@@ -2,7 +2,7 @@
 APIリクエスト・レスポンスの型定義とバリデーションを担う。
 """
 from datetime import date
-from typing import List, Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -14,7 +14,7 @@ class VulnerabilityOut(BaseModel):
     product: str = Field(description="製品名 (例: Windows)")
     vulnerability_name: str = Field(description="脆弱性の名称・タイトル")
     description: str = Field(description="脆弱性の詳細説明")
-    required_action: Optional[str] = Field(None, description="推奨される対策・アクション")
+    required_action: str | None = Field(None, description="推奨される対策・アクション")
     date_added: date = Field(description="CISA KEV に追加された日")
 
     model_config = {"from_attributes": True}
@@ -26,7 +26,7 @@ class VulnerabilityListResponse(BaseModel):
     total: int = Field(description="総件数")
     page: int = Field(description="現在のページ番号")
     per_page: int = Field(description="1ページあたりの件数")
-    data: List[VulnerabilityOut] = Field(description="脆弱性データ一覧")
+    data: list[VulnerabilityOut] = Field(description="脆弱性データ一覧")
 
 
 class HealthResponse(BaseModel):

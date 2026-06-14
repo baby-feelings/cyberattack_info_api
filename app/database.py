@@ -3,8 +3,10 @@ SQLAlchemy エンジンとセッションファクトリを構築し、
 FastAPI の依存性注入（Depends）で使えるジェネレータを提供する。
 """
 import logging
+
 from sqlalchemy import create_engine, event
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
+
 from app.config import settings
 
 logger = logging.getLogger(__name__)

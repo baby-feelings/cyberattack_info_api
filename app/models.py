@@ -2,17 +2,10 @@
 CISA KEV カタログの脆弱性データを格納する vulnerabilities テーブルを定義する。
 """
 from datetime import date, datetime
-from sqlalchemy import (
-    Column,
-    Integer,
-    String,
-    Text,
-    Date,
-    DateTime,
-    Index,
-    UniqueConstraint,
-)
+
+from sqlalchemy import Column, Date, DateTime, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.sql import func
+
 from app.database import Base
 
 

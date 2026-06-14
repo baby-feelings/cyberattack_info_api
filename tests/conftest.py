@@ -3,6 +3,7 @@
 各テスト間のデータ汚染を防ぐため、テスト毎にテーブルを truncate する。
 """
 import os
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text

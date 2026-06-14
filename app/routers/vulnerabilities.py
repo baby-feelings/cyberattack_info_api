@@ -4,10 +4,10 @@ GET /api/vulnerabilities/recent – 直近追加データ取得（Claude Code �
 """
 import logging
 from datetime import date, timedelta
-from typing import Annotated, List
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, or_
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.auth import require_api_key
@@ -93,7 +93,7 @@ def list_vulnerabilities(
 
 @router.get(
     "/recent",
-    response_model=List[VulnerabilityOut],
+    response_model=list[VulnerabilityOut],
     summary="直近の脅威取得",
     description=(
         "過去 N 日以内に CISA KEV に追加された脆弱性を返す。"
@@ -103,7 +103,7 @@ def list_vulnerabilities(
 def get_recent_vulnerabilities(
     db: Annotated[Session, Depends(get_db)],
     days: int = Query(30, ge=1, le=365, description="過去何日分のデータを取得するか"),
-) -> List[VulnerabilityOut]:
+) -> list[VulnerabilityOut]:
     """直近 N 日以内に追加された脆弱性を取得する。
     シンプルなリスト形式で返すことで、Claude Code のコンテキスト連携を最適化する。
     """

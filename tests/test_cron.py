@@ -1,7 +1,6 @@
 """クローラー（cron.py）のユニットテスト。
 実際のネットワークリクエストは httpx のモックで差し替える。
 """
-import json
 from datetime import date
 from unittest.mock import MagicMock, patch
 
