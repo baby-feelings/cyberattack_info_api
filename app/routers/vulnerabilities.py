@@ -1,19 +1,27 @@
 """脆弱性情報 API ルーター。
-GET /api/vulnerabilities       – 一覧取得（ページネーション・フィルタリング）
-GET /api/vulnerabilities/recent – 直近追加データ取得（Claude Code 向け最適化）
+GET /api/vulnerabilities         – 一覧取得（ページネーション・フィルタリング）
+GET /api/vulnerabilities/recent  – 直近追加データ取得
+GET /api/vulnerabilities/stats   – 統計情報取得
+GET /api/vulnerabilities/{cve_id} – CVE 個別取得
 """
 import logging
 from datetime import date, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy import or_
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.auth import require_api_key
 from app.database import get_db
 from app.models import Vulnerability
-from app.schemas import VulnerabilityListResponse, VulnerabilityOut
+from app.schemas import (
+    MonthlyStat,
+    StatsResponse,
+    VendorStat,
+    VulnerabilityListResponse,
+    VulnerabilityOut,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -122,3 +130,71 @@ def get_recent_vulnerabilities(
     )
 
     return [VulnerabilityOut.model_validate(item) for item in items]
+
+
+@router.get(
+    "/stats",
+    response_model=StatsResponse,
+    summary="脆弱性統計情報",
+    description="総件数・ベンダー別ランキング・月別追加トレンドを返す。",
+)
+def get_stats(
+    db: Annotated[Session, Depends(get_db)],
+) -> StatsResponse:
+    """ベンダー別・月別の集計統計を返す。"""
+    total = db.query(func.count(Vulnerability.id)).scalar() or 0
+
+    # ベンダー別件数（上位 10 件）
+    vendor_rows = (
+        db.query(Vulnerability.vendor_project, func.count(Vulnerability.id).label("cnt"))
+        .group_by(Vulnerability.vendor_project)
+        .order_by(func.count(Vulnerability.id).desc())
+        .limit(10)
+        .all()
+    )
+    top_vendors = [VendorStat(vendor_project=r[0], count=r[1]) for r in vendor_rows]
+
+    # 月別追加件数（直近 12 ヶ月）— SQLite / PostgreSQL 両対応
+    cutoff = date.today() - timedelta(days=365)
+    monthly_rows = (
+        db.query(
+            func.strftime("%Y-%m", Vulnerability.date_added).label("ym"),
+            func.count(Vulnerability.id).label("cnt"),
+        )
+        .filter(Vulnerability.date_added >= cutoff)
+        .group_by(func.strftime("%Y-%m", Vulnerability.date_added))
+        .order_by(func.strftime("%Y-%m", Vulnerability.date_added))
+        .all()
+    )
+    monthly_trend = [MonthlyStat(year_month=r[0], count=r[1]) for r in monthly_rows]
+
+    logger.info("get_stats: total=%d, vendors=%d", total, len(top_vendors))
+    return StatsResponse(
+        total_vulnerabilities=total,
+        top_vendors=top_vendors,
+        monthly_trend=monthly_trend,
+    )
+
+
+@router.get(
+    "/{cve_id}",
+    response_model=VulnerabilityOut,
+    summary="CVE 個別取得",
+    description="CVE ID を指定して脆弱性の詳細を1件取得する。",
+)
+def get_vulnerability(
+    cve_id: str,
+    db: Annotated[Session, Depends(get_db)],
+) -> VulnerabilityOut:
+    """指定した CVE ID の脆弱性を返す。存在しない場合は 404 を返す。"""
+    # CVE ID は大文字小文字を問わず一致させる
+    item = (
+        db.query(Vulnerability)
+        .filter(func.upper(Vulnerability.cve_id) == cve_id.upper())
+        .first()
+    )
+    if item is None:
+        raise HTTPException(status_code=404, detail=f"{cve_id} は見つかりませんでした。")
+
+    logger.info("get_vulnerability: cve_id=%s", cve_id)
+    return VulnerabilityOut.model_validate(item)

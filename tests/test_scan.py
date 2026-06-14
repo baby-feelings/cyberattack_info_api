@@ -13,6 +13,7 @@ from app.routers.scan import (
     _deduplicate,
     _extract_fixed_versions,
     _extract_severity,
+    _parse_package_json,
     _parse_requirements,
     _query_kev,
     _query_osv,
@@ -423,4 +424,151 @@ def test_scan_requirements_requires_auth(client: TestClient):
         content="fastapi==0.115.6\n",
         headers={"Content-Type": "text/plain"},
     )
+    assert resp.status_code == 403
+
+
+# ── _parse_package_json のテスト ──────────────────────────────────
+
+
+def test_parse_package_json_basic():
+    """package.json から dependencies をパースできる。"""
+    pkg_json = '{"dependencies": {"express": "^4.18.2", "lodash": "4.17.21"}}'
+    pkgs = _parse_package_json(pkg_json)
+    names = [p.name for p in pkgs]
+    assert "express" in names
+    assert "lodash" in names
+    assert all(p.ecosystem == "npm" for p in pkgs)
+
+
+def test_parse_package_json_dev_dependencies():
+    """devDependencies も対象に含める。"""
+    pkg_json = '{"devDependencies": {"jest": "^29.0.0"}}'
+    pkgs = _parse_package_json(pkg_json)
+    assert pkgs[0].name == "jest"
+    assert pkgs[0].ecosystem == "npm"
+
+
+def test_parse_package_json_strips_prefix():
+    """バージョンのプレフィックス（^, ~）を除去する。"""
+    pkg_json = '{"dependencies": {"react": "^18.2.0"}}'
+    pkgs = _parse_package_json(pkg_json)
+    assert pkgs[0].version == "18.2.0"
+
+
+def test_parse_package_json_invalid_json():
+    """不正な JSON に対して 422 を返す。"""
+    from fastapi import HTTPException
+    import pytest
+    with pytest.raises(HTTPException) as exc_info:
+        _parse_package_json("not-json")
+    assert exc_info.value.status_code == 422
+
+
+def test_parse_package_json_empty_deps():
+    """dependencies がない場合は空リストを返す。"""
+    pkg_json = '{"name": "my-app", "version": "1.0.0"}'
+    pkgs = _parse_package_json(pkg_json)
+    assert pkgs == []
+
+
+# ── POST /api/scan/package-json エンドポイントのテスト ────────────
+
+
+def test_scan_package_json_returns_200(client: TestClient):
+    """package.json スキャンが正常に完了し 200 を返す。"""
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {"vulns": []}
+    mock_resp.raise_for_status = MagicMock()
+
+    pkg_json = '{"dependencies": {"express": "^4.18.2", "lodash": "4.17.21"}}'
+
+    with patch("app.routers.scan.httpx.Client") as mock_client_cls:
+        mock_client_cls.return_value.__enter__.return_value.post.return_value = mock_resp
+        resp = client.post(
+            "/api/scan/package-json",
+            content=pkg_json,
+            headers={"X-API-KEY": TEST_API_KEY, "Content-Type": "text/plain"},
+        )
+
+    assert resp.status_code == 200
+    assert resp.json()["scanned_packages"] == 2
+
+
+def test_scan_package_json_empty_returns_422(client: TestClient):
+    """dependencies が空の package.json は 422 を返す。"""
+    resp = client.post(
+        "/api/scan/package-json",
+        content='{"name": "empty"}',
+        headers={"X-API-KEY": TEST_API_KEY, "Content-Type": "text/plain"},
+    )
+    assert resp.status_code == 422
+
+
+def test_scan_package_json_requires_auth(client: TestClient):
+    """認証なしでは 403 を返す。"""
+    resp = client.post(
+        "/api/scan/package-json",
+        content='{"dependencies": {"lodash": "4.17.21"}}',
+        headers={"Content-Type": "text/plain"},
+    )
+    assert resp.status_code == 403
+
+
+# ── スキャン履歴のテスト ──────────────────────────────────────────
+
+
+def test_scan_history_saves_result(client: TestClient):
+    """スキャン実行後、履歴に記録されることを確認する。"""
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {"vulns": []}
+    mock_resp.raise_for_status = MagicMock()
+
+    with patch("app.routers.scan.httpx.Client") as mock_client_cls:
+        mock_client_cls.return_value.__enter__.return_value.post.return_value = mock_resp
+        client.post(
+            "/api/scan",
+            json={"packages": [{"name": "fastapi", "version": "0.115.6"}]},
+            headers={"X-API-KEY": TEST_API_KEY},
+        )
+
+    history = client.get("/api/scan/history", headers={"X-API-KEY": TEST_API_KEY})
+    assert history.status_code == 200
+    assert len(history.json()) >= 1
+
+
+def test_scan_history_detail(client: TestClient):
+    """スキャン履歴の詳細を ID で取得できることを確認する。"""
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {"vulns": []}
+    mock_resp.raise_for_status = MagicMock()
+
+    with patch("app.routers.scan.httpx.Client") as mock_client_cls:
+        mock_client_cls.return_value.__enter__.return_value.post.return_value = mock_resp
+        scan_resp = client.post(
+            "/api/scan",
+            json={"packages": [{"name": "requests", "version": "2.32.0"}]},
+            headers={"X-API-KEY": TEST_API_KEY},
+        )
+    assert scan_resp.status_code == 200
+
+    history = client.get("/api/scan/history", headers={"X-API-KEY": TEST_API_KEY})
+    scan_id = history.json()[0]["id"]
+
+    detail = client.get(f"/api/scan/history/{scan_id}", headers={"X-API-KEY": TEST_API_KEY})
+    assert detail.status_code == 200
+    data = detail.json()
+    assert data["id"] == scan_id
+    assert data["scan_type"] == "packages"
+    assert data["scanned_packages"] == 1
+
+
+def test_scan_history_not_found(client: TestClient):
+    """存在しないスキャン ID は 404 を返す。"""
+    resp = client.get("/api/scan/history/99999", headers={"X-API-KEY": TEST_API_KEY})
+    assert resp.status_code == 404
+
+
+def test_scan_history_requires_auth(client: TestClient):
+    """認証なしでは 403 を返す。"""
+    resp = client.get("/api/scan/history")
     assert resp.status_code == 403

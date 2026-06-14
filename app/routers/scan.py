@@ -1,24 +1,29 @@
 """ライブラリ脆弱性スキャン API ルーター。
 
-POST /api/scan              – パッケージリストを OSV + CISA KEV でスキャン
-POST /api/scan/requirements – requirements.txt 形式のテキストをスキャン
+POST /api/scan                – パッケージリストを OSV + CISA KEV でスキャン
+POST /api/scan/requirements   – requirements.txt 形式のテキストをスキャン
+POST /api/scan/package-json   – package.json の dependencies をスキャン（npm）
+GET  /api/scan/history        – スキャン履歴一覧
+GET  /api/scan/history/{id}   – スキャン結果詳細
 """
+import json
 import logging
 import re
 from typing import Annotated
 
 import httpx
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.auth import require_api_key
 from app.database import get_db
-from app.models import Vulnerability
+from app.models import ScanResult, Vulnerability
 from app.schemas import (
     PackageInput,
     ScanRequest,
     ScanResponse,
+    ScanResultOut,
     VulnerabilityFinding,
 )
 
@@ -52,10 +57,8 @@ def _extract_severity(vuln: dict) -> str | None:
     for sev in vuln.get("severity", []):
         sev_type = sev.get("type", "")
         if "CVSS" in sev_type:
-            # CVSS ベクタから AV(Attack Vector) と評価スコアを簡易推定
             score_str = sev.get("score", "")
             if score_str:
-                # CVSS:3.x/AV:... 形式のベクタから重要度を推定
                 if "/AV:N/" in score_str and "/AC:L/" in score_str:
                     return "HIGH"
                 return "MEDIUM"
@@ -194,8 +197,30 @@ def _parse_requirements(text: str) -> list[PackageInput]:
     return packages
 
 
-def _run_scan(db: Session, packages: list[PackageInput]) -> ScanResponse:
-    """パッケージリストをスキャンして ScanResponse を返す共通ロジック。"""
+def _parse_package_json(text: str) -> list[PackageInput]:
+    """package.json の内容をパースして PackageInput リストを返す。
+    dependencies と devDependencies の両方を対象にする。
+    バージョンのプレフィックス（^, ~, >=）は除去して渡す。
+    """
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"package.json のパースに失敗しました: {exc}",
+        ) from exc
+
+    packages: list[PackageInput] = []
+    for section in ("dependencies", "devDependencies"):
+        for name, ver_str in data.get(section, {}).items():
+            # バージョン範囲記号を除去して数値バージョンを抽出
+            clean_ver = re.sub(r"^[^0-9]*", "", str(ver_str)).split(" ")[0] or None
+            packages.append(PackageInput(name=name, version=clean_ver, ecosystem="npm"))
+    return packages
+
+
+def _run_scan(db: Session, packages: list[PackageInput], scan_type: str) -> ScanResponse:
+    """パッケージリストをスキャンして ScanResponse を返し、結果を DB に保存する。"""
     all_findings: list[VulnerabilityFinding] = []
 
     for pkg in packages:
@@ -206,14 +231,38 @@ def _run_scan(db: Session, packages: list[PackageInput]) -> ScanResponse:
 
     deduped = _deduplicate(all_findings)
 
+    # スキャン結果を DB に永続化
+    record = ScanResult(
+        scan_type=scan_type,
+        scanned_packages=len(packages),
+        total_findings=len(deduped),
+        findings=[f.model_dump() for f in deduped],
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+
     logger.info(
-        "scan completed: packages=%d, findings=%d",
-        len(packages), len(deduped),
+        "scan completed: type=%s, packages=%d, findings=%d, id=%d",
+        scan_type, len(packages), len(deduped), record.id,
     )
     return ScanResponse(
         scanned_packages=len(packages),
         total_findings=len(deduped),
         findings=deduped,
+    )
+
+
+def _to_scan_result_out(record: ScanResult) -> ScanResultOut:
+    """ScanResult ORM モデルを ScanResultOut スキーマに変換する。"""
+    findings = [VulnerabilityFinding(**f) for f in (record.findings or [])]
+    return ScanResultOut(
+        id=record.id,
+        scan_type=record.scan_type,
+        scanned_packages=record.scanned_packages,
+        total_findings=record.total_findings,
+        findings=findings,
+        scanned_at=record.scanned_at.isoformat(),
     )
 
 
@@ -227,6 +276,7 @@ def _run_scan(db: Session, packages: list[PackageInput]) -> ScanResponse:
     description=(
         "指定したパッケージを **OSV**（Open Source Vulnerabilities）と "
         "**CISA KEV** の両方から横断検索し、既知の脆弱性一覧を返す。"
+        "スキャン結果は履歴として保存される。"
     ),
 )
 def scan_packages(
@@ -239,7 +289,7 @@ def scan_packages(
     - CISA KEV: パッケージ名をベンダー名・製品名で部分一致検索
     - 同一 CVE の重複は自動除去（OSV の詳細情報を優先）
     """
-    return _run_scan(db, request.packages)
+    return _run_scan(db, request.packages, scan_type="packages")
 
 
 @router.post(
@@ -247,8 +297,9 @@ def scan_packages(
     response_model=ScanResponse,
     summary="requirements.txt スキャン",
     description=(
-        "`requirements.txt` の内容をそのまま貼り付けてスキャンする。 "
+        "`requirements.txt` の内容をそのまま貼り付けてスキャンする。"
         "各パッケージを OSV と CISA KEV で検索し、脆弱性一覧を返す。"
+        "スキャン結果は履歴として保存される。"
     ),
 )
 def scan_requirements(
@@ -265,4 +316,74 @@ def scan_requirements(
             status_code=422,
             detail="パッケージが見つかりませんでした。requirements.txt 形式で入力してください。",
         )
-    return _run_scan(db, packages)
+    return _run_scan(db, packages, scan_type="requirements")
+
+
+@router.post(
+    "/package-json",
+    response_model=ScanResponse,
+    summary="package.json スキャン（npm）",
+    description=(
+        "`package.json` の内容をそのまま貼り付けてスキャンする。"
+        "`dependencies` と `devDependencies` の両方を OSV（npm エコシステム）と "
+        "CISA KEV で検索する。スキャン結果は履歴として保存される。"
+    ),
+)
+def scan_package_json(
+    db: Annotated[Session, Depends(get_db)],
+    body: Annotated[str, Body(media_type="text/plain")],
+) -> ScanResponse:
+    """package.json の内容をパースして npm パッケージをスキャンする。
+
+    Content-Type: text/plain でリクエストボディに package.json の内容を送る。
+    """
+    packages = _parse_package_json(body)
+    if not packages:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "パッケージが見つかりませんでした。"
+                "dependencies または devDependencies が存在する package.json を入力してください。"
+            ),
+        )
+    return _run_scan(db, packages, scan_type="package-json")
+
+
+@router.get(
+    "/history",
+    response_model=list[ScanResultOut],
+    summary="スキャン履歴一覧",
+    description="過去のスキャン結果を新しい順に返す（最大 50 件）。",
+)
+def list_scan_history(
+    db: Annotated[Session, Depends(get_db)],
+    limit: int = Query(20, ge=1, le=50, description="取得件数（最大 50）"),
+) -> list[ScanResultOut]:
+    """スキャン実行履歴を一覧で返す。"""
+    records = (
+        db.query(ScanResult)
+        .order_by(ScanResult.scanned_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return [_to_scan_result_out(r) for r in records]
+
+
+@router.get(
+    "/history/{scan_id}",
+    response_model=ScanResultOut,
+    summary="スキャン結果詳細",
+    description="指定した ID のスキャン結果を返す。",
+)
+def get_scan_result(
+    scan_id: int,
+    db: Annotated[Session, Depends(get_db)],
+) -> ScanResultOut:
+    """指定した ID のスキャン結果を返す。存在しない場合は 404。"""
+    record = db.query(ScanResult).filter(ScanResult.id == scan_id).first()
+    if record is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"スキャン結果 ID={scan_id} は見つかりませんでした。",
+        )
+    return _to_scan_result_out(record)
