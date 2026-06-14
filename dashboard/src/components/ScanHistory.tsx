@@ -34,7 +34,7 @@ export function ScanHistory() {
   useEffect(() => { load() }, [])
 
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-lg flex flex-col gap-4">
+    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg flex flex-col gap-4">
 
       {/* ヘッダー */}
       <div className="flex items-center justify-between">

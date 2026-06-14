@@ -46,11 +46,11 @@ export function StatsCards({ stats, recent, loading }: Props) {
   ]
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
       {cards.map(({ icon: Icon, iconColor, iconBg, accent, borderColor, label, value, sub }) => (
         <div
           key={label}
-          className={`relative overflow-hidden rounded-2xl border ${borderColor} bg-slate-900 p-5 shadow-lg`}
+          className={`relative overflow-hidden rounded-2xl border ${borderColor} bg-slate-900 p-6 shadow-lg`}
         >
           {/* 背景グラデーション装飾 */}
           <div className={`absolute inset-0 bg-gradient-to-br ${accent} pointer-events-none`} />
