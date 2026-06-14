@@ -1,0 +1,41 @@
+name: CD — Deploy to Production
+
+on:
+  push:
+    branches: [main]
+  # 手動トリガーも可能
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to Render / Railway
+    runs-on: ubuntu-latest
+    # CI が通った後にのみデプロイする
+    needs: []  # CI workflow とは独立しているため、メインブランチマージ後に実行
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── Render へのデプロイ（Render を使う場合） ─────────────
+      # Render の Deploy Hook URL を GitHub Secrets に登録してください。
+      # Secret 名: RENDER_DEPLOY_HOOK_URL
+      - name: Trigger Render deploy
+        if: ${{ vars.DEPLOY_TARGET == 'render' || vars.DEPLOY_TARGET == '' }}
+        run: |
+          if [ -n "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" ]; then
+            curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+            echo "Render deploy triggered"
+          else
+            echo "RENDER_DEPLOY_HOOK_URL is not set. Skipping Render deploy."
+          fi
+
+      # ── Railway へのデプロイ（Railway を使う場合） ────────────
+      # Railway CLI Token を GitHub Secrets に登録してください。
+      # Secret 名: RAILWAY_TOKEN
+      - name: Deploy to Railway
+        if: ${{ vars.DEPLOY_TARGET == 'railway' }}
+        uses: bervProject/railway-deploy@v1.0.0
+        with:
+          railway_token: ${{ secrets.RAILWAY_TOKEN }}
+          service: cyberattack-info-api
