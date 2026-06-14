@@ -16,9 +16,9 @@ function CustomTooltip({ active, payload, label }: {
 }) {
   if (!active || !payload?.length) return null
   return (
-    <div className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs shadow-xl">
+    <div className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm shadow-xl">
       <p className="text-slate-400 mb-0.5">{label}</p>
-      <p className="text-violet-300 font-bold text-sm">{payload[0].value} 件</p>
+      <p className="text-violet-300 font-bold text-base">{payload[0].value} 件</p>
     </div>
   )
 }
@@ -29,7 +29,7 @@ export function MonthlyTrend({ data, loading }: Props) {
 
       <div className="flex items-center gap-2">
         <TrendingUp size={15} className="text-slate-400" />
-        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">月別 CVE 追加数トレンド</span>
+        <span className="text-sm font-semibold text-slate-400 uppercase tracking-wider">月別 CVE 追加数トレンド</span>
       </div>
 
       <div className="flex-1 min-h-[180px]">
@@ -56,13 +56,13 @@ export function MonthlyTrend({ data, loading }: Props) {
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
               <XAxis
                 dataKey="year_month"
-                tick={{ fill: '#475569', fontSize: 10 }}
+                tick={{ fill: '#475569', fontSize: 12 }}
                 tickLine={false}
                 axisLine={false}
                 interval="preserveStartEnd"
               />
               <YAxis
-                tick={{ fill: '#475569', fontSize: 10 }}
+                tick={{ fill: '#475569', fontSize: 12 }}
                 tickLine={false}
                 axisLine={false}
                 allowDecimals={false}

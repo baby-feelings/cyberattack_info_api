@@ -40,7 +40,7 @@ export function ScanHistory() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <History size={15} className="text-slate-400" />
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          <span className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
             スキャン履歴
           </span>
         </div>
@@ -50,7 +50,7 @@ export function ScanHistory() {
           className="text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40 p-1 rounded"
           title="再読み込み"
         >
-          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
         </button>
       </div>
 
@@ -66,7 +66,7 @@ export function ScanHistory() {
       ) : history.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-2 py-10 text-slate-600">
           <Package size={24} />
-          <p className="text-xs">スキャン履歴がありません</p>
+          <p className="text-sm">スキャン履歴がありません</p>
         </div>
 
       /* 履歴一覧 */
@@ -87,34 +87,34 @@ export function ScanHistory() {
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     {/* スキャン種別バッジ */}
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 font-medium shrink-0">
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 font-medium shrink-0">
                       {SCAN_TYPE_LABEL[item.scan_type] ?? item.scan_type}
                     </span>
                     {/* パッケージ数 */}
-                    <span className="text-xs text-slate-500 tabular-nums shrink-0">
+                    <span className="text-sm text-slate-500 tabular-nums shrink-0">
                       {item.scanned_packages} pkg
                     </span>
                     {/* 検出件数 */}
                     {hasFinding ? (
-                      <span className="flex items-center gap-0.5 text-xs text-red-400 font-semibold tabular-nums shrink-0">
-                        <AlertTriangle size={10} />
+                      <span className="flex items-center gap-0.5 text-sm text-red-400 font-semibold tabular-nums shrink-0">
+                        <AlertTriangle size={12} />
                         {item.total_findings} 件
                       </span>
                     ) : (
-                      <span className="text-xs text-emerald-500 tabular-nums shrink-0">0 件</span>
+                      <span className="text-sm text-emerald-500 tabular-nums shrink-0">0 件</span>
                     )}
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
                     {/* 実行日時 */}
-                    <span className="text-[10px] text-slate-600 tabular-nums">
+                    <span className="text-xs text-slate-600 tabular-nums">
                       {date.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })}
                       {' '}
                       {date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
                     </span>
                     {isOpen
-                      ? <ChevronUp size={11} className="text-slate-500" />
-                      : <ChevronDown size={11} className="text-slate-500" />}
+                      ? <ChevronUp size={13} className="text-slate-500" />
+                      : <ChevronDown size={13} className="text-slate-500" />}
                   </div>
                 </button>
 
@@ -122,7 +122,7 @@ export function ScanHistory() {
                 {isOpen && (
                   <div className="border-t border-slate-800">
                     {item.findings.length === 0 ? (
-                      <p className="text-xs text-emerald-500 text-center py-3">脆弱性なし</p>
+                      <p className="text-sm text-emerald-500 text-center py-3">脆弱性なし</p>
                     ) : (
                       <div className="max-h-64 overflow-y-auto divide-y divide-slate-800/60">
                         {item.findings.map((f, idx) => {
@@ -130,11 +130,11 @@ export function ScanHistory() {
                           return (
                             <div key={idx} className="flex items-start gap-2 px-3 py-2">
                               {/* 深刻度 */}
-                              <span className={`text-[10px] font-bold shrink-0 w-14 ${SEVERITY_COLOR[f.severity ?? ''] ?? 'text-slate-500'}`}>
+                              <span className={`text-xs font-bold shrink-0 w-16 ${SEVERITY_COLOR[f.severity ?? ''] ?? 'text-slate-500'}`}>
                                 {f.severity ?? 'N/A'}
                               </span>
                               {/* パッケージ名 */}
-                              <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                              <span className="text-xs font-mono text-slate-400 shrink-0">
                                 {f.package_name}
                               </span>
                               {/* CVE リンク */}
@@ -143,18 +143,18 @@ export function ScanHistory() {
                                   href={`https://nvd.nist.gov/vuln/detail/${f.vuln_id}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-0.5 text-[10px] font-mono text-violet-400 hover:text-violet-300 shrink-0"
+                                  className="inline-flex items-center gap-0.5 text-xs font-mono text-violet-400 hover:text-violet-300 shrink-0"
                                 >
                                   {f.vuln_id}
-                                  <ExternalLink size={8} />
+                                  <ExternalLink size={10} />
                                 </a>
                               ) : (
-                                <span className="text-[10px] font-mono text-slate-500 shrink-0">
+                                <span className="text-xs font-mono text-slate-500 shrink-0">
                                   {f.vuln_id}
                                 </span>
                               )}
                               {/* 概要（残りスペースを使用） */}
-                              <span className="text-[10px] text-slate-600 truncate min-w-0">
+                              <span className="text-xs text-slate-600 truncate min-w-0">
                                 {f.summary}
                               </span>
                             </div>

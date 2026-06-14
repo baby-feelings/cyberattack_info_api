@@ -58,14 +58,14 @@ export function StatsCards({ stats, recent, loading }: Props) {
           <div className="relative">
             <div className="flex items-center gap-2 mb-4">
               <span className={`inline-flex p-2 rounded-lg ${iconBg}`}>
-                <Icon size={15} className={iconColor} />
+                <Icon size={17} className={iconColor} />
               </span>
-              <span className="text-xs font-medium text-slate-400">{label}</span>
+              <span className="text-sm font-medium text-slate-400">{label}</span>
             </div>
-            <p className={`text-3xl font-bold tracking-tight ${loading ? 'text-slate-600 animate-pulse' : 'text-white'} mb-1`}>
+            <p className={`text-4xl font-bold tracking-tight ${loading ? 'text-slate-600 animate-pulse' : 'text-white'} mb-1`}>
               {value}
             </p>
-            <p className="text-xs text-slate-500">{sub}</p>
+            <p className="text-sm text-slate-500">{sub}</p>
           </div>
         </div>
       ))}

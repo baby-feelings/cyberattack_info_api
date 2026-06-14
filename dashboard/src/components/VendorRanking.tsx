@@ -20,8 +20,8 @@ export function VendorRanking({ data, loading }: Props) {
     <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg flex flex-col gap-4">
 
       <div className="flex items-center gap-2">
-        <Trophy size={15} className="text-slate-400" />
-        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+        <Trophy size={16} className="text-slate-400" />
+        <span className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
           ベンダー別脆弱性数 Top 10
         </span>
       </div>
@@ -37,23 +37,23 @@ export function VendorRanking({ data, loading }: Props) {
           ))}
         </div>
       ) : data.length === 0 ? (
-        <p className="text-xs text-slate-600 text-center py-8">データがありません</p>
+        <p className="text-sm text-slate-600 text-center py-8">データがありません</p>
       ) : (
-        <div className="space-y-2.5">
+        <div className="space-y-3">
           {data.map((item, i) => (
             <div key={item.vendor_project} className="flex items-center gap-3 group">
               {/* 順位 */}
-              <span className="text-sm w-5 text-center shrink-0 leading-none">
-                {MEDAL[i] ?? <span className="text-xs text-slate-600 font-mono">{i + 1}</span>}
+              <span className="text-base w-6 text-center shrink-0 leading-none">
+                {MEDAL[i] ?? <span className="text-sm text-slate-600 font-mono">{i + 1}</span>}
               </span>
 
               {/* ベンダー名 + バー */}
               <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-slate-300 truncate pr-2 group-hover:text-white transition-colors">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-sm text-slate-300 truncate pr-2 group-hover:text-white transition-colors">
                     {item.vendor_project}
                   </span>
-                  <span className="text-xs font-semibold text-slate-400 shrink-0 tabular-nums">
+                  <span className="text-sm font-semibold text-slate-400 shrink-0 tabular-nums">
                     {item.count.toLocaleString()}
                   </span>
                 </div>
