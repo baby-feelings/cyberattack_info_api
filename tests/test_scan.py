@@ -457,8 +457,8 @@ def test_parse_package_json_strips_prefix():
 
 def test_parse_package_json_invalid_json():
     """不正な JSON に対して 422 を返す。"""
-    from fastapi import HTTPException
     import pytest
+    from fastapi import HTTPException
     with pytest.raises(HTTPException) as exc_info:
         _parse_package_json("not-json")
     assert exc_info.value.status_code == 422
