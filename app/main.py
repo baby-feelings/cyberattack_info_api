@@ -103,6 +103,7 @@ def health_check() -> HealthResponse:
     ロードバランサーやモニタリングツールからの死活監視に使用する。
     """
     db_ok = False
+    db_gen = None
     try:
         db_gen = get_db()
         db = next(db_gen)
@@ -111,10 +112,12 @@ def health_check() -> HealthResponse:
     except Exception as exc:
         logger.error("Health check DB error: %s", exc)
     finally:
-        try:
-            next(db_gen)
-        except StopIteration:
-            pass
+        # db_gen が生成済みの場合のみクローズ処理を実行（UnboundLocalError 防止）
+        if db_gen is not None:
+            try:
+                next(db_gen)
+            except StopIteration:
+                pass
 
     return HealthResponse(
         status="ok" if db_ok else "degraded",

@@ -45,6 +45,31 @@ def test_health_check(client: TestClient):
     assert body["status"] in ("ok", "degraded")
 
 
+def test_health_check_db_ok(client: TestClient):
+    """GET /health の db_connected フィールドが True であることを確認する。"""
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json()["db_connected"] is True
+
+
+def test_health_check_db_error(client: TestClient):
+    """DB 接続失敗時に GET /health が degraded ステータスを返すことを確認する。"""
+    from unittest.mock import MagicMock, patch
+
+    # db.execute が例外を送出するジェネレータをモックとして注入
+    def failing_get_db():
+        mock_db = MagicMock()
+        mock_db.execute.side_effect = Exception("DB connection failed")
+        yield mock_db
+
+    with patch("app.main.get_db", side_effect=failing_get_db):
+        response = client.get("/health")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "degraded"
+    assert body["db_connected"] is False
+
+
 def test_root(client: TestClient):
     """GET / が API 情報を返すことを確認する。"""
     response = client.get("/")
@@ -117,6 +142,55 @@ def test_list_search_filter(client: TestClient, db_session: Session, monkeypatch
     assert all("MegaCorp" in item["vendor_project"] for item in data)
 
 
+def test_list_vendor_filter(client: TestClient, db_session: Session, monkeypatch):
+    """vendor パラメータによる完全一致フィルタが機能することを確認する。"""
+    monkeypatch.setattr("app.auth.settings.API_KEY", TEST_API_KEY)
+    _make_vuln(db_session, cve_id="CVE-2026-10004", vendor="AlphaVendor", product="ProductA")
+    _make_vuln(db_session, cve_id="CVE-2026-10005", vendor="BetaVendor", product="ProductB")
+
+    response = client.get(
+        "/api/vulnerabilities?vendor=AlphaVendor",
+        headers={"X-API-KEY": TEST_API_KEY},
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert len(data) == 1
+    assert data[0]["vendor_project"] == "AlphaVendor"
+
+
+def test_list_product_filter(client: TestClient, db_session: Session, monkeypatch):
+    """product パラメータによる部分一致フィルタが機能することを確認する。"""
+    monkeypatch.setattr("app.auth.settings.API_KEY", TEST_API_KEY)
+    _make_vuln(db_session, cve_id="CVE-2026-10006", vendor="VendorX", product="SpecialGateway")
+    _make_vuln(db_session, cve_id="CVE-2026-10007", vendor="VendorY", product="CommonApp")
+
+    response = client.get(
+        "/api/vulnerabilities?product=Gateway",
+        headers={"X-API-KEY": TEST_API_KEY},
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert len(data) == 1
+    assert "Gateway" in data[0]["product"]
+
+
+def test_list_pagination(client: TestClient, db_session: Session, monkeypatch):
+    """ページネーションが正しく機能することを確認する。"""
+    monkeypatch.setattr("app.auth.settings.API_KEY", TEST_API_KEY)
+    for i in range(5):
+        _make_vuln(db_session, cve_id=f"CVE-2026-5000{i}", vendor="PagingVendor")
+
+    response = client.get(
+        "/api/vulnerabilities?page=1&per_page=2",
+        headers={"X-API-KEY": TEST_API_KEY},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 5
+    assert len(body["data"]) == 2
+    assert body["per_page"] == 2
+
+
 # ── 直近データ取得テスト ────────────────────────────────────────
 
 
@@ -143,3 +217,28 @@ def test_recent_without_api_key_returns_403(client: TestClient):
     """GET /api/vulnerabilities/recent も認証が必要なことを確認する。"""
     response = client.get("/api/vulnerabilities/recent")
     assert response.status_code == 403
+
+
+def test_recent_default_days(client: TestClient, db_session: Session, monkeypatch):
+    """days パラメータ未指定時はデフォルト 30 日が使われることを確認する。"""
+    monkeypatch.setattr("app.auth.settings.API_KEY", TEST_API_KEY)
+    _make_vuln(db_session, cve_id="CVE-2026-30001", days_ago=10)
+
+    response = client.get(
+        "/api/vulnerabilities/recent",
+        headers={"X-API-KEY": TEST_API_KEY},
+    )
+    assert response.status_code == 200
+    cve_ids = [item["cve_id"] for item in response.json()]
+    assert "CVE-2026-30001" in cve_ids
+
+
+# ── モデル repr テスト ────────────────────────────────────────────
+
+
+def test_vulnerability_repr(db_session: Session):
+    """Vulnerability の __repr__ が正しい文字列を返すことを確認する。"""
+    vuln = _make_vuln(db_session, cve_id="CVE-2026-99999", vendor="ReprVendor")
+    result = repr(vuln)
+    assert "CVE-2026-99999" in result
+    assert "ReprVendor" in result
