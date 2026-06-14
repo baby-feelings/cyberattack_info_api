@@ -28,13 +28,13 @@ export function RecentCVEs({ data, loading }: Props) {
       {/* ヘッダー */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <AlertTriangle size={15} className="text-slate-400" />
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          <AlertTriangle size={16} className="text-slate-400" />
+          <span className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
             直近 30 日の新規 CVE
           </span>
         </div>
         {!loading && (
-          <span className="text-xs font-medium text-slate-500 tabular-nums">
+          <span className="text-sm font-medium text-slate-500 tabular-nums">
             {data.length} 件
           </span>
         )}
@@ -59,12 +59,12 @@ export function RecentCVEs({ data, loading }: Props) {
       ) : (
         <>
           <div className="overflow-x-auto -mx-1 px-1">
-            <table className="w-full text-xs min-w-[480px]">
+            <table className="w-full text-sm min-w-[480px]">
               <thead>
                 <tr className="border-b border-slate-800">
-                  <th className="text-left text-[10px] font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-32">CVE ID</th>
-                  <th className="text-left text-[10px] font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3">ベンダー / 製品</th>
-                  <th className="text-right text-[10px] font-semibold text-slate-600 uppercase tracking-wider pb-2 w-24">追加日</th>
+                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-36">CVE ID</th>
+                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3">ベンダー / 製品</th>
+                  <th className="text-right text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 w-24">追加日</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
@@ -72,7 +72,7 @@ export function RecentCVEs({ data, loading }: Props) {
                   const badge = getDateBadge(v.date_added)
                   return (
                     <tr key={v.cve_id} className="hover:bg-slate-800/40 transition-colors group">
-                      <td className="py-2.5 pr-3">
+                      <td className="py-3 pr-3">
                         <a
                           href={`https://nvd.nist.gov/vuln/detail/${v.cve_id}`}
                           target="_blank"
@@ -80,15 +80,15 @@ export function RecentCVEs({ data, loading }: Props) {
                           className="inline-flex items-center gap-1 font-mono text-violet-400 hover:text-violet-300 transition-colors"
                         >
                           {v.cve_id}
-                          <ExternalLink size={9} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                          <ExternalLink size={11} className="opacity-0 group-hover:opacity-100 transition-opacity" />
                         </a>
                       </td>
                       <td className="py-2.5 pr-3">
                         <p className="text-slate-300 font-medium truncate max-w-[200px]">{v.vendor_project}</p>
-                        <p className="text-slate-600 truncate max-w-[200px]">{v.product}</p>
+                        <p className="text-slate-500 text-xs truncate max-w-[200px]">{v.product}</p>
                       </td>
                       <td className="py-2.5 text-right">
-                        <span className={`inline-block px-1.5 py-0.5 rounded border text-[10px] font-medium ${badge.cls}`}>
+                        <span className={`inline-block px-2 py-0.5 rounded border text-xs font-medium ${badge.cls}`}>
                           {badge.label}
                         </span>
                       </td>
@@ -105,17 +105,17 @@ export function RecentCVEs({ data, loading }: Props) {
               <button
                 onClick={() => setPage(p => Math.max(0, p - 1))}
                 disabled={page === 0}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronLeft size={12} /> 前へ
               </button>
-              <span className="text-xs text-slate-600 tabular-nums">
+              <span className="text-sm text-slate-600 tabular-nums">
                 {page + 1} / {totalPages}
               </span>
               <button
                 onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
                 disabled={page === totalPages - 1}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
                 次へ <ChevronRight size={12} />
               </button>

@@ -32,7 +32,7 @@ export function HealthStatus() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Activity size={15} className="text-slate-400" />
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">サーバー稼働状況</span>
+          <span className="text-sm font-semibold text-slate-400 uppercase tracking-wider">サーバー稼働状況</span>
         </div>
         <button
           onClick={load}
@@ -53,7 +53,7 @@ export function HealthStatus() {
             'bg-red-400 shadow-[0_0_10px_#f87171]'
           }`}
         />
-        <span className={`text-xl font-bold ${
+        <span className={`text-2xl font-bold ${
           loading ? 'text-slate-600' :
           isOk ? 'text-emerald-400' : 'text-red-400'
         }`}>
@@ -81,16 +81,16 @@ export function HealthStatus() {
         ].map(({ icon: Icon, label, ok, okText, ngText }) => (
           <div key={label} className="flex items-center justify-between rounded-xl bg-slate-800/60 px-3 py-2.5">
             <div className="flex items-center gap-2">
-              <Icon size={13} className="text-slate-500" />
-              <span className="text-xs text-slate-400">{label}</span>
+              <Icon size={14} className="text-slate-500" />
+              <span className="text-sm text-slate-400">{label}</span>
             </div>
             <div className="flex items-center gap-1.5">
               {!loading && (
                 ok
-                  ? <CheckCircle size={12} className="text-emerald-400" />
-                  : <XCircle size={12} className="text-red-400" />
+                  ? <CheckCircle size={14} className="text-emerald-400" />
+                  : <XCircle size={14} className="text-red-400" />
               )}
-              <span className={`text-xs font-medium ${
+              <span className={`text-sm font-medium ${
                 loading ? 'text-slate-600' :
                 label === '実行環境' ? 'text-slate-300' :
                 ok ? 'text-emerald-400' : 'text-red-400'
@@ -104,7 +104,7 @@ export function HealthStatus() {
 
       {/* 最終確認時刻 */}
       {lastChecked && (
-        <p className="text-[10px] text-slate-600 text-right">
+        <p className="text-xs text-slate-600 text-right">
           最終確認: {lastChecked.toLocaleTimeString('ja-JP')}
         </p>
       )}

@@ -2,6 +2,7 @@
 認証・ページネーション・フィルタリング・直近データ取得を検証する。
 """
 from datetime import date, timedelta
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -335,3 +336,39 @@ def test_vulnerability_repr(db_session: Session):
     result = repr(vuln)
     assert "CVE-2026-99999" in result
     assert "ReprVendor" in result
+
+
+# ── /admin/crawl テスト ───────────────────────────────────────────
+
+
+def test_admin_crawl_requires_auth(client: TestClient):
+    """POST /admin/crawl は API キーなしで 403 を返すことを確認する。"""
+    response = client.post("/admin/crawl")
+    assert response.status_code == 403
+
+
+def test_admin_crawl_success(client: TestClient, monkeypatch):
+    """POST /admin/crawl がクローラーを正常実行し結果を返すことを確認する。"""
+    monkeypatch.setattr("app.auth.settings.API_KEY", TEST_API_KEY)
+    with patch("app.main._fetch_cisa_kev", return_value=[]), \
+         patch("app.main._upsert_vulnerabilities", return_value=(3, 1)):
+        response = client.post(
+            "/admin/crawl",
+            headers={"X-API-KEY": TEST_API_KEY},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["inserted"] == 3
+    assert body["updated"] == 1
+    assert "completed" in body["message"].lower()
+
+
+def test_admin_crawl_failure_returns_500(client: TestClient, monkeypatch):
+    """クローラーが例外を送出した場合に 500 を返すことを確認する。"""
+    monkeypatch.setattr("app.auth.settings.API_KEY", TEST_API_KEY)
+    with patch("app.main._fetch_cisa_kev", side_effect=RuntimeError("Network error")):
+        response = client.post(
+            "/admin/crawl",
+            headers={"X-API-KEY": TEST_API_KEY},
+        )
+    assert response.status_code == 500
