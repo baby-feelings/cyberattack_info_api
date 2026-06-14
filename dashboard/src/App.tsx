@@ -6,6 +6,8 @@ import { StatsCards } from './components/StatsCards'
 import { MonthlyTrend } from './components/MonthlyTrend'
 import { VendorRanking } from './components/VendorRanking'
 import { RecentCVEs } from './components/RecentCVEs'
+import { ScanPanel } from './components/ScanPanel'
+import { ScanHistory } from './components/ScanHistory'
 
 export default function App() {
   const [recent, setRecent] = useState<VulnerabilityOut[]>([])
@@ -102,6 +104,16 @@ export default function App() {
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           <VendorRanking data={stats?.top_vendors ?? []} loading={loading} />
           <RecentCVEs data={recent} loading={loading} />
+        </div>
+
+        {/* ライブラリ脆弱性スキャン */}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+          <div className="xl:col-span-2">
+            <ScanPanel />
+          </div>
+          <div className="xl:col-span-1">
+            <ScanHistory />
+          </div>
         </div>
 
       </main>

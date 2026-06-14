@@ -28,6 +28,32 @@ export async function fetchStats(): Promise<StatsResponse> {
   return apiFetch<StatsResponse>('/api/vulnerabilities/stats')
 }
 
+// POST リクエスト共通ヘルパー（text/plain ボディ）
+async function apiPost<T>(path: string, body: string): Promise<T> {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: 'POST',
+    headers: { 'X-API-KEY': API_KEY, 'Content-Type': 'text/plain' },
+    body,
+  })
+  if (!res.ok) throw new Error(`API error ${res.status}: ${path}`)
+  return res.json() as Promise<T>
+}
+
+// requirements.txt スキャン
+export async function scanRequirements(text: string): Promise<ScanResponse> {
+  return apiPost<ScanResponse>('/api/scan/requirements', text)
+}
+
+// package.json スキャン
+export async function scanPackageJson(text: string): Promise<ScanResponse> {
+  return apiPost<ScanResponse>('/api/scan/package-json', text)
+}
+
+// スキャン履歴取得
+export async function fetchScanHistory(limit = 10): Promise<ScanResultOut[]> {
+  return apiFetch<ScanResultOut[]>(`/api/scan/history?limit=${limit}`)
+}
+
 // 型定義
 export interface HealthResponse {
   status: 'ok' | 'degraded'
@@ -59,4 +85,31 @@ export interface StatsResponse {
   total_vulnerabilities: number
   top_vendors: VendorStat[]
   monthly_trend: MonthlyStat[]
+}
+
+export interface VulnerabilityFinding {
+  package_name: string
+  package_version: string | null
+  source: 'OSV' | 'CISA_KEV'
+  vuln_id: string
+  severity: string | null
+  summary: string
+  details: string | null
+  fixed_versions: string[]
+  references: string[]
+}
+
+export interface ScanResponse {
+  scanned_packages: number
+  total_findings: number
+  findings: VulnerabilityFinding[]
+}
+
+export interface ScanResultOut {
+  id: number
+  scan_type: string
+  scanned_packages: number
+  total_findings: number
+  findings: VulnerabilityFinding[]
+  scanned_at: string
 }
