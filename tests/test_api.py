@@ -233,6 +233,99 @@ def test_recent_default_days(client: TestClient, db_session: Session, monkeypatc
     assert "CVE-2026-30001" in cve_ids
 
 
+# ── CVE 個別取得テスト ────────────────────────────────────────────
+
+
+def test_get_vulnerability_by_cve_id(client: TestClient, db_session: Session, monkeypatch):
+    """GET /api/vulnerabilities/{cve_id} が正しいレコードを返すことを確認する。"""
+    monkeypatch.setattr("app.auth.settings.API_KEY", TEST_API_KEY)
+    _make_vuln(db_session, cve_id="CVE-2026-40001", vendor="SingleVendor", product="SingleProduct")
+
+    response = client.get(
+        "/api/vulnerabilities/CVE-2026-40001",
+        headers={"X-API-KEY": TEST_API_KEY},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["cve_id"] == "CVE-2026-40001"
+    assert data["vendor_project"] == "SingleVendor"
+
+
+def test_get_vulnerability_case_insensitive(client: TestClient, db_session: Session, monkeypatch):
+    """CVE ID の大文字・小文字を問わず一致することを確認する。"""
+    monkeypatch.setattr("app.auth.settings.API_KEY", TEST_API_KEY)
+    _make_vuln(db_session, cve_id="CVE-2026-40002")
+
+    response = client.get(
+        "/api/vulnerabilities/cve-2026-40002",
+        headers={"X-API-KEY": TEST_API_KEY},
+    )
+    assert response.status_code == 200
+    assert response.json()["cve_id"] == "CVE-2026-40002"
+
+
+def test_get_vulnerability_not_found(client: TestClient, monkeypatch):
+    """存在しない CVE ID に対して 404 を返すことを確認する。"""
+    monkeypatch.setattr("app.auth.settings.API_KEY", TEST_API_KEY)
+
+    response = client.get(
+        "/api/vulnerabilities/CVE-9999-99999",
+        headers={"X-API-KEY": TEST_API_KEY},
+    )
+    assert response.status_code == 404
+
+
+def test_get_vulnerability_requires_auth(client: TestClient):
+    """認証なしでは 403 を返すことを確認する。"""
+    response = client.get("/api/vulnerabilities/CVE-2026-00001")
+    assert response.status_code == 403
+
+
+# ── 統計エンドポイントテスト ─────────────────────────────────────
+
+
+def test_stats_returns_correct_structure(client: TestClient, db_session: Session, monkeypatch):
+    """GET /api/vulnerabilities/stats が正しい構造を返すことを確認する。"""
+    monkeypatch.setattr("app.auth.settings.API_KEY", TEST_API_KEY)
+    _make_vuln(db_session, cve_id="CVE-2026-50001", vendor="VendorA")
+    _make_vuln(db_session, cve_id="CVE-2026-50002", vendor="VendorA")
+    _make_vuln(db_session, cve_id="CVE-2026-50003", vendor="VendorB")
+
+    response = client.get(
+        "/api/vulnerabilities/stats",
+        headers={"X-API-KEY": TEST_API_KEY},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "total_vulnerabilities" in data
+    assert "top_vendors" in data
+    assert "monthly_trend" in data
+    assert data["total_vulnerabilities"] == 3
+
+
+def test_stats_top_vendors_sorted(client: TestClient, db_session: Session, monkeypatch):
+    """top_vendors が件数の多い順に並んでいることを確認する。"""
+    monkeypatch.setattr("app.auth.settings.API_KEY", TEST_API_KEY)
+    for i in range(3):
+        _make_vuln(db_session, cve_id=f"CVE-2026-6000{i}", vendor="BigVendor")
+    _make_vuln(db_session, cve_id="CVE-2026-60099", vendor="SmallVendor")
+
+    response = client.get(
+        "/api/vulnerabilities/stats",
+        headers={"X-API-KEY": TEST_API_KEY},
+    )
+    assert response.status_code == 200
+    vendors = response.json()["top_vendors"]
+    assert vendors[0]["vendor_project"] == "BigVendor"
+    assert vendors[0]["count"] == 3
+
+
+def test_stats_requires_auth(client: TestClient):
+    """認証なしでは 403 を返すことを確認する。"""
+    response = client.get("/api/vulnerabilities/stats")
+    assert response.status_code == 403
+
+
 # ── モデル repr テスト ────────────────────────────────────────────
 
 

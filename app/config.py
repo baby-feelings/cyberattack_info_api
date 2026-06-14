@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     CRON_HOUR_UTC: int = 19
     CRON_MINUTE_UTC: int = 0
 
+    # Slack 通知用 Webhook URL（未設定時は通知をスキップ）
+    SLACK_WEBHOOK_URL: str = ""
+
     model_config = SettingsConfigDict(
         # 環境に応じて .env.development または .env.production を使用
         env_file=".env",
