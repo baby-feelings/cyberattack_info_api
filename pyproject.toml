@@ -1,0 +1,34 @@
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+]
+ignore = [
+    "B008",  # FastAPI の Depends() をデフォルト引数として使う場合に必要
+]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+strict = false
+# SQLAlchemy 2.x の Mapped/mapped_column スタイルを正しく型推論するためのプラグイン
+plugins = ["sqlalchemy.ext.mypy.plugin"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "--cov=app --cov-report=term-missing --cov-report=xml"
+# DeprecationWarning を抑制（httpx と starlette の互換性警告など）
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
