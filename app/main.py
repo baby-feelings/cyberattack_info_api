@@ -77,9 +77,8 @@ app = FastAPI(
     ),
     version="1.0.0",
     lifespan=lifespan,
-    # 本番環境では Swagger UI を無効化してセキュリティを高める
-    docs_url="/docs" if settings.ENVIRONMENT == "development" else None,
-    redoc_url="/redoc" if settings.ENVIRONMENT == "development" else None,
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
 # CORS 設定（必要に応じてオリジンを制限する）
@@ -132,6 +131,7 @@ def root():
     return {
         "name": "Cyberattack Info API",
         "version": "1.0.0",
-        "docs": "/docs" if settings.ENVIRONMENT == "development" else "disabled",
+        "docs": "/docs",
+        "redoc": "/redoc",
         "health": "/health",
     }
