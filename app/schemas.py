@@ -35,3 +35,11 @@ class HealthResponse(BaseModel):
     status: str
     environment: str
     db_connected: bool
+
+
+class CrawlResponse(BaseModel):
+    """クローラー手動実行エンドポイントのレスポンススキーマ。"""
+
+    message: str
+    inserted: int
+    updated: int
