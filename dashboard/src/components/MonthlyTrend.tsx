@@ -25,7 +25,7 @@ function CustomTooltip({ active, payload, label }: {
 
 export function MonthlyTrend({ data, loading }: Props) {
   return (
-    <div className="h-full rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-lg flex flex-col gap-4">
+    <div className="h-full rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg flex flex-col gap-4">
 
       <div className="flex items-center gap-2">
         <TrendingUp size={15} className="text-slate-400" />

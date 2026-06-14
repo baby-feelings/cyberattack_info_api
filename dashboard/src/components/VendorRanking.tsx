@@ -17,7 +17,7 @@ export function VendorRanking({ data, loading }: Props) {
   const maxCount = data[0]?.count ?? 1
 
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-lg flex flex-col gap-4">
+    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg flex flex-col gap-4">
 
       <div className="flex items-center gap-2">
         <Trophy size={15} className="text-slate-400" />

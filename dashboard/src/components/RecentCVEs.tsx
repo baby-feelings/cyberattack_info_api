@@ -23,7 +23,7 @@ export function RecentCVEs({ data, loading }: Props) {
   const paged = data.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-lg flex flex-col gap-4">
+    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg flex flex-col gap-4">
 
       {/* ヘッダー */}
       <div className="flex items-center justify-between">

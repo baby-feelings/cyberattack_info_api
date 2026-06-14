@@ -38,7 +38,7 @@ export default function App() {
 
       {/* ヘッダー */}
       <header className="sticky top-0 z-20 border-b border-slate-800/60 bg-[#0a0e1a]/90 backdrop-blur-md">
-        <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-4">
+        <div className="max-w-screen-xl mx-auto px-4 sm:px-8 lg:px-12 h-14 flex items-center justify-between gap-4">
 
           {/* ロゴ */}
           <div className="flex items-center gap-2.5 min-w-0">
@@ -77,7 +77,7 @@ export default function App() {
       </header>
 
       {/* メインコンテンツ */}
-      <main className="flex-1 max-w-screen-xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      <main className="flex-1 max-w-screen-xl mx-auto w-full px-4 sm:px-8 lg:px-12 py-8 flex flex-col gap-8">
 
         {/* エラーバナー */}
         {error && (
@@ -91,7 +91,7 @@ export default function App() {
         <StatsCards stats={stats} recent={recent} loading={loading} />
 
         {/* ヘルス + 月別トレンド */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
           <div className="lg:col-span-1">
             <HealthStatus />
           </div>
@@ -101,13 +101,13 @@ export default function App() {
         </div>
 
         {/* ベンダーランキング + 直近CVE */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 xl:gap-8">
           <VendorRanking data={stats?.top_vendors ?? []} loading={loading} />
           <RecentCVEs data={recent} loading={loading} />
         </div>
 
         {/* ライブラリ脆弱性スキャン */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 xl:gap-8">
           <div className="xl:col-span-2">
             <ScanPanel />
           </div>
@@ -119,8 +119,8 @@ export default function App() {
       </main>
 
       {/* フッター */}
-      <footer className="border-t border-slate-800/60 mt-2">
-        <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-1 text-xs text-slate-600">
+      <footer className="border-t border-slate-800/60 mt-4">
+        <div className="max-w-screen-xl mx-auto px-4 sm:px-8 lg:px-12 py-5 flex flex-col sm:flex-row items-center justify-between gap-1 text-xs text-slate-600">
           <span>データソース: CISA Known Exploited Vulnerabilities Catalog</span>
           <span>毎日 JST 04:00 自動更新</span>
         </div>
