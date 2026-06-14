@@ -82,3 +82,44 @@ class ScanResponse(BaseModel):
     scanned_packages: int = Field(description="スキャンしたパッケージ数")
     total_findings: int = Field(description="検出された脆弱性の総数")
     findings: list[VulnerabilityFinding] = Field(description="検出された脆弱性一覧")
+
+
+# ── スキャン履歴 ─────────────────────────────────────────────────
+
+
+class ScanResultOut(BaseModel):
+    """スキャン履歴の出力スキーマ。"""
+
+    id: int = Field(description="スキャン結果 ID")
+    scan_type: str = Field(description="スキャン種別 (packages / requirements / package-json)")
+    scanned_packages: int = Field(description="スキャンしたパッケージ数")
+    total_findings: int = Field(description="検出された脆弱性の総数")
+    findings: list[VulnerabilityFinding] = Field(description="検出された脆弱性一覧")
+    scanned_at: str = Field(description="スキャン実行日時（ISO 8601）")
+
+    model_config = {"from_attributes": True}
+
+
+# ── 統計 ────────────────────────────────────────────────────────
+
+
+class VendorStat(BaseModel):
+    """ベンダー別集計。"""
+
+    vendor_project: str
+    count: int
+
+
+class MonthlyStat(BaseModel):
+    """月別集計。"""
+
+    year_month: str = Field(description="YYYY-MM 形式")
+    count: int
+
+
+class StatsResponse(BaseModel):
+    """統計エンドポイントのレスポンス。"""
+
+    total_vulnerabilities: int = Field(description="総脆弱性件数")
+    top_vendors: list[VendorStat] = Field(description="件数上位ベンダー（上位 10 件）")
+    monthly_trend: list[MonthlyStat] = Field(description="月別追加件数（直近 12 ヶ月）")

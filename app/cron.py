@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import SessionLocal
 from app.models import Vulnerability
+from app.notifications import notify_crawl_error, notify_new_vulnerabilities
 
 logger = logging.getLogger(__name__)
 
@@ -108,11 +109,15 @@ def fetch_and_store_kev() -> None:
             inserted,
             updated,
         )
+        # 新規 CVE があれば Slack に通知
+        notify_new_vulnerabilities(inserted, updated)
     except httpx.HTTPError as exc:
         logger.error("HTTP error during CISA KEV fetch: %s", exc)
+        notify_crawl_error(str(exc))
         raise
     except Exception as exc:
         logger.error("Unexpected error during CISA KEV fetch: %s", exc, exc_info=True)
+        notify_crawl_error(str(exc))
         raise
     finally:
         db.close()
