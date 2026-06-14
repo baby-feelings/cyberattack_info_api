@@ -40,6 +40,16 @@ def test_extract_severity_from_cvss_vector():
     assert _extract_severity(vuln) == "HIGH"
 
 
+def test_extract_severity_medium_from_cvss_vector():
+    """CVSS ベクタが AV:N/AC:L に一致しない場合は MEDIUM を返す。"""
+    vuln = {
+        "severity": [
+            {"type": "CVSS_V3", "score": "CVSS:3.1/AV:L/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H"}
+        ]
+    }
+    assert _extract_severity(vuln) == "MEDIUM"
+
+
 def test_extract_severity_none_when_no_data():
     """重要度情報がない場合は None を返す。"""
     assert _extract_severity({}) is None
