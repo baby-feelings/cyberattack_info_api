@@ -1,6 +1,5 @@
-// 直近 30 日の新規 CVE 一覧テーブル
 import { useState } from 'react'
-import { AlertTriangle, ExternalLink } from 'lucide-react'
+import { AlertTriangle, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react'
 import type { VulnerabilityOut } from '../api/client'
 
 interface Props {
@@ -8,7 +7,15 @@ interface Props {
   loading: boolean
 }
 
-const PAGE_SIZE = 10
+const PAGE_SIZE = 8
+
+// 日付から経過日数を計算してバッジ色を返す
+function getDateBadge(dateStr: string) {
+  const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000)
+  if (days <= 7) return { label: `${days}d ago`, cls: 'bg-red-500/15 text-red-400 border-red-500/30' }
+  if (days <= 14) return { label: `${days}d ago`, cls: 'bg-orange-500/15 text-orange-400 border-orange-500/30' }
+  return { label: dateStr, cls: 'bg-slate-800 text-slate-500 border-slate-700' }
+}
 
 export function RecentCVEs({ data, loading }: Props) {
   const [page, setPage] = useState(0)
@@ -16,83 +23,101 @@ export function RecentCVEs({ data, loading }: Props) {
   const paged = data.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
   return (
-    <div className="bg-slate-800 rounded-2xl p-6 border border-slate-700">
-      <div className="flex items-center justify-between mb-5">
+    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-lg flex flex-col gap-4">
+
+      {/* ヘッダー */}
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <AlertTriangle size={18} className="text-slate-400" />
-          <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">
+          <AlertTriangle size={15} className="text-slate-400" />
+          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
             直近 30 日の新規 CVE
-          </h2>
+          </span>
         </div>
-        <span className="text-xs text-slate-500">{data.length} 件</span>
+        {!loading && (
+          <span className="text-xs font-medium text-slate-500 tabular-nums">
+            {data.length} 件
+          </span>
+        )}
       </div>
 
+      {/* テーブル本体 */}
       {loading ? (
         <div className="space-y-2">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-12 bg-slate-700/50 rounded-lg animate-pulse" />
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3 py-2">
+              <div className="h-3 w-28 bg-slate-800 rounded animate-pulse" />
+              <div className="h-3 flex-1 bg-slate-800 rounded animate-pulse" />
+              <div className="h-3 w-16 bg-slate-800 rounded animate-pulse" />
+            </div>
           ))}
         </div>
       ) : data.length === 0 ? (
-        <p className="text-slate-500 text-sm text-center py-8">直近 30 日の新規 CVE はありません</p>
+        <div className="flex flex-col items-center justify-center gap-2 py-10 text-slate-600">
+          <AlertTriangle size={24} />
+          <p className="text-xs">直近 30 日の新規 CVE はありません</p>
+        </div>
       ) : (
         <>
-          <div className="overflow-x-auto -mx-1">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto -mx-1 px-1">
+            <table className="w-full text-xs min-w-[480px]">
               <thead>
-                <tr className="text-left text-xs text-slate-500 border-b border-slate-700">
-                  <th className="pb-2 pr-4 font-medium">CVE ID</th>
-                  <th className="pb-2 pr-4 font-medium">ベンダー</th>
-                  <th className="pb-2 pr-4 font-medium hidden md:table-cell">製品</th>
-                  <th className="pb-2 pr-4 font-medium hidden lg:table-cell">脆弱性名</th>
-                  <th className="pb-2 font-medium">追加日</th>
+                <tr className="border-b border-slate-800">
+                  <th className="text-left text-[10px] font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-32">CVE ID</th>
+                  <th className="text-left text-[10px] font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3">ベンダー / 製品</th>
+                  <th className="text-right text-[10px] font-semibold text-slate-600 uppercase tracking-wider pb-2 w-24">追加日</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-700/50">
-                {paged.map((v) => (
-                  <tr key={v.cve_id} className="hover:bg-slate-700/30 transition-colors">
-                    <td className="py-2.5 pr-4">
-                      <a
-                        href={`https://nvd.nist.gov/vuln/detail/${v.cve_id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-violet-400 hover:text-violet-300 font-mono text-xs flex items-center gap-1 whitespace-nowrap"
-                      >
-                        {v.cve_id}
-                        <ExternalLink size={10} />
-                      </a>
-                    </td>
-                    <td className="py-2.5 pr-4 text-slate-300 text-xs whitespace-nowrap">{v.vendor_project}</td>
-                    <td className="py-2.5 pr-4 text-slate-400 text-xs hidden md:table-cell">{v.product}</td>
-                    <td className="py-2.5 pr-4 text-slate-400 text-xs hidden lg:table-cell max-w-xs truncate">
-                      {v.vulnerability_name}
-                    </td>
-                    <td className="py-2.5 text-slate-500 text-xs whitespace-nowrap">{v.date_added}</td>
-                  </tr>
-                ))}
+              <tbody className="divide-y divide-slate-800/60">
+                {paged.map((v) => {
+                  const badge = getDateBadge(v.date_added)
+                  return (
+                    <tr key={v.cve_id} className="hover:bg-slate-800/40 transition-colors group">
+                      <td className="py-2.5 pr-3">
+                        <a
+                          href={`https://nvd.nist.gov/vuln/detail/${v.cve_id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 font-mono text-violet-400 hover:text-violet-300 transition-colors"
+                        >
+                          {v.cve_id}
+                          <ExternalLink size={9} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </a>
+                      </td>
+                      <td className="py-2.5 pr-3">
+                        <p className="text-slate-300 font-medium truncate max-w-[200px]">{v.vendor_project}</p>
+                        <p className="text-slate-600 truncate max-w-[200px]">{v.product}</p>
+                      </td>
+                      <td className="py-2.5 text-right">
+                        <span className={`inline-block px-1.5 py-0.5 rounded border text-[10px] font-medium ${badge.cls}`}>
+                          {badge.label}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
 
           {/* ページネーション */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-700">
+            <div className="flex items-center justify-between pt-2 border-t border-slate-800">
               <button
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                onClick={() => setPage(p => Math.max(0, p - 1))}
                 disabled={page === 0}
-                className="text-xs px-3 py-1.5 rounded-lg bg-slate-700 text-slate-300 disabled:opacity-40 hover:bg-slate-600 transition-colors"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
-                ← 前へ
+                <ChevronLeft size={12} /> 前へ
               </button>
-              <span className="text-xs text-slate-500">
-                {page + 1} / {totalPages} ページ
+              <span className="text-xs text-slate-600 tabular-nums">
+                {page + 1} / {totalPages}
               </span>
               <button
-                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
                 disabled={page === totalPages - 1}
-                className="text-xs px-3 py-1.5 rounded-lg bg-slate-700 text-slate-300 disabled:opacity-40 hover:bg-slate-600 transition-colors"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
-                次へ →
+                次へ <ChevronRight size={12} />
               </button>
             </div>
           )}

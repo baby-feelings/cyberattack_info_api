@@ -1,6 +1,5 @@
-// サーバー稼働状況カード
 import { useEffect, useState } from 'react'
-import { Activity, Database, Server, RefreshCw } from 'lucide-react'
+import { Activity, Database, Server, RefreshCw, CheckCircle, XCircle } from 'lucide-react'
 import { fetchHealth, type HealthResponse } from '../api/client'
 
 export function HealthStatus() {
@@ -12,8 +11,7 @@ export function HealthStatus() {
   async function load() {
     setLoading(true)
     try {
-      const res = await fetchHealth()
-      setData(res)
+      setData(await fetchHealth())
       setError(false)
     } catch {
       setError(true)
@@ -28,52 +26,85 @@ export function HealthStatus() {
   const isOk = !error && data?.status === 'ok'
 
   return (
-    <div className="bg-slate-800 rounded-2xl p-6 border border-slate-700">
-      <div className="flex items-center justify-between mb-4">
+    <div className="h-full rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-lg flex flex-col gap-4">
+
+      {/* ヘッダー */}
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Activity size={18} className="text-slate-400" />
-          <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">サーバー稼働状況</h2>
+          <Activity size={15} className="text-slate-400" />
+          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">サーバー稼働状況</span>
         </div>
         <button
           onClick={load}
           disabled={loading}
-          className="text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-50"
-          title="更新"
+          className="text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40 p-1 rounded"
+          title="再確認"
         >
-          <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
         </button>
       </div>
 
-      <div className="flex items-center gap-3 mb-5">
-        <span className={`w-3 h-3 rounded-full ${isOk ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]' : 'bg-red-400 shadow-[0_0_8px_#f87171]'} ${loading ? 'animate-pulse' : ''}`} />
-        <span className={`text-2xl font-bold ${isOk ? 'text-emerald-400' : 'text-red-400'}`}>
+      {/* ステータス表示 */}
+      <div className="flex items-center gap-3">
+        <span
+          className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+            loading ? 'bg-slate-600 animate-pulse' :
+            isOk ? 'bg-emerald-400 shadow-[0_0_10px_#34d399]' :
+            'bg-red-400 shadow-[0_0_10px_#f87171]'
+          }`}
+        />
+        <span className={`text-xl font-bold ${
+          loading ? 'text-slate-600' :
+          isOk ? 'text-emerald-400' : 'text-red-400'
+        }`}>
           {loading ? '確認中...' : error ? 'UNREACHABLE' : data?.status.toUpperCase()}
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-slate-700/50 rounded-xl p-3 flex items-center gap-3">
-          <Database size={16} className="text-slate-400 shrink-0" />
-          <div>
-            <p className="text-xs text-slate-400">DB 接続</p>
-            <p className={`text-sm font-semibold ${data?.db_connected ? 'text-emerald-400' : 'text-red-400'}`}>
-              {loading ? '—' : data?.db_connected ? '正常' : 'エラー'}
-            </p>
+      {/* 詳細項目 */}
+      <div className="flex flex-col gap-2 flex-1">
+        {[
+          {
+            icon: Database,
+            label: 'DB 接続',
+            ok: data?.db_connected ?? false,
+            okText: '正常',
+            ngText: 'エラー',
+          },
+          {
+            icon: Server,
+            label: '実行環境',
+            ok: true,
+            okText: loading ? '—' : (data?.environment ?? '—'),
+            ngText: '—',
+          },
+        ].map(({ icon: Icon, label, ok, okText, ngText }) => (
+          <div key={label} className="flex items-center justify-between rounded-xl bg-slate-800/60 px-3 py-2.5">
+            <div className="flex items-center gap-2">
+              <Icon size={13} className="text-slate-500" />
+              <span className="text-xs text-slate-400">{label}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              {!loading && (
+                ok
+                  ? <CheckCircle size={12} className="text-emerald-400" />
+                  : <XCircle size={12} className="text-red-400" />
+              )}
+              <span className={`text-xs font-medium ${
+                loading ? 'text-slate-600' :
+                label === '実行環境' ? 'text-slate-300' :
+                ok ? 'text-emerald-400' : 'text-red-400'
+              }`}>
+                {loading ? '—' : ok ? okText : ngText}
+              </span>
+            </div>
           </div>
-        </div>
-        <div className="bg-slate-700/50 rounded-xl p-3 flex items-center gap-3">
-          <Server size={16} className="text-slate-400 shrink-0" />
-          <div>
-            <p className="text-xs text-slate-400">環境</p>
-            <p className="text-sm font-semibold text-slate-200">
-              {loading ? '—' : data?.environment ?? '—'}
-            </p>
-          </div>
-        </div>
+        ))}
       </div>
 
+      {/* 最終確認時刻 */}
       {lastChecked && (
-        <p className="text-xs text-slate-500 mt-3 text-right">
+        <p className="text-[10px] text-slate-600 text-right">
           最終確認: {lastChecked.toLocaleTimeString('ja-JP')}
         </p>
       )}
