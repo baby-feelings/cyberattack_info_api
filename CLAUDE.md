@@ -78,20 +78,24 @@ pip install -r requirements-dev.txt
 
 ```
 app/
-├── main.py          # FastAPI アプリ・lifespan・ヘルスチェック
-├── config.py        # Settings（pydantic-settings）・環境変数管理
-├── database.py      # SQLAlchemy エンジン（SQLite/PG 切り替え）・get_db
-├── models.py        # Vulnerability ORM モデル（SQLAlchemy 2.x Mapped スタイル）
-├── schemas.py       # Pydantic スキーマ（VulnerabilityOut・HealthResponse 等）
-├── auth.py          # X-API-KEY 認証（APIKeyHeader）
-├── cron.py          # CISA KEV クローラー・Upsert ロジック
+├── main.py            # FastAPI アプリ・lifespan・ヘルスチェック・/admin/crawl
+├── config.py          # Settings（pydantic-settings）・環境変数管理
+├── database.py        # SQLAlchemy エンジン（SQLite/PG 切り替え）・get_db
+├── models.py          # ORM モデル（Vulnerability・ScanResult）
+├── schemas.py         # Pydantic スキーマ（VulnerabilityOut・ScanResponse 等）
+├── auth.py            # X-API-KEY 認証（APIKeyHeader）
+├── cron.py            # CISA KEV クローラー・Upsert ロジック・Slack 通知呼び出し
+├── notifications.py   # Slack Webhook 通知（新規 CVE・エラー通知）
 └── routers/
-    └── vulnerabilities.py  # /api/vulnerabilities エンドポイント
+    ├── vulnerabilities.py  # /api/vulnerabilities エンドポイント（一覧・個別・統計）
+    └── scan.py             # /api/scan エンドポイント（スキャン・履歴）
 
 tests/
-├── conftest.py      # テスト DB・client・db_session フィクスチャ
-├── test_api.py      # API エンドポイントテスト（15 テスト）
-└── test_cron.py     # クローラーユニットテスト（12 テスト）
+├── conftest.py           # テスト DB・client・db_session フィクスチャ
+├── test_api.py           # API エンドポイントテスト（24 テスト）
+├── test_cron.py          # クローラーユニットテスト（12 テスト）
+├── test_scan.py          # スキャン API テスト（27 テスト）
+└── test_notifications.py # Slack 通知テスト（8 テスト）
 
 .github/workflows/
 ├── ci.yml           # CI: ruff → mypy → pytest（PR 時・Python 3.10/3.11 matrix）
@@ -182,7 +186,7 @@ main ブランチへのマージ後に自動実行。
 ### Render の設定
 - **Build Command:** `pip install -r requirements.txt`
 - **Start Command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-- **Environment Variables:** `DATABASE_URL`, `API_KEY`, `ENVIRONMENT=production`
+- **Environment Variables:** `DATABASE_URL`, `API_KEY`, `ENVIRONMENT=production`, `SLACK_WEBHOOK_URL`（任意）
 
 ---
 
