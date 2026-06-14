@@ -6,15 +6,16 @@ import logging.config
 from contextlib import asynccontextmanager
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from fastapi import FastAPI
+from fastapi import FastAPI, Security
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
+from app.auth import require_api_key
 from app.config import settings
-from app.cron import fetch_and_store_kev
-from app.database import Base, engine, get_db
+from app.cron import _fetch_cisa_kev, _upsert_vulnerabilities, fetch_and_store_kev
+from app.database import Base, SessionLocal, engine, get_db
 from app.routers import vulnerabilities
-from app.schemas import HealthResponse
+from app.schemas import CrawlResponse, HealthResponse
 
 # ──────────────────────────────────────────────
 # ロギング設定（標準出力に JSON 風ログを出力）
@@ -86,7 +87,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["X-API-KEY"],
 )
 
@@ -124,6 +125,36 @@ def health_check() -> HealthResponse:
         environment=settings.ENVIRONMENT,
         db_connected=db_ok,
     )
+
+
+@app.post(
+    "/admin/crawl",
+    response_model=CrawlResponse,
+    tags=["admin"],
+    dependencies=[Security(require_api_key)],
+    summary="クローラー手動実行",
+    description="CISA KEV フィードを即時取得して DB に Upsert する（X-API-KEY 必須）。",
+)
+def trigger_crawl() -> CrawlResponse:
+    """CISA KEV クローラーを手動で即時実行する。
+    スケジュール実行を待たずにデータを取得したい場合に使用する。
+    """
+    logger.info("Manual crawl triggered via /admin/crawl")
+    db = SessionLocal()
+    try:
+        entries = _fetch_cisa_kev()
+        inserted, updated = _upsert_vulnerabilities(db, entries)
+        logger.info("Manual crawl done: inserted=%d, updated=%d", inserted, updated)
+        return CrawlResponse(
+            message="Crawl completed successfully",
+            inserted=inserted,
+            updated=updated,
+        )
+    except Exception as exc:
+        logger.error("Manual crawl failed: %s", exc, exc_info=True)
+        raise
+    finally:
+        db.close()
 
 
 @app.get("/", tags=["system"])
