@@ -7,21 +7,16 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
-    name: Deploy to Render
+  # ── Render（バックエンド API）デプロイ ──────────────────────────
+  deploy-render:
+    name: Deploy API to Render
     runs-on: ubuntu-latest
-    # CI が通った後にのみデプロイする
-    needs: []  # CI workflow とは独立しているため、メインブランチマージ後に実行
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # ── Render へのデプロイ（Render を使う場合） ─────────────
-      # Render の Deploy Hook URL を GitHub Secrets に登録してください。
-      # Secret 名: RENDER_DEPLOY_HOOK_URL
       - name: Trigger Render deploy
-        if: ${{ vars.DEPLOY_TARGET == 'render' || vars.DEPLOY_TARGET == '' }}
         run: |
           if [ -n "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" ]; then
             curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
@@ -30,3 +25,37 @@ jobs:
             echo "RENDER_DEPLOY_HOOK_URL is not set. Skipping Render deploy."
           fi
 
+  # ── Vercel（フロントエンド ダッシュボード）デプロイ ────────────
+  deploy-vercel:
+    name: Deploy Dashboard to Vercel
+    runs-on: ubuntu-latest
+    # dashboard/ 配下に変更があった場合のみデプロイ
+    # （バックエンドのみの変更でダッシュボードを再デプロイしない）
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Deploy to Vercel (Production)
+        # VERCEL_TOKEN を GitHub Secrets に登録することでデプロイが有効になる
+        if: ${{ secrets.VERCEL_TOKEN != '' }}
+        working-directory: dashboard
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: vercel deploy --prod --token=$VERCEL_TOKEN --yes
+
+      - name: Skip Vercel deploy (secrets not configured)
+        if: ${{ secrets.VERCEL_TOKEN == '' }}
+        run: echo "VERCEL_TOKEN is not set. Skipping Vercel deploy."
