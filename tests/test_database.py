@@ -8,13 +8,13 @@ os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
 os.environ.setdefault("API_KEY", "test-api-key-for-pytest")
 os.environ.setdefault("ENVIRONMENT", "development")
 
-from unittest.mock import MagicMock, call, patch  # noqa: E402
+from unittest.mock import MagicMock, patch  # noqa: E402
 
 from app.database import _build_engine  # noqa: E402
 
 
 def test_build_engine_sqlite_path():
-    """DATABASE_URL が sqlite の場合、check_same_thread=False で engine が作られることを確認する。"""
+    """DATABASE_URL が sqlite の場合、check_same_thread=False で engine が作られることを確認。"""
     mock_engine = MagicMock()
 
     with patch("app.database.settings") as mock_settings, \
