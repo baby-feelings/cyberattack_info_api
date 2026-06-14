@@ -42,3 +42,8 @@ Thumbs.db
 
 # Alembic
 alembic/versions/
+
+.vercel
+
+# Icon source files (deployed via dashboard/public/)
+icon/

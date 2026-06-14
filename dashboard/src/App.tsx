@@ -1,7 +1,5 @@
-// ダッシュボードのメインコンポーネント
-// 初回マウント時に API から全データを並列取得し、各ウィジェットへ渡す
 import { useEffect, useState, useCallback } from 'react'
-import { RefreshCw, ShieldAlert } from 'lucide-react'
+import { RefreshCw, ShieldAlert, Wifi } from 'lucide-react'
 import { fetchRecent, fetchStats, type VulnerabilityOut, type StatsResponse } from './api/client'
 import { HealthStatus } from './components/HealthStatus'
 import { StatsCards } from './components/StatsCards'
@@ -20,7 +18,6 @@ export default function App() {
     setLoading(true)
     setError(null)
     try {
-      // 並列取得で高速化
       const [recentData, statsData] = await Promise.all([fetchRecent(30), fetchStats()])
       setRecent(recentData)
       setStats(statsData)
@@ -35,51 +32,64 @@ export default function App() {
   useEffect(() => { load() }, [load])
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100">
+    <div className="min-h-screen bg-[#0a0e1a] text-slate-100 flex flex-col">
+
       {/* ヘッダー */}
-      <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="bg-violet-600 rounded-xl p-1.5">
-              <ShieldAlert size={20} className="text-white" />
+      <header className="sticky top-0 z-20 border-b border-slate-800/60 bg-[#0a0e1a]/90 backdrop-blur-md">
+        <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-4">
+
+          {/* ロゴ */}
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="shrink-0 bg-violet-600 rounded-lg p-1.5 shadow-lg shadow-violet-900/50">
+              <ShieldAlert size={18} className="text-white" />
             </div>
-            <div>
-              <h1 className="text-base font-bold text-slate-100">Cyberattack Info Dashboard</h1>
-              <p className="text-xs text-slate-500">CISA Known Exploited Vulnerabilities</p>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-white leading-tight truncate">
+                Cyberattack Info Dashboard
+              </p>
+              <p className="text-[10px] text-slate-500 leading-tight hidden sm:block">
+                CISA Known Exploited Vulnerabilities
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+
+          {/* 右側: 更新時刻 + ボタン */}
+          <div className="flex items-center gap-2 shrink-0">
             {refreshedAt && (
-              <span className="text-xs text-slate-500 hidden sm:block">
-                更新: {refreshedAt.toLocaleTimeString('ja-JP')}
-              </span>
+              <div className="hidden md:flex items-center gap-1.5 text-xs text-slate-500">
+                <Wifi size={11} className="text-emerald-500" />
+                <span>{refreshedAt.toLocaleTimeString('ja-JP')}</span>
+              </div>
             )}
             <button
               onClick={load}
               disabled={loading}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm text-slate-300 transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-xs font-medium text-slate-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-              <span className="hidden sm:inline">更新</span>
+              <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+              <span>更新</span>
             </button>
           </div>
+
         </div>
       </header>
 
       {/* メインコンテンツ */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-5">
-        {/* エラー表示 */}
+      <main className="flex-1 max-w-screen-xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        {/* エラーバナー */}
         {error && (
-          <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-xl px-4 py-3 text-sm">
-            ⚠️ データ取得エラー: {error}
+          <div className="flex items-start gap-3 bg-red-950/60 border border-red-800/60 text-red-300 rounded-xl px-4 py-3 text-sm">
+            <span className="shrink-0 mt-0.5">⚠️</span>
+            <span>データ取得エラー: {error}</span>
           </div>
         )}
 
-        {/* サマリーカード */}
+        {/* サマリーカード (3列) */}
         <StatsCards stats={stats} recent={recent} loading={loading} />
 
         {/* ヘルス + 月別トレンド */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1">
             <HealthStatus />
           </div>
@@ -89,19 +99,21 @@ export default function App() {
         </div>
 
         {/* ベンダーランキング + 直近CVE */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           <VendorRanking data={stats?.top_vendors ?? []} loading={loading} />
           <RecentCVEs data={recent} loading={loading} />
         </div>
+
       </main>
 
       {/* フッター */}
-      <footer className="border-t border-slate-800 mt-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between text-xs text-slate-600">
+      <footer className="border-t border-slate-800/60 mt-2">
+        <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-1 text-xs text-slate-600">
           <span>データソース: CISA Known Exploited Vulnerabilities Catalog</span>
           <span>毎日 JST 04:00 自動更新</span>
         </div>
       </footer>
+
     </div>
   )
 }

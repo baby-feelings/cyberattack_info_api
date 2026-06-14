@@ -1,7 +1,3 @@
-// ベンダー別脆弱性ランキング（Top 10 横棒グラフ）
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
-} from 'recharts'
 import { Trophy } from 'lucide-react'
 import type { VendorStat } from '../api/client'
 
@@ -10,62 +6,67 @@ interface Props {
   loading: boolean
 }
 
-// 順位に応じて色を変える
-const BAR_COLORS = ['#f59e0b', '#94a3b8', '#cd7c2f', '#7c3aed', '#7c3aed', '#7c3aed', '#7c3aed', '#7c3aed', '#7c3aed', '#7c3aed']
-
-function CustomTooltip({ active, payload }: { active?: boolean; payload?: { payload: VendorStat; value: number }[] }) {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm shadow-lg">
-      <p className="text-slate-200 font-semibold">{payload[0].payload.vendor_project}</p>
-      <p className="text-amber-400">{payload[0].value} 件</p>
-    </div>
-  )
-}
+const MEDAL = ['🥇', '🥈', '🥉']
+const BAR_COLOR = [
+  'bg-amber-400', 'bg-slate-400', 'bg-orange-600',
+  'bg-violet-500', 'bg-violet-500', 'bg-violet-500',
+  'bg-violet-500', 'bg-violet-500', 'bg-violet-500', 'bg-violet-500',
+]
 
 export function VendorRanking({ data, loading }: Props) {
+  const maxCount = data[0]?.count ?? 1
+
   return (
-    <div className="bg-slate-800 rounded-2xl p-6 border border-slate-700">
-      <div className="flex items-center gap-2 mb-5">
-        <Trophy size={18} className="text-slate-400" />
-        <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">ベンダー別脆弱性数 Top 10</h2>
+    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-lg flex flex-col gap-4">
+
+      <div className="flex items-center gap-2">
+        <Trophy size={15} className="text-slate-400" />
+        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          ベンダー別脆弱性数 Top 10
+        </span>
       </div>
 
       {loading ? (
-        <div className="h-64 flex items-center justify-center text-slate-500">読み込み中...</div>
+        <div className="space-y-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3">
+              <div className="w-4 h-3 bg-slate-800 rounded animate-pulse shrink-0" />
+              <div className="flex-1 h-3 bg-slate-800 rounded animate-pulse" style={{ width: `${80 - i * 10}%` }} />
+              <div className="w-10 h-3 bg-slate-800 rounded animate-pulse" />
+            </div>
+          ))}
+        </div>
       ) : data.length === 0 ? (
-        <div className="h-64 flex items-center justify-center text-slate-500">データなし</div>
+        <p className="text-xs text-slate-600 text-center py-8">データがありません</p>
       ) : (
-        <ResponsiveContainer width="100%" height={280}>
-          <BarChart
-            data={data}
-            layout="vertical"
-            margin={{ top: 0, right: 30, left: 10, bottom: 0 }}
-          >
-            <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
-            <XAxis
-              type="number"
-              tick={{ fill: '#94a3b8', fontSize: 11 }}
-              tickLine={false}
-              axisLine={false}
-              allowDecimals={false}
-            />
-            <YAxis
-              type="category"
-              dataKey="vendor_project"
-              tick={{ fill: '#cbd5e1', fontSize: 11 }}
-              tickLine={false}
-              axisLine={false}
-              width={90}
-            />
-            <Tooltip content={<CustomTooltip />} />
-            <Bar dataKey="count" radius={[0, 4, 4, 0]}>
-              {data.map((_, index) => (
-                <Cell key={index} fill={BAR_COLORS[index] ?? '#7c3aed'} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+        <div className="space-y-2.5">
+          {data.map((item, i) => (
+            <div key={item.vendor_project} className="flex items-center gap-3 group">
+              {/* 順位 */}
+              <span className="text-sm w-5 text-center shrink-0 leading-none">
+                {MEDAL[i] ?? <span className="text-xs text-slate-600 font-mono">{i + 1}</span>}
+              </span>
+
+              {/* ベンダー名 + バー */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-slate-300 truncate pr-2 group-hover:text-white transition-colors">
+                    {item.vendor_project}
+                  </span>
+                  <span className="text-xs font-semibold text-slate-400 shrink-0 tabular-nums">
+                    {item.count.toLocaleString()}
+                  </span>
+                </div>
+                <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${BAR_COLOR[i]} transition-all duration-700`}
+                    style={{ width: `${(item.count / maxCount) * 100}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   )
