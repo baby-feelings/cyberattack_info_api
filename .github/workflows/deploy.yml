@@ -30,12 +30,3 @@ jobs:
             echo "RENDER_DEPLOY_HOOK_URL is not set. Skipping Render deploy."
           fi
 
-      # ── Railway へのデプロイ（Railway を使う場合） ────────────
-      # Railway CLI Token を GitHub Secrets に登録してください。
-      # Secret 名: RAILWAY_TOKEN
-      - name: Deploy to Railway
-        if: ${{ vars.DEPLOY_TARGET == 'railway' }}
-        uses: bervProject/railway-deploy@v1.0.0
-        with:
-          railway_token: ${{ secrets.RAILWAY_TOKEN }}
-          service: cyberattack-info-api
