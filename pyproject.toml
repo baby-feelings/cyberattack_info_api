@@ -27,7 +27,7 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "--cov=app --cov-report=term-missing --cov-report=xml"
+addopts = "--cov=app --cov-report=term-missing --cov-report=xml --cov-report=html:htmlcov"
 # DeprecationWarning を抑制（httpx と starlette の互換性警告など）
 filterwarnings = [
     "ignore::DeprecationWarning",

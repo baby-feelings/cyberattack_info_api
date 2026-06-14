@@ -4,6 +4,7 @@
 from datetime import date
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 from sqlalchemy.orm import Session
 
@@ -76,8 +77,6 @@ def test_fetch_cisa_kev_success():
 
 def test_fetch_cisa_kev_http_error():
     """HTTP エラー時に例外が伝播することを確認する。"""
-    import httpx
-
     mock_response = MagicMock()
     mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
         "404", request=MagicMock(), response=MagicMock()
@@ -154,3 +153,37 @@ def test_fetch_and_store_kev_integration():
         mock_session_cls.return_value = mock_db
 
         fetch_and_store_kev()  # 例外が発生しないことを確認
+
+
+def test_fetch_and_store_kev_raises_http_error():
+    """fetch_and_store_kev が httpx.HTTPError 時にログを記録して再送出することを確認する。"""
+    http_err = httpx.HTTPError("connection error")
+
+    with (
+        patch("app.cron._fetch_cisa_kev", side_effect=http_err),
+        patch("app.cron.SessionLocal") as mock_session_cls,
+    ):
+        mock_db = MagicMock()
+        mock_session_cls.return_value = mock_db
+
+        with pytest.raises(httpx.HTTPError):
+            fetch_and_store_kev()
+
+        # finally ブロックで DB がクローズされることを確認
+        mock_db.close.assert_called_once()
+
+
+def test_fetch_and_store_kev_raises_unexpected_error():
+    """fetch_and_store_kev が予期しない例外時にログを記録して再送出することを確認する。"""
+    with (
+        patch("app.cron._fetch_cisa_kev", side_effect=RuntimeError("unexpected")),
+        patch("app.cron.SessionLocal") as mock_session_cls,
+    ):
+        mock_db = MagicMock()
+        mock_session_cls.return_value = mock_db
+
+        with pytest.raises(RuntimeError, match="unexpected"):
+            fetch_and_store_kev()
+
+        # finally ブロックで DB がクローズされることを確認
+        mock_db.close.assert_called_once()
