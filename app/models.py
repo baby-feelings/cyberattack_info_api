@@ -1,10 +1,11 @@
 """SQLAlchemy ORM モデル定義。
 CISA KEV カタログの脆弱性データを格納する vulnerabilities テーブルを定義する。
+SQLAlchemy 2.x の Mapped + mapped_column スタイルを採用し、mypy との型互換性を確保する。
 """
 from datetime import date, datetime
 
-from sqlalchemy import Column, Date, DateTime, Index, Integer, String, Text, UniqueConstraint
-from sqlalchemy.sql import func
+from sqlalchemy import Date, DateTime, Index, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
 
@@ -15,36 +16,36 @@ class Vulnerability(Base):
     __tablename__ = "vulnerabilities"
 
     # 内部管理ID（自動採番）
-    id: int = Column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # CVE番号（例: CVE-2026-12345）—— ビジネスキーとして一意制約
-    cve_id: str = Column(String(30), nullable=False)
+    cve_id: Mapped[str] = mapped_column(String(30), nullable=False)
 
     # ベンダー・プロジェクト名（例: Microsoft, Apache）
-    vendor_project: str = Column(String(255), nullable=False)
+    vendor_project: Mapped[str] = mapped_column(String(255), nullable=False)
 
     # 製品名（例: Windows, Log4j）
-    product: str = Column(String(255), nullable=False)
+    product: Mapped[str] = mapped_column(String(255), nullable=False)
 
     # 脆弱性の名称・タイトル
-    vulnerability_name: str = Column(Text, nullable=False)
+    vulnerability_name: Mapped[str] = mapped_column(Text, nullable=False)
 
     # 脆弱性の詳細説明
-    description: str = Column(Text, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
 
     # 推奨される対策・アクション（任意）
-    required_action: str | None = Column(Text, nullable=True)
+    required_action: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # CISA KEV に追加された日
-    date_added: date = Column(Date, nullable=False)
+    date_added: Mapped[date] = mapped_column(Date, nullable=False)
 
     # DB 登録日時（自動セット）
-    created_at: datetime = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     # DB 更新日時（更新時に自動セット）
-    updated_at: datetime = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),

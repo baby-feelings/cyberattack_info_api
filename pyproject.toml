@@ -19,12 +19,17 @@ ignore = [
 python_version = "3.10"
 ignore_missing_imports = true
 strict = false
+# SQLAlchemy 2.x の Mapped/mapped_column スタイルを正しく型推論するためのプラグイン
+plugins = ["sqlalchemy.ext.mypy.plugin"]
 
 [tool.pytest.ini_options]
-# テスト用 .env を読み込む
-env_files = [".env.test"]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "--cov=app --cov-report=term-missing --cov-report=xml"
+# httpx と starlette の互換性警告を抑制（httpx2 への移行前の過渡期警告）
+filterwarnings = [
+    "ignore::starlette.testclient.StarletteDeprecationWarning",
+    "ignore::DeprecationWarning",
+]

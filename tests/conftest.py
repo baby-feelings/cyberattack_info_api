@@ -32,9 +32,13 @@ def setup_test_db():
     Base.metadata.create_all(bind=test_engine)
     yield
     Base.metadata.drop_all(bind=test_engine)
-    # テスト用 DB ファイルを削除
-    if os.path.exists("test.db"):
-        os.remove("test.db")
+    # エンジンの接続を全て閉じてからファイルを削除（Windows のファイルロック対策）
+    test_engine.dispose()
+    try:
+        if os.path.exists("test.db"):
+            os.remove("test.db")
+    except OSError:
+        pass  # ファイルロックが残っている場合は無視（CI の Linux 環境では発生しない）
 
 
 @pytest.fixture(autouse=True)

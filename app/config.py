@@ -32,4 +32,5 @@ class Settings(BaseSettings):
 
 
 # シングルトンとしてアプリ全体で共有
-settings = Settings()
+# mypy は env_file からの値注入を認識できないため type: ignore を使用
+settings = Settings()  # type: ignore[call-arg]
