@@ -12,6 +12,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.crawler_log import now_utc, write_crawler_log
 from app.database import SessionLocal
 from app.models import OsvVulnerability
 from app.notifications import notify_osv_crawl_error, notify_osv_new_vulnerabilities
@@ -392,12 +393,14 @@ def fetch_and_store_osv() -> tuple[int, int, int]:
 
     OSV REST API を使い、各エコシステムの主要パッケージに影響する脆弱性を
     取得して DB に保存する。完了後に古いレコードを削除し、Slack に通知する。
+    実行結果（成功・失敗・件数・所要時間）は crawler_logs テーブルに記録する。
     APScheduler から毎日呼び出しされる。
 
     Returns:
         (inserted, updated, deleted) のタプル
     """
     logger.info("=== OSV crawler started (API mode) ===")
+    started_at = now_utc()
     cutoff = datetime.now(timezone.utc) - timedelta(days=settings.OSV_DAYS)
     total_inserted = 0
     total_updated = 0
@@ -471,6 +474,16 @@ def fetch_and_store_osv() -> tuple[int, int, int]:
             logger.error("Failed to delete old OSV records: %s", exc, exc_info=True)
 
     except Exception as exc:
+        write_crawler_log(
+            crawler_type="OSV",
+            status="error",
+            started_at=started_at,
+            finished_at=now_utc(),
+            inserted=total_inserted,
+            updated=total_updated,
+            deleted=total_deleted,
+            error_message=str(exc),
+        )
         notify_osv_crawl_error(str(exc))
         raise
     finally:
@@ -479,6 +492,16 @@ def fetch_and_store_osv() -> tuple[int, int, int]:
     logger.info(
         "=== OSV crawler completed: inserted=%d, updated=%d, deleted=%d ===",
         total_inserted, total_updated, total_deleted,
+    )
+    # 実行ログを記録
+    write_crawler_log(
+        crawler_type="OSV",
+        status="success",
+        started_at=started_at,
+        finished_at=now_utc(),
+        inserted=total_inserted,
+        updated=total_updated,
+        deleted=total_deleted,
     )
     # 新規・更新があった場合のみ Slack 通知
     notify_osv_new_vulnerabilities(total_inserted, total_updated, total_deleted)
