@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   Shield, ExternalLink, ChevronDown, ChevronUp,
-  Loader2, RefreshCw, Search, X,
+  Loader2, RefreshCw, Search, X, TrendingUp, BarChart2,
 } from 'lucide-react'
+import {
+  PieChart, Pie, Cell, Tooltip as ReTooltip, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+} from 'recharts'
 import {
   fetchOsvList, fetchOsvStats,
   type OsvVulnerabilityOut, type OsvListResponse, type OsvStatsResponse,
@@ -14,6 +18,15 @@ const SEVERITY_CLS: Record<string, string> = {
   HIGH:     'bg-orange-500/15 text-orange-400 border-orange-500/30',
   MEDIUM:   'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
   LOW:      'bg-blue-500/15 text-blue-400 border-blue-500/30',
+}
+
+// 重要度別グラフの色
+const SEVERITY_COLORS: Record<string, string> = {
+  CRITICAL: '#ef4444',
+  HIGH:     '#f97316',
+  MEDIUM:   '#eab308',
+  LOW:      '#3b82f6',
+  'N/A':    '#475569',
 }
 
 // エコシステムバッジの色
@@ -28,6 +41,12 @@ const ECO_COLOR: Record<string, string> = {
   Packagist:  'bg-indigo-500/15 text-indigo-400',
   Hex:        'bg-emerald-500/15 text-emerald-400',
 }
+
+// エコシステム別グラフの色（順番で割り当て）
+const ECO_CHART_COLORS = [
+  '#7c3aed', '#0ea5e9', '#22d3ee', '#f59e0b',
+  '#f43f5e', '#8b5cf6', '#f97316', '#6366f1', '#10b981',
+]
 
 const ECOSYSTEMS = ['ALL', 'PyPI', 'npm', 'Go', 'Maven', 'RubyGems', 'NuGet', 'crates.io', 'Packagist', 'Hex']
 const SEVERITIES = ['ALL', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
@@ -175,20 +194,183 @@ function OsvRow({ item }: { item: OsvVulnerabilityOut }) {
   )
 }
 
+// 重要度別円グラフ
+function SeverityPieChart({ stats, loading }: { stats: OsvStatsResponse | null; loading: boolean }) {
+  const data = (stats?.severities ?? [])
+    .filter(s => s.severity !== 'N/A' && s.count > 0)
+    .map(s => ({ name: s.severity, value: s.count }))
+
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <Shield size={13} className="text-slate-400" />
+        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">重要度別分布</span>
+      </div>
+      <div className="h-[160px]">
+        {loading || data.length === 0 ? (
+          <div className="h-full flex items-center justify-center text-xs text-slate-600">
+            {loading ? '読み込み中...' : 'データなし'}
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={data}
+                cx="40%"
+                cy="50%"
+                innerRadius={40}
+                outerRadius={65}
+                paddingAngle={2}
+                dataKey="value"
+              >
+                {data.map((entry) => (
+                  <Cell
+                    key={entry.name}
+                    fill={SEVERITY_COLORS[entry.name] ?? '#475569'}
+                  />
+                ))}
+              </Pie>
+              <ReTooltip
+                contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }}
+                formatter={(value, name) => [String(value) + ' 件', String(name)]}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+      {/* 凡例 */}
+      {!loading && data.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {data.map(d => (
+            <span key={d.name} className="flex items-center gap-1 text-[11px] text-slate-400">
+              <span
+                className="inline-block w-2 h-2 rounded-full"
+                style={{ background: SEVERITY_COLORS[d.name] ?? '#475569' }}
+              />
+              {d.name} <span className="text-slate-600">{d.value}</span>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// エコシステム別棒グラフ
+function EcosystemBarChart({ stats, loading }: { stats: OsvStatsResponse | null; loading: boolean }) {
+  // 上位 8 エコシステムのみ表示
+  const data = (stats?.ecosystems ?? []).slice(0, 8)
+
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <BarChart2 size={13} className="text-slate-400" />
+        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">エコシステム別件数</span>
+      </div>
+      <div className="h-[160px]">
+        {loading || data.length === 0 ? (
+          <div className="h-full flex items-center justify-center text-xs text-slate-600">
+            {loading ? '読み込み中...' : 'データなし'}
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+              <XAxis
+                dataKey="ecosystem"
+                tick={{ fill: '#475569', fontSize: 10 }}
+                tickLine={false}
+                axisLine={false}
+              />
+              <YAxis
+                tick={{ fill: '#475569', fontSize: 10 }}
+                tickLine={false}
+                axisLine={false}
+                allowDecimals={false}
+              />
+              <ReTooltip
+                contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }}
+                formatter={(value) => [String(value) + ' 件', '件数']}
+              />
+              <Bar dataKey="count" radius={[3, 3, 0, 0]}>
+                {data.map((_entry, index) => (
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={ECO_CHART_COLORS[index % ECO_CHART_COLORS.length]}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// 月別 OSV トレンドグラフ
+function OsvMonthlyChart({ stats, loading }: { stats: OsvStatsResponse | null; loading: boolean }) {
+  const data = stats?.monthly_trend ?? []
+
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <TrendingUp size={13} className="text-slate-400" />
+        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">月別 OSV 更新トレンド</span>
+      </div>
+      <div className="h-[160px]">
+        {loading || data.length === 0 ? (
+          <div className="h-full flex items-center justify-center text-xs text-slate-600">
+            {loading ? '読み込み中...' : 'データなし'}
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+              <XAxis
+                dataKey="year_month"
+                tick={{ fill: '#475569', fontSize: 10 }}
+                tickLine={false}
+                axisLine={false}
+                interval="preserveStartEnd"
+              />
+              <YAxis
+                tick={{ fill: '#475569', fontSize: 10 }}
+                tickLine={false}
+                axisLine={false}
+                allowDecimals={false}
+              />
+              <ReTooltip
+                contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }}
+                formatter={(value) => [String(value) + ' 件', '件数']}
+              />
+              <Bar dataKey="count" fill="#7c3aed" radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function OsvPanel() {
   const [ecosystem, setEcosystem] = useState<string | null>(null)
   const [severity, setSeverity] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [sortBy, setSortBy] = useState<'modified' | 'cvss'>('modified')
   const [page, setPage] = useState(1)
   const [result, setResult] = useState<OsvListResponse | null>(null)
   const [stats, setStats] = useState<OsvStatsResponse | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const load = useCallback(async (eco: string | null, sev: string | null, q: string, p: number) => {
+  const load = useCallback(async (
+    eco: string | null, sev: string | null, q: string,
+    p: number, sort: 'modified' | 'cvss',
+  ) => {
     setLoading(true)
     try {
       const [list, st] = await Promise.all([
-        fetchOsvList({ ecosystem: eco, severity: sev, search: q, page: p, perPage: PER_PAGE }),
+        fetchOsvList({ ecosystem: eco, severity: sev, search: q, page: p, perPage: PER_PAGE, sortBy: sort }),
         fetchOsvStats(90),
       ])
       setResult(list)
@@ -200,7 +382,9 @@ export function OsvPanel() {
     }
   }, [])
 
-  useEffect(() => { load(ecosystem, severity, search, page) }, [load, ecosystem, severity, search, page])
+  useEffect(() => {
+    load(ecosystem, severity, search, page, sortBy)
+  }, [load, ecosystem, severity, search, page, sortBy])
 
   function handleEco(eco: string) {
     setEcosystem(eco === 'ALL' ? null : eco)
@@ -252,7 +436,7 @@ export function OsvPanel() {
             </div>
           )}
           <button
-            onClick={() => load(ecosystem, severity, search, page)}
+            onClick={() => load(ecosystem, severity, search, page, sortBy)}
             disabled={loading}
             className="text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40 p-1 rounded"
             title="再読み込み"
@@ -260,6 +444,13 @@ export function OsvPanel() {
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
+      </div>
+
+      {/* ビジュアライゼーション: 重要度別グラフ・エコシステム別・月別トレンド */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <SeverityPieChart stats={stats} loading={loading} />
+        <EcosystemBarChart stats={stats} loading={loading} />
+        <OsvMonthlyChart stats={stats} loading={loading} />
       </div>
 
       {/* エコシステムフィルター */}
@@ -288,7 +479,7 @@ export function OsvPanel() {
         })}
       </div>
 
-      {/* 重要度フィルター + 検索 */}
+      {/* 重要度フィルター + 検索 + ソート */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex gap-1">
           {SEVERITIES.map(sev => {
@@ -325,6 +516,27 @@ export function OsvPanel() {
               <X size={10} />
             </button>
           )}
+        </div>
+
+        {/* ソートセレクター */}
+        <div className="flex items-center gap-1 bg-slate-800/60 border border-slate-700 rounded-lg px-2.5 py-1.5">
+          <span className="text-[10px] text-slate-500 whitespace-nowrap">ソート:</span>
+          <button
+            onClick={() => { setSortBy('modified'); setPage(1) }}
+            className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+              sortBy === 'modified' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-300'
+            }`}
+          >
+            更新日
+          </button>
+          <button
+            onClick={() => { setSortBy('cvss'); setPage(1) }}
+            className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+              sortBy === 'cvss' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-300'
+            }`}
+          >
+            CVSS
+          </button>
         </div>
       </div>
 

@@ -61,6 +61,9 @@ def list_osv(
     search: str | None = Query(
         None, description="OSV ID・パッケージ名・概要のキーワード検索"
     ),
+    sort_by: str = Query(
+        "modified", description="ソートキー（modified: 更新日時降順 / cvss: CVSSスコア降順）"
+    ),
 ) -> OsvListResponse:
     """直近 N 日以内に更新された OSV 脆弱性を取得する。"""
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
@@ -87,16 +90,23 @@ def list_osv(
 
     total = query.count()
     offset = (page - 1) * per_page
+
+    # ソート順の適用（cvss 指定時は CVSS スコア降順、NULL は末尾）
+    if sort_by == "cvss":
+        order = OsvVulnerability.cvss_score.desc().nulls_last()  # type: ignore[union-attr,assignment]
+    else:
+        order = OsvVulnerability.modified.desc()  # type: ignore[assignment]
+
     items = (
-        query.order_by(OsvVulnerability.modified.desc())
+        query.order_by(order)
         .offset(offset)
         .limit(per_page)
         .all()
     )
 
     logger.info(
-        "list_osv: total=%d, page=%d, ecosystem=%r, severity=%r, search=%r",
-        total, page, ecosystem, severity, search,
+        "list_osv: total=%d, page=%d, ecosystem=%r, severity=%r, search=%r, sort_by=%r",
+        total, page, ecosystem, severity, search, sort_by,
     )
 
     return OsvListResponse(

@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from app.auth import require_api_key
 from app.database import get_db
 from app.models import ScanResult, Vulnerability
+from app.notifications import notify_scan_diff
 from app.schemas import (
     PackageInput,
     ScanRequest,
@@ -219,9 +220,29 @@ def _parse_package_json(text: str) -> list[PackageInput]:
     return packages
 
 
+def _get_previous_vuln_ids(db: Session, scan_type: str) -> set[str]:
+    """同一 scan_type の直前スキャン結果から脆弱性 ID の集合を取得する。
+    前回スキャンが存在しない場合は空集合を返す。
+    """
+    prev = (
+        db.query(ScanResult)
+        .filter(ScanResult.scan_type == scan_type)
+        .order_by(ScanResult.scanned_at.desc())
+        .first()
+    )
+    if prev is None:
+        return set()
+    return {f.get("vuln_id", "") for f in (prev.findings or []) if f.get("vuln_id")}
+
+
 def _run_scan(db: Session, packages: list[PackageInput], scan_type: str) -> ScanResponse:
-    """パッケージリストをスキャンして ScanResponse を返し、結果を DB に保存する。"""
+    """パッケージリストをスキャンして ScanResponse を返し、結果を DB に保存する。
+    前回スキャンとの差分（新規脆弱性）を検出して Slack 通知を送る。
+    """
     all_findings: list[VulnerabilityFinding] = []
+
+    # 前回スキャンの脆弱性 ID を先に取得（今回の保存前に行う）
+    prev_vuln_ids = _get_previous_vuln_ids(db, scan_type)
 
     for pkg in packages:
         # OSV API で検索（バージョン指定があればそのバージョンに限定）
@@ -246,6 +267,12 @@ def _run_scan(db: Session, packages: list[PackageInput], scan_type: str) -> Scan
         "scan completed: type=%s, packages=%d, findings=%d, id=%d",
         scan_type, len(packages), len(deduped), record.id,
     )
+
+    # 前回スキャンと比較して新規発見の脆弱性を Slack 通知
+    current_vuln_ids = {f.vuln_id for f in deduped if f.vuln_id}
+    new_vuln_ids = sorted(current_vuln_ids - prev_vuln_ids)
+    notify_scan_diff(new_vuln_ids, scan_type)
+
     return ScanResponse(
         scanned_packages=len(packages),
         total_findings=len(deduped),
