@@ -10,6 +10,8 @@ on:
 permissions:
   actions: read
   contents: read
+  # google/osv-scanner-action の reusable workflow が security-events: write を要求するため付与
+  security-events: write
 
 jobs:
   scan-scheduled:
