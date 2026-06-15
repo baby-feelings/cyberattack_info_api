@@ -1,0 +1,100 @@
+name: Daily Crawl — KEV & OSV
+
+# KEV は毎日 UTC 19:05、OSV は毎日 UTC 20:05 に実行
+# （APScheduler の代わりに GitHub Actions で定期実行し、Render スリープ問題を回避）
+on:
+  schedule:
+    - cron: '5 19 * * *'   # KEV: JST 翌 04:05
+    - cron: '5 20 * * *'   # OSV: JST 翌 05:05
+  workflow_dispatch:
+    inputs:
+      target:
+        description: '実行対象 (kev / osv / both)'
+        required: false
+        default: 'both'
+
+env:
+  API_BASE_URL: https://cyberattack-info-api.onrender.com
+
+jobs:
+  # ── CISA KEV クローラー ─────────────────────────────────────────
+  crawl-kev:
+    name: CISA KEV Crawl
+    runs-on: ubuntu-latest
+    # schedule: 19:05 UTC のトリガー、または手動で kev / both を指定した場合のみ実行
+    if: |
+      github.event_name == 'workflow_dispatch' && (
+        github.event.inputs.target == 'kev' ||
+        github.event.inputs.target == 'both'
+      ) ||
+      github.event.schedule == '5 19 * * *'
+
+    steps:
+      - name: Wake up Render service
+        # Render の Free プランはスリープするため、まずヘルスチェックで起こす
+        run: |
+          echo "Waking up Render service..."
+          for i in 1 2 3; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$API_BASE_URL/health")
+            echo "Attempt $i: HTTP $STATUS"
+            if [ "$STATUS" = "200" ]; then
+              echo "Service is awake."
+              break
+            fi
+            sleep 20
+          done
+
+      - name: Trigger KEV crawl
+        run: |
+          echo "Triggering CISA KEV crawl..."
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$API_BASE_URL/admin/crawl" \
+            -H "X-API-KEY: ${{ secrets.API_KEY }}")
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "HTTP Status: $HTTP_STATUS"
+          echo "Response: $BODY"
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "KEV crawl failed with HTTP $HTTP_STATUS"
+            exit 1
+          fi
+
+  # ── OSV クローラー ──────────────────────────────────────────────
+  crawl-osv:
+    name: OSV Crawl
+    runs-on: ubuntu-latest
+    # schedule: 20:05 UTC のトリガー、または手動で osv / both を指定した場合のみ実行
+    if: |
+      github.event_name == 'workflow_dispatch' && (
+        github.event.inputs.target == 'osv' ||
+        github.event.inputs.target == 'both'
+      ) ||
+      github.event.schedule == '5 20 * * *'
+
+    steps:
+      - name: Wake up Render service
+        run: |
+          echo "Waking up Render service..."
+          for i in 1 2 3; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$API_BASE_URL/health")
+            echo "Attempt $i: HTTP $STATUS"
+            if [ "$STATUS" = "200" ]; then
+              echo "Service is awake."
+              break
+            fi
+            sleep 20
+          done
+
+      - name: Trigger OSV crawl
+        # OSV クローラーは件数が多く時間がかかるため timeout を長めに設定
+        run: |
+          echo "Triggering OSV crawl..."
+          RESPONSE=$(curl -s -w "\n%{http_code}" --max-time 600 -X POST "$API_BASE_URL/admin/osv-crawl" \
+            -H "X-API-KEY: ${{ secrets.API_KEY }}")
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "HTTP Status: $HTTP_STATUS"
+          echo "Response: $BODY"
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "OSV crawl failed with HTTP $HTTP_STATUS"
+            exit 1
+          fi
