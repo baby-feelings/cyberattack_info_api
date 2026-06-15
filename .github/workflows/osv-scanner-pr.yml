@@ -8,11 +8,7 @@ on:
     branches: [main]
 
 permissions:
-  # SARIF ファイルを CodeQL にアップロードするために必要
   actions: read
-  # セキュリティタブへの SARIF アップロードに必要
-  security-events: write
-  # リポジトリの読み取りのみ
   contents: read
 
 jobs:
@@ -21,3 +17,5 @@ jobs:
     with:
       # requirements.txt / package.json を再帰的にスキャン
       scan-args: "--recursive ./"
+      # Code Scanning（GitHub Advanced Security）未有効のため SARIF アップロードを無効化
+      upload-sarif: false
