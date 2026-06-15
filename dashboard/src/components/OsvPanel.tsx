@@ -232,7 +232,7 @@ function SeverityPieChart({ stats, loading }: { stats: OsvStatsResponse | null; 
               </Pie>
               <ReTooltip
                 contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }}
-                formatter={(value: number, name: string) => [value + ' 件', name]}
+                formatter={(value, name) => [String(value) + ' 件', String(name)]}
               />
             </PieChart>
           </ResponsiveContainer>
@@ -290,7 +290,7 @@ function EcosystemBarChart({ stats, loading }: { stats: OsvStatsResponse | null;
               />
               <ReTooltip
                 contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }}
-                formatter={(value: number) => [value + ' 件', '件数']}
+                formatter={(value) => [String(value) + ' 件', '件数']}
               />
               <Bar dataKey="count" radius={[3, 3, 0, 0]}>
                 {data.map((_entry, index) => (
@@ -342,7 +342,7 @@ function OsvMonthlyChart({ stats, loading }: { stats: OsvStatsResponse | null; l
               />
               <ReTooltip
                 contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }}
-                formatter={(value: number) => [value + ' 件', '件数']}
+                formatter={(value) => [String(value) + ' 件', '件数']}
               />
               <Bar dataKey="count" fill="#7c3aed" radius={[3, 3, 0, 0]} />
             </BarChart>
