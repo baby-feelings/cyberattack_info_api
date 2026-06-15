@@ -4,7 +4,6 @@
 import logging
 import logging.config
 from contextlib import asynccontextmanager
-from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI, Security
@@ -182,36 +181,12 @@ def trigger_crawl() -> CrawlResponse:
 )
 def trigger_osv_crawl() -> OsvCrawlResponse:
     """OSV クローラーを手動で即時実行する。"""
-    from datetime import timedelta, timezone
-
-    from app.cron_osv import (
-        TARGET_ECOSYSTEMS,
-        _fetch_ecosystem_zip,
-        _process_zip,
-        _upsert_osv_records,
-    )
-
     logger.info("Manual OSV crawl triggered via /admin/osv-crawl")
-    cutoff = datetime.now(timezone.utc) - timedelta(days=settings.OSV_DAYS)
-    total_inserted = 0
-    total_updated = 0
-    db = SessionLocal()
-    try:
-        for ecosystem in TARGET_ECOSYSTEMS:
-            try:
-                zip_bytes = _fetch_ecosystem_zip(ecosystem)
-                records = _process_zip(ecosystem, zip_bytes, cutoff)
-                ins, upd = _upsert_osv_records(db, records)
-                total_inserted += ins
-                total_updated += upd
-            except Exception as exc:
-                logger.error("OSV crawl error [%s]: %s", ecosystem, exc)
-    finally:
-        db.close()
+    inserted, updated = fetch_and_store_osv()
     return OsvCrawlResponse(
         message="OSV crawl completed",
-        inserted=total_inserted,
-        updated=total_updated,
+        inserted=inserted,
+        updated=updated,
     )
 
 

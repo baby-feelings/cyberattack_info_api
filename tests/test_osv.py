@@ -2,12 +2,9 @@
 
 GET /api/osv        – 一覧取得・フィルタリング・ページネーション
 GET /api/osv/stats  – 統計情報取得
-クローラーヘルパー関数のユニットテスト
+クローラーヘルパー関数・API クライアントのユニットテスト
 """
-import io
-import json
 import os
-import zipfile
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
@@ -20,9 +17,8 @@ import httpx  # noqa: E402
 from app.cron_osv import (  # noqa: E402
     _build_records,
     _extract_fixed_versions,
-    _fetch_ecosystem_zip,
     _parse_severity,
-    _process_zip,
+    _query_packages_batch,
     _upsert_osv_records,
     fetch_and_store_osv,
 )
@@ -57,6 +53,34 @@ def _make_osv(db_session, **kwargs):
     db_session.add(record)
     db_session.commit()
     return record
+
+
+def _make_vuln(
+    osv_id: str = "GHSA-test-0001",
+    modified: str = "2026-06-01T00:00:00Z",
+    ecosystem: str = "PyPI",
+    pkg_name: str = "testpkg",
+) -> dict:
+    """OSV API が返す脆弱性オブジェクトのモックを生成する。"""
+    return {
+        "id": osv_id,
+        "modified": modified,
+        "published": "2026-01-01T00:00:00Z",
+        "aliases": ["CVE-2026-00001"],
+        "summary": f"Vuln {osv_id}",
+        "details": "Detailed description",
+        "database_specific": {"severity": "HIGH"},
+        "affected": [
+            {
+                "package": {"name": pkg_name, "ecosystem": ecosystem},
+                "versions": ["1.0.0"],
+                "ranges": [
+                    {"type": "ECOSYSTEM", "events": [{"fixed": "1.1.0"}]}
+                ],
+            }
+        ],
+        "references": [{"url": "https://example.com/advisory"}],
+    }
 
 
 # ──────────────────────────────────────────────────────────────
@@ -215,7 +239,6 @@ class TestOsvStats:
         _make_osv(db_session, osv_id="GHSA-mt1", package_name="a")
         res = client.get("/api/osv/stats", headers=HEADERS)
         body = res.json()
-        # 少なくとも1ヶ月のデータがあること
         assert len(body["monthly_trend"]) >= 1
 
 
@@ -286,6 +309,32 @@ class TestParseSeverity:
         }
         sev, score = _parse_severity(vuln)
         assert sev is None
+        assert score is None
+
+
+class TestParseSeverityEdgeCases:
+    def test_cvss_score_type_error(self):
+        """cvss.score が変換不能な型の場合は None を返す。"""
+        vuln = {
+            "database_specific": {
+                "severity": "HIGH",
+                "cvss": {"score": None},
+            }
+        }
+        sev, score = _parse_severity(vuln)
+        assert sev == "HIGH"
+        assert score is None
+
+    def test_cvss_score_value_error(self):
+        """cvss.score が文字列で数値変換できない場合は None を返す。"""
+        vuln = {
+            "database_specific": {
+                "severity": "HIGH",
+                "cvss": {"score": "not-a-number"},
+            }
+        }
+        sev, score = _parse_severity(vuln)
+        assert sev == "HIGH"
         assert score is None
 
 
@@ -403,141 +452,6 @@ class TestBuildRecords:
         assert records == []
 
 
-class TestProcessZip:
-    def _make_zip(self, entries: list[dict]) -> bytes:
-        """テスト用の zip バイト列を生成する。"""
-        import io
-        import json
-        import zipfile
-
-        buf = io.BytesIO()
-        with zipfile.ZipFile(buf, "w") as zf:
-            for entry in entries:
-                zf.writestr(f"{entry['id']}.json", json.dumps(entry))
-        return buf.getvalue()
-
-    def test_filters_by_cutoff(self):
-        """cutoff より古いエントリは除外される。"""
-        entries = [
-            {
-                "id": "GHSA-new",
-                "modified": "2026-06-01T00:00:00Z",
-                "published": "2026-06-01T00:00:00Z",
-                "aliases": [],
-                "summary": "New vuln",
-                "affected": [
-                    {"package": {"name": "pkg", "ecosystem": "PyPI"}, "versions": [], "ranges": []}
-                ],
-                "references": [],
-            },
-            {
-                "id": "GHSA-old",
-                "modified": "2020-01-01T00:00:00Z",
-                "published": "2020-01-01T00:00:00Z",
-                "aliases": [],
-                "summary": "Old vuln",
-                "affected": [
-                    {"package": {"name": "pkg", "ecosystem": "PyPI"}, "versions": [], "ranges": []}
-                ],
-                "references": [],
-            },
-        ]
-        zip_bytes = self._make_zip(entries)
-        cutoff = datetime(2026, 1, 1, tzinfo=timezone.utc)
-        records = _process_zip("PyPI", zip_bytes, cutoff)
-        osv_ids = [r["osv_id"] for r in records]
-        assert "GHSA-new" in osv_ids
-        assert "GHSA-old" not in osv_ids
-
-    def test_returns_all_recent(self):
-        """cutoff 以降のエントリは全て返される。"""
-        entries = [
-            {
-                "id": f"GHSA-{i:03d}",
-                "modified": "2026-06-01T00:00:00Z",
-                "published": "2026-06-01T00:00:00Z",
-                "aliases": [],
-                "summary": f"Vuln {i}",
-                "affected": [
-                    {
-                        "package": {"name": f"pkg-{i}", "ecosystem": "PyPI"},
-                        "versions": [],
-                        "ranges": [],
-                    }
-                ],
-                "references": [],
-            }
-            for i in range(3)
-        ]
-        zip_bytes = self._make_zip(entries)
-        cutoff = datetime(2026, 1, 1, tzinfo=timezone.utc)
-        records = _process_zip("PyPI", zip_bytes, cutoff)
-        assert len(records) == 3
-
-    def test_skips_non_json_files(self):
-        """zip 内の .json 以外のファイルはスキップされること。"""
-        buf = io.BytesIO()
-        with zipfile.ZipFile(buf, "w") as zf:
-            zf.writestr("README.txt", "not json")
-            zf.writestr("GHSA-ok.json", json.dumps({
-                "id": "GHSA-ok",
-                "modified": "2026-06-01T00:00:00Z",
-                "published": "2026-06-01T00:00:00Z",
-                "aliases": [],
-                "summary": "OK",
-                "affected": [
-                    {"package": {"name": "pkg", "ecosystem": "PyPI"},
-                     "versions": [], "ranges": []}
-                ],
-                "references": [],
-            }))
-        cutoff = datetime(2026, 1, 1, tzinfo=timezone.utc)
-        records = _process_zip("PyPI", buf.getvalue(), cutoff)
-        assert len(records) == 1
-
-    def test_skips_invalid_json(self):
-        """JSON パースエラーのファイルはスキップされること。"""
-        buf = io.BytesIO()
-        with zipfile.ZipFile(buf, "w") as zf:
-            zf.writestr("bad.json", "not valid json {{{")
-        cutoff = datetime(2026, 1, 1, tzinfo=timezone.utc)
-        records = _process_zip("PyPI", buf.getvalue(), cutoff)
-        assert records == []
-
-    def test_skips_missing_modified(self):
-        """modified フィールドがないエントリはスキップされること。"""
-        buf = io.BytesIO()
-        with zipfile.ZipFile(buf, "w") as zf:
-            zf.writestr("no-modified.json", json.dumps({
-                "id": "GHSA-nm",
-                "published": "2026-06-01T00:00:00Z",
-                "aliases": [],
-                "summary": "No modified",
-                "affected": [],
-                "references": [],
-            }))
-        cutoff = datetime(2026, 1, 1, tzinfo=timezone.utc)
-        records = _process_zip("PyPI", buf.getvalue(), cutoff)
-        assert records == []
-
-    def test_skips_invalid_modified_format(self):
-        """modified の日時フォーマットが不正な場合はスキップされること。"""
-        buf = io.BytesIO()
-        with zipfile.ZipFile(buf, "w") as zf:
-            zf.writestr("bad-date.json", json.dumps({
-                "id": "GHSA-bd",
-                "modified": "not-a-date",
-                "published": "2026-06-01T00:00:00Z",
-                "aliases": [],
-                "summary": "Bad date",
-                "affected": [],
-                "references": [],
-            }))
-        cutoff = datetime(2026, 1, 1, tzinfo=timezone.utc)
-        records = _process_zip("PyPI", buf.getvalue(), cutoff)
-        assert records == []
-
-
 class TestBuildRecordsEdgeCases:
     def test_invalid_published_falls_back_to_modified(self):
         """published が不正な場合は modified で代替されること。"""
@@ -595,66 +509,80 @@ class TestBuildRecordsEdgeCases:
         assert records == []
 
 
-class TestParseSeverityEdgeCases:
-    def test_cvss_score_type_error(self):
-        """cvss.score が変換不能な型の場合は None を返す。"""
-        vuln = {
-            "database_specific": {
-                "severity": "HIGH",
-                "cvss": {"score": None},
-            }
-        }
-        sev, score = _parse_severity(vuln)
-        assert sev == "HIGH"
-        assert score is None
-
-    def test_cvss_score_value_error(self):
-        """cvss.score が文字列で数値変換できない場合は None を返す。"""
-        vuln = {
-            "database_specific": {
-                "severity": "HIGH",
-                "cvss": {"score": "not-a-number"},
-            }
-        }
-        sev, score = _parse_severity(vuln)
-        assert sev == "HIGH"
-        assert score is None
+# ──────────────────────────────────────────────────────────────
+# OSV API クライアント (_query_packages_batch)
+# ──────────────────────────────────────────────────────────────
 
 
-class TestFetchEcosystemZip:
-    def test_download_success(self):
-        """httpx でダウンロードが成功した場合にバイト列を返す。"""
-        mock_response = MagicMock()
-        mock_response.content = b"fake zip content"
-        mock_response.raise_for_status = MagicMock()
+def _mock_batch_response(vulns_per_query: list[list[dict]]) -> MagicMock:
+    """_query_packages_batch が呼ぶ httpx.Client のモックを返す。"""
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status = MagicMock()
+    mock_resp.json.return_value = {
+        "results": [{"vulns": v} for v in vulns_per_query]
+    }
+    mock_client = MagicMock()
+    mock_client.__enter__ = MagicMock(return_value=mock_client)
+    mock_client.__exit__ = MagicMock(return_value=False)
+    mock_client.post = MagicMock(return_value=mock_resp)
+    return mock_client
 
-        mock_client = MagicMock()
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client.get = MagicMock(return_value=mock_response)
 
+class TestQueryPackagesBatch:
+    def test_returns_deduped_vulns(self):
+        """同じ ID の脆弱性が複数クエリから返っても1件に絞り込むこと。"""
+        shared_vuln = _make_vuln("GHSA-shared")
+        mock_client = _mock_batch_response([
+            [shared_vuln],       # query 1 の結果
+            [shared_vuln],       # query 2 (同じ vuln)
+            [_make_vuln("GHSA-unique")],  # query 3 の結果
+        ])
         with patch("app.cron_osv.httpx.Client", return_value=mock_client):
-            result = _fetch_ecosystem_zip("PyPI")
+            result = _query_packages_batch([
+                ("requests", "PyPI"),
+                ("flask", "PyPI"),
+                ("django", "PyPI"),
+            ])
+        ids = [v["id"] for v in result]
+        assert ids.count("GHSA-shared") == 1
+        assert "GHSA-unique" in ids
 
-        assert result == b"fake zip content"
-        mock_response.raise_for_status.assert_called_once()
+    def test_empty_packages_returns_empty(self):
+        """空リストを渡した場合は API を呼ばず空リストを返すこと。"""
+        with patch("app.cron_osv.httpx.Client") as mock_cls:
+            result = _query_packages_batch([])
+        mock_cls.assert_not_called()
+        assert result == []
 
     def test_http_error_propagates(self):
         """HTTP エラーが発生した場合は例外が伝播すること。"""
-        mock_response = MagicMock()
-        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "404", request=MagicMock(), response=MagicMock()
-        )
-
         mock_client = MagicMock()
         mock_client.__enter__ = MagicMock(return_value=mock_client)
         mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client.get = MagicMock(return_value=mock_response)
+        mock_client.post.return_value.raise_for_status.side_effect = (
+            httpx.HTTPStatusError("503", request=MagicMock(), response=MagicMock())
+        )
 
         import pytest as _pytest
         with patch("app.cron_osv.httpx.Client", return_value=mock_client):
             with _pytest.raises(httpx.HTTPStatusError):
-                _fetch_ecosystem_zip("PyPI")
+                _query_packages_batch([("requests", "PyPI")])
+
+    def test_filters_empty_vuln_ids(self):
+        """ID が空の脆弱性は除外されること。"""
+        mock_client = _mock_batch_response([
+            [{"id": "", "modified": "2026-06-01T00:00:00Z"}],
+            [_make_vuln("GHSA-valid")],
+        ])
+        with patch("app.cron_osv.httpx.Client", return_value=mock_client):
+            result = _query_packages_batch([("pkg1", "PyPI"), ("pkg2", "PyPI")])
+        assert all(v["id"] for v in result)
+        assert any(v["id"] == "GHSA-valid" for v in result)
+
+
+# ──────────────────────────────────────────────────────────────
+# _upsert_osv_records
+# ──────────────────────────────────────────────────────────────
 
 
 class TestUpsertOsvRecords:
@@ -704,10 +632,8 @@ class TestUpsertOsvRecords:
     def test_no_double_insert(self, db_session):
         """同じキーのレコードを 2 回 upsert しても 2 回 insert されないこと。"""
         rec = self._make_rec(osv_id="GHSA-no-dup-001")
-        # 1回目: insert
         ins1, _ = _upsert_osv_records(db_session, [rec])
         assert ins1 == 1
-        # 2回目: insert されない（update か skip）
         ins2, _ = _upsert_osv_records(db_session, [rec])
         assert ins2 == 0
 
@@ -718,87 +644,103 @@ class TestUpsertOsvRecords:
         assert upd == 0
 
 
-def _make_simple_zip(*osv_ids: str) -> bytes:
-    """テスト用の最小限の zip バイト列を生成する。"""
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w") as zf:
-        for osv_id in osv_ids:
-            entry = {
-                "id": osv_id,
-                "modified": "2026-06-01T00:00:00Z",
-                "published": "2026-06-01T00:00:00Z",
-                "aliases": [],
-                "summary": f"Vuln {osv_id}",
-                "affected": [
-                    {"package": {"name": "mock-pkg", "ecosystem": "PyPI"},
-                     "versions": [], "ranges": []}
-                ],
-                "references": [],
-            }
-            zf.writestr(f"{osv_id}.json", json.dumps(entry))
-    return buf.getvalue()
+# ──────────────────────────────────────────────────────────────
+# fetch_and_store_osv (メインクローラー)
+# ──────────────────────────────────────────────────────────────
+
+
+def _make_batch_side_effect(vulns: list[dict]):
+    """_query_packages_batch をモックする side_effect を返す。"""
+    def side_effect(packages):
+        return vulns
+    return side_effect
 
 
 class TestFetchAndStoreOsv:
-    def test_runs_and_stores_records(self, db_session):
-        """クローラーが正常に実行してレコードを保存できること。"""
-        zip_bytes = _make_simple_zip("GHSA-mock-0001")
+    def test_runs_and_returns_counts(self, db_session):
+        """クローラーが正常実行して (inserted, updated) を返すこと。"""
+        vuln = _make_vuln("GHSA-mock-0001", modified="2026-06-01T00:00:00Z")
 
-        with patch("app.cron_osv._fetch_ecosystem_zip", return_value=zip_bytes):
+        with patch(
+            "app.cron_osv._query_packages_batch",
+            side_effect=_make_batch_side_effect([vuln]),
+        ):
             with patch("app.cron_osv.SessionLocal", return_value=db_session):
-                # close() を無効化（db_session はフィクスチャで管理）
-                original_close = db_session.close
                 db_session.close = MagicMock()
-                fetch_and_store_osv()
-                db_session.close = original_close
+                inserted, updated = fetch_and_store_osv()
+
+        assert isinstance(inserted, int)
+        assert isinstance(updated, int)
 
     def test_http_error_skips_ecosystem(self):
         """1エコシステムで HTTPError が発生しても処理が継続されること。"""
-        empty_zip = _make_simple_zip()
         call_counts = {"count": 0}
 
-        def side_effect(ecosystem):
+        def side_effect(packages):
             call_counts["count"] += 1
             if call_counts["count"] == 1:
                 raise httpx.HTTPError("Connection refused")
-            return empty_zip
+            return []
 
-        with patch("app.cron_osv._fetch_ecosystem_zip", side_effect=side_effect):
+        with patch("app.cron_osv._query_packages_batch", side_effect=side_effect):
             with patch("app.cron_osv.SessionLocal") as mock_sl:
                 mock_db = MagicMock()
                 mock_db.query.return_value.filter.return_value.first.return_value = None
                 mock_sl.return_value = mock_db
                 fetch_and_store_osv()
 
-        # 全 9 エコシステムが試行されること
-        assert call_counts["count"] == 9
+        # 全エコシステムが試行されること
+        from app.cron_osv import POPULAR_PACKAGES
+        assert call_counts["count"] == len(POPULAR_PACKAGES)
 
     def test_unexpected_error_skips_ecosystem(self):
         """予期しない例外でも処理が継続されること。"""
-        empty_zip = _make_simple_zip()
         call_counts = {"count": 0}
 
-        def side_effect(ecosystem):
+        def side_effect(packages):
             call_counts["count"] += 1
             if call_counts["count"] == 1:
                 raise RuntimeError("Unexpected error")
-            return empty_zip
+            return []
 
-        with patch("app.cron_osv._fetch_ecosystem_zip", side_effect=side_effect):
+        with patch("app.cron_osv._query_packages_batch", side_effect=side_effect):
             with patch("app.cron_osv.SessionLocal") as mock_sl:
                 mock_db = MagicMock()
                 mock_db.query.return_value.filter.return_value.first.return_value = None
                 mock_sl.return_value = mock_db
                 fetch_and_store_osv()
 
-        assert call_counts["count"] == 9
+        from app.cron_osv import POPULAR_PACKAGES
+        assert call_counts["count"] == len(POPULAR_PACKAGES)
+
+    def test_old_vulns_filtered_out(self, db_session):
+        """cutoff より古い脆弱性はスキップされること。"""
+        old_vuln = _make_vuln("GHSA-old", modified="2000-01-01T00:00:00Z")
+
+        with patch(
+            "app.cron_osv._query_packages_batch",
+            side_effect=_make_batch_side_effect([old_vuln]),
+        ):
+            with patch("app.cron_osv.SessionLocal", return_value=db_session):
+                db_session.close = MagicMock()
+                inserted, updated = fetch_and_store_osv()
+
+        assert inserted == 0
+        assert updated == 0
+
+
+# ──────────────────────────────────────────────────────────────
+# POST /admin/osv-crawl
+# ──────────────────────────────────────────────────────────────
 
 
 class TestAdminOsvCrawl:
     def test_trigger_osv_crawl(self, client):
         """POST /admin/osv-crawl が正常にレスポンスを返すこと。"""
-        empty_zip = _make_simple_zip()
-        with patch("app.cron_osv._fetch_ecosystem_zip", return_value=empty_zip):
+        with patch(
+            "app.cron_osv._query_packages_batch",
+            side_effect=_make_batch_side_effect([]),
+        ):
             res = client.post("/admin/osv-crawl", headers=HEADERS)
         assert res.status_code == 200
         body = res.json()
@@ -813,8 +755,15 @@ class TestAdminOsvCrawl:
 
     def test_trigger_osv_crawl_with_records(self, client):
         """OSV レコードが挿入される場合も正常に動作すること。"""
-        zip_bytes = _make_simple_zip("GHSA-crawl-0001", "GHSA-crawl-0002")
-        with patch("app.cron_osv._fetch_ecosystem_zip", return_value=zip_bytes):
+        vulns = [
+            _make_vuln("GHSA-crawl-0001", modified="2026-06-01T00:00:00Z"),
+            _make_vuln("GHSA-crawl-0002", modified="2026-06-01T00:00:00Z",
+                       pkg_name="requests"),
+        ]
+        with patch(
+            "app.cron_osv._query_packages_batch",
+            side_effect=_make_batch_side_effect(vulns),
+        ):
             res = client.post("/admin/osv-crawl", headers=HEADERS)
         assert res.status_code == 200
         body = res.json()
