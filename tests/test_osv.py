@@ -881,3 +881,200 @@ class TestAdminOsvCrawl:
         assert res.status_code == 200
         body = res.json()
         assert body["inserted"] >= 0
+
+
+# ──────────────────────────────────────────────────────────────
+# _upsert_osv_records — コミット失敗パス
+# ──────────────────────────────────────────────────────────────
+
+
+class TestUpsertOsvRecordsCommitFailure:
+    """_upsert_osv_records の定期コミット・最終コミット失敗パスをカバーする。"""
+
+    def _make_rec(self, osv_id="GHSA-cf-001", pkg="testpkg", **kwargs) -> dict:
+        dt = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        base = {
+            "osv_id": osv_id,
+            "ecosystem": "PyPI",
+            "package_name": pkg,
+            "aliases": [],
+            "summary": "Test",
+            "details": None,
+            "severity": "HIGH",
+            "cvss_score": 7.5,
+            "affected_versions": [],
+            "fixed_versions": [],
+            "references": [],
+            "published": dt,
+            "modified": dt,
+        }
+        base.update(kwargs)
+        return base
+
+    def test_periodic_commit_failure_raises(self):
+        """定期コミット（_COMMIT_EVERY 件目）が失敗した場合に rollback して例外が伝播すること。"""
+        import pytest as _pytest
+
+        from app.cron_osv import _COMMIT_EVERY
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.commit.side_effect = Exception("periodic commit failed")
+
+        # _COMMIT_EVERY 件以上のレコードで定期コミットを発火させる
+        records = [
+            self._make_rec(osv_id=f"GHSA-pc-{i:04d}", pkg=f"pkg{i}")
+            for i in range(_COMMIT_EVERY + 1)
+        ]
+
+        with patch("app.cron_osv._COMMIT_EVERY", 1):
+            with _pytest.raises(Exception, match="periodic commit failed"):
+                _upsert_osv_records(mock_db, records)
+
+        mock_db.rollback.assert_called()
+
+    def test_final_commit_failure_raises(self):
+        """最終コミットが失敗した場合に rollback して例外が伝播すること。"""
+        import pytest as _pytest
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.commit.side_effect = Exception("final commit failed")
+
+        records = [self._make_rec()]  # 1件のみ→定期コミットは発火しない
+
+        with _pytest.raises(Exception, match="final commit failed"):
+            _upsert_osv_records(mock_db, records)
+
+        mock_db.rollback.assert_called()
+
+
+# ──────────────────────────────────────────────────────────────
+# fetch_and_store_osv — 追加カバレッジ
+# ──────────────────────────────────────────────────────────────
+
+
+class TestFetchAndStoreOsvAdditional:
+    def test_malformed_modified_date_skipped(self, db_session):
+        """modified が不正な日付形式の場合はそのレコードをスキップすること。"""
+        bad_ref = {"id": "GHSA-bad-date", "modified": "not-a-valid-date"}
+
+        with patch("app.cron_osv._query_packages_batch", return_value=[bad_ref]):
+            with patch("app.cron_osv._fetch_vuln_by_id") as mock_fetch:
+                with patch("app.cron_osv.SessionLocal", return_value=db_session):
+                    db_session.close = MagicMock()
+                    inserted, updated, deleted = fetch_and_store_osv()
+
+        # 不正な日付のため _fetch_vuln_by_id は呼ばれない
+        mock_fetch.assert_not_called()
+        assert inserted == 0
+
+    def test_delete_old_records_failure_logged(self, db_session):
+        """_delete_old_osv_records が失敗してもクローラー全体はエラーにならないこと。"""
+        with patch("app.cron_osv._query_packages_batch", return_value=[]):
+            with patch(
+                "app.cron_osv._delete_old_osv_records",
+                side_effect=Exception("delete failed"),
+            ):
+                with patch("app.cron_osv.SessionLocal", return_value=db_session):
+                    db_session.close = MagicMock()
+                    # 例外が外に漏れないことを確認
+                    inserted, updated, deleted = fetch_and_store_osv()
+
+        assert deleted == 0
+
+    def test_outer_exception_notifies_slack_and_reraises(self):
+        """外側の例外ハンドラが Slack 通知して再 raise すること。"""
+        import pytest as _pytest
+
+        class BadPackages:
+            def items(self):
+                raise RuntimeError("outer error")
+
+        with patch("app.cron_osv.POPULAR_PACKAGES", BadPackages()):
+            with patch("app.cron_osv.notify_osv_crawl_error") as mock_notify:
+                with patch("app.cron_osv.SessionLocal") as mock_sl:
+                    mock_sl.return_value = MagicMock()
+                    with _pytest.raises(RuntimeError, match="outer error"):
+                        fetch_and_store_osv()
+
+        mock_notify.assert_called_once()
+        assert "outer error" in mock_notify.call_args[0][0]
+
+
+# ──────────────────────────────────────────────────────────────
+# OsvVulnerability __repr__
+# ──────────────────────────────────────────────────────────────
+
+
+class TestOsvVulnerabilityRepr:
+    def test_repr(self, db_session):
+        """`__repr__` が osv_id と ecosystem/package_name を含む文字列を返すこと。"""
+        record = _make_osv(db_session, osv_id="GHSA-repr-001")
+        r = repr(record)
+        assert "GHSA-repr-001" in r
+        assert "PyPI" in r
+        assert "fastapi" in r
+
+
+# ──────────────────────────────────────────────────────────────
+# routers/osv.py — PostgreSQL year_month 分岐
+# ──────────────────────────────────────────────────────────────
+
+
+class TestYearMonthExpr:
+    def test_postgresql_branch(self):
+        """PostgreSQL ダイアレクトの場合に func.to_char を返すこと。"""
+        from sqlalchemy import Column, DateTime
+
+        from app.routers.osv import _year_month_expr
+
+        col = Column("published", DateTime)
+        with patch("app.routers.osv.engine") as mock_engine:
+            mock_engine.dialect.name = "postgresql"
+            result = _year_month_expr(col)
+        # to_char(...) が呼ばれていることを名前で確認
+        assert "to_char" in str(result).lower()
+
+    def test_sqlite_branch(self):
+        """SQLite ダイアレクトの場合に strftime を返すこと。"""
+        from sqlalchemy import Column, DateTime
+
+        from app.routers.osv import _year_month_expr
+
+        col = Column("published", DateTime)
+        with patch("app.routers.osv.engine") as mock_engine:
+            mock_engine.dialect.name = "sqlite"
+            result = _year_month_expr(col)
+        assert "strftime" in str(result).lower()
+
+
+# ──────────────────────────────────────────────────────────────
+# schemas.py — OsvVulnerabilityOut.model_validate dict フォールバック
+# ──────────────────────────────────────────────────────────────
+
+
+class TestOsvVulnerabilityOutModelValidate:
+    def test_validate_from_dict(self):
+        """dict（__dict__ なし）から model_validate を呼ぶと super() フォールバックが動くこと。"""
+        from app.schemas import OsvVulnerabilityOut
+
+        data = {
+            "osv_id": "GHSA-schema-001",
+            "ecosystem": "PyPI",
+            "package_name": "fastapi",
+            "aliases": ["CVE-2026-00001"],
+            "summary": "Test vuln",
+            "details": None,
+            "severity": "HIGH",
+            "cvss_score": 7.5,
+            "affected_versions": ["1.0.0"],
+            "fixed_versions": ["1.1.0"],
+            "references": ["https://example.com"],
+            "published": "2026-01-01T00:00:00+00:00",
+            "modified": "2026-06-01T00:00:00+00:00",
+        }
+        result = OsvVulnerabilityOut.model_validate(data)
+        assert result.osv_id == "GHSA-schema-001"
+        assert result.ecosystem == "PyPI"
+        assert result.published == "2026-01-01T00:00:00+00:00"
