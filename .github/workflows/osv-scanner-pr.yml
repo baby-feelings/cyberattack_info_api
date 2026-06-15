@@ -1,0 +1,23 @@
+name: OSV-Scanner — PR Scan
+
+# PRで新たに導入された脆弱性のみを検出する（ベースブランチとの差分スキャン）
+on:
+  pull_request:
+    branches: [main]
+  merge_group:
+    branches: [main]
+
+permissions:
+  # SARIF ファイルを CodeQL にアップロードするために必要
+  actions: read
+  # セキュリティタブへの SARIF アップロードに必要
+  security-events: write
+  # リポジトリの読み取りのみ
+  contents: read
+
+jobs:
+  scan-pr:
+    uses: "google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@v2.3.8"
+    with:
+      # requirements.txt / package.json を再帰的にスキャン
+      scan-args: "--recursive ./"
