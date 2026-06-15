@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     # Slack 通知用 Webhook URL（未設定時は通知をスキップ）
     SLACK_WEBHOOK_URL: str = ""
 
+    # OSV クローラー設定
+    # 直近何日分の脆弱性を取得・保持するか
+    OSV_DAYS: int = 90
+    # クローラー実行曜日（APScheduler の day_of_week 形式: mon/tue/.../sun）
+    OSV_CRON_DAY_OF_WEEK: str = "sun"
+
     model_config = SettingsConfigDict(
         # 環境に応じて .env.development または .env.production を使用
         env_file=".env",

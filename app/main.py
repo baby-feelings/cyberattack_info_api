@@ -4,6 +4,7 @@
 import logging
 import logging.config
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI, Security
@@ -13,9 +14,10 @@ from sqlalchemy import text
 from app.auth import require_api_key
 from app.config import settings
 from app.cron import _fetch_cisa_kev, _upsert_vulnerabilities, fetch_and_store_kev
+from app.cron_osv import fetch_and_store_osv
 from app.database import Base, SessionLocal, engine, get_db
-from app.routers import scan, vulnerabilities
-from app.schemas import CrawlResponse, HealthResponse
+from app.routers import osv, scan, vulnerabilities
+from app.schemas import CrawlResponse, HealthResponse, OsvCrawlResponse
 
 # ──────────────────────────────────────────────
 # ロギング設定（標準出力に JSON 風ログを出力）
@@ -44,6 +46,7 @@ async def lifespan(app: FastAPI):
     logger.info("Database tables created/verified")
 
     # クローラーを毎日 UTC 19:00（JST 翌日 4:00）に実行
+    # CISA KEV クローラー: 毎日 UTC 19:00（JST 翌日 4:00）
     scheduler.add_job(
         fetch_and_store_kev,
         trigger="cron",
@@ -52,11 +55,22 @@ async def lifespan(app: FastAPI):
         id="cisa_kev_crawler",
         replace_existing=True,
     )
+    # OSV クローラー: 毎週日曜 UTC 20:00（JST 月曜 5:00）
+    scheduler.add_job(
+        fetch_and_store_osv,
+        trigger="cron",
+        day_of_week=settings.OSV_CRON_DAY_OF_WEEK,
+        hour=20,
+        minute=0,
+        id="osv_crawler",
+        replace_existing=True,
+    )
     scheduler.start()
     logger.info(
-        "Scheduler started: CISA KEV crawler at UTC %02d:%02d daily",
+        "Scheduler started: KEV daily UTC %02d:%02d, OSV weekly on %s",
         settings.CRON_HOUR_UTC,
         settings.CRON_MINUTE_UTC,
+        settings.OSV_CRON_DAY_OF_WEEK,
     )
 
     yield  # アプリ実行中
@@ -93,6 +107,7 @@ app.add_middleware(
 # ルーター登録
 app.include_router(vulnerabilities.router)
 app.include_router(scan.router)
+app.include_router(osv.router)
 
 
 # ──────────────────────────────────────────────
@@ -155,6 +170,49 @@ def trigger_crawl() -> CrawlResponse:
         raise
     finally:
         db.close()
+
+
+@app.post(
+    "/admin/osv-crawl",
+    response_model=OsvCrawlResponse,
+    tags=["admin"],
+    dependencies=[Security(require_api_key)],
+    summary="OSV クローラー手動実行",
+    description="OSV GCS から直近データを即時取得して DB に Upsert する（X-API-KEY 必須）。",
+)
+def trigger_osv_crawl() -> OsvCrawlResponse:
+    """OSV クローラーを手動で即時実行する。"""
+    from datetime import timedelta, timezone
+
+    from app.cron_osv import (
+        TARGET_ECOSYSTEMS,
+        _fetch_ecosystem_zip,
+        _process_zip,
+        _upsert_osv_records,
+    )
+
+    logger.info("Manual OSV crawl triggered via /admin/osv-crawl")
+    cutoff = datetime.now(timezone.utc) - timedelta(days=settings.OSV_DAYS)
+    total_inserted = 0
+    total_updated = 0
+    db = SessionLocal()
+    try:
+        for ecosystem in TARGET_ECOSYSTEMS:
+            try:
+                zip_bytes = _fetch_ecosystem_zip(ecosystem)
+                records = _process_zip(ecosystem, zip_bytes, cutoff)
+                ins, upd = _upsert_osv_records(db, records)
+                total_inserted += ins
+                total_updated += upd
+            except Exception as exc:
+                logger.error("OSV crawl error [%s]: %s", ecosystem, exc)
+    finally:
+        db.close()
+    return OsvCrawlResponse(
+        message="OSV crawl completed",
+        inserted=total_inserted,
+        updated=total_updated,
+    )
 
 
 @app.get("/", tags=["system"])
