@@ -193,6 +193,34 @@ class TestListOsv:
         res = client.get("/api/osv?days=90", headers=HEADERS)
         assert res.json()["total"] == 0
 
+    def test_sort_by_cvss(self, client, db_session):
+        """sort_by=cvss 指定時に CVSS スコア降順でソートされること。"""
+        _make_osv(db_session, osv_id="GHSA-cvss-low", package_name="pkg-low", cvss_score=4.0)
+        _make_osv(db_session, osv_id="GHSA-cvss-high", package_name="pkg-high", cvss_score=9.8)
+        _make_osv(db_session, osv_id="GHSA-cvss-mid", package_name="pkg-mid", cvss_score=7.5)
+        res = client.get("/api/osv?sort_by=cvss", headers=HEADERS)
+        body = res.json()
+        scores = [item["cvss_score"] for item in body["data"]]
+        # CVSS スコアが降順になっていること
+        assert scores == sorted(scores, reverse=True)
+        assert scores[0] == 9.8
+
+    def test_sort_by_modified_default(self, client, db_session):
+        """sort_by 未指定（デフォルト）は更新日時降順でソートされること。"""
+        early = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        late = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        _make_osv(
+            db_session, osv_id="GHSA-mod-early",
+            package_name="pkg-a", modified=early, published=early,
+        )
+        _make_osv(
+            db_session, osv_id="GHSA-mod-late",
+            package_name="pkg-b", modified=late, published=late,
+        )
+        res = client.get("/api/osv", headers=HEADERS)
+        body = res.json()
+        assert body["data"][0]["osv_id"] == "GHSA-mod-late"
+
 
 # ──────────────────────────────────────────────────────────────
 # GET /api/osv/stats

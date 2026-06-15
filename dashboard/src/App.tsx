@@ -35,10 +35,10 @@ export default function App() {
   useEffect(() => { load() }, [load])
 
   return (
-    <div className="min-h-screen bg-[#0a0e1a] text-slate-100 flex flex-col">
+    <div className="min-h-screen bg-[#0a0e1a] text-slate-100 flex flex-col items-center">
 
       {/* ヘッダー */}
-      <header className="sticky top-0 z-20 border-b border-slate-800/60 bg-[#0a0e1a]/90 backdrop-blur-md">
+      <header className="w-full sticky top-0 z-20 border-b border-slate-800/60 bg-[#0a0e1a]/90 backdrop-blur-md">
         <div className="max-w-screen-xl mx-auto px-4 sm:px-8 lg:px-12 h-14 flex items-center justify-between gap-4">
 
           {/* ロゴ */}
@@ -78,7 +78,7 @@ export default function App() {
       </header>
 
       {/* メインコンテンツ */}
-      <main className="flex-1 max-w-screen-xl mx-auto w-full px-4 sm:px-8 lg:px-12 py-8 flex flex-col gap-8">
+      <main className="flex-1 max-w-screen-xl w-full px-4 sm:px-8 lg:px-12 py-8 flex flex-col gap-8">
 
         {/* エラーバナー */}
         {error && (
@@ -123,7 +123,7 @@ export default function App() {
       </main>
 
       {/* フッター */}
-      <footer className="border-t border-slate-800/60 mt-4">
+      <footer className="w-full border-t border-slate-800/60 mt-4">
         <div className="max-w-screen-xl mx-auto px-4 sm:px-8 lg:px-12 py-5 flex flex-col sm:flex-row items-center justify-between gap-1 text-xs text-slate-600">
           <span>データソース: CISA KEV / Open Source Vulnerabilities (OSV)</span>
           <span>毎日 JST 04:00 自動更新</span>

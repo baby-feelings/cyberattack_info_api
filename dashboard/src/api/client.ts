@@ -163,6 +163,7 @@ export async function fetchOsvList(params: {
   ecosystem?: string | null
   severity?: string | null
   search?: string
+  sortBy?: 'modified' | 'cvss'
 }): Promise<OsvListResponse> {
   const p = new URLSearchParams()
   p.set('page', String(params.page ?? 1))
@@ -171,6 +172,7 @@ export async function fetchOsvList(params: {
   if (params.ecosystem) p.set('ecosystem', params.ecosystem)
   if (params.severity) p.set('severity', params.severity)
   if (params.search) p.set('search', params.search)
+  if (params.sortBy) p.set('sort_by', params.sortBy)
   return apiFetch<OsvListResponse>(`/api/osv?${p}`)
 }
 

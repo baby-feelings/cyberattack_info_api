@@ -8,11 +8,12 @@ from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
-from app.models import Vulnerability
+from app.models import ScanResult, Vulnerability
 from app.routers.scan import (
     _deduplicate,
     _extract_fixed_versions,
     _extract_severity,
+    _get_previous_vuln_ids,
     _parse_package_json,
     _parse_requirements,
     _query_kev,
@@ -576,6 +577,98 @@ def test_scan_history_not_found(client: TestClient):
     """存在しないスキャン ID は 404 を返す。"""
     resp = client.get("/api/scan/history/99999", headers={"X-API-KEY": TEST_API_KEY})
     assert resp.status_code == 404
+
+
+# ── スキャン差分通知のテスト ──────────────────────────────────────────
+
+
+def test_get_previous_vuln_ids_no_history(db_session):
+    """前回スキャンがない場合は空集合を返す。"""
+    result = _get_previous_vuln_ids(db_session, "requirements")
+    assert result == set()
+
+
+def test_get_previous_vuln_ids_with_history(db_session):
+    """前回スキャンが存在する場合は脆弱性 ID の集合を返す。"""
+    record = ScanResult(
+        scan_type="requirements",
+        scanned_packages=2,
+        total_findings=2,
+        findings=[
+            {"vuln_id": "CVE-2024-0001", "package_name": "pkg-a", "source": "OSV"},
+            {"vuln_id": "CVE-2024-0002", "package_name": "pkg-b", "source": "OSV"},
+        ],
+    )
+    db_session.add(record)
+    db_session.commit()
+
+    result = _get_previous_vuln_ids(db_session, "requirements")
+    assert result == {"CVE-2024-0001", "CVE-2024-0002"}
+
+
+def test_get_previous_vuln_ids_different_scan_type(db_session):
+    """scan_type が異なる履歴は参照しない。"""
+    record = ScanResult(
+        scan_type="package-json",
+        scanned_packages=1,
+        total_findings=1,
+        findings=[{"vuln_id": "CVE-2024-0099", "package_name": "pkg-a", "source": "OSV"}],
+    )
+    db_session.add(record)
+    db_session.commit()
+
+    result = _get_previous_vuln_ids(db_session, "requirements")
+    assert result == set()
+
+
+def test_scan_diff_notification_sent_on_new_vuln(client: TestClient):
+    """前回スキャンより新規脆弱性が増えた場合、差分通知が送信されること。"""
+    osv_resp_first = {"vulns": []}
+    osv_resp_second = {
+        "vulns": [
+            {
+                "id": "GHSA-new-vuln",
+                "aliases": ["CVE-2024-9999"],
+                "summary": "New vulnerability",
+                "database_specific": {"severity": "HIGH"},
+                "severity": [],
+                "affected": [],
+                "references": [],
+            }
+        ]
+    }
+
+    mock_empty = MagicMock()
+    mock_empty.json.return_value = osv_resp_first
+    mock_empty.raise_for_status = MagicMock()
+
+    # 初回スキャン（脆弱性なし）
+    with patch("app.routers.scan.httpx.Client") as mock_client_cls:
+        mock_client_cls.return_value.__enter__.return_value.post.return_value = mock_empty
+        client.post(
+            "/api/scan/requirements",
+            content="fastapi==0.115.6\n",
+            headers={"X-API-KEY": TEST_API_KEY, "Content-Type": "text/plain"},
+        )
+
+    mock_vuln = MagicMock()
+    mock_vuln.json.return_value = osv_resp_second
+    mock_vuln.raise_for_status = MagicMock()
+
+    # 2回目スキャン（新規脆弱性あり）→ 差分通知が呼ばれる
+    with patch("app.routers.scan.httpx.Client") as mock_client_cls, \
+         patch("app.routers.scan.notify_scan_diff") as mock_notify:
+        mock_client_cls.return_value.__enter__.return_value.post.return_value = mock_vuln
+        resp = client.post(
+            "/api/scan/requirements",
+            content="fastapi==0.115.6\n",
+            headers={"X-API-KEY": TEST_API_KEY, "Content-Type": "text/plain"},
+        )
+        assert resp.status_code == 200
+        mock_notify.assert_called_once()
+        # 新規 CVE ID が差分として渡されること
+        call_args = mock_notify.call_args[0]
+        assert "CVE-2024-9999" in call_args[0]
 
 
 def test_scan_history_requires_auth(client: TestClient):
