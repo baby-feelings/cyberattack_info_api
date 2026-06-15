@@ -113,3 +113,67 @@ export interface ScanResultOut {
   findings: VulnerabilityFinding[]
   scanned_at: string
 }
+
+// ── OSV 脆弱性 ─────────────────────────────────────────────
+
+export interface OsvVulnerabilityOut {
+  osv_id: string
+  ecosystem: string
+  package_name: string
+  aliases: string[]
+  summary: string
+  details: string | null
+  severity: string | null
+  cvss_score: number | null
+  affected_versions: string[]
+  fixed_versions: string[]
+  references: string[]
+  published: string
+  modified: string
+}
+
+export interface OsvEcosystemStat {
+  ecosystem: string
+  count: number
+}
+
+export interface OsvSeverityStat {
+  severity: string
+  count: number
+}
+
+export interface OsvStatsResponse {
+  total: number
+  ecosystems: OsvEcosystemStat[]
+  severities: OsvSeverityStat[]
+  monthly_trend: MonthlyStat[]
+}
+
+export interface OsvListResponse {
+  total: number
+  page: number
+  per_page: number
+  data: OsvVulnerabilityOut[]
+}
+
+export async function fetchOsvList(params: {
+  page?: number
+  perPage?: number
+  days?: number
+  ecosystem?: string | null
+  severity?: string | null
+  search?: string
+}): Promise<OsvListResponse> {
+  const p = new URLSearchParams()
+  p.set('page', String(params.page ?? 1))
+  p.set('per_page', String(params.perPage ?? 50))
+  p.set('days', String(params.days ?? 90))
+  if (params.ecosystem) p.set('ecosystem', params.ecosystem)
+  if (params.severity) p.set('severity', params.severity)
+  if (params.search) p.set('search', params.search)
+  return apiFetch<OsvListResponse>(`/api/osv?${p}`)
+}
+
+export async function fetchOsvStats(days = 90): Promise<OsvStatsResponse> {
+  return apiFetch<OsvStatsResponse>(`/api/osv/stats?days=${days}`)
+}

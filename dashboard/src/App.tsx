@@ -8,6 +8,7 @@ import { VendorRanking } from './components/VendorRanking'
 import { RecentCVEs } from './components/RecentCVEs'
 import { ScanPanel } from './components/ScanPanel'
 import { ScanHistory } from './components/ScanHistory'
+import { OsvPanel } from './components/OsvPanel'
 
 export default function App() {
   const [recent, setRecent] = useState<VulnerabilityOut[]>([])
@@ -116,12 +117,15 @@ export default function App() {
           </div>
         </div>
 
+        {/* OSV 直近脆弱性 */}
+        <OsvPanel />
+
       </main>
 
       {/* フッター */}
       <footer className="border-t border-slate-800/60 mt-4">
         <div className="max-w-screen-xl mx-auto px-4 sm:px-8 lg:px-12 py-5 flex flex-col sm:flex-row items-center justify-between gap-1 text-xs text-slate-600">
-          <span>データソース: CISA Known Exploited Vulnerabilities Catalog</span>
+          <span>データソース: CISA KEV / Open Source Vulnerabilities (OSV)</span>
           <span>毎日 JST 04:00 自動更新</span>
         </div>
       </footer>
