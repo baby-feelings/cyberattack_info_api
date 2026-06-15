@@ -304,6 +304,9 @@ def _fetch_vuln_by_id(osv_id: str) -> dict[str, Any]:
     return resp.json()
 
 
+_COMMIT_EVERY = 50  # 何件ごとにコミットするか（長時間トランザクション回避）
+
+
 def _upsert_osv_records(
     db: Session, records: list[dict[str, Any]]
 ) -> tuple[int, int]:
@@ -311,6 +314,7 @@ def _upsert_osv_records(
 
     (osv_id, ecosystem, package_name) をキーに INSERT または UPDATE する。
     modified が変化していない場合は UPDATE をスキップしてパフォーマンスを最適化する。
+    _COMMIT_EVERY 件ごとにコミットして長時間トランザクションを回避する。
 
     Returns:
         (inserted_count, updated_count) のタプル
@@ -318,7 +322,16 @@ def _upsert_osv_records(
     inserted = 0
     updated = 0
 
+    # レコードリスト内の重複 (osv_id, ecosystem, package_name) を除去
+    seen_keys: set[tuple[str, str, str]] = set()
+    unique_records: list[dict[str, Any]] = []
     for rec in records:
+        key = (rec["osv_id"], rec["ecosystem"], rec["package_name"])
+        if key not in seen_keys:
+            seen_keys.add(key)
+            unique_records.append(rec)
+
+    for i, rec in enumerate(unique_records):
         existing = (
             db.query(OsvVulnerability)
             .filter(
@@ -338,7 +351,19 @@ def _upsert_osv_records(
                 setattr(existing, key, value)
             updated += 1
 
-    db.commit()
+        # 定期コミットで接続タイムアウトを防ぐ
+        if (i + 1) % _COMMIT_EVERY == 0:
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise
+
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     return inserted, updated
 
 
@@ -361,10 +386,18 @@ def fetch_and_store_osv() -> tuple[int, int]:
             try:
                 # Step 1: パッケージを BATCH_SIZE ずつ分割して {id, modified} を一括取得
                 pkg_tuples = [(pkg, ecosystem) for pkg in packages]
-                refs: list[dict[str, Any]] = []
+                raw_refs: list[dict[str, Any]] = []
                 for i in range(0, len(pkg_tuples), BATCH_SIZE):
                     chunk = pkg_tuples[i: i + BATCH_SIZE]
-                    refs.extend(_query_packages_batch(chunk))
+                    raw_refs.extend(_query_packages_batch(chunk))
+
+                # 複数バッチにまたがる重複 ID を除去
+                seen_ids: set[str] = set()
+                refs: list[dict[str, Any]] = []
+                for ref in raw_refs:
+                    if ref["id"] not in seen_ids:
+                        seen_ids.add(ref["id"])
+                        refs.append(ref)
 
                 # Step 2: cutoff 以降に更新されたものに絞り込む
                 recent_refs = []
