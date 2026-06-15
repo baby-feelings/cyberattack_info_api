@@ -2,7 +2,7 @@
 
 OSV REST API (https://api.osv.dev/v1/) を使い、各エコシステムの主要パッケージに
 影響する脆弱性を取得して DB に Upsert する。
-APScheduler から毎週呼び出される。
+APScheduler から毎日呼び出される。
 """
 import logging
 from datetime import datetime, timedelta, timezone
@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import SessionLocal
 from app.models import OsvVulnerability
+from app.notifications import notify_osv_crawl_error, notify_osv_new_vulnerabilities
 
 logger = logging.getLogger(__name__)
 
@@ -307,6 +308,25 @@ def _fetch_vuln_by_id(osv_id: str) -> dict[str, Any]:
 _COMMIT_EVERY = 50  # 何件ごとにコミットするか（長時間トランザクション回避）
 
 
+def _delete_old_osv_records(db: Session) -> int:
+    """保持期間（OSV_RETENTION_DAYS）を超えた OSV レコードを削除する。
+
+    modified が cutoff より古いレコードを一括削除して DB 容量を管理する。
+
+    Returns:
+        削除件数
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(days=settings.OSV_RETENTION_DAYS)
+    deleted = (
+        db.query(OsvVulnerability)
+        .filter(OsvVulnerability.modified < cutoff)
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    logger.info("OSV old records deleted: %d (modified < %s)", deleted, cutoff.date())
+    return deleted
+
+
 def _upsert_osv_records(
     db: Session, records: list[dict[str, Any]]
 ) -> tuple[int, int]:
@@ -347,8 +367,8 @@ def _upsert_osv_records(
             inserted += 1
         elif existing.modified != rec["modified"]:
             # modified が更新されている場合のみ上書き
-            for key, value in rec.items():
-                setattr(existing, key, value)
+            for field, value in rec.items():
+                setattr(existing, field, value)
             updated += 1
 
         # 定期コミットで接続タイムアウトを防ぐ
@@ -367,18 +387,21 @@ def _upsert_osv_records(
     return inserted, updated
 
 
-def fetch_and_store_osv() -> tuple[int, int]:
+def fetch_and_store_osv() -> tuple[int, int, int]:
     """OSV クローラーのメインエントリポイント。
 
     OSV REST API を使い、各エコシステムの主要パッケージに影響する脆弱性を
-    取得して DB に保存する。
-    GCS zip ダウンロード方式と比べ、小さな HTTP リクエストで高速に完了する。
-    APScheduler から定期呼び出しされる。
+    取得して DB に保存する。完了後に古いレコードを削除し、Slack に通知する。
+    APScheduler から毎日呼び出しされる。
+
+    Returns:
+        (inserted, updated, deleted) のタプル
     """
     logger.info("=== OSV crawler started (API mode) ===")
     cutoff = datetime.now(timezone.utc) - timedelta(days=settings.OSV_DAYS)
     total_inserted = 0
     total_updated = 0
+    total_deleted = 0
 
     db: Session = SessionLocal()
     try:
@@ -440,11 +463,23 @@ def fetch_and_store_osv() -> tuple[int, int]:
                     "Unexpected error for ecosystem %s: %s",
                     ecosystem, exc, exc_info=True,
                 )
+
+        # Step 4: 保持期間を超えた古いレコードを削除（DB 容量管理）
+        try:
+            total_deleted = _delete_old_osv_records(db)
+        except Exception as exc:
+            logger.error("Failed to delete old OSV records: %s", exc, exc_info=True)
+
+    except Exception as exc:
+        notify_osv_crawl_error(str(exc))
+        raise
     finally:
         db.close()
 
     logger.info(
-        "=== OSV crawler completed: inserted=%d, updated=%d ===",
-        total_inserted, total_updated,
+        "=== OSV crawler completed: inserted=%d, updated=%d, deleted=%d ===",
+        total_inserted, total_updated, total_deleted,
     )
-    return total_inserted, total_updated
+    # 新規・更新があった場合のみ Slack 通知
+    notify_osv_new_vulnerabilities(total_inserted, total_updated, total_deleted)
+    return total_inserted, total_updated, total_deleted

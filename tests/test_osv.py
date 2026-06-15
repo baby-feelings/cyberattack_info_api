@@ -16,6 +16,7 @@ import httpx  # noqa: E402
 
 from app.cron_osv import (  # noqa: E402
     _build_records,
+    _delete_old_osv_records,
     _extract_fixed_versions,
     _fetch_vuln_by_id,
     _parse_severity,
@@ -694,7 +695,7 @@ def _make_refs(vulns: list[dict]) -> list[dict]:
 
 class TestFetchAndStoreOsv:
     def test_runs_and_returns_counts(self, db_session):
-        """クローラーが正常実行して (inserted, updated) を返すこと。"""
+        """クローラーが正常実行して (inserted, updated, deleted) を返すこと。"""
         vuln = _make_vuln("GHSA-mock-0001", modified="2026-06-01T00:00:00Z")
 
         with patch(
@@ -707,10 +708,11 @@ class TestFetchAndStoreOsv:
             ):
                 with patch("app.cron_osv.SessionLocal", return_value=db_session):
                     db_session.close = MagicMock()
-                    inserted, updated = fetch_and_store_osv()
+                    inserted, updated, deleted = fetch_and_store_osv()
 
         assert isinstance(inserted, int)
         assert isinstance(updated, int)
+        assert isinstance(deleted, int)
 
     def test_http_error_skips_ecosystem(self):
         """1エコシステムの querybatch で HTTPError が発生しても処理が継続されること。"""
@@ -760,7 +762,7 @@ class TestFetchAndStoreOsv:
             with patch("app.cron_osv._fetch_vuln_by_id") as mock_fetch:
                 with patch("app.cron_osv.SessionLocal", return_value=db_session):
                     db_session.close = MagicMock()
-                    inserted, updated = fetch_and_store_osv()
+                    inserted, updated, deleted = fetch_and_store_osv()
 
         # 古いのでフェッチされないこと
         mock_fetch.assert_not_called()
@@ -778,9 +780,65 @@ class TestFetchAndStoreOsv:
             ):
                 with patch("app.cron_osv.SessionLocal", return_value=db_session):
                     db_session.close = MagicMock()
-                    inserted, updated = fetch_and_store_osv()
+                    inserted, updated, deleted = fetch_and_store_osv()
 
         assert inserted == 0
+
+
+# ──────────────────────────────────────────────────────────────
+# _delete_old_osv_records
+# ──────────────────────────────────────────────────────────────
+
+
+class TestDeleteOldOsvRecords:
+    def test_deletes_old_records(self, db_session):
+        """保持期間（OSV_RETENTION_DAYS）を超えた古いレコードが削除されること。"""
+        old_dt = datetime(2000, 1, 1, tzinfo=timezone.utc)
+        _make_osv(db_session, osv_id="GHSA-old-del-001", modified=old_dt, published=old_dt)
+        count_before = db_session.query(OsvVulnerability).count()
+        assert count_before == 1
+
+        deleted = _delete_old_osv_records(db_session)
+
+        assert deleted == 1
+        count_after = db_session.query(OsvVulnerability).count()
+        assert count_after == 0
+
+    def test_keeps_recent_records(self, db_session):
+        """保持期間内の新しいレコードは削除されないこと。"""
+        recent_dt = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        _make_osv(db_session, osv_id="GHSA-recent-keep", modified=recent_dt, published=recent_dt)
+
+        deleted = _delete_old_osv_records(db_session)
+
+        assert deleted == 0
+        count_after = db_session.query(OsvVulnerability).count()
+        assert count_after == 1
+
+    def test_mixed_records(self, db_session):
+        """古いレコードのみ削除され、新しいレコードは残ること。"""
+        old_dt = datetime(2000, 1, 1, tzinfo=timezone.utc)
+        recent_dt = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        _make_osv(db_session, osv_id="GHSA-old-mix", modified=old_dt, published=old_dt)
+        _make_osv(
+            db_session,
+            osv_id="GHSA-recent-mix",
+            package_name="requests",
+            modified=recent_dt,
+            published=recent_dt,
+        )
+
+        deleted = _delete_old_osv_records(db_session)
+
+        assert deleted == 1
+        remaining = db_session.query(OsvVulnerability).all()
+        assert len(remaining) == 1
+        assert remaining[0].osv_id == "GHSA-recent-mix"
+
+    def test_empty_db_returns_zero(self, db_session):
+        """DB が空の場合は 0 を返すこと。"""
+        deleted = _delete_old_osv_records(db_session)
+        assert deleted == 0
 
 
 # ──────────────────────────────────────────────────────────────
@@ -798,6 +856,7 @@ class TestAdminOsvCrawl:
         assert "message" in body
         assert "inserted" in body
         assert "updated" in body
+        assert "deleted" in body
 
     def test_trigger_osv_crawl_requires_auth(self, client):
         """API キーなしは 403 を返すこと。"""

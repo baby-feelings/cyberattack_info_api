@@ -54,11 +54,10 @@ async def lifespan(app: FastAPI):
         id="cisa_kev_crawler",
         replace_existing=True,
     )
-    # OSV クローラー: 毎週日曜 UTC 20:00（JST 月曜 5:00）
+    # OSV クローラー: 毎日 UTC 20:00（JST 翌日 5:00）
     scheduler.add_job(
         fetch_and_store_osv,
         trigger="cron",
-        day_of_week=settings.OSV_CRON_DAY_OF_WEEK,
         hour=20,
         minute=0,
         id="osv_crawler",
@@ -66,10 +65,9 @@ async def lifespan(app: FastAPI):
     )
     scheduler.start()
     logger.info(
-        "Scheduler started: KEV daily UTC %02d:%02d, OSV weekly on %s",
+        "Scheduler started: KEV daily UTC %02d:%02d, OSV daily UTC 20:00",
         settings.CRON_HOUR_UTC,
         settings.CRON_MINUTE_UTC,
-        settings.OSV_CRON_DAY_OF_WEEK,
     )
 
     yield  # アプリ実行中
@@ -182,11 +180,12 @@ def trigger_crawl() -> CrawlResponse:
 def trigger_osv_crawl() -> OsvCrawlResponse:
     """OSV クローラーを手動で即時実行する。"""
     logger.info("Manual OSV crawl triggered via /admin/osv-crawl")
-    inserted, updated = fetch_and_store_osv()
+    inserted, updated, deleted = fetch_and_store_osv()
     return OsvCrawlResponse(
         message="OSV crawl completed",
         inserted=inserted,
         updated=updated,
+        deleted=deleted,
     )
 
 

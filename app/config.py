@@ -27,10 +27,10 @@ class Settings(BaseSettings):
     SLACK_WEBHOOK_URL: str = ""
 
     # OSV クローラー設定
-    # 直近何日分の脆弱性を取得・保持するか
+    # 直近何日分の脆弱性を取得対象とするか（cutoff フィルター）
     OSV_DAYS: int = 90
-    # クローラー実行曜日（APScheduler の day_of_week 形式: mon/tue/.../sun）
-    OSV_CRON_DAY_OF_WEEK: str = "sun"
+    # OSV データの保持期間（日数）: この日数より古い modified レコードを定期削除する
+    OSV_RETENTION_DAYS: int = 180
 
     model_config = SettingsConfigDict(
         # 環境に応じて .env.development または .env.production を使用
