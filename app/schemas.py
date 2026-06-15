@@ -207,3 +207,4 @@ class OsvCrawlResponse(BaseModel):
     message: str
     inserted: int
     updated: int
+    deleted: int = 0

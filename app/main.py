@@ -4,7 +4,6 @@
 import logging
 import logging.config
 from contextlib import asynccontextmanager
-from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI, Security
@@ -55,11 +54,10 @@ async def lifespan(app: FastAPI):
         id="cisa_kev_crawler",
         replace_existing=True,
     )
-    # OSV クローラー: 毎週日曜 UTC 20:00（JST 月曜 5:00）
+    # OSV クローラー: 毎日 UTC 20:00（JST 翌日 5:00）
     scheduler.add_job(
         fetch_and_store_osv,
         trigger="cron",
-        day_of_week=settings.OSV_CRON_DAY_OF_WEEK,
         hour=20,
         minute=0,
         id="osv_crawler",
@@ -67,10 +65,9 @@ async def lifespan(app: FastAPI):
     )
     scheduler.start()
     logger.info(
-        "Scheduler started: KEV daily UTC %02d:%02d, OSV weekly on %s",
+        "Scheduler started: KEV daily UTC %02d:%02d, OSV daily UTC 20:00",
         settings.CRON_HOUR_UTC,
         settings.CRON_MINUTE_UTC,
-        settings.OSV_CRON_DAY_OF_WEEK,
     )
 
     yield  # アプリ実行中
@@ -182,36 +179,13 @@ def trigger_crawl() -> CrawlResponse:
 )
 def trigger_osv_crawl() -> OsvCrawlResponse:
     """OSV クローラーを手動で即時実行する。"""
-    from datetime import timedelta, timezone
-
-    from app.cron_osv import (
-        TARGET_ECOSYSTEMS,
-        _fetch_ecosystem_zip,
-        _process_zip,
-        _upsert_osv_records,
-    )
-
     logger.info("Manual OSV crawl triggered via /admin/osv-crawl")
-    cutoff = datetime.now(timezone.utc) - timedelta(days=settings.OSV_DAYS)
-    total_inserted = 0
-    total_updated = 0
-    db = SessionLocal()
-    try:
-        for ecosystem in TARGET_ECOSYSTEMS:
-            try:
-                zip_bytes = _fetch_ecosystem_zip(ecosystem)
-                records = _process_zip(ecosystem, zip_bytes, cutoff)
-                ins, upd = _upsert_osv_records(db, records)
-                total_inserted += ins
-                total_updated += upd
-            except Exception as exc:
-                logger.error("OSV crawl error [%s]: %s", ecosystem, exc)
-    finally:
-        db.close()
+    inserted, updated, deleted = fetch_and_store_osv()
     return OsvCrawlResponse(
         message="OSV crawl completed",
-        inserted=total_inserted,
-        updated=total_updated,
+        inserted=inserted,
+        updated=updated,
+        deleted=deleted,
     )
 
 

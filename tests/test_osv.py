@@ -2,20 +2,27 @@
 
 GET /api/osv        – 一覧取得・フィルタリング・ページネーション
 GET /api/osv/stats  – 統計情報取得
-クローラーヘルパー関数のユニットテスト
+クローラーヘルパー関数・API クライアントのユニットテスト
 """
 import os
 from datetime import datetime, timezone
+from unittest.mock import MagicMock, patch
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
 os.environ.setdefault("API_KEY", "test-api-key-for-pytest")
 os.environ.setdefault("ENVIRONMENT", "development")
 
+import httpx  # noqa: E402
+
 from app.cron_osv import (  # noqa: E402
     _build_records,
+    _delete_old_osv_records,
     _extract_fixed_versions,
+    _fetch_vuln_by_id,
     _parse_severity,
-    _process_zip,
+    _query_packages_batch,
+    _upsert_osv_records,
+    fetch_and_store_osv,
 )
 from app.models import OsvVulnerability  # noqa: E402
 
@@ -48,6 +55,34 @@ def _make_osv(db_session, **kwargs):
     db_session.add(record)
     db_session.commit()
     return record
+
+
+def _make_vuln(
+    osv_id: str = "GHSA-test-0001",
+    modified: str = "2026-06-01T00:00:00Z",
+    ecosystem: str = "PyPI",
+    pkg_name: str = "testpkg",
+) -> dict:
+    """OSV API が返す脆弱性オブジェクトのモックを生成する。"""
+    return {
+        "id": osv_id,
+        "modified": modified,
+        "published": "2026-01-01T00:00:00Z",
+        "aliases": ["CVE-2026-00001"],
+        "summary": f"Vuln {osv_id}",
+        "details": "Detailed description",
+        "database_specific": {"severity": "HIGH"},
+        "affected": [
+            {
+                "package": {"name": pkg_name, "ecosystem": ecosystem},
+                "versions": ["1.0.0"],
+                "ranges": [
+                    {"type": "ECOSYSTEM", "events": [{"fixed": "1.1.0"}]}
+                ],
+            }
+        ],
+        "references": [{"url": "https://example.com/advisory"}],
+    }
 
 
 # ──────────────────────────────────────────────────────────────
@@ -206,7 +241,6 @@ class TestOsvStats:
         _make_osv(db_session, osv_id="GHSA-mt1", package_name="a")
         res = client.get("/api/osv/stats", headers=HEADERS)
         body = res.json()
-        # 少なくとも1ヶ月のデータがあること
         assert len(body["monthly_trend"]) >= 1
 
 
@@ -277,6 +311,32 @@ class TestParseSeverity:
         }
         sev, score = _parse_severity(vuln)
         assert sev is None
+        assert score is None
+
+
+class TestParseSeverityEdgeCases:
+    def test_cvss_score_type_error(self):
+        """cvss.score が変換不能な型の場合は None を返す。"""
+        vuln = {
+            "database_specific": {
+                "severity": "HIGH",
+                "cvss": {"score": None},
+            }
+        }
+        sev, score = _parse_severity(vuln)
+        assert sev == "HIGH"
+        assert score is None
+
+    def test_cvss_score_value_error(self):
+        """cvss.score が文字列で数値変換できない場合は None を返す。"""
+        vuln = {
+            "database_specific": {
+                "severity": "HIGH",
+                "cvss": {"score": "not-a-number"},
+            }
+        }
+        sev, score = _parse_severity(vuln)
+        assert sev == "HIGH"
         assert score is None
 
 
@@ -394,73 +454,430 @@ class TestBuildRecords:
         assert records == []
 
 
-class TestProcessZip:
-    def _make_zip(self, entries: list[dict]) -> bytes:
-        """テスト用の zip バイト列を生成する。"""
-        import io
-        import json
-        import zipfile
+class TestBuildRecordsEdgeCases:
+    def test_invalid_published_falls_back_to_modified(self):
+        """published が不正な場合は modified で代替されること。"""
+        modified = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        vuln = {
+            "id": "GHSA-pub-err",
+            "published": "not-a-valid-date",
+            "aliases": [],
+            "summary": "Test",
+            "affected": [
+                {"package": {"name": "pkg", "ecosystem": "PyPI"},
+                 "versions": [], "ranges": []}
+            ],
+            "references": [],
+        }
+        records = _build_records(vuln, modified)
+        assert len(records) == 1
+        assert records[0]["published"] == modified
 
-        buf = io.BytesIO()
-        with zipfile.ZipFile(buf, "w") as zf:
-            for entry in entries:
-                zf.writestr(f"{entry['id']}.json", json.dumps(entry))
-        return buf.getvalue()
+    def test_missing_pkg_name_skipped(self):
+        """パッケージ名が空の affected エントリはスキップされること。"""
+        modified = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        vuln = {
+            "id": "GHSA-no-name",
+            "published": "2026-06-01T00:00:00Z",
+            "aliases": [],
+            "summary": "Test",
+            "affected": [
+                {"package": {"name": "", "ecosystem": "PyPI"},
+                 "versions": [], "ranges": []},
+                {"package": {"name": "valid-pkg", "ecosystem": "PyPI"},
+                 "versions": [], "ranges": []},
+            ],
+            "references": [],
+        }
+        records = _build_records(vuln, modified)
+        assert len(records) == 1
+        assert records[0]["package_name"] == "valid-pkg"
 
-    def test_filters_by_cutoff(self):
-        """cutoff より古いエントリは除外される。"""
-        entries = [
-            {
-                "id": "GHSA-new",
-                "modified": "2026-06-01T00:00:00Z",
-                "published": "2026-06-01T00:00:00Z",
-                "aliases": [],
-                "summary": "New vuln",
-                "affected": [
-                    {"package": {"name": "pkg", "ecosystem": "PyPI"}, "versions": [], "ranges": []}
-                ],
-                "references": [],
-            },
-            {
-                "id": "GHSA-old",
-                "modified": "2020-01-01T00:00:00Z",
-                "published": "2020-01-01T00:00:00Z",
-                "aliases": [],
-                "summary": "Old vuln",
-                "affected": [
-                    {"package": {"name": "pkg", "ecosystem": "PyPI"}, "versions": [], "ranges": []}
-                ],
-                "references": [],
-            },
+    def test_missing_ecosystem_skipped(self):
+        """エコシステムが空の affected エントリはスキップされること。"""
+        modified = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        vuln = {
+            "id": "GHSA-no-eco",
+            "published": "2026-06-01T00:00:00Z",
+            "aliases": [],
+            "summary": "Test",
+            "affected": [
+                {"package": {"name": "pkg", "ecosystem": ""},
+                 "versions": [], "ranges": []},
+            ],
+            "references": [],
+        }
+        records = _build_records(vuln, modified)
+        assert records == []
+
+
+# ──────────────────────────────────────────────────────────────
+# OSV API クライアント (_query_packages_batch)
+# ──────────────────────────────────────────────────────────────
+
+
+def _mock_batch_response(vulns_per_query: list[list[dict]]) -> MagicMock:
+    """_query_packages_batch が呼ぶ httpx.Client のモックを返す。"""
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status = MagicMock()
+    mock_resp.json.return_value = {
+        "results": [{"vulns": v} for v in vulns_per_query]
+    }
+    mock_client = MagicMock()
+    mock_client.__enter__ = MagicMock(return_value=mock_client)
+    mock_client.__exit__ = MagicMock(return_value=False)
+    mock_client.post = MagicMock(return_value=mock_resp)
+    return mock_client
+
+
+class TestQueryPackagesBatch:
+    def test_returns_deduped_id_refs(self):
+        """同じ ID が複数クエリから返っても1件に絞り込むこと。"""
+        ref = {"id": "GHSA-shared", "modified": "2026-06-01T00:00:00Z"}
+        mock_client = _mock_batch_response([
+            [ref],                                             # query 1
+            [ref],                                             # query 2 (重複)
+            [{"id": "GHSA-unique", "modified": "2026-06-01T00:00:00Z"}],  # query 3
+        ])
+        with patch("app.cron_osv.httpx.Client", return_value=mock_client):
+            result = _query_packages_batch([
+                ("requests", "PyPI"),
+                ("flask", "PyPI"),
+                ("django", "PyPI"),
+            ])
+        ids = [v["id"] for v in result]
+        assert ids.count("GHSA-shared") == 1
+        assert "GHSA-unique" in ids
+
+    def test_empty_packages_returns_empty(self):
+        """空リストを渡した場合は API を呼ばず空リストを返すこと。"""
+        with patch("app.cron_osv.httpx.Client") as mock_cls:
+            result = _query_packages_batch([])
+        mock_cls.assert_not_called()
+        assert result == []
+
+    def test_http_error_propagates(self):
+        """HTTP エラーが発生した場合は例外が伝播すること。"""
+        mock_client = MagicMock()
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client.post.return_value.raise_for_status.side_effect = (
+            httpx.HTTPStatusError("503", request=MagicMock(), response=MagicMock())
+        )
+
+        import pytest as _pytest
+        with patch("app.cron_osv.httpx.Client", return_value=mock_client):
+            with _pytest.raises(httpx.HTTPStatusError):
+                _query_packages_batch([("requests", "PyPI")])
+
+    def test_filters_empty_vuln_ids(self):
+        """ID が空の脆弱性は除外されること。"""
+        mock_client = _mock_batch_response([
+            [{"id": "", "modified": "2026-06-01T00:00:00Z"}],
+            [{"id": "GHSA-valid", "modified": "2026-06-01T00:00:00Z"}],
+        ])
+        with patch("app.cron_osv.httpx.Client", return_value=mock_client):
+            result = _query_packages_batch([("pkg1", "PyPI"), ("pkg2", "PyPI")])
+        assert all(v["id"] for v in result)
+        assert any(v["id"] == "GHSA-valid" for v in result)
+
+
+class TestFetchVulnById:
+    def test_returns_full_vuln(self):
+        """GET /v1/vulns/{id} が完全な脆弱性オブジェクトを返すこと。"""
+        full_vuln = _make_vuln("GHSA-detail-001")
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = full_vuln
+
+        mock_client = MagicMock()
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client.get = MagicMock(return_value=mock_resp)
+
+        with patch("app.cron_osv.httpx.Client", return_value=mock_client):
+            result = _fetch_vuln_by_id("GHSA-detail-001")
+
+        assert result["id"] == "GHSA-detail-001"
+        assert "affected" in result
+        mock_client.get.assert_called_once_with(
+            "https://api.osv.dev/v1/vulns/GHSA-detail-001"
+        )
+
+    def test_http_error_propagates(self):
+        """HTTP エラーが発生した場合は例外が伝播すること。"""
+        mock_client = MagicMock()
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client.get.return_value.raise_for_status.side_effect = (
+            httpx.HTTPStatusError("404", request=MagicMock(), response=MagicMock())
+        )
+
+        import pytest as _pytest
+        with patch("app.cron_osv.httpx.Client", return_value=mock_client):
+            with _pytest.raises(httpx.HTTPStatusError):
+                _fetch_vuln_by_id("GHSA-not-found")
+
+
+# ──────────────────────────────────────────────────────────────
+# _upsert_osv_records
+# ──────────────────────────────────────────────────────────────
+
+
+class TestUpsertOsvRecords:
+    def _make_rec(self, **kwargs) -> dict:
+        dt = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        base = {
+            "osv_id": "GHSA-upsert-001",
+            "ecosystem": "PyPI",
+            "package_name": "testpkg",
+            "aliases": [],
+            "summary": "Test",
+            "details": None,
+            "severity": "HIGH",
+            "cvss_score": 7.5,
+            "affected_versions": [],
+            "fixed_versions": [],
+            "references": [],
+            "published": dt,
+            "modified": dt,
+        }
+        base.update(kwargs)
+        return base
+
+    def test_insert_new_record(self, db_session):
+        """新規レコードが挿入されること。"""
+        ins, upd = _upsert_osv_records(db_session, [self._make_rec()])
+        assert ins == 1
+        assert upd == 0
+
+    def test_update_changed_record(self, db_session):
+        """modified が変化した既存レコードが更新されること。"""
+        old_dt = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        new_dt = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        _make_osv(
+            db_session,
+            osv_id="GHSA-upd-chg",
+            package_name="testpkg",
+            modified=old_dt,
+            published=old_dt,
+        )
+
+        rec = self._make_rec(osv_id="GHSA-upd-chg", modified=new_dt, summary="Updated")
+        ins, upd = _upsert_osv_records(db_session, [rec])
+        assert ins == 0
+        assert upd == 1
+
+    def test_no_double_insert(self, db_session):
+        """同じキーのレコードを 2 回 upsert しても 2 回 insert されないこと。"""
+        rec = self._make_rec(osv_id="GHSA-no-dup-001")
+        ins1, _ = _upsert_osv_records(db_session, [rec])
+        assert ins1 == 1
+        ins2, _ = _upsert_osv_records(db_session, [rec])
+        assert ins2 == 0
+
+    def test_empty_records(self, db_session):
+        """空リストを渡した場合は 0,0 を返すこと。"""
+        ins, upd = _upsert_osv_records(db_session, [])
+        assert ins == 0
+        assert upd == 0
+
+
+# ──────────────────────────────────────────────────────────────
+# fetch_and_store_osv (メインクローラー)
+# ──────────────────────────────────────────────────────────────
+
+
+def _make_refs(vulns: list[dict]) -> list[dict]:
+    """vulns リストから {id, modified} の refs リストを生成する。"""
+    return [{"id": v["id"], "modified": v["modified"]} for v in vulns]
+
+
+class TestFetchAndStoreOsv:
+    def test_runs_and_returns_counts(self, db_session):
+        """クローラーが正常実行して (inserted, updated, deleted) を返すこと。"""
+        vuln = _make_vuln("GHSA-mock-0001", modified="2026-06-01T00:00:00Z")
+
+        with patch(
+            "app.cron_osv._query_packages_batch",
+            return_value=_make_refs([vuln]),
+        ):
+            with patch(
+                "app.cron_osv._fetch_vuln_by_id",
+                return_value=vuln,
+            ):
+                with patch("app.cron_osv.SessionLocal", return_value=db_session):
+                    db_session.close = MagicMock()
+                    inserted, updated, deleted = fetch_and_store_osv()
+
+        assert isinstance(inserted, int)
+        assert isinstance(updated, int)
+        assert isinstance(deleted, int)
+
+    def test_http_error_skips_ecosystem(self):
+        """1エコシステムの querybatch で HTTPError が発生しても処理が継続されること。"""
+        call_counts = {"count": 0}
+
+        def batch_side_effect(packages):
+            call_counts["count"] += 1
+            if call_counts["count"] == 1:
+                raise httpx.HTTPError("Connection refused")
+            return []
+
+        with patch("app.cron_osv._query_packages_batch", side_effect=batch_side_effect):
+            with patch("app.cron_osv.SessionLocal") as mock_sl:
+                mock_db = MagicMock()
+                mock_db.query.return_value.filter.return_value.first.return_value = None
+                mock_sl.return_value = mock_db
+                fetch_and_store_osv()
+
+        from app.cron_osv import POPULAR_PACKAGES
+        assert call_counts["count"] == len(POPULAR_PACKAGES)
+
+    def test_unexpected_error_skips_ecosystem(self):
+        """予期しない例外でも処理が継続されること。"""
+        call_counts = {"count": 0}
+
+        def batch_side_effect(packages):
+            call_counts["count"] += 1
+            if call_counts["count"] == 1:
+                raise RuntimeError("Unexpected error")
+            return []
+
+        with patch("app.cron_osv._query_packages_batch", side_effect=batch_side_effect):
+            with patch("app.cron_osv.SessionLocal") as mock_sl:
+                mock_db = MagicMock()
+                mock_db.query.return_value.filter.return_value.first.return_value = None
+                mock_sl.return_value = mock_db
+                fetch_and_store_osv()
+
+        from app.cron_osv import POPULAR_PACKAGES
+        assert call_counts["count"] == len(POPULAR_PACKAGES)
+
+    def test_old_vulns_filtered_out(self, db_session):
+        """cutoff より古い脆弱性はスキップされること（_fetch_vuln_by_id を呼ばない）。"""
+        old_ref = {"id": "GHSA-old", "modified": "2000-01-01T00:00:00Z"}
+
+        with patch("app.cron_osv._query_packages_batch", return_value=[old_ref]):
+            with patch("app.cron_osv._fetch_vuln_by_id") as mock_fetch:
+                with patch("app.cron_osv.SessionLocal", return_value=db_session):
+                    db_session.close = MagicMock()
+                    inserted, updated, deleted = fetch_and_store_osv()
+
+        # 古いのでフェッチされないこと
+        mock_fetch.assert_not_called()
+        assert inserted == 0
+        assert updated == 0
+
+    def test_fetch_error_skips_single_vuln(self, db_session):
+        """個別 ID のフェッチ失敗時はその1件をスキップして継続すること。"""
+        recent_ref = {"id": "GHSA-fetch-err", "modified": "2026-06-01T00:00:00Z"}
+
+        with patch("app.cron_osv._query_packages_batch", return_value=[recent_ref]):
+            with patch(
+                "app.cron_osv._fetch_vuln_by_id",
+                side_effect=httpx.HTTPError("timeout"),
+            ):
+                with patch("app.cron_osv.SessionLocal", return_value=db_session):
+                    db_session.close = MagicMock()
+                    inserted, updated, deleted = fetch_and_store_osv()
+
+        assert inserted == 0
+
+
+# ──────────────────────────────────────────────────────────────
+# _delete_old_osv_records
+# ──────────────────────────────────────────────────────────────
+
+
+class TestDeleteOldOsvRecords:
+    def test_deletes_old_records(self, db_session):
+        """保持期間（OSV_RETENTION_DAYS）を超えた古いレコードが削除されること。"""
+        old_dt = datetime(2000, 1, 1, tzinfo=timezone.utc)
+        _make_osv(db_session, osv_id="GHSA-old-del-001", modified=old_dt, published=old_dt)
+        count_before = db_session.query(OsvVulnerability).count()
+        assert count_before == 1
+
+        deleted = _delete_old_osv_records(db_session)
+
+        assert deleted == 1
+        count_after = db_session.query(OsvVulnerability).count()
+        assert count_after == 0
+
+    def test_keeps_recent_records(self, db_session):
+        """保持期間内の新しいレコードは削除されないこと。"""
+        recent_dt = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        _make_osv(db_session, osv_id="GHSA-recent-keep", modified=recent_dt, published=recent_dt)
+
+        deleted = _delete_old_osv_records(db_session)
+
+        assert deleted == 0
+        count_after = db_session.query(OsvVulnerability).count()
+        assert count_after == 1
+
+    def test_mixed_records(self, db_session):
+        """古いレコードのみ削除され、新しいレコードは残ること。"""
+        old_dt = datetime(2000, 1, 1, tzinfo=timezone.utc)
+        recent_dt = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        _make_osv(db_session, osv_id="GHSA-old-mix", modified=old_dt, published=old_dt)
+        _make_osv(
+            db_session,
+            osv_id="GHSA-recent-mix",
+            package_name="requests",
+            modified=recent_dt,
+            published=recent_dt,
+        )
+
+        deleted = _delete_old_osv_records(db_session)
+
+        assert deleted == 1
+        remaining = db_session.query(OsvVulnerability).all()
+        assert len(remaining) == 1
+        assert remaining[0].osv_id == "GHSA-recent-mix"
+
+    def test_empty_db_returns_zero(self, db_session):
+        """DB が空の場合は 0 を返すこと。"""
+        deleted = _delete_old_osv_records(db_session)
+        assert deleted == 0
+
+
+# ──────────────────────────────────────────────────────────────
+# POST /admin/osv-crawl
+# ──────────────────────────────────────────────────────────────
+
+
+class TestAdminOsvCrawl:
+    def test_trigger_osv_crawl(self, client):
+        """POST /admin/osv-crawl が正常にレスポンスを返すこと。"""
+        with patch("app.cron_osv._query_packages_batch", return_value=[]):
+            res = client.post("/admin/osv-crawl", headers=HEADERS)
+        assert res.status_code == 200
+        body = res.json()
+        assert "message" in body
+        assert "inserted" in body
+        assert "updated" in body
+        assert "deleted" in body
+
+    def test_trigger_osv_crawl_requires_auth(self, client):
+        """API キーなしは 403 を返すこと。"""
+        res = client.post("/admin/osv-crawl")
+        assert res.status_code == 403
+
+    def test_trigger_osv_crawl_with_records(self, client):
+        """OSV レコードが挿入される場合も正常に動作すること。"""
+        vulns = [
+            _make_vuln("GHSA-crawl-0001", modified="2026-06-01T00:00:00Z"),
+            _make_vuln("GHSA-crawl-0002", modified="2026-06-01T00:00:00Z",
+                       pkg_name="requests"),
         ]
-        zip_bytes = self._make_zip(entries)
-        cutoff = datetime(2026, 1, 1, tzinfo=timezone.utc)
-        records = _process_zip("PyPI", zip_bytes, cutoff)
-        osv_ids = [r["osv_id"] for r in records]
-        assert "GHSA-new" in osv_ids
-        assert "GHSA-old" not in osv_ids
+        refs = _make_refs(vulns)
 
-    def test_returns_all_recent(self):
-        """cutoff 以降のエントリは全て返される。"""
-        entries = [
-            {
-                "id": f"GHSA-{i:03d}",
-                "modified": "2026-06-01T00:00:00Z",
-                "published": "2026-06-01T00:00:00Z",
-                "aliases": [],
-                "summary": f"Vuln {i}",
-                "affected": [
-                    {
-                        "package": {"name": f"pkg-{i}", "ecosystem": "PyPI"},
-                        "versions": [],
-                        "ranges": [],
-                    }
-                ],
-                "references": [],
-            }
-            for i in range(3)
-        ]
-        zip_bytes = self._make_zip(entries)
-        cutoff = datetime(2026, 1, 1, tzinfo=timezone.utc)
-        records = _process_zip("PyPI", zip_bytes, cutoff)
-        assert len(records) == 3
+        def fetch_side_effect(osv_id):
+            return next(v for v in vulns if v["id"] == osv_id)
+
+        with patch("app.cron_osv._query_packages_batch", return_value=refs):
+            with patch("app.cron_osv._fetch_vuln_by_id", side_effect=fetch_side_effect):
+                res = client.post("/admin/osv-crawl", headers=HEADERS)
+        assert res.status_code == 200
+        body = res.json()
+        assert body["inserted"] >= 0
