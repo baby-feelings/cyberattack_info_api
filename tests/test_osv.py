@@ -17,6 +17,7 @@ import httpx  # noqa: E402
 from app.cron_osv import (  # noqa: E402
     _build_records,
     _extract_fixed_versions,
+    _fetch_vuln_by_id,
     _parse_severity,
     _query_packages_batch,
     _upsert_osv_records,
@@ -529,13 +530,13 @@ def _mock_batch_response(vulns_per_query: list[list[dict]]) -> MagicMock:
 
 
 class TestQueryPackagesBatch:
-    def test_returns_deduped_vulns(self):
-        """同じ ID の脆弱性が複数クエリから返っても1件に絞り込むこと。"""
-        shared_vuln = _make_vuln("GHSA-shared")
+    def test_returns_deduped_id_refs(self):
+        """同じ ID が複数クエリから返っても1件に絞り込むこと。"""
+        ref = {"id": "GHSA-shared", "modified": "2026-06-01T00:00:00Z"}
         mock_client = _mock_batch_response([
-            [shared_vuln],       # query 1 の結果
-            [shared_vuln],       # query 2 (同じ vuln)
-            [_make_vuln("GHSA-unique")],  # query 3 の結果
+            [ref],                                             # query 1
+            [ref],                                             # query 2 (重複)
+            [{"id": "GHSA-unique", "modified": "2026-06-01T00:00:00Z"}],  # query 3
         ])
         with patch("app.cron_osv.httpx.Client", return_value=mock_client):
             result = _query_packages_batch([
@@ -572,12 +573,49 @@ class TestQueryPackagesBatch:
         """ID が空の脆弱性は除外されること。"""
         mock_client = _mock_batch_response([
             [{"id": "", "modified": "2026-06-01T00:00:00Z"}],
-            [_make_vuln("GHSA-valid")],
+            [{"id": "GHSA-valid", "modified": "2026-06-01T00:00:00Z"}],
         ])
         with patch("app.cron_osv.httpx.Client", return_value=mock_client):
             result = _query_packages_batch([("pkg1", "PyPI"), ("pkg2", "PyPI")])
         assert all(v["id"] for v in result)
         assert any(v["id"] == "GHSA-valid" for v in result)
+
+
+class TestFetchVulnById:
+    def test_returns_full_vuln(self):
+        """GET /v1/vulns/{id} が完全な脆弱性オブジェクトを返すこと。"""
+        full_vuln = _make_vuln("GHSA-detail-001")
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = full_vuln
+
+        mock_client = MagicMock()
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client.get = MagicMock(return_value=mock_resp)
+
+        with patch("app.cron_osv.httpx.Client", return_value=mock_client):
+            result = _fetch_vuln_by_id("GHSA-detail-001")
+
+        assert result["id"] == "GHSA-detail-001"
+        assert "affected" in result
+        mock_client.get.assert_called_once_with(
+            "https://api.osv.dev/v1/vulns/GHSA-detail-001"
+        )
+
+    def test_http_error_propagates(self):
+        """HTTP エラーが発生した場合は例外が伝播すること。"""
+        mock_client = MagicMock()
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client.get.return_value.raise_for_status.side_effect = (
+            httpx.HTTPStatusError("404", request=MagicMock(), response=MagicMock())
+        )
+
+        import pytest as _pytest
+        with patch("app.cron_osv.httpx.Client", return_value=mock_client):
+            with _pytest.raises(httpx.HTTPStatusError):
+                _fetch_vuln_by_id("GHSA-not-found")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -649,11 +687,9 @@ class TestUpsertOsvRecords:
 # ──────────────────────────────────────────────────────────────
 
 
-def _make_batch_side_effect(vulns: list[dict]):
-    """_query_packages_batch をモックする side_effect を返す。"""
-    def side_effect(packages):
-        return vulns
-    return side_effect
+def _make_refs(vulns: list[dict]) -> list[dict]:
+    """vulns リストから {id, modified} の refs リストを生成する。"""
+    return [{"id": v["id"], "modified": v["modified"]} for v in vulns]
 
 
 class TestFetchAndStoreOsv:
@@ -663,33 +699,36 @@ class TestFetchAndStoreOsv:
 
         with patch(
             "app.cron_osv._query_packages_batch",
-            side_effect=_make_batch_side_effect([vuln]),
+            return_value=_make_refs([vuln]),
         ):
-            with patch("app.cron_osv.SessionLocal", return_value=db_session):
-                db_session.close = MagicMock()
-                inserted, updated = fetch_and_store_osv()
+            with patch(
+                "app.cron_osv._fetch_vuln_by_id",
+                return_value=vuln,
+            ):
+                with patch("app.cron_osv.SessionLocal", return_value=db_session):
+                    db_session.close = MagicMock()
+                    inserted, updated = fetch_and_store_osv()
 
         assert isinstance(inserted, int)
         assert isinstance(updated, int)
 
     def test_http_error_skips_ecosystem(self):
-        """1エコシステムで HTTPError が発生しても処理が継続されること。"""
+        """1エコシステムの querybatch で HTTPError が発生しても処理が継続されること。"""
         call_counts = {"count": 0}
 
-        def side_effect(packages):
+        def batch_side_effect(packages):
             call_counts["count"] += 1
             if call_counts["count"] == 1:
                 raise httpx.HTTPError("Connection refused")
             return []
 
-        with patch("app.cron_osv._query_packages_batch", side_effect=side_effect):
+        with patch("app.cron_osv._query_packages_batch", side_effect=batch_side_effect):
             with patch("app.cron_osv.SessionLocal") as mock_sl:
                 mock_db = MagicMock()
                 mock_db.query.return_value.filter.return_value.first.return_value = None
                 mock_sl.return_value = mock_db
                 fetch_and_store_osv()
 
-        # 全エコシステムが試行されること
         from app.cron_osv import POPULAR_PACKAGES
         assert call_counts["count"] == len(POPULAR_PACKAGES)
 
@@ -697,13 +736,13 @@ class TestFetchAndStoreOsv:
         """予期しない例外でも処理が継続されること。"""
         call_counts = {"count": 0}
 
-        def side_effect(packages):
+        def batch_side_effect(packages):
             call_counts["count"] += 1
             if call_counts["count"] == 1:
                 raise RuntimeError("Unexpected error")
             return []
 
-        with patch("app.cron_osv._query_packages_batch", side_effect=side_effect):
+        with patch("app.cron_osv._query_packages_batch", side_effect=batch_side_effect):
             with patch("app.cron_osv.SessionLocal") as mock_sl:
                 mock_db = MagicMock()
                 mock_db.query.return_value.filter.return_value.first.return_value = None
@@ -714,19 +753,34 @@ class TestFetchAndStoreOsv:
         assert call_counts["count"] == len(POPULAR_PACKAGES)
 
     def test_old_vulns_filtered_out(self, db_session):
-        """cutoff より古い脆弱性はスキップされること。"""
-        old_vuln = _make_vuln("GHSA-old", modified="2000-01-01T00:00:00Z")
+        """cutoff より古い脆弱性はスキップされること（_fetch_vuln_by_id を呼ばない）。"""
+        old_ref = {"id": "GHSA-old", "modified": "2000-01-01T00:00:00Z"}
 
-        with patch(
-            "app.cron_osv._query_packages_batch",
-            side_effect=_make_batch_side_effect([old_vuln]),
-        ):
-            with patch("app.cron_osv.SessionLocal", return_value=db_session):
-                db_session.close = MagicMock()
-                inserted, updated = fetch_and_store_osv()
+        with patch("app.cron_osv._query_packages_batch", return_value=[old_ref]):
+            with patch("app.cron_osv._fetch_vuln_by_id") as mock_fetch:
+                with patch("app.cron_osv.SessionLocal", return_value=db_session):
+                    db_session.close = MagicMock()
+                    inserted, updated = fetch_and_store_osv()
 
+        # 古いのでフェッチされないこと
+        mock_fetch.assert_not_called()
         assert inserted == 0
         assert updated == 0
+
+    def test_fetch_error_skips_single_vuln(self, db_session):
+        """個別 ID のフェッチ失敗時はその1件をスキップして継続すること。"""
+        recent_ref = {"id": "GHSA-fetch-err", "modified": "2026-06-01T00:00:00Z"}
+
+        with patch("app.cron_osv._query_packages_batch", return_value=[recent_ref]):
+            with patch(
+                "app.cron_osv._fetch_vuln_by_id",
+                side_effect=httpx.HTTPError("timeout"),
+            ):
+                with patch("app.cron_osv.SessionLocal", return_value=db_session):
+                    db_session.close = MagicMock()
+                    inserted, updated = fetch_and_store_osv()
+
+        assert inserted == 0
 
 
 # ──────────────────────────────────────────────────────────────
@@ -737,10 +791,7 @@ class TestFetchAndStoreOsv:
 class TestAdminOsvCrawl:
     def test_trigger_osv_crawl(self, client):
         """POST /admin/osv-crawl が正常にレスポンスを返すこと。"""
-        with patch(
-            "app.cron_osv._query_packages_batch",
-            side_effect=_make_batch_side_effect([]),
-        ):
+        with patch("app.cron_osv._query_packages_batch", return_value=[]):
             res = client.post("/admin/osv-crawl", headers=HEADERS)
         assert res.status_code == 200
         body = res.json()
@@ -760,11 +811,14 @@ class TestAdminOsvCrawl:
             _make_vuln("GHSA-crawl-0002", modified="2026-06-01T00:00:00Z",
                        pkg_name="requests"),
         ]
-        with patch(
-            "app.cron_osv._query_packages_batch",
-            side_effect=_make_batch_side_effect(vulns),
-        ):
-            res = client.post("/admin/osv-crawl", headers=HEADERS)
+        refs = _make_refs(vulns)
+
+        def fetch_side_effect(osv_id):
+            return next(v for v in vulns if v["id"] == osv_id)
+
+        with patch("app.cron_osv._query_packages_batch", return_value=refs):
+            with patch("app.cron_osv._fetch_vuln_by_id", side_effect=fetch_side_effect):
+                res = client.post("/admin/osv-crawl", headers=HEADERS)
         assert res.status_code == 200
         body = res.json()
         assert body["inserted"] >= 0

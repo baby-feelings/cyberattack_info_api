@@ -257,13 +257,15 @@ def _build_records(
 def _query_packages_batch(
     packages: list[tuple[str, str]],  # [(package_name, ecosystem), ...]
 ) -> list[dict[str, Any]]:
-    """OSV /v1/querybatch で複数パッケージを一括クエリして脆弱性リストを返す。
+    """/v1/querybatch で複数パッケージを一括クエリして {id, modified} リストを返す。
+
+    querybatch は id と modified のみ返すため、詳細は別途 _fetch_vuln_by_id で取得する。
 
     Args:
         packages: (パッケージ名, エコシステム) のタプルリスト（最大 BATCH_SIZE 件）
 
     Returns:
-        脆弱性オブジェクトのリスト（重複 ID は除去済み）
+        {"id": ..., "modified": ...} 辞書のリスト（重複 ID は除去済み）
     """
     if not packages:
         return []
@@ -283,15 +285,23 @@ def _query_packages_batch(
     data = resp.json()
     # 脆弱性を ID でユニーク化（複数パッケージが同じ CVE に影響する場合の重複除去）
     seen: set[str] = set()
-    vulns: list[dict[str, Any]] = []
+    refs: list[dict[str, Any]] = []
     for result in data.get("results", []):
         for v in result.get("vulns", []):
             vid = v.get("id", "")
             if vid and vid not in seen:
                 seen.add(vid)
-                vulns.append(v)
+                refs.append({"id": vid, "modified": v.get("modified", "")})
 
-    return vulns
+    return refs
+
+
+def _fetch_vuln_by_id(osv_id: str) -> dict[str, Any]:
+    """GET /v1/vulns/{id} で脆弱性の完全な情報（affected・severity 等）を取得する。"""
+    with httpx.Client(timeout=30.0) as client:
+        resp = client.get(f"{OSV_API_BASE}/vulns/{osv_id}")
+        resp.raise_for_status()
+    return resp.json()
 
 
 def _upsert_osv_records(
@@ -349,39 +359,45 @@ def fetch_and_store_osv() -> tuple[int, int]:
     try:
         for ecosystem, packages in POPULAR_PACKAGES.items():
             try:
-                # パッケージを BATCH_SIZE ずつ分割して一括クエリ
+                # Step 1: パッケージを BATCH_SIZE ずつ分割して {id, modified} を一括取得
                 pkg_tuples = [(pkg, ecosystem) for pkg in packages]
-                all_vulns: list[dict[str, Any]] = []
-
+                refs: list[dict[str, Any]] = []
                 for i in range(0, len(pkg_tuples), BATCH_SIZE):
                     chunk = pkg_tuples[i: i + BATCH_SIZE]
-                    vulns = _query_packages_batch(chunk)
-                    all_vulns.extend(vulns)
-                    logger.info(
-                        "OSV API [%s] batch %d: %d vulns fetched",
-                        ecosystem, i // BATCH_SIZE + 1, len(vulns),
-                    )
+                    refs.extend(_query_packages_batch(chunk))
 
-                # modified でフィルタリングしてレコード構築
-                records: list[dict[str, Any]] = []
-                for vuln in all_vulns:
-                    modified_str = vuln.get("modified", "")
+                # Step 2: cutoff 以降に更新されたものに絞り込む
+                recent_refs = []
+                for ref in refs:
                     try:
                         modified = datetime.fromisoformat(
-                            modified_str.replace("Z", "+00:00")
+                            ref["modified"].replace("Z", "+00:00")
                         )
-                    except (ValueError, AttributeError):
+                        if modified >= cutoff:
+                            recent_refs.append((ref["id"], modified))
+                    except (ValueError, AttributeError, KeyError):
                         continue
-                    if modified < cutoff:
-                        continue
-                    records.extend(_build_records(vuln, modified))
+
+                logger.info(
+                    "OSV API [%s]: %d total vulns, %d recent (>= %s)",
+                    ecosystem, len(refs), len(recent_refs), cutoff.date(),
+                )
+
+                # Step 3: 直近のものだけ GET /v1/vulns/{id} で完全情報を取得してレコード構築
+                records: list[dict[str, Any]] = []
+                for osv_id, modified in recent_refs:
+                    try:
+                        vuln = _fetch_vuln_by_id(osv_id)
+                        records.extend(_build_records(vuln, modified))
+                    except httpx.HTTPError as exc:
+                        logger.warning("Failed to fetch %s: %s", osv_id, exc)
 
                 ins, upd = _upsert_osv_records(db, records)
                 total_inserted += ins
                 total_updated += upd
                 logger.info(
-                    "OSV [%s] done: vulns=%d records=%d inserted=%d updated=%d",
-                    ecosystem, len(all_vulns), len(records), ins, upd,
+                    "OSV [%s] done: recent=%d records=%d inserted=%d updated=%d",
+                    ecosystem, len(recent_refs), len(records), ins, upd,
                 )
 
             except httpx.HTTPError as exc:
