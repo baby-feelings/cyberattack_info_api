@@ -10,6 +10,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.crawler_log import now_utc, write_crawler_log
 from app.database import SessionLocal
 from app.models import Vulnerability
 from app.notifications import notify_crawl_error, notify_new_vulnerabilities
@@ -97,9 +98,10 @@ def _upsert_vulnerabilities(db: Session, entries: list[dict[str, Any]]) -> tuple
 def fetch_and_store_kev() -> None:
     """CISA KEV フィードを取得し DB に保存するメインエントリポイント。
     APScheduler から定期呼び出しされる。
-    エラーは握りつぶさず、ログに記録して上位に伝播させる。
+    実行結果（成功・失敗・件数・所要時間）は crawler_logs テーブルに記録する。
     """
     logger.info("=== CISA KEV crawler started ===")
+    started_at = now_utc()
     db: Session = SessionLocal()
     try:
         entries = _fetch_cisa_kev()
@@ -109,14 +111,37 @@ def fetch_and_store_kev() -> None:
             inserted,
             updated,
         )
+        # 実行ログを記録
+        write_crawler_log(
+            crawler_type="KEV",
+            status="success",
+            started_at=started_at,
+            finished_at=now_utc(),
+            inserted=inserted,
+            updated=updated,
+        )
         # 新規 CVE があれば Slack に通知
         notify_new_vulnerabilities(inserted, updated)
     except httpx.HTTPError as exc:
         logger.error("HTTP error during CISA KEV fetch: %s", exc)
+        write_crawler_log(
+            crawler_type="KEV",
+            status="error",
+            started_at=started_at,
+            finished_at=now_utc(),
+            error_message=str(exc),
+        )
         notify_crawl_error(str(exc))
         raise
     except Exception as exc:
         logger.error("Unexpected error during CISA KEV fetch: %s", exc, exc_info=True)
+        write_crawler_log(
+            crawler_type="KEV",
+            status="error",
+            started_at=started_at,
+            finished_at=now_utc(),
+            error_message=str(exc),
+        )
         notify_crawl_error(str(exc))
         raise
     finally:
