@@ -1,0 +1,23 @@
+name: OSV-Scanner — Scheduled Scan
+
+# 毎週月曜 12:30 UTC（JST 21:30）と main マージ時に全依存ライブラリをスキャン
+on:
+  schedule:
+    - cron: "30 12 * * 1"
+  push:
+    branches: [main]
+
+permissions:
+  # SARIF ファイルを CodeQL にアップロードするために必要
+  actions: read
+  # セキュリティタブへの SARIF アップロードに必要
+  security-events: write
+  # リポジトリの読み取りのみ
+  contents: read
+
+jobs:
+  scan-scheduled:
+    uses: "google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.3.8"
+    with:
+      # requirements.txt / package.json を再帰的にスキャン
+      scan-args: "--recursive ./"
