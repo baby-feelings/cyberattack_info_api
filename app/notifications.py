@@ -74,32 +74,6 @@ def notify_osv_crawl_error(error: str) -> None:
     _send_slack(message)
 
 
-def notify_scan_diff(new_vuln_ids: list[str], scan_type: str) -> None:
-    """スキャン差分（新規発見された脆弱性）を Slack に通知する。
-
-    Args:
-        new_vuln_ids: 前回スキャンから新たに検出された脆弱性 ID のリスト
-        scan_type:    スキャン種別（requirements / package-json / packages）
-    """
-    if not settings.SLACK_WEBHOOK_URL:
-        return
-
-    # 新規発見がなければ通知不要
-    if not new_vuln_ids:
-        return
-
-    ids_text = "\n".join(f"• {vid}" for vid in new_vuln_ids[:20])
-    suffix = f"\n…他 {len(new_vuln_ids) - 20} 件" if len(new_vuln_ids) > 20 else ""
-
-    message = (
-        f":rotating_light: *スキャン差分通知 [{scan_type}]*\n"
-        f">前回スキャンから *{len(new_vuln_ids)} 件* の新規脆弱性を検出しました\n"
-        f"```{ids_text}{suffix}```"
-    )
-
-    _send_slack(message)
-
-
 def notify_crawl_error(error: str) -> None:
     """クローラーのエラーを Slack に通知する。
 

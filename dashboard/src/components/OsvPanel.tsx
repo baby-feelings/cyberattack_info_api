@@ -371,7 +371,7 @@ export function OsvPanel() {
     try {
       const [list, st] = await Promise.all([
         fetchOsvList({ ecosystem: eco, severity: sev, search: q, page: p, perPage: PER_PAGE, sortBy: sort }),
-        fetchOsvStats(90),
+        fetchOsvStats(30),
       ])
       setResult(list)
       setStats(st)

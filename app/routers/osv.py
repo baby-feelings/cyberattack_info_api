@@ -53,7 +53,7 @@ def list_osv(
     db: Annotated[Session, Depends(get_db)],
     page: int = Query(1, ge=1, description="ページ番号（1始まり）"),
     per_page: int = Query(50, ge=1, le=200, description="1ページあたりの件数"),
-    days: int = Query(90, ge=1, le=365, description="直近何日分を取得するか"),
+    days: int = Query(30, ge=1, le=365, description="直近何日分を取得するか"),
     ecosystem: str | None = Query(None, description="エコシステム絞り込み（例: PyPI / npm）"),
     severity: str | None = Query(
         None, description="重要度絞り込み（CRITICAL / HIGH / MEDIUM / LOW）"
@@ -125,7 +125,7 @@ def list_osv(
 )
 def get_osv_stats(
     db: Annotated[Session, Depends(get_db)],
-    days: int = Query(90, ge=1, le=365, description="集計対象の日数"),
+    days: int = Query(30, ge=1, le=365, description="集計対象の日数"),
 ) -> OsvStatsResponse:
     """エコシステム・重要度・月別の統計を集計して返す。"""
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)

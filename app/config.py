@@ -28,7 +28,7 @@ class Settings(BaseSettings):
 
     # OSV クローラー設定
     # 直近何日分の脆弱性を取得対象とするか（cutoff フィルター）
-    OSV_DAYS: int = 90
+    OSV_DAYS: int = 30
     # OSV データの保持期間（日数）: この日数より古い modified レコードを定期削除する
     OSV_RETENTION_DAYS: int = 180
 
