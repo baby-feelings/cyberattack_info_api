@@ -9,6 +9,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI, Security
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.auth import require_api_key
 from app.config import settings
@@ -43,9 +44,14 @@ async def lifespan(app: FastAPI):
     # DB テーブルを自動作成（存在しない場合のみ）
     Base.metadata.create_all(bind=engine)
     # scan_results テーブルを削除（スキャン機能廃止）
-    with engine.connect() as conn:
-        conn.execute(text("DROP TABLE IF EXISTS scan_results"))
-        conn.commit()
+    # 失敗してもサービス起動を止めないようベストエフォートで実行する
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("DROP TABLE IF EXISTS scan_results"))
+            conn.commit()
+        logger.info("scan_results table dropped (scan feature removed)")
+    except SQLAlchemyError as exc:
+        logger.warning("Could not drop scan_results table: %s", exc)
     logger.info("Database tables created/verified")
 
     # クローラーを毎日 UTC 19:00（JST 翌日 4:00）に実行

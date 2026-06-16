@@ -415,7 +415,7 @@ export function OsvPanel() {
         <div className="flex items-center gap-2">
           <Shield size={16} className="text-slate-400" />
           <span className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
-            OSV 直近脆弱性（過去 90 日）
+            OSV 直近脆弱性（過去 30 日）
           </span>
         </div>
         <div className="flex items-center gap-3">

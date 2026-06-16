@@ -158,7 +158,7 @@ export default function App() {
       <footer className="w-full border-t border-slate-800/60 mt-4">
         <div className="max-w-screen-xl mx-auto px-4 sm:px-8 lg:px-12 py-5 flex flex-col sm:flex-row items-center justify-between gap-1 text-xs text-slate-600">
           <span>データソース: CISA KEV / Open Source Vulnerabilities (OSV)</span>
-          <span>毎日 JST 04:05 自動更新</span>
+          <span>KEV: JST 04:05 / OSV: JST 05:05 自動更新</span>
         </div>
       </footer>
 
