@@ -206,7 +206,7 @@ function SeverityPieChart({ stats, loading }: { stats: OsvStatsResponse | null; 
         <Shield size={13} className="text-slate-400" />
         <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">重要度別分布</span>
       </div>
-      <div className="h-[160px]">
+      <div className="h-[210px]">
         {loading || data.length === 0 ? (
           <div className="h-full flex items-center justify-center text-xs text-slate-600">
             {loading ? '読み込み中...' : 'データなし'}
@@ -216,10 +216,10 @@ function SeverityPieChart({ stats, loading }: { stats: OsvStatsResponse | null; 
             <PieChart>
               <Pie
                 data={data}
-                cx="40%"
+                cx="50%"
                 cy="50%"
-                innerRadius={40}
-                outerRadius={65}
+                innerRadius={55}
+                outerRadius={85}
                 paddingAngle={2}
                 dataKey="value"
               >
