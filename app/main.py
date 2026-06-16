@@ -15,7 +15,7 @@ from app.config import settings
 from app.cron import _fetch_cisa_kev, _upsert_vulnerabilities, fetch_and_store_kev
 from app.cron_osv import fetch_and_store_osv
 from app.database import Base, SessionLocal, engine, get_db
-from app.routers import osv, vulnerabilities
+from app.routers import crawler_logs, osv, vulnerabilities
 from app.schemas import CrawlResponse, HealthResponse, OsvCrawlResponse
 
 # ──────────────────────────────────────────────
@@ -108,6 +108,7 @@ app.add_middleware(
 # ルーター登録
 app.include_router(vulnerabilities.router)
 app.include_router(osv.router)
+app.include_router(crawler_logs.router)
 
 
 # ──────────────────────────────────────────────
