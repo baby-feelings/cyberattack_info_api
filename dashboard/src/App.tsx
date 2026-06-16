@@ -97,7 +97,7 @@ export default function App() {
       </header>
 
       {/* メインコンテンツ */}
-      <main className="flex-1 max-w-screen-xl w-full px-4 sm:px-8 lg:px-12 py-8 flex flex-col gap-8">
+      <main className="flex-1 max-w-screen-xl w-full px-4 sm:px-6 lg:px-12 py-6 sm:py-8 lg:py-10 flex flex-col gap-6 sm:gap-8 lg:gap-10">
 
         {/* エラーバナー */}
         {error && (
@@ -108,7 +108,7 @@ export default function App() {
         )}
 
         {/* ══ CISA KEV セクション ══════════════════════════════════════ */}
-        <section className="flex flex-col gap-6">
+        <section className="flex flex-col gap-4 sm:gap-6 lg:gap-8">
           <SectionHeader
             icon={<Shield size={18} className="text-blue-400" />}
             title="CISA KEV — Known Exploited Vulnerabilities"
@@ -120,7 +120,7 @@ export default function App() {
           <StatsCards stats={stats} recent={recent} loading={loading} />
 
           {/* ヘルス + 月別トレンド */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
             <div className="lg:col-span-1">
               <HealthStatus />
             </div>
@@ -130,7 +130,7 @@ export default function App() {
           </div>
 
           {/* ベンダーランキング + 直近 CVE */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 xl:gap-8">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6 xl:gap-8">
             <VendorRanking data={stats?.top_vendors ?? []} loading={loading} />
             <RecentCVEs data={recent} loading={loading} />
           </div>
@@ -140,7 +140,7 @@ export default function App() {
         <div className="border-t border-slate-700/50" />
 
         {/* ══ OSV セクション ═══════════════════════════════════════════ */}
-        <section className="flex flex-col gap-6">
+        <section className="flex flex-col gap-4 sm:gap-6 lg:gap-8">
           <SectionHeader
             icon={<Package size={18} className="text-emerald-400" />}
             title="OSV — Open Source Vulnerabilities"
@@ -155,7 +155,7 @@ export default function App() {
       </main>
 
       {/* フッター */}
-      <footer className="w-full border-t border-slate-800/60 mt-4">
+      <footer className="w-full border-t border-slate-800/60 mt-2 sm:mt-4">
         <div className="max-w-screen-xl mx-auto px-4 sm:px-8 lg:px-12 py-5 flex flex-col sm:flex-row items-center justify-between gap-1 text-xs text-slate-600">
           <span>データソース: CISA KEV / Open Source Vulnerabilities (OSV)</span>
           <span>KEV: JST 04:05 / OSV: JST 05:05 自動更新</span>
