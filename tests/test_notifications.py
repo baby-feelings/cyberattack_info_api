@@ -11,7 +11,6 @@ from app.notifications import (
     notify_new_vulnerabilities,
     notify_osv_crawl_error,
     notify_osv_new_vulnerabilities,
-    notify_scan_diff,
 )
 
 
@@ -159,54 +158,3 @@ def test_osv_crawl_error_skips_without_webhook(monkeypatch):
     with patch("app.notifications._send_slack") as mock_send:
         notify_osv_crawl_error("some error")
         mock_send.assert_not_called()
-
-
-# ──────────────────────────────────────────────────────────────
-# スキャン差分通知
-# ──────────────────────────────────────────────────────────────
-
-
-def test_scan_diff_skips_when_no_webhook(monkeypatch):
-    """SLACK_WEBHOOK_URL 未設定時はスキャン差分通知を送信しない。"""
-    monkeypatch.setattr("app.notifications.settings.SLACK_WEBHOOK_URL", "")
-    with patch("app.notifications._send_slack") as mock_send:
-        notify_scan_diff(["CVE-2024-0001"], "requirements")
-        mock_send.assert_not_called()
-
-
-def test_scan_diff_skips_when_no_new_vulns(monkeypatch):
-    """新規脆弱性がない場合はスキャン差分通知を送信しない。"""
-    monkeypatch.setattr(
-        "app.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/test"
-    )
-    with patch("app.notifications._send_slack") as mock_send:
-        notify_scan_diff([], "requirements")
-        mock_send.assert_not_called()
-
-
-def test_scan_diff_sends_when_new_vulns(monkeypatch):
-    """新規脆弱性がある場合は差分通知を送信し、件数と ID が含まれること。"""
-    monkeypatch.setattr(
-        "app.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/test"
-    )
-    with patch("app.notifications._send_slack") as mock_send:
-        notify_scan_diff(["CVE-2024-0001", "CVE-2024-0002"], "package-json")
-        mock_send.assert_called_once()
-        msg = mock_send.call_args[0][0]
-        assert "CVE-2024-0001" in msg
-        assert "CVE-2024-0002" in msg
-        assert "2" in msg
-        assert "package-json" in msg
-
-
-def test_scan_diff_truncates_long_list(monkeypatch):
-    """21 件以上の新規脆弱性は先頭 20 件のみ表示し、残り件数を付記する。"""
-    monkeypatch.setattr(
-        "app.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/test"
-    )
-    vuln_ids = [f"CVE-2024-{i:04d}" for i in range(25)]
-    with patch("app.notifications._send_slack") as mock_send:
-        notify_scan_diff(vuln_ids, "requirements")
-        mock_send.assert_called_once()
-        msg = mock_send.call_args[0][0]
-        assert "他 5 件" in msg

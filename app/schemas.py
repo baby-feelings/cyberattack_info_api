@@ -45,61 +45,6 @@ class CrawlResponse(BaseModel):
     updated: int
 
 
-# ── ライブラリ脆弱性スキャン ───────────────────────────────────────
-
-
-class PackageInput(BaseModel):
-    """スキャン対象パッケージの入力スキーマ。"""
-
-    name: str = Field(description="パッケージ名 (例: fastapi)")
-    version: str | None = Field(None, description="バージョン (例: 0.115.6)")
-    ecosystem: str = Field("PyPI", description="パッケージエコシステム (例: PyPI / npm / Go)")
-
-
-class ScanRequest(BaseModel):
-    """パッケージスキャンのリクエストスキーマ。"""
-
-    packages: list[PackageInput] = Field(description="スキャン対象のパッケージリスト")
-
-
-class VulnerabilityFinding(BaseModel):
-    """スキャンで検出された脆弱性の1件分スキーマ。"""
-
-    package_name: str = Field(description="パッケージ名")
-    package_version: str | None = Field(None, description="スキャンしたバージョン")
-    source: str = Field(description="情報源 (OSV / CISA_KEV)")
-    vuln_id: str = Field(description="脆弱性 ID (CVE-xxxx または OSV ID)")
-    severity: str | None = Field(None, description="重要度 (CRITICAL / HIGH / MEDIUM / LOW)")
-    summary: str = Field(description="脆弱性の概要")
-    details: str | None = Field(None, description="詳細説明")
-    fixed_versions: list[str] = Field(default_factory=list, description="修正済みバージョン一覧")
-    references: list[str] = Field(default_factory=list, description="参考 URL 一覧（最大 5 件）")
-
-
-class ScanResponse(BaseModel):
-    """パッケージスキャンのレスポンススキーマ。"""
-
-    scanned_packages: int = Field(description="スキャンしたパッケージ数")
-    total_findings: int = Field(description="検出された脆弱性の総数")
-    findings: list[VulnerabilityFinding] = Field(description="検出された脆弱性一覧")
-
-
-# ── スキャン履歴 ─────────────────────────────────────────────────
-
-
-class ScanResultOut(BaseModel):
-    """スキャン履歴の出力スキーマ。"""
-
-    id: int = Field(description="スキャン結果 ID")
-    scan_type: str = Field(description="スキャン種別 (packages / requirements / package-json)")
-    scanned_packages: int = Field(description="スキャンしたパッケージ数")
-    total_findings: int = Field(description="検出された脆弱性の総数")
-    findings: list[VulnerabilityFinding] = Field(description="検出された脆弱性一覧")
-    scanned_at: str = Field(description="スキャン実行日時（ISO 8601）")
-
-    model_config = {"from_attributes": True}
-
-
 # ── 統計 ────────────────────────────────────────────────────────
 
 

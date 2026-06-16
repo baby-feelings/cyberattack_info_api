@@ -48,7 +48,6 @@ def clean_db():
     # テスト終了後にテーブルを truncate（SQLite では DELETE を使用）
     with test_engine.connect() as conn:
         conn.execute(text("DELETE FROM crawler_logs"))
-        conn.execute(text("DELETE FROM scan_results"))
         conn.execute(text("DELETE FROM osv_vulnerabilities"))
         conn.execute(text("DELETE FROM vulnerabilities"))
         conn.commit()

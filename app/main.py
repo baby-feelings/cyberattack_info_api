@@ -9,13 +9,14 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI, Security
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.auth import require_api_key
 from app.config import settings
 from app.cron import _fetch_cisa_kev, _upsert_vulnerabilities, fetch_and_store_kev
 from app.cron_osv import fetch_and_store_osv
 from app.database import Base, SessionLocal, engine, get_db
-from app.routers import crawler_logs, osv, scan, vulnerabilities
+from app.routers import crawler_logs, osv, vulnerabilities
 from app.schemas import CrawlResponse, HealthResponse, OsvCrawlResponse
 
 # ──────────────────────────────────────────────
@@ -42,6 +43,15 @@ async def lifespan(app: FastAPI):
 
     # DB テーブルを自動作成（存在しない場合のみ）
     Base.metadata.create_all(bind=engine)
+    # scan_results テーブルを削除（スキャン機能廃止）
+    # 失敗してもサービス起動を止めないようベストエフォートで実行する
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("DROP TABLE IF EXISTS scan_results"))
+            conn.commit()
+        logger.info("scan_results table dropped (scan feature removed)")
+    except SQLAlchemyError as exc:
+        logger.warning("Could not drop scan_results table: %s", exc)
     logger.info("Database tables created/verified")
 
     # クローラーを毎日 UTC 19:00（JST 翌日 4:00）に実行
@@ -103,7 +113,6 @@ app.add_middleware(
 
 # ルーター登録
 app.include_router(vulnerabilities.router)
-app.include_router(scan.router)
 app.include_router(osv.router)
 app.include_router(crawler_logs.router)
 

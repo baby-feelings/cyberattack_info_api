@@ -1,14 +1,35 @@
 import { useEffect, useState, useCallback } from 'react'
-import { RefreshCw, ShieldAlert, Wifi } from 'lucide-react'
+import { RefreshCw, ShieldAlert, Wifi, Shield, Package } from 'lucide-react'
 import { fetchRecent, fetchStats, type VulnerabilityOut, type StatsResponse } from './api/client'
 import { HealthStatus } from './components/HealthStatus'
 import { StatsCards } from './components/StatsCards'
 import { MonthlyTrend } from './components/MonthlyTrend'
 import { VendorRanking } from './components/VendorRanking'
 import { RecentCVEs } from './components/RecentCVEs'
-import { ScanPanel } from './components/ScanPanel'
-import { ScanHistory } from './components/ScanHistory'
 import { OsvPanel } from './components/OsvPanel'
+
+// セクション見出しコンポーネント
+function SectionHeader({
+  icon,
+  title,
+  subtitle,
+  borderColor,
+}: {
+  icon: React.ReactNode
+  title: string
+  subtitle: string
+  borderColor: string
+}) {
+  return (
+    <div className={`flex items-center gap-3 pb-4 border-b ${borderColor}`}>
+      <div>{icon}</div>
+      <div>
+        <h2 className="text-base font-semibold text-white leading-tight">{title}</h2>
+        <p className="text-xs text-slate-500 leading-tight">{subtitle}</p>
+      </div>
+    </div>
+  )
+}
 
 export default function App() {
   const [recent, setRecent] = useState<VulnerabilityOut[]>([])
@@ -41,7 +62,6 @@ export default function App() {
       <header className="w-full sticky top-0 z-20 border-b border-slate-800/60 bg-[#0a0e1a]/90 backdrop-blur-md">
         <div className="max-w-screen-xl mx-auto px-4 sm:px-8 lg:px-12 h-14 flex items-center justify-between gap-4">
 
-          {/* ロゴ */}
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="shrink-0 bg-violet-600 rounded-lg p-1.5 shadow-lg shadow-violet-900/50">
               <ShieldAlert size={18} className="text-white" />
@@ -51,12 +71,11 @@ export default function App() {
                 Cyberattack Info Dashboard
               </p>
               <p className="text-[10px] text-slate-500 leading-tight hidden sm:block">
-                CISA Known Exploited Vulnerabilities
+                CISA KEV / Open Source Vulnerabilities
               </p>
             </div>
           </div>
 
-          {/* 右側: 更新時刻 + ボタン */}
           <div className="flex items-center gap-2 shrink-0">
             {refreshedAt && (
               <div className="hidden md:flex items-center gap-1.5 text-xs text-slate-500">
@@ -88,37 +107,50 @@ export default function App() {
           </div>
         )}
 
-        {/* サマリーカード (3列) */}
-        <StatsCards stats={stats} recent={recent} loading={loading} />
+        {/* ══ CISA KEV セクション ══════════════════════════════════════ */}
+        <section className="flex flex-col gap-6">
+          <SectionHeader
+            icon={<Shield size={18} className="text-blue-400" />}
+            title="CISA KEV — Known Exploited Vulnerabilities"
+            subtitle="実際に悪用が確認された脆弱性（米 CISA 公式カタログ）"
+            borderColor="border-blue-800/40"
+          />
 
-        {/* ヘルス + 月別トレンド */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-          <div className="lg:col-span-1">
-            <HealthStatus />
-          </div>
-          <div className="lg:col-span-2">
-            <MonthlyTrend data={stats?.monthly_trend ?? []} loading={loading} />
-          </div>
-        </div>
+          {/* CVE サマリーカード */}
+          <StatsCards stats={stats} recent={recent} loading={loading} />
 
-        {/* ベンダーランキング + 直近CVE */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 xl:gap-8">
-          <VendorRanking data={stats?.top_vendors ?? []} loading={loading} />
-          <RecentCVEs data={recent} loading={loading} />
-        </div>
-
-        {/* ライブラリ脆弱性スキャン */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 xl:gap-8">
-          <div className="xl:col-span-2">
-            <ScanPanel />
+          {/* ヘルス + 月別トレンド */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+            <div className="lg:col-span-1">
+              <HealthStatus />
+            </div>
+            <div className="lg:col-span-2">
+              <MonthlyTrend data={stats?.monthly_trend ?? []} loading={loading} />
+            </div>
           </div>
-          <div className="xl:col-span-1">
-            <ScanHistory />
-          </div>
-        </div>
 
-        {/* OSV 直近脆弱性 */}
-        <OsvPanel />
+          {/* ベンダーランキング + 直近 CVE */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 xl:gap-8">
+            <VendorRanking data={stats?.top_vendors ?? []} loading={loading} />
+            <RecentCVEs data={recent} loading={loading} />
+          </div>
+        </section>
+
+        {/* セクション区切り */}
+        <div className="border-t border-slate-700/50" />
+
+        {/* ══ OSV セクション ═══════════════════════════════════════════ */}
+        <section className="flex flex-col gap-6">
+          <SectionHeader
+            icon={<Package size={18} className="text-emerald-400" />}
+            title="OSV — Open Source Vulnerabilities"
+            subtitle="オープンソースライブラリの脆弱性（直近 30 日）"
+            borderColor="border-emerald-800/40"
+          />
+
+          {/* OSV パネル（サマリーカード・チャート・一覧を内包） */}
+          <OsvPanel />
+        </section>
 
       </main>
 
@@ -126,7 +158,7 @@ export default function App() {
       <footer className="w-full border-t border-slate-800/60 mt-4">
         <div className="max-w-screen-xl mx-auto px-4 sm:px-8 lg:px-12 py-5 flex flex-col sm:flex-row items-center justify-between gap-1 text-xs text-slate-600">
           <span>データソース: CISA KEV / Open Source Vulnerabilities (OSV)</span>
-          <span>毎日 JST 04:00 自動更新</span>
+          <span>KEV: JST 04:05 / OSV: JST 05:05 自動更新</span>
         </div>
       </footer>
 
