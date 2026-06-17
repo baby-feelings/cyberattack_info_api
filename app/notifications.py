@@ -31,7 +31,7 @@ def notify_new_vulnerabilities(inserted: int, updated: int) -> None:
     message = (
         f":shield: *CISA KEV 更新通知*\n"
         f">新規追加: *{inserted} 件*　更新: {updated} 件\n"
-        f">詳細: https://cyberattack-info-api.onrender.com/api/vulnerabilities/recent?days=1"
+        f">詳細: https://cyberattackinfoapi.vercel.app/"
     )
 
     _send_slack(message)
@@ -55,7 +55,7 @@ def notify_osv_new_vulnerabilities(inserted: int, updated: int, deleted: int) ->
     message = (
         f":package: *OSV 脆弱性データ更新通知*\n"
         f">新規追加: *{inserted} 件*　更新: {updated} 件　削除: {deleted} 件\n"
-        f">詳細: https://cyberattack-info-api.onrender.com/api/osv"
+        f">詳細: https://cyberattackinfoapi.vercel.app/"
     )
 
     _send_slack(message)
