@@ -24,8 +24,8 @@ def notify_new_vulnerabilities(inserted: int, updated: int) -> None:
     if not settings.SLACK_WEBHOOK_URL:
         return
 
-    # 新規追加がなければ通知不要
-    if inserted == 0:
+    # 新規追加も更新もなければ通知不要（OSV 通知と同じ基準）
+    if inserted == 0 and updated == 0:
         return
 
     message = (
