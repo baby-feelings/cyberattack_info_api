@@ -24,14 +24,14 @@ def notify_new_vulnerabilities(inserted: int, updated: int) -> None:
     if not settings.SLACK_WEBHOOK_URL:
         return
 
-    # 新規追加がなければ通知不要
-    if inserted == 0:
+    # 新規追加も更新もなければ通知不要（OSV 通知と同じ基準）
+    if inserted == 0 and updated == 0:
         return
 
     message = (
         f":shield: *CISA KEV 更新通知*\n"
         f">新規追加: *{inserted} 件*　更新: {updated} 件\n"
-        f">詳細: https://cyberattack-info-api.onrender.com/api/vulnerabilities/recent?days=1"
+        f">詳細: https://cyberattackinfoapi.vercel.app/"
     )
 
     _send_slack(message)
@@ -55,7 +55,7 @@ def notify_osv_new_vulnerabilities(inserted: int, updated: int, deleted: int) ->
     message = (
         f":package: *OSV 脆弱性データ更新通知*\n"
         f">新規追加: *{inserted} 件*　更新: {updated} 件　削除: {deleted} 件\n"
-        f">詳細: https://cyberattack-info-api.onrender.com/api/osv"
+        f">詳細: https://cyberattackinfoapi.vercel.app/"
     )
 
     _send_slack(message)

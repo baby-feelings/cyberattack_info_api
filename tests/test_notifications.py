@@ -22,18 +22,18 @@ def test_notify_skips_when_no_webhook(monkeypatch):
         mock_send.assert_not_called()
 
 
-def test_notify_skips_when_no_inserts(monkeypatch):
-    """新規追加が 0 件の場合は送信しない。"""
+def test_notify_skips_when_no_changes(monkeypatch):
+    """新規追加・更新ともに 0 件の場合は送信しない。"""
     monkeypatch.setattr(
         "app.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/test"
     )
     with patch("app.notifications._send_slack") as mock_send:
-        notify_new_vulnerabilities(inserted=0, updated=3)
+        notify_new_vulnerabilities(inserted=0, updated=0)
         mock_send.assert_not_called()
 
 
 def test_notify_sends_when_inserted(monkeypatch):
-    """新規追加がある場合は Slack に送信する。"""
+    """新規追加がある場合は Slack に送信し、件数が含まれること。"""
     monkeypatch.setattr(
         "app.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/test"
     )
@@ -43,6 +43,18 @@ def test_notify_sends_when_inserted(monkeypatch):
         # メッセージに件数が含まれることを確認
         msg = mock_send.call_args[0][0]
         assert "10" in msg
+
+
+def test_notify_sends_when_updated_only(monkeypatch):
+    """新規追加が 0 件でも更新がある場合は Slack に送信する。"""
+    monkeypatch.setattr(
+        "app.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/test"
+    )
+    with patch("app.notifications._send_slack") as mock_send:
+        notify_new_vulnerabilities(inserted=0, updated=5)
+        mock_send.assert_called_once()
+        msg = mock_send.call_args[0][0]
+        assert "5" in msg
 
 
 def test_notify_crawl_error_sends_message(monkeypatch):
