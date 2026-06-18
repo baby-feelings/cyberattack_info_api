@@ -108,6 +108,9 @@ export default function App() {
           </div>
         )}
 
+        {/* ══ サーバー稼働状況 ═══════════════════════════════════════ */}
+        <HealthStatus />
+
         {/* ══ CISA KEV セクション ══════════════════════════════════════ */}
         <section className="flex flex-col gap-4 sm:gap-6 lg:gap-8">
           <SectionHeader
@@ -120,15 +123,8 @@ export default function App() {
           {/* CVE サマリーカード */}
           <StatsCards stats={stats} recent={recent} loading={loading} />
 
-          {/* ヘルス + 月別トレンド */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
-            <div className="lg:col-span-1">
-              <HealthStatus />
-            </div>
-            <div className="lg:col-span-2">
-              <MonthlyTrend data={stats?.monthly_trend ?? []} loading={loading} />
-            </div>
-          </div>
+          {/* 月別トレンド */}
+          <MonthlyTrend data={stats?.monthly_trend ?? []} loading={loading} />
 
           {/* ベンダーランキング + 直近 CVE */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6 xl:gap-8">
@@ -175,7 +171,7 @@ export default function App() {
       <footer className="w-full border-t border-slate-800/60 mt-2 sm:mt-4">
         <div className="max-w-screen-xl mx-auto px-4 sm:px-8 lg:px-12 py-5 flex flex-col sm:flex-row items-center justify-between gap-1 text-xs text-slate-600">
           <span>データソース: CISA KEV / Open Source Vulnerabilities (OSV) / JVN (JVNDB)</span>
-          <span>KEV: JST 04:05 / OSV: JST 05:05 / JVN: JST 06:05 自動更新</span>
+          <span>KEV → OSV → JVN: JST 04:05 一括自動更新</span>
         </div>
       </footer>
 
