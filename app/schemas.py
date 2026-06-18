@@ -2,6 +2,7 @@
 APIリクエスト・レスポンスの型定義とバリデーションを担う。
 """
 from datetime import date
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -177,7 +178,16 @@ class JvnVulnerabilityOut(BaseModel):
     model_config = {"from_attributes": True}
 
     @classmethod
-    def model_validate(cls, obj, **kwargs):  # type: ignore[override]
+    def model_validate(
+        cls,
+        obj: Any,
+        *,
+        strict: bool | None = None,
+        from_attributes: bool | None = None,
+        context: Any = None,
+        by_alias: bool | None = None,
+        by_name: bool | None = None,
+    ) -> "JvnVulnerabilityOut":
         """datetime を ISO 文字列に変換して生成する。"""
         if hasattr(obj, "__dict__"):
             return cls(
@@ -194,7 +204,14 @@ class JvnVulnerabilityOut(BaseModel):
                 date_published=obj.date_published.isoformat(),
                 date_last_modified=obj.date_last_modified.isoformat(),
             )
-        return super().model_validate(obj, **kwargs)
+        return super().model_validate(
+            obj,
+            strict=strict,
+            from_attributes=from_attributes,
+            context=context,
+            by_alias=by_alias,
+            by_name=by_name,
+        )
 
 
 class JvnListResponse(BaseModel):

@@ -1,5 +1,9 @@
 name: Daily Crawl — KEV & OSV & JVN
 
+# GitHub Actions の GITHUB_TOKEN に対して最小権限を明示（最小権限の原則）
+permissions:
+  contents: read
+
 # KEV は毎日 UTC 19:05、OSV は毎日 UTC 20:05、JVN は毎日 UTC 21:05 に実行
 # （APScheduler の代わりに GitHub Actions で定期実行し、Render スリープ問題を回避）
 on:
@@ -37,7 +41,7 @@ jobs:
         run: |
           echo "Waking up Render service..."
           for i in 1 2 3; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$API_BASE_URL/health")
+            STATUS=$(curl -s --connect-timeout 10 --max-time 30 --fail -o /dev/null -w "%{http_code}" "$API_BASE_URL/health" || echo "000")
             echo "Attempt $i: HTTP $STATUS"
             if [ "$STATUS" = "200" ]; then
               echo "Service is awake."
@@ -78,7 +82,7 @@ jobs:
         run: |
           echo "Waking up Render service..."
           for i in 1 2 3; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$API_BASE_URL/health")
+            STATUS=$(curl -s --connect-timeout 10 --max-time 30 --fail -o /dev/null -w "%{http_code}" "$API_BASE_URL/health" || echo "000")
             echo "Attempt $i: HTTP $STATUS"
             if [ "$STATUS" = "200" ]; then
               echo "Service is awake."
@@ -119,7 +123,7 @@ jobs:
         run: |
           echo "Waking up Render service..."
           for i in 1 2 3; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$API_BASE_URL/health")
+            STATUS=$(curl -s --connect-timeout 10 --max-time 30 --fail -o /dev/null -w "%{http_code}" "$API_BASE_URL/health" || echo "000")
             echo "Attempt $i: HTTP $STATUS"
             if [ "$STATUS" = "200" ]; then
               echo "Service is awake."

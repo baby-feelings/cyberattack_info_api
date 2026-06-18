@@ -5,11 +5,12 @@ GET /api/jvn/stats  – 重要度別・月別の統計情報
 """
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.elements import ColumnElement  # noqa: F401 — used in type annotation
 
 from app.auth import require_api_key
 from app.database import engine, get_db
@@ -31,12 +32,12 @@ router = APIRouter(
 )
 
 
-def _year_month_expr(column):  # type: ignore[no-untyped-def]
+def _year_month_expr(column: Any) -> ColumnElement[str]:
     """SQLite / PostgreSQL 両対応の YYYY-MM フォーマット式を返す。"""
     if "sqlite" in engine.dialect.name:
-        return func.strftime("%Y-%m", column)
+        return func.strftime("%Y-%m", column)  # type: ignore[return-value]
     # PostgreSQL
-    return func.to_char(column, "YYYY-MM")
+    return func.to_char(column, "YYYY-MM")  # type: ignore[return-value]
 
 
 @router.get(

@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 
 import defusedxml.ElementTree as defused_ET  # XXE / billion-laughs 攻撃防止
 import httpx
+from sqlalchemy.exc import IntegrityError
 
 from app.config import settings
 from app.crawler_log import now_utc, write_crawler_log
@@ -206,6 +207,23 @@ def _fetch_all_entries(cutoff_date: str) -> list[dict]:
     return entries
 
 
+def _apply_update(existing: JvnVulnerability, data: dict) -> bool:
+    """既存レコードに新しいデータを適用し、変更があれば True を返す。"""
+    changed = existing.date_last_modified != data["date_last_modified"]
+    existing.title = data["title"]
+    existing.overview = data["overview"]
+    existing.cve_ids = data["cve_ids"]
+    existing.severity = data["severity"]
+    existing.cvss_score = data["cvss_score"]
+    existing.cvss_vector = data["cvss_vector"]
+    existing.affected_products = data["affected_products"]
+    existing.references = data["references"]
+    existing.jvn_url = data["jvn_url"]
+    existing.date_published = data["date_published"]
+    existing.date_last_modified = data["date_last_modified"]
+    return changed
+
+
 def _upsert_jvn(db, entries: list[dict]) -> tuple[int, int]:
     """JVN エントリを jvn_vulnerabilities テーブルに Upsert する。
 
@@ -231,25 +249,23 @@ def _upsert_jvn(db, entries: list[dict]) -> tuple[int, int]:
         ).first()
 
         if existing is None:
-            # 新規挿入
-            record = JvnVulnerability(**data)
-            db.add(record)
-            inserted += 1
+            try:
+                # 新規挿入（flush で即座にユニーク制約を検査）
+                record = JvnVulnerability(**data)
+                db.add(record)
+                db.flush()
+                inserted += 1
+            except IntegrityError:
+                # 並行プロセスが先に INSERT した場合は UPDATE に切り替える
+                db.rollback()
+                existing = db.query(JvnVulnerability).filter(
+                    JvnVulnerability.jvndb_id == jvndb_id
+                ).first()
+                if existing and _apply_update(existing, data):
+                    updated += 1
         else:
             # 更新（date_last_modified が変化している場合のみカウント）
-            changed = existing.date_last_modified != data["date_last_modified"]
-            existing.title = data["title"]
-            existing.overview = data["overview"]
-            existing.cve_ids = data["cve_ids"]
-            existing.severity = data["severity"]
-            existing.cvss_score = data["cvss_score"]
-            existing.cvss_vector = data["cvss_vector"]
-            existing.affected_products = data["affected_products"]
-            existing.references = data["references"]
-            existing.jvn_url = data["jvn_url"]
-            existing.date_published = data["date_published"]
-            existing.date_last_modified = data["date_last_modified"]
-            if changed:
+            if _apply_update(existing, data):
                 updated += 1
 
         count += 1
