@@ -124,7 +124,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 ### スキル 5: OSV 脆弱性を検索する
 
 **用途:** OSV データベースから特定エコシステム・重要度の脆弱性を検索する（直近 30 日）。  
-対象: PyPI / npm / Go / Maven / RubyGems / NuGet / crates.io / Packagist / Hex の主要パッケージ。
+対象: PyPI / npm / Go / Maven / RubyGems / NuGet / crates.io / Packagist / Hex / **Pub**（Dart / Flutter）の主要パッケージ。
 
 ```bash
 # PyPI の HIGH 以上の脆弱性を取得
@@ -144,7 +144,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 |-----------|-----|------|
 | `page` | int | ページ番号（デフォルト: 1） |
 | `per_page` | int | 件数（デフォルト: 50、最大: 500） |
-| `ecosystem` | string | エコシステム名（`PyPI` / `npm` / `Go` 等） |
+| `ecosystem` | string | エコシステム名（`PyPI` / `npm` / `Go` / `Pub` 等） |
 | `severity` | string | 重要度（`CRITICAL` / `HIGH` / `MEDIUM` / `LOW`） |
 | `search` | string | パッケージ名の部分一致 |
 | `sort_by` | string | ソート基準（`modified`（デフォルト） / `cvss`） |
@@ -342,6 +342,12 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
   "https://cyberattack-info-api.onrender.com/api/osv?ecosystem=PyPI&severity=CRITICAL" \
   | claude -p "自分のプロジェクトで使っているパッケージが含まれているか確認し、
                影響があれば修正バージョンを教えてください"
+
+# Flutter プロジェクトの Pub パッケージに脆弱性がないか確認
+curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
+  "https://cyberattack-info-api.onrender.com/api/osv?ecosystem=Pub" \
+  | claude -p "Flutter プロジェクトの pubspec.yaml に含まれるパッケージに
+               影響する脆弱性があるか確認してください"
 ```
 
 ### パターン 5: JVN で国内脆弱性の最新動向を把握する
