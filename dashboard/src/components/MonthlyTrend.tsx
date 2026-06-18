@@ -32,7 +32,7 @@ export function MonthlyTrend({ data, loading }: Props) {
         <span className="text-sm font-semibold text-slate-400 uppercase tracking-wider">月別 CVE 追加数トレンド</span>
       </div>
 
-      <div className="flex-1 min-h-[180px]">
+      <div className="h-[220px]">
         {loading ? (
           <div className="h-full flex items-center justify-center">
             <div className="flex flex-col items-center gap-2">
