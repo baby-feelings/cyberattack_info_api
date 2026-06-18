@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { RefreshCw, ShieldAlert, Wifi, Shield, Package } from 'lucide-react'
+import { RefreshCw, ShieldAlert, Wifi, Shield, Package, FileWarning } from 'lucide-react'
 import { fetchRecent, fetchStats, type VulnerabilityOut, type StatsResponse } from './api/client'
 import { HealthStatus } from './components/HealthStatus'
 import { StatsCards } from './components/StatsCards'
@@ -7,6 +7,7 @@ import { MonthlyTrend } from './components/MonthlyTrend'
 import { VendorRanking } from './components/VendorRanking'
 import { RecentCVEs } from './components/RecentCVEs'
 import { OsvPanel } from './components/OsvPanel'
+import { JvnPanel } from './components/JvnPanel'
 
 // セクション見出しコンポーネント
 function SectionHeader({
@@ -152,13 +153,29 @@ export default function App() {
           <OsvPanel />
         </section>
 
+        {/* セクション区切り */}
+        <div className="border-t border-slate-700/50" />
+
+        {/* ══ JVN セクション ═══════════════════════════════════════════ */}
+        <section className="flex flex-col gap-4 sm:gap-6 lg:gap-8">
+          <SectionHeader
+            icon={<FileWarning size={18} className="text-amber-400" />}
+            title="JVN — Japan Vulnerability Notes"
+            subtitle="日本国内の脆弱性情報（MyJVN / JVNDB 直近 30 日）"
+            borderColor="border-amber-800/40"
+          />
+
+          {/* JVN パネル（サマリーカード・チャート・一覧を内包） */}
+          <JvnPanel />
+        </section>
+
       </main>
 
       {/* フッター */}
       <footer className="w-full border-t border-slate-800/60 mt-2 sm:mt-4">
         <div className="max-w-screen-xl mx-auto px-4 sm:px-8 lg:px-12 py-5 flex flex-col sm:flex-row items-center justify-between gap-1 text-xs text-slate-600">
-          <span>データソース: CISA KEV / Open Source Vulnerabilities (OSV)</span>
-          <span>KEV: JST 04:05 / OSV: JST 05:05 自動更新</span>
+          <span>データソース: CISA KEV / Open Source Vulnerabilities (OSV) / JVN (JVNDB)</span>
+          <span>KEV: JST 04:05 / OSV: JST 05:05 / JVN: JST 06:05 自動更新</span>
         </div>
       </footer>
 
