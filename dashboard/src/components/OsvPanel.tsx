@@ -40,15 +40,16 @@ const ECO_COLOR: Record<string, string> = {
   'crates.io': 'bg-orange-500/15 text-orange-400',
   Packagist:  'bg-indigo-500/15 text-indigo-400',
   Hex:        'bg-emerald-500/15 text-emerald-400',
+  Pub:        'bg-teal-500/15 text-teal-400',
 }
 
 // エコシステム別グラフの色（順番で割り当て）
 const ECO_CHART_COLORS = [
   '#7c3aed', '#0ea5e9', '#22d3ee', '#f59e0b',
-  '#f43f5e', '#8b5cf6', '#f97316', '#6366f1', '#10b981',
+  '#f43f5e', '#8b5cf6', '#f97316', '#6366f1', '#10b981', '#14b8a6',
 ]
 
-const ECOSYSTEMS = ['ALL', 'PyPI', 'npm', 'Go', 'Maven', 'RubyGems', 'NuGet', 'crates.io', 'Packagist', 'Hex']
+const ECOSYSTEMS = ['ALL', 'PyPI', 'npm', 'Go', 'Maven', 'RubyGems', 'NuGet', 'crates.io', 'Packagist', 'Hex', 'Pub']
 const SEVERITIES = ['ALL', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
 const PER_PAGE = 30
 
