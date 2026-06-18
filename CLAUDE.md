@@ -113,7 +113,7 @@ dashboard/               # Vercel デプロイの React ダッシュボード
 .github/workflows/
 ├── ci.yml           # CI: ruff → mypy → pytest（PR 時・Python 3.10/3.11 matrix）
 ├── deploy.yml       # CD: Render Deploy Hook トリガー（main マージ時）
-└── daily-crawl.yml  # 毎日クロール: KEV(UTC 19:05) / OSV(UTC 20:05) / JVN(UTC 21:05)
+└── daily-crawl.yml  # 毎日クロール: 単一 cron(UTC 19:05) で KEV → OSV → JVN を順次実行
 ```
 
 ---
