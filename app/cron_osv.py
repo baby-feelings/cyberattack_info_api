@@ -138,6 +138,35 @@ POPULAR_PACKAGES: dict[str, list[str]] = {
         "guardian", "comeonin", "bcrypt_elixir",
         "telemetry", "oban", "broadway",
     ],
+    # Dart / Flutter パッケージ（pub.dev）
+    "Pub": [
+        # HTTP / ネットワーク
+        "dio", "http", "retrofit", "chopper", "graphql",
+        # 状態管理
+        "provider", "flutter_riverpod", "riverpod", "flutter_bloc", "bloc",
+        "get", "mobx", "signals",
+        # Firebase
+        "firebase_core", "firebase_auth", "cloud_firestore",
+        "firebase_messaging", "firebase_storage", "firebase_analytics",
+        # ローカルストレージ / DB
+        "shared_preferences", "sqflite", "hive", "isar", "drift",
+        "path_provider",
+        # ルーティング / ナビゲーション
+        "go_router", "auto_route",
+        # UI / ウィジェット
+        "flutter_svg", "cached_network_image", "flutter_screenutil",
+        "shimmer", "lottie", "photo_view",
+        # ユーティリティ
+        "url_launcher", "image_picker", "permission_handler",
+        "connectivity_plus", "package_info_plus", "device_info_plus",
+        "intl", "freezed", "json_serializable", "json_annotation",
+        "equatable", "dartz", "fpdart",
+        # セキュリティ / 認証
+        "flutter_secure_storage", "local_auth", "encrypt",
+        "google_sign_in", "sign_in_with_apple",
+        # テスト / 開発
+        "mockito", "bloc_test", "flutter_test",
+    ],
 }
 
 # 後方互換: GCS ベースのクローラーと同じエコシステム名リスト
