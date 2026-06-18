@@ -4,17 +4,15 @@ name: Daily Crawl — KEV & OSV & JVN
 permissions:
   contents: read
 
-# KEV は毎日 UTC 19:05、OSV は毎日 UTC 20:05、JVN は毎日 UTC 21:05 に実行
-# （APScheduler の代わりに GitHub Actions で定期実行し、Render スリープ問題を回避）
+# 毎日 UTC 19:05（JST 翌 04:05）に 1 回のみ発火し、KEV → OSV → JVN を順次実行する。
+# GitHub Actions 無料プランでは複数 cron の発火が不安定なため、単一 cron に統合。
 on:
   schedule:
-    - cron: '5 19 * * *'   # KEV: JST 翌 04:05
-    - cron: '5 20 * * *'   # OSV: JST 翌 05:05
-    - cron: '5 21 * * *'   # JVN: JST 翌 06:05
+    - cron: '5 19 * * *'   # JST 翌 04:05
   workflow_dispatch:
     inputs:
       target:
-        description: '実行対象 (kev / osv / jvn / both / all)'
+        description: '実行対象 (kev / osv / jvn / all)'
         required: false
         default: 'all'
 
@@ -22,19 +20,10 @@ env:
   API_BASE_URL: https://cyberattack-info-api.onrender.com
 
 jobs:
-  # ── CISA KEV クローラー ─────────────────────────────────────────
-  crawl-kev:
-    name: CISA KEV Crawl
+  # ── Render 起動 ────────────────────────────────────────────────
+  wake-up:
+    name: Wake up Render
     runs-on: ubuntu-latest
-    # schedule: 19:05 UTC のトリガー、または手動で kev / both / all を指定した場合のみ実行
-    if: |
-      github.event_name == 'workflow_dispatch' && (
-        github.event.inputs.target == 'kev' ||
-        github.event.inputs.target == 'both' ||
-        github.event.inputs.target == 'all'
-      ) ||
-      github.event.schedule == '5 19 * * *'
-
     steps:
       - name: Wake up Render service
         # Render の Free プランはスリープするため、まずヘルスチェックで起こす
@@ -50,10 +39,20 @@ jobs:
             sleep 20
           done
 
+  # ── CISA KEV クローラー ─────────────────────────────────────────
+  crawl-kev:
+    name: CISA KEV Crawl
+    runs-on: ubuntu-latest
+    needs: wake-up
+    if: |
+      github.event_name == 'schedule' ||
+      github.event.inputs.target == 'kev' ||
+      github.event.inputs.target == 'all'
+    steps:
       - name: Trigger KEV crawl
         run: |
           echo "Triggering CISA KEV crawl..."
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$API_BASE_URL/admin/crawl" \
+          RESPONSE=$(curl -s -w "\n%{http_code}" --max-time 120 -X POST "$API_BASE_URL/admin/crawl" \
             -H "X-API-KEY: ${{ secrets.API_KEY }}")
           HTTP_STATUS=$(echo "$RESPONSE" | tail -1)
           BODY=$(echo "$RESPONSE" | head -n -1)
@@ -68,29 +67,15 @@ jobs:
   crawl-osv:
     name: OSV Crawl
     runs-on: ubuntu-latest
-    # schedule: 20:05 UTC のトリガー、または手動で osv / both / all を指定した場合のみ実行
+    needs: [wake-up, crawl-kev]
+    # KEV が失敗してもスキップされても OSV は実行する
     if: |
-      github.event_name == 'workflow_dispatch' && (
+      always() && needs.wake-up.result == 'success' && (
+        github.event_name == 'schedule' ||
         github.event.inputs.target == 'osv' ||
-        github.event.inputs.target == 'both' ||
         github.event.inputs.target == 'all'
-      ) ||
-      github.event.schedule == '5 20 * * *'
-
+      )
     steps:
-      - name: Wake up Render service
-        run: |
-          echo "Waking up Render service..."
-          for i in 1 2 3; do
-            STATUS=$(curl -s --connect-timeout 10 --max-time 30 --fail -o /dev/null -w "%{http_code}" "$API_BASE_URL/health" || echo "000")
-            echo "Attempt $i: HTTP $STATUS"
-            if [ "$STATUS" = "200" ]; then
-              echo "Service is awake."
-              break
-            fi
-            sleep 20
-          done
-
       - name: Trigger OSV crawl
         # OSV クローラーは件数が多く時間がかかるため timeout を長めに設定
         run: |
@@ -110,28 +95,15 @@ jobs:
   crawl-jvn:
     name: JVN Crawl
     runs-on: ubuntu-latest
-    # schedule: 21:05 UTC のトリガー、または手動で jvn / all を指定した場合のみ実行
+    needs: [wake-up, crawl-osv]
+    # OSV が失敗してもスキップされても JVN は実行する
     if: |
-      github.event_name == 'workflow_dispatch' && (
+      always() && needs.wake-up.result == 'success' && (
+        github.event_name == 'schedule' ||
         github.event.inputs.target == 'jvn' ||
         github.event.inputs.target == 'all'
-      ) ||
-      github.event.schedule == '5 21 * * *'
-
+      )
     steps:
-      - name: Wake up Render service
-        run: |
-          echo "Waking up Render service..."
-          for i in 1 2 3; do
-            STATUS=$(curl -s --connect-timeout 10 --max-time 30 --fail -o /dev/null -w "%{http_code}" "$API_BASE_URL/health" || echo "000")
-            echo "Attempt $i: HTTP $STATUS"
-            if [ "$STATUS" = "200" ]; then
-              echo "Service is awake."
-              break
-            fi
-            sleep 20
-          done
-
       - name: Trigger JVN crawl
         run: |
           echo "Triggering JVN crawl..."

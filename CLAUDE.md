@@ -227,12 +227,18 @@ main ブランチへのマージ後に自動実行。
 
 ### 毎日クロール（daily-crawl.yml）
 Render Free プランのスリープ問題を回避するため、GitHub Actions から直接 API を叩いてクロールを強制実行する。
+**単一 cron（`5 19 * * *` / JST 翌 04:05）で全 3 クローラーを順次実行する構成。**
+GitHub Actions 無料プランでは複数 cron の発火が不安定なため、単一 cron に統合した。
 
-| ジョブ | cron（UTC） | JST | 対象 |
-|--------|-----------|-----|------|
-| `crawl-kev` | `5 19 * * *` | 翌日 04:05 | `POST /admin/crawl` |
-| `crawl-osv` | `5 20 * * *` | 翌日 05:05 | `POST /admin/osv-crawl` |
-| `crawl-jvn` | `5 21 * * *` | 翌日 06:05 | `POST /admin/jvn-crawl` |
+| 実行順 | ジョブ | 対象 | 備考 |
+|--------|--------|------|------|
+| 1 | `wake-up` | Render 起動 | ヘルスチェックでスリープ解除 |
+| 2 | `crawl-kev` | `POST /admin/crawl` | KEV フィード取得 |
+| 3 | `crawl-osv` | `POST /admin/osv-crawl` | OSV 脆弱性取得（timeout 600s） |
+| 4 | `crawl-jvn` | `POST /admin/jvn-crawl` | JVN 脆弱性取得（timeout 600s） |
+
+- 各ジョブは `always()` で前段の失敗に関わらず実行される（`wake-up` 成功が前提）
+- `workflow_dispatch` で手動実行可能（`target: kev / osv / jvn / all`）
 
 - GitHub Secrets に `API_KEY`（Render 環境変数と同じ値）を設定すること
 - `workflow_dispatch` で手動実行も可能（`target: kev / osv / jvn / both / all`）
