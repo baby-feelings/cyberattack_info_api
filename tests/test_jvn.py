@@ -291,17 +291,18 @@ def test_fetch_and_store_jvn_error(monkeypatch):
 
 
 def test_parse_item_skips_non_jvndb(monkeypatch):
-    """JVNDB- で始まらない identifier はスキップされること。"""
+    """JVNDB- で始まらない sec:identifier はスキップされること。"""
     import defusedxml.ElementTree as ET
 
     from app.cron_jvn import _parse_item
 
+    # 実際の MyJVN API と同じ構造: sec:identifier が JVN# 形式
     xml_str = """<item xmlns:dc="http://purl.org/dc/elements/1.1/"
                        xmlns:dcterms="http://purl.org/dc/terms/"
                        xmlns:sec="http://jvn.jp/rss/mod_sec/3.0/">
         <title>テスト</title>
         <link>https://example.com</link>
-        <dc:identifier>JVN#12345678</dc:identifier>
+        <sec:identifier>JVN#12345678</sec:identifier>
         <dc:date>2026-06-18T00:00:00+09:00</dc:date>
         <dcterms:modified>2026-06-18T00:00:00+09:00</dcterms:modified>
     </item>"""
@@ -311,23 +312,25 @@ def test_parse_item_skips_non_jvndb(monkeypatch):
 
 
 def test_parse_item_valid():
-    """正常な JVNDB アイテムがパースされること。"""
+    """正常な JVNDB アイテムが実際の MyJVN API 構造でパースされること。"""
     import defusedxml.ElementTree as ET
 
     from app.cron_jvn import _parse_item
 
+    # 実際の MyJVN API レスポンスと同じ要素構造を使用
     xml_str = """<item xmlns:dc="http://purl.org/dc/elements/1.1/"
                        xmlns:dcterms="http://purl.org/dc/terms/"
                        xmlns:sec="http://jvn.jp/rss/mod_sec/3.0/">
         <title>テスト脆弱性タイトル</title>
         <link>https://jvndb.jvn.jp/ja/contents/2026/JVNDB-2026-000001.html</link>
         <description>概要テキスト</description>
-        <dc:identifier>JVNDB-2026-000001</dc:identifier>
+        <sec:identifier>JVNDB-2026-000001</sec:identifier>
         <dc:date>2026-06-18T00:00:00+09:00</dc:date>
         <dcterms:modified>2026-06-18T00:00:00+09:00</dcterms:modified>
-        <sec:cvss score="9.8" vector="AV:N/AC:L" severity="高"/>
-        <sec:references type="CVE" id="CVE-2026-12345"/>
-        <sec:affected vendor="TestVendor" name="TestProduct" cpe="cpe:/a:test:product"/>
+        <sec:cvss score="9.8" vector="AV:N/AC:L" severity="High" version="3.0" type="Base"/>
+        <sec:references source="CVE" id="CVE-2026-12345">https://nvd.nist.gov/vuln/detail/CVE-2026-12345</sec:references>
+        <sec:cpe version="2.2" vendor="TestVendor"
+            product="TestProduct">cpe:/a:test:product</sec:cpe>
     </item>"""
     item = ET.fromstring(xml_str)
     result = _parse_item(item)
@@ -337,6 +340,8 @@ def test_parse_item_valid():
     assert result["cvss_score"] == 9.8
     assert "CVE-2026-12345" in result["cve_ids"]
     assert len(result["affected_products"]) == 1
+    assert result["affected_products"][0]["product"] == "TestProduct"
+    assert result["affected_products"][0]["cpe"] == "cpe:/a:test:product"
 
 
 def test_fetch_page_returns_none_on_http_error(monkeypatch):
