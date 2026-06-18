@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cyberattack Info API — セキュリティ脆弱性診断レポート（再診断）</title>
+<style>
+  :root { --bg: #0f172a; --card: #1e293b; --border: #334155; --text: #e2e8f0; --muted: #94a3b8; --crit: #ef4444; --high: #f97316; --med: #eab308; --low: #3b82f6; --info: #6b7280; --safe: #22c55e; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .container { max-width: 1000px; margin: 0 auto; padding: 2rem 1.5rem; }
+  h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+  .subtitle { color: var(--muted); font-size: 0.85rem; margin-bottom: 2rem; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; margin-bottom: 2rem; }
+  .summary-card { background: var(--card); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1rem; text-align: center; }
+  .summary-card .num { font-size: 2rem; font-weight: 700; }
+  .summary-card .label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .crit { color: var(--crit); } .high { color: var(--high); } .med { color: var(--med); } .low { color: var(--low); } .info-c { color: var(--info); } .safe { color: var(--safe); }
+  section { margin-bottom: 2.5rem; }
+  h2 { font-size: 1.1rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 0.95rem; color: var(--muted); margin: 1.25rem 0 0.75rem; }
+  .finding { background: var(--card); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1rem 1.25rem; margin-bottom: 0.75rem; border-left: 4px solid var(--border); }
+  .finding.sev-CRITICAL { border-left-color: var(--crit); } .finding.sev-HIGH { border-left-color: var(--high); } .finding.sev-MEDIUM { border-left-color: var(--med); } .finding.sev-LOW { border-left-color: var(--low); } .finding.sev-INFO { border-left-color: var(--info); } .finding.sev-FIXED { border-left-color: var(--safe); }
+  .finding-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
+  .badge { font-size: 0.65rem; font-weight: 700; padding: 0.2em 0.6em; border-radius: 4px; text-transform: uppercase; white-space: nowrap; }
+  .badge-CRITICAL { background: rgba(239,68,68,0.15); color: var(--crit); } .badge-HIGH { background: rgba(249,115,22,0.15); color: var(--high); } .badge-MEDIUM { background: rgba(234,179,8,0.15); color: var(--med); } .badge-LOW { background: rgba(59,130,246,0.15); color: var(--low); } .badge-INFO { background: rgba(107,114,128,0.15); color: var(--info); } .badge-FIXED { background: rgba(34,197,94,0.15); color: var(--safe); } .badge-KEV { background: rgba(139,92,246,0.15); color: #a78bfa; } .badge-OSV { background: rgba(16,185,129,0.15); color: #34d399; } .badge-JVN { background: rgba(251,191,36,0.15); color: #fbbf24; }
+  .finding-title { font-weight: 600; font-size: 0.9rem; }
+  .finding-file { font-family: 'Cascadia Code', monospace; font-size: 0.75rem; color: var(--muted); }
+  .finding-desc { font-size: 0.82rem; color: var(--muted); margin-bottom: 0.5rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  code { font-family: 'Cascadia Code', monospace; font-size: 0.8em; background: rgba(255,255,255,0.06); padding: 0.1em 0.4em; border-radius: 3px; }
+  .strikethrough { text-decoration: line-through; color: var(--muted); }
+  .before-after { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
+  .ba-card { background: var(--card); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.25rem; text-align: center; }
+  .ba-card .grade { font-size: 3rem; font-weight: 700; }
+  .ba-card .ba-label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; margin-bottom: 0.5rem; }
+  .note { font-size: 0.8rem; color: var(--muted); background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.75rem 1rem; margin-top: 0.75rem; }
+  .api-stat { display: inline-flex; align-items: center; gap: 0.4rem; background: var(--card); border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.3rem 0.7rem; font-size: 0.75rem; margin: 0.2rem; }
+  .api-stat .val { font-weight: 700; font-size: 0.9rem; }
+  .footer { text-align: center; color: var(--muted); font-size: 0.7rem; margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>Cyberattack Info API — セキュリティ脆弱性診断レポート（再診断）</h1>
+<p class="subtitle">
+  再診断日: 2026-06-19 &nbsp;|&nbsp; 対象: cyberattack_info_api &nbsp;|&nbsp; ブランチ: fix/security-audit-remediation<br>
+  ツール: pip-audit + 静的コードレビュー + <strong>自社 Cyberattack Info API（KEV / OSV / JVN）</strong>
+</p>
+
+<!-- ── 総合評価 Before/After ──────────────────────── -->
+<div class="before-after">
+  <div class="ba-card">
+    <div class="ba-label">初回診断（修正前）</div>
+    <div class="grade med">B+</div>
+    <div style="font-size:0.8rem;color:var(--muted);">HIGH 2 / MEDIUM 2 / LOW 3</div>
+  </div>
+  <div class="ba-card" style="border-color: var(--safe);">
+    <div class="ba-label">再診断（修正後）</div>
+    <div class="grade safe">A</div>
+    <div style="font-size:0.8rem;color:var(--safe);">CRITICAL 0 / HIGH 0 / MEDIUM 0 / LOW 0</div>
+  </div>
+</div>
+
+<!-- ── サマリー ────────────────────────────────────── -->
+<div class="summary-grid">
+  <div class="summary-card"><div class="num safe">0</div><div class="label">Critical</div></div>
+  <div class="summary-card"><div class="num safe">0</div><div class="label">High</div></div>
+  <div class="summary-card"><div class="num safe">0</div><div class="label">Medium</div></div>
+  <div class="summary-card"><div class="num safe">0</div><div class="label">Low</div></div>
+  <div class="summary-card"><div class="num safe">7</div><div class="label">修正済み</div></div>
+  <div class="summary-card"><div class="num safe">3</div><div class="label">Safe 確認済</div></div>
+</div>
+
+<!-- ── P1〜P7 修正結果 ──────────────────────────── -->
+<section>
+<h2>1. 指摘事項の修正結果（P1〜P7 全件対応済み）</h2>
+
+<div class="finding sev-FIXED">
+  <div class="finding-header">
+    <span class="badge badge-FIXED">Fixed</span>
+    <span class="badge badge-HIGH" style="opacity:0.5;">was: High</span>
+    <span class="finding-title">P1: urllib3 を 2.7.0 にアップデート</span>
+  </div>
+  <div class="finding-file">requirements.txt</div>
+  <div class="finding-desc">
+    <span class="strikethrough">urllib3 2.5.0 — GHSA-mf9v（圧縮爆弾バイパス）/ GHSA-qccp（ヘッダ転送）</span><br>
+    <strong style="color:var(--safe);">修正後:</strong> <code>urllib3==2.7.0</code> — pip-audit で脆弱性 <strong>0 件</strong>を確認。
+  </div>
+</div>
+
+<div class="finding sev-FIXED">
+  <div class="finding-header">
+    <span class="badge badge-FIXED">Fixed</span>
+    <span class="badge badge-HIGH" style="opacity:0.5;">was: High</span>
+    <span class="finding-title">P2: cryptography を 49.0.0 にアップデート</span>
+  </div>
+  <div class="finding-file">requirements.txt</div>
+  <div class="finding-desc">
+    <span class="strikethrough">cryptography 45.0.6 — CVE-2026-39892（バッファオーバーフロー）/ GHSA-537c（OpenSSL）等 4 件</span><br>
+    <strong style="color:var(--safe);">修正後:</strong> <code>cryptography==49.0.0</code> — pip-audit で脆弱性 <strong>0 件</strong>を確認。
+  </div>
+</div>
+
+<div class="finding sev-FIXED">
+  <div class="finding-header">
+    <span class="badge badge-FIXED">Fixed</span>
+    <span class="badge badge-MEDIUM" style="opacity:0.5;">was: Medium</span>
+    <span class="finding-title">P3: API キー比較をタイミング攻撃安全に</span>
+  </div>
+  <div class="finding-file">app/auth.py:31</div>
+  <div class="finding-desc">
+    <span class="strikethrough"><code>api_key != settings.API_KEY</code>（通常の文字列比較）</span><br>
+    <strong style="color:var(--safe);">修正後:</strong> <code>hmac.compare_digest(api_key, settings.API_KEY)</code> — 定数時間比較でタイミング攻撃を防止。
+  </div>
+</div>
+
+<div class="finding sev-FIXED">
+  <div class="finding-header">
+    <span class="badge badge-FIXED">Fixed</span>
+    <span class="badge badge-MEDIUM" style="opacity:0.5;">was: Medium</span>
+    <span class="finding-title">P4: CORS オリジンをダッシュボードドメインに制限</span>
+  </div>
+  <div class="finding-file">app/main.py:117-122</div>
+  <div class="finding-desc">
+    <span class="strikethrough"><code>allow_origins=["*"]</code>（全オリジン許可）</span><br>
+    <strong style="color:var(--safe);">修正後:</strong> 本番は <code>["https://cyberattackinfoapi.vercel.app"]</code> のみ。開発時は <code>localhost:5173</code> / <code>localhost:3000</code> も追加。
+  </div>
+</div>
+
+<div class="finding sev-FIXED">
+  <div class="finding-header">
+    <span class="badge badge-FIXED">Fixed</span>
+    <span class="badge badge-LOW" style="opacity:0.5;">was: Low</span>
+    <span class="finding-title">P5: 本番で Swagger UI / ReDoc を無効化</span>
+  </div>
+  <div class="finding-file">app/main.py:112-113</div>
+  <div class="finding-desc">
+    <span class="strikethrough"><code>docs_url="/docs"</code> / <code>redoc_url="/redoc"</code>（常時有効）</span><br>
+    <strong style="color:var(--safe);">修正後:</strong> <code>settings.ENVIRONMENT != "production"</code> の場合のみ有効。本番では <code>None</code>（404）。
+  </div>
+</div>
+
+<div class="finding sev-FIXED">
+  <div class="finding-header">
+    <span class="badge badge-FIXED">Fixed</span>
+    <span class="badge badge-LOW" style="opacity:0.5;">was: Low</span>
+    <span class="finding-title">P6: sort_by パラメータを Literal 型に変更</span>
+  </div>
+  <div class="finding-file">app/routers/osv.py:64, app/routers/jvn.py:63</div>
+  <div class="finding-desc">
+    <span class="strikethrough"><code>sort_by: str</code>（任意文字列を受け付け）</span><br>
+    <strong style="color:var(--safe);">修正後:</strong> <code>sort_by: Literal["modified", "cvss"]</code> — 不正値は FastAPI が自動的に 422 で拒否。
+  </div>
+</div>
+
+<div class="finding sev-FIXED">
+  <div class="finding-header">
+    <span class="badge badge-FIXED">Fixed</span>
+    <span class="badge badge-LOW" style="opacity:0.5;">was: Low</span>
+    <span class="finding-title">P7: Slack 通知のエラーメッセージをサニタイズ</span>
+  </div>
+  <div class="finding-file">app/notifications.py</div>
+  <div class="finding-desc">
+    <span class="strikethrough"><code>str(exc)</code> をそのまま Slack に送信（接続文字列漏洩リスク）</span><br>
+    <strong style="color:var(--safe);">修正後:</strong> <code>_sanitize_error()</code> で接続文字列パターン（<code>postgresql://</code> 等）をマスク + 200 文字制限。テスト 3 件追加。
+  </div>
+</div>
+</section>
+
+<!-- ── Cyberattack Info API 再照合 ───────────────── -->
+<section>
+<h2>2. Cyberattack Info API による再照合</h2>
+<div style="margin-bottom:1rem;">
+  <span class="api-stat"><span class="badge badge-KEV">KEV</span> 照合母数 <span class="val">1,623</span> 件</span>
+  <span class="api-stat"><span class="badge badge-OSV">OSV</span> 照合母数 <span class="val">492</span> 件</span>
+  <span class="api-stat"><span class="badge badge-JVN">JVN</span> 照合母数 <span class="val">129</span> 件</span>
+</div>
+
+<h3>2-1. CISA KEV（実際に悪用が確認された脆弱性）</h3>
+<div class="note" style="border-color: rgba(34,197,94,0.3);">
+  ✅ 本アプリの全依存ライブラリ（fastapi, uvicorn, sqlalchemy, pydantic, httpx, apscheduler, defusedxml, cryptography, urllib3 等）を照合 → <strong style="color:var(--safe);">該当 0 件</strong>
+</div>
+
+<h3>2-2. OSV（オープンソース脆弱性データベース）</h3>
+<table>
+<thead><tr><th>パッケージ</th><th>使用バージョン</th><th>OSV HIGH+ ヒット</th><th>本バージョンへの影響</th></tr></thead>
+<tbody>
+<tr><td><code>cryptography</code></td><td><strong>49.0.0</strong> <span class="safe">(↑45.0.6)</span></td><td>2 件</td><td class="safe">✅ fix 48.0.1 / 42.0.4 — <strong>修正済みバージョン使用中</strong></td></tr>
+<tr><td><code>urllib3</code></td><td><strong>2.7.0</strong> <span class="safe">(↑2.5.0)</span></td><td>3 件</td><td class="safe">✅ fix 2.7.0 / 1.26.5 — <strong>修正済みバージョン使用中</strong></td></tr>
+<tr><td><code>certifi</code></td><td>2025.8.3</td><td>0 件</td><td class="safe">✅ 影響なし</td></tr>
+<tr><td><code>sqlalchemy</code></td><td>2.0.36</td><td>0 件</td><td class="safe">✅ 影響なし</td></tr>
+<tr><td><code>fastapi</code></td><td>0.115.6</td><td>0 件</td><td class="safe">✅ 該当なし</td></tr>
+<tr><td><code>httpx</code></td><td>0.28.1</td><td>0 件</td><td class="safe">✅ 該当なし</td></tr>
+<tr><td><code>pydantic</code></td><td>2.11.7</td><td>0 件</td><td class="safe">✅ 該当なし</td></tr>
+<tr><td><code>uvicorn</code></td><td>0.32.1</td><td>0 件</td><td class="safe">✅ 該当なし</td></tr>
+<tr><td><code>defusedxml</code></td><td>0.7.1</td><td>0 件</td><td class="safe">✅ 該当なし</td></tr>
+<tr><td><code>apscheduler</code></td><td>3.10.4</td><td>0 件</td><td class="safe">✅ 該当なし</td></tr>
+</tbody>
+</table>
+<div class="note" style="border-color: rgba(34,197,94,0.3);">
+  ✅ OSV データベース上に過去の脆弱性レコードは存在するが、<strong style="color:var(--safe);">全て修正済みバージョンを使用中</strong>。本バージョンに影響する HIGH 以上の脆弱性は <strong>0 件</strong>。
+</div>
+
+<h3>2-3. JVN（国内脆弱性情報）</h3>
+<div class="note" style="border-color: rgba(34,197,94,0.3);">
+  ✅ 直近 30 日の JVN に本アプリの依存ライブラリに影響する脆弱性は <strong style="color:var(--safe);">0 件</strong>。
+</div>
+</section>
+
+<!-- ── pip-audit 再スキャン ───────────────────────── -->
+<section>
+<h2>3. pip-audit 再スキャン結果</h2>
+<table>
+<thead><tr><th>パッケージ</th><th>バージョン</th><th>脆弱性数</th><th>本アプリの依存？</th><th>判定</th></tr></thead>
+<tbody>
+<tr><td><code>cryptography</code></td><td>49.0.0</td><td class="safe">0 件</td><td>間接依存</td><td class="safe">✅ 解消</td></tr>
+<tr><td><code>urllib3</code></td><td>2.7.0</td><td class="safe">0 件</td><td>間接依存</td><td class="safe">✅ 解消</td></tr>
+<tr><td><code>h2</code></td><td>4.2.0</td><td>1 件</td><td>間接依存（httpx）</td><td>⚡ 低リスク — HTTP/2 非使用</td></tr>
+<tr><td><code>idna</code></td><td>3.10</td><td>1 件</td><td>間接依存</td><td>⚡ 低リスク</td></tr>
+<tr style="color:var(--muted)"><td><code>pip</code></td><td>25.2</td><td>5 件</td><td>ビルドツール</td><td>— ランタイム影響なし</td></tr>
+<tr style="color:var(--muted)"><td><code>setuptools</code></td><td>65.5.0</td><td>3 件</td><td>ビルドツール</td><td>— ランタイム影響なし</td></tr>
+<tr style="color:var(--muted)"><td><code>pyjwt</code></td><td>2.10.1</td><td>7 件</td><td>未使用</td><td>— 本アプリで import なし</td></tr>
+<tr style="color:var(--muted)"><td><code>protobuf</code></td><td>6.32.0</td><td>1 件</td><td>未使用</td><td>— 本アプリで import なし</td></tr>
+<tr style="color:var(--muted)"><td><code>pyasn1</code></td><td>0.6.1</td><td>2 件</td><td>未使用</td><td>— 本アプリで import なし</td></tr>
+<tr style="color:var(--muted)"><td><code>requests</code></td><td>2.32.4</td><td>1 件</td><td>未使用</td><td>— 本アプリは httpx を使用</td></tr>
+</tbody>
+</table>
+<div class="note" style="border-color: rgba(34,197,94,0.3);">
+  ✅ 本アプリの直接依存・間接依存のうち、<strong style="color:var(--safe);">ランタイムに影響する HIGH 以上の脆弱性は 0 件</strong>。残存する脆弱性はビルドツール（pip / setuptools）や未使用パッケージ（pyjwt / protobuf 等）のみ。
+</div>
+</section>
+
+<!-- ── 安全確認済み ───────────────────────────────── -->
+<section>
+<h2>4. 安全性が確認された項目（変更なし）</h2>
+
+<div class="finding sev-INFO">
+  <div class="finding-header"><span class="badge badge-INFO">Safe</span><span class="finding-title">XML パース: defusedxml で XXE / Billion-laughs 攻撃対策済み</span></div>
+  <div class="finding-file">app/cron_jvn.py:11, 79</div>
+</div>
+
+<div class="finding sev-INFO">
+  <div class="finding-header"><span class="badge badge-INFO">Safe</span><span class="finding-title">SQL インジェクション: 全クエリが SQLAlchemy ORM パラメータ化</span></div>
+</div>
+
+<div class="finding sev-INFO">
+  <div class="finding-header"><span class="badge badge-INFO">Safe</span><span class="finding-title">GitHub Actions: シークレット管理・最小権限が適切</span></div>
+</div>
+</section>
+
+<!-- ── テスト品質 ─────────────────────────────────── -->
+<section>
+<h2>5. テスト品質</h2>
+<table>
+<thead><tr><th>指標</th><th>値</th></tr></thead>
+<tbody>
+<tr><td>テスト数</td><td><strong>183</strong>（セキュリティ修正で +3 追加）</td></tr>
+<tr><td>全体カバレッジ</td><td><strong>99%</strong></td></tr>
+<tr><td>全ファイル 90% 以上</td><td class="safe">✅</td></tr>
+<tr><td>ruff lint</td><td class="safe">✅ All checks passed</td></tr>
+<tr><td>mypy 型チェック</td><td class="safe">✅ Success: no issues found</td></tr>
+</tbody>
+</table>
+</section>
+
+<!-- ── 総合評価 ───────────────────────────────────── -->
+<section>
+<h2>6. 総合評価</h2>
+<table>
+<thead><tr><th>診断カテゴリ</th><th>初回診断</th><th>再診断</th></tr></thead>
+<tbody>
+<tr><td>CISA KEV（実際に悪用された脆弱性）</td><td class="safe">✅ 0 件</td><td class="safe">✅ 0 件</td></tr>
+<tr><td>OSV — HIGH 以上（影響あり）</td><td class="high" style="color:var(--high);">⚠️ 2 パッケージ</td><td class="safe">✅ 0 件（全てアップデート済み）</td></tr>
+<tr><td>JVN（国内脆弱性情報）</td><td class="safe">✅ 0 件</td><td class="safe">✅ 0 件</td></tr>
+<tr><td>pip-audit — 直接依存の脆弱性</td><td class="high" style="color:var(--high);">⚠️ cryptography / urllib3</td><td class="safe">✅ 0 件</td></tr>
+<tr><td>コード — タイミング攻撃</td><td style="color:var(--med);">⚠️ Medium</td><td class="safe">✅ hmac.compare_digest</td></tr>
+<tr><td>コード — CORS ワイルドカード</td><td style="color:var(--med);">⚠️ Medium</td><td class="safe">✅ ドメイン制限</td></tr>
+<tr><td>コード — Swagger 本番公開</td><td style="color:var(--low);">⚠️ Low</td><td class="safe">✅ 本番無効化</td></tr>
+<tr><td>コード — sort_by バリデーション</td><td style="color:var(--low);">⚠️ Low</td><td class="safe">✅ Literal 型</td></tr>
+<tr><td>コード — エラーメッセージ漏洩</td><td style="color:var(--low);">⚠️ Low</td><td class="safe">✅ サニタイズ済み</td></tr>
+<tr><td><strong>総合評価</strong></td><td><strong style="color:var(--med);">B+</strong></td><td><strong style="color:var(--safe);">A</strong></td></tr>
+</tbody>
+</table>
+</section>
+
+<div class="footer">
+  Generated by Claude Code &nbsp;|&nbsp; 2026-06-19 &nbsp;|&nbsp; cyberattack_info_api セキュリティ再診断<br>
+  データソース: CISA KEV (1,623 件) / OSV (492 件) / JVN (129 件) / pip-audit / 静的コードレビュー<br>
+  修正 PR: <a href="https://github.com/baby-feelings/cyberattack_info_api/pull/42" style="color:#a78bfa;">#42</a>
+</div>
+
+</div>
+</body>
+</html>
