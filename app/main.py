@@ -13,10 +13,10 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.auth import require_api_key
 from app.config import settings
-from app.cron import _fetch_cisa_kev, _upsert_vulnerabilities, fetch_and_store_kev
+from app.cron import fetch_and_store_kev
 from app.cron_jvn import fetch_and_store_jvn
 from app.cron_osv import fetch_and_store_osv
-from app.database import Base, SessionLocal, engine, get_db
+from app.database import Base, engine, get_db
 from app.routers import crawler_logs, jvn, osv, vulnerabilities
 from app.schemas import CrawlResponse, HealthResponse, JvnCrawlResponse, OsvCrawlResponse
 
@@ -173,21 +173,12 @@ def trigger_crawl() -> CrawlResponse:
     スケジュール実行を待たずにデータを取得したい場合に使用する。
     """
     logger.info("Manual crawl triggered via /admin/crawl")
-    db = SessionLocal()
-    try:
-        entries = _fetch_cisa_kev()
-        inserted, updated = _upsert_vulnerabilities(db, entries)
-        logger.info("Manual crawl done: inserted=%d, updated=%d", inserted, updated)
-        return CrawlResponse(
-            message="Crawl completed successfully",
-            inserted=inserted,
-            updated=updated,
-        )
-    except Exception as exc:
-        logger.error("Manual crawl failed: %s", exc, exc_info=True)
-        raise
-    finally:
-        db.close()
+    inserted, updated = fetch_and_store_kev()
+    return CrawlResponse(
+        message="Crawl completed successfully",
+        inserted=inserted,
+        updated=updated,
+    )
 
 
 @app.post(

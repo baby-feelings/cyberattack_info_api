@@ -350,8 +350,7 @@ def test_admin_crawl_requires_auth(client: TestClient):
 def test_admin_crawl_success(client: TestClient, monkeypatch):
     """POST /admin/crawl がクローラーを正常実行し結果を返すことを確認する。"""
     monkeypatch.setattr("app.auth.settings.API_KEY", TEST_API_KEY)
-    with patch("app.main._fetch_cisa_kev", return_value=[]), \
-         patch("app.main._upsert_vulnerabilities", return_value=(3, 1)):
+    with patch("app.main.fetch_and_store_kev", return_value=(3, 1)):
         response = client.post(
             "/admin/crawl",
             headers={"X-API-KEY": TEST_API_KEY},
@@ -366,7 +365,7 @@ def test_admin_crawl_success(client: TestClient, monkeypatch):
 def test_admin_crawl_failure_returns_500(client: TestClient, monkeypatch):
     """クローラーが例外を送出した場合に 500 を返すことを確認する。"""
     monkeypatch.setattr("app.auth.settings.API_KEY", TEST_API_KEY)
-    with patch("app.main._fetch_cisa_kev", side_effect=RuntimeError("Network error")):
+    with patch("app.main.fetch_and_store_kev", side_effect=RuntimeError("Network error")):
         response = client.post(
             "/admin/crawl",
             headers={"X-API-KEY": TEST_API_KEY},
