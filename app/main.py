@@ -109,14 +109,19 @@ app = FastAPI(
     ),
     version="1.0.0",
     lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url="/docs" if settings.ENVIRONMENT != "production" else None,
+    redoc_url="/redoc" if settings.ENVIRONMENT != "production" else None,
 )
 
-# CORS 設定（必要に応じてオリジンを制限する）
+# CORS 設定（本番はダッシュボードドメインのみ許可、開発時は localhost も許可）
+_cors_origins = (
+    ["https://cyberattackinfoapi.vercel.app", "http://localhost:5173", "http://localhost:3000"]
+    if settings.ENVIRONMENT != "production"
+    else ["https://cyberattackinfoapi.vercel.app"]
+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_methods=["GET", "POST"],
     allow_headers=["X-API-KEY"],
 )

@@ -5,7 +5,7 @@ GET /api/jvn/stats  – 重要度別・月別の統計情報
 """
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, or_
@@ -60,7 +60,7 @@ def list_jvn(
     search: str | None = Query(
         None, description="JVNDB ID・タイトル・概要のキーワード検索"
     ),
-    sort_by: str = Query(
+    sort_by: Literal["modified", "cvss"] = Query(
         "modified",
         description="ソートキー（modified: 更新日時降順 / cvss: CVSSスコア降順）",
     ),
