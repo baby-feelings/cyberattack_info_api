@@ -3,6 +3,7 @@
 SLACK_WEBHOOK_URL が未設定の場合は何もしない（サイレントスキップ）。
 """
 import logging
+import re
 
 import httpx
 
@@ -11,6 +12,18 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 _WEBHOOK_TIMEOUT = 10.0
+
+# 接続文字列パターン（postgresql:// / sqlite:// 等）をマスク
+_CONN_STR_RE = re.compile(r"\b\w+://[^\s]+")
+_MAX_ERROR_LEN = 200
+
+
+def _sanitize_error(error: str) -> str:
+    """エラーメッセージから接続文字列をマスクし、長さを制限する。"""
+    sanitized = _CONN_STR_RE.sub("***masked-url***", error)
+    if len(sanitized) > _MAX_ERROR_LEN:
+        sanitized = sanitized[:_MAX_ERROR_LEN] + "..."
+    return sanitized
 
 
 def notify_new_vulnerabilities(inserted: int, updated: int) -> None:
@@ -70,7 +83,7 @@ def notify_osv_crawl_error(error: str) -> None:
     if not settings.SLACK_WEBHOOK_URL:
         return
 
-    message = f":warning: *OSV クローラーエラー*\n```{error}```"
+    message = f":warning: *OSV クローラーエラー*\n```{_sanitize_error(error)}```"
     _send_slack(message)
 
 
@@ -106,7 +119,7 @@ def notify_jvn_crawl_error(error: str) -> None:
     if not settings.SLACK_WEBHOOK_URL:
         return
 
-    message = f":warning: *JVN クローラーエラー*\n```{error}```"
+    message = f":warning: *JVN クローラーエラー*\n```{_sanitize_error(error)}```"
     _send_slack(message)
 
 
@@ -119,7 +132,7 @@ def notify_crawl_error(error: str) -> None:
     if not settings.SLACK_WEBHOOK_URL:
         return
 
-    message = f":warning: *CISA KEV クローラーエラー*\n```{error}```"
+    message = f":warning: *CISA KEV クローラーエラー*\n```{_sanitize_error(error)}```"
     _send_slack(message)
 
 

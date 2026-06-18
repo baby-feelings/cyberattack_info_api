@@ -10,3 +10,7 @@ python-dotenv==1.2.2
 httpx==0.28.1
 apscheduler==3.10.4
 defusedxml==0.7.1
+
+# ── セキュリティピン留め（間接依存の脆弱性対策） ──────────────────
+cryptography>=48.0.1
+urllib3>=2.7.0

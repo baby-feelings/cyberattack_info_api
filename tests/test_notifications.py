@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 
 from app.notifications import (
+    _sanitize_error,
     notify_crawl_error,
     notify_new_vulnerabilities,
     notify_osv_crawl_error,
@@ -238,3 +239,29 @@ def test_jvn_crawl_error_skips_without_webhook(monkeypatch):
     with patch("app.notifications._send_slack") as mock_send:
         notify_jvn_crawl_error("some error")
         mock_send.assert_not_called()
+
+
+# ── _sanitize_error テスト ────────────────────────────────────────
+
+
+def test_sanitize_error_masks_connection_string():
+    """接続文字列がマスクされること。"""
+    error = "connection failed: postgresql://user:pass@host:5432/db timeout"
+    result = _sanitize_error(error)
+    assert "postgresql://" not in result
+    assert "***masked-url***" in result
+    assert "timeout" in result
+
+
+def test_sanitize_error_truncates_long_message():
+    """200 文字を超えるメッセージが切り詰められること。"""
+    error = "x" * 300
+    result = _sanitize_error(error)
+    assert len(result) == 203  # 200 + "..."
+    assert result.endswith("...")
+
+
+def test_sanitize_error_passes_short_message():
+    """短いメッセージはそのまま返すこと。"""
+    error = "simple error"
+    assert _sanitize_error(error) == "simple error"

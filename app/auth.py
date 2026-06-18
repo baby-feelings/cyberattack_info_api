@@ -2,6 +2,7 @@
 X-API-KEY ヘッダーによるシンプルな固定キー認証を提供する。
 個人開発・限定用途のため、シンプルな実装を採用する（YAGNI）。
 """
+import hmac
 import logging
 
 from fastapi import HTTPException, Security, status
@@ -28,7 +29,7 @@ def require_api_key(api_key: str = Security(_api_key_header)) -> str:
     Raises:
         HTTPException 403: キーが無効または欠落している場合
     """
-    if not api_key or api_key != settings.API_KEY:
+    if not api_key or not hmac.compare_digest(api_key, settings.API_KEY):
         logger.warning("Unauthorized API access attempt")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
