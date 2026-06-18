@@ -88,15 +88,28 @@ def _parse_item(item: stdlib_ET.Element) -> dict | None:
     Returns:
         dict 形式のデータ、必須フィールド欠損時は None
     """
-    # JVNDB ID（例: JVNDB-2026-020171）
-    identifier = item.findtext("dc:identifier", namespaces=_NS) or ""
+    # JVNDB ID（例: JVNDB-2026-020171）— MyJVN API は sec:identifier を使用
+    identifier = item.findtext("sec:identifier", namespaces=_NS) or ""
     if not identifier.startswith("JVNDB-"):
         # JVN ID（JVN#xxxxxxxx 形式）は対象外
         return None
 
-    title = item.findtext("title", namespaces=_NS) or ""
-    link = item.findtext("link", namespaces=_NS) or ""
-    description = _strip_html(item.findtext("description", namespaces=_NS) or "")
+    # RSS 1.0 の title/link は既定名前空間（rss:）またはプレフィックスなしの両方に対応
+    title = (
+        item.findtext("rss:title", namespaces=_NS)
+        or item.findtext("title", namespaces=_NS)
+        or ""
+    )
+    link = (
+        item.findtext("rss:link", namespaces=_NS)
+        or item.findtext("link", namespaces=_NS)
+        or ""
+    )
+    description = _strip_html(
+        item.findtext("rss:description", namespaces=_NS)
+        or item.findtext("description", namespaces=_NS)
+        or ""
+    )
     date_published = _parse_datetime(item.findtext("dc:date", namespaces=_NS))
     date_last_modified = _parse_datetime(item.findtext("dcterms:modified", namespaces=_NS))
 
@@ -124,20 +137,20 @@ def _parse_item(item: stdlib_ET.Element) -> dict | None:
                         "High": "High", "Medium": "Medium", "Low": "Low"}
         severity = severity_map.get(severity_raw)
 
-    # 関連 CVE ID を収集（sec:references の type="CVE" 要素から）
+    # 関連 CVE ID を収集（sec:references の source="CVE" 要素から）
     cve_ids: list[str] = []
     for ref in item.findall("sec:references", namespaces=_NS):
-        if ref.get("type") == "CVE":
+        if ref.get("source") == "CVE":
             ref_id = ref.get("id", "")
             if ref_id.startswith("CVE-"):
                 cve_ids.append(ref_id)
 
-    # 影響製品（sec:affected の sec:name 要素から）
+    # 影響製品（sec:cpe 要素の vendor/product 属性と CPE テキストから）
     affected_products: list[dict] = []
-    for affected in item.findall("sec:affected", namespaces=_NS):
-        vendor = affected.get("vendor", "")
-        product_name = affected.get("name", "")
-        cpe = affected.get("cpe", "")
+    for cpe_elem in item.findall("sec:cpe", namespaces=_NS):
+        vendor = cpe_elem.get("vendor", "")
+        product_name = cpe_elem.get("product", "")
+        cpe = cpe_elem.text or ""
         if vendor or product_name:
             affected_products.append({"vendor": vendor, "product": product_name, "cpe": cpe})
 
