@@ -2,6 +2,7 @@
 APIリクエスト・レスポンスの型定義とバリデーションを担う。
 """
 from datetime import date
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -153,6 +154,96 @@ class OsvCrawlResponse(BaseModel):
     inserted: int
     updated: int
     deleted: int = 0
+
+
+# ── JVN 脆弱性 ──────────────────────────────────────────────────
+
+
+class JvnVulnerabilityOut(BaseModel):
+    """JVN 脆弱性情報の出力スキーマ。"""
+
+    jvndb_id: str = Field(description="JVNDB ID（例: JVNDB-2026-020171）")
+    title: str = Field(description="脆弱性タイトル")
+    overview: str = Field(description="概要説明")
+    cve_ids: list[str] = Field(description="関連 CVE ID 一覧")
+    severity: str | None = Field(None, description="重要度（High / Medium / Low）")
+    cvss_score: float | None = Field(None, description="CVSS スコア")
+    cvss_vector: str | None = Field(None, description="CVSS ベクター文字列")
+    affected_products: list[dict] = Field(description="影響製品一覧")
+    references: list[dict] = Field(description="参考リンク一覧")
+    jvn_url: str = Field(description="JVNDB エントリの URL")
+    date_published: str = Field(description="公開日時（ISO 8601）")
+    date_last_modified: str = Field(description="最終更新日時（ISO 8601）")
+
+    model_config = {"from_attributes": True}
+
+    @classmethod
+    def model_validate(
+        cls,
+        obj: Any,
+        *,
+        strict: bool | None = None,
+        from_attributes: bool | None = None,
+        context: Any = None,
+        by_alias: bool | None = None,
+        by_name: bool | None = None,
+    ) -> "JvnVulnerabilityOut":
+        """datetime を ISO 文字列に変換して生成する。"""
+        if hasattr(obj, "__dict__"):
+            return cls(
+                jvndb_id=obj.jvndb_id,
+                title=obj.title,
+                overview=obj.overview,
+                cve_ids=obj.cve_ids or [],
+                severity=obj.severity,
+                cvss_score=obj.cvss_score,
+                cvss_vector=obj.cvss_vector,
+                affected_products=obj.affected_products or [],
+                references=obj.references or [],
+                jvn_url=obj.jvn_url,
+                date_published=obj.date_published.isoformat(),
+                date_last_modified=obj.date_last_modified.isoformat(),
+            )
+        return super().model_validate(
+            obj,
+            strict=strict,
+            from_attributes=from_attributes,
+            context=context,
+            by_alias=by_alias,
+            by_name=by_name,
+        )
+
+
+class JvnListResponse(BaseModel):
+    """JVN 一覧取得レスポンス（ページネーション付き）。"""
+
+    total: int = Field(description="総件数")
+    page: int = Field(description="現在のページ番号")
+    per_page: int = Field(description="1ページあたりの件数")
+    data: list[JvnVulnerabilityOut] = Field(description="JVN 脆弱性一覧")
+
+
+class JvnSeverityStat(BaseModel):
+    """重要度別件数。"""
+
+    severity: str
+    count: int
+
+
+class JvnStatsResponse(BaseModel):
+    """JVN 統計エンドポイントのレスポンス。"""
+
+    total: int = Field(description="総件数")
+    severities: list[JvnSeverityStat] = Field(description="重要度別件数")
+    monthly_trend: list[MonthlyStat] = Field(description="月別件数（直近 12 ヶ月）")
+
+
+class JvnCrawlResponse(BaseModel):
+    """JVN クローラー手動実行レスポンス。"""
+
+    message: str
+    inserted: int
+    updated: int
 
 
 # ── クローラー実行履歴 ────────────────────────────────────────────

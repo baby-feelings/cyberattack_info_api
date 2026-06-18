@@ -14,10 +14,11 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.auth import require_api_key
 from app.config import settings
 from app.cron import _fetch_cisa_kev, _upsert_vulnerabilities, fetch_and_store_kev
+from app.cron_jvn import fetch_and_store_jvn
 from app.cron_osv import fetch_and_store_osv
 from app.database import Base, SessionLocal, engine, get_db
-from app.routers import crawler_logs, osv, vulnerabilities
-from app.schemas import CrawlResponse, HealthResponse, OsvCrawlResponse
+from app.routers import crawler_logs, jvn, osv, vulnerabilities
+from app.schemas import CrawlResponse, HealthResponse, JvnCrawlResponse, OsvCrawlResponse
 
 # ──────────────────────────────────────────────
 # ロギング設定（標準出力に JSON 風ログを出力）
@@ -73,9 +74,18 @@ async def lifespan(app: FastAPI):
         id="osv_crawler",
         replace_existing=True,
     )
+    # JVN クローラー: 毎日 UTC 21:00（JST 翌日 6:00）
+    scheduler.add_job(
+        fetch_and_store_jvn,
+        trigger="cron",
+        hour=21,
+        minute=0,
+        id="jvn_crawler",
+        replace_existing=True,
+    )
     scheduler.start()
     logger.info(
-        "Scheduler started: KEV daily UTC %02d:%02d, OSV daily UTC 20:00",
+        "Scheduler started: KEV daily UTC %02d:%02d, OSV daily UTC 20:00, JVN daily UTC 21:00",
         settings.CRON_HOUR_UTC,
         settings.CRON_MINUTE_UTC,
     )
@@ -114,6 +124,7 @@ app.add_middleware(
 # ルーター登録
 app.include_router(vulnerabilities.router)
 app.include_router(osv.router)
+app.include_router(jvn.router)
 app.include_router(crawler_logs.router)
 
 
@@ -196,6 +207,25 @@ def trigger_osv_crawl() -> OsvCrawlResponse:
         inserted=inserted,
         updated=updated,
         deleted=deleted,
+    )
+
+
+@app.post(
+    "/admin/jvn-crawl",
+    response_model=JvnCrawlResponse,
+    tags=["admin"],
+    dependencies=[Security(require_api_key)],
+    summary="JVN クローラー手動実行",
+    description="MyJVN API から直近データを即時取得して DB に Upsert する（X-API-KEY 必須）。",
+)
+def trigger_jvn_crawl() -> JvnCrawlResponse:
+    """JVN クローラーを手動で即時実行する。"""
+    logger.info("Manual JVN crawl triggered via /admin/jvn-crawl")
+    inserted, updated = fetch_and_store_jvn()
+    return JvnCrawlResponse(
+        message="JVN crawl completed",
+        inserted=inserted,
+        updated=updated,
     )
 
 

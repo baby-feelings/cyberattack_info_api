@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     # OSV データの保持期間（日数）: この日数より古い modified レコードを定期削除する
     OSV_RETENTION_DAYS: int = 180
 
+    # JVN クローラー設定
+    # 直近何日分の脆弱性を取得対象とするか（dateLastModified フィルター）
+    JVN_DAYS: int = 30
+
     model_config = SettingsConfigDict(
         # 環境に応じて .env.development または .env.production を使用
         env_file=".env",
