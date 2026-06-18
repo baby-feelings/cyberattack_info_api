@@ -95,10 +95,13 @@ def _upsert_vulnerabilities(db: Session, entries: list[dict[str, Any]]) -> tuple
     return inserted, updated
 
 
-def fetch_and_store_kev() -> None:
+def fetch_and_store_kev() -> tuple[int, int]:
     """CISA KEV フィードを取得し DB に保存するメインエントリポイント。
-    APScheduler から定期呼び出しされる。
+    APScheduler および /admin/crawl から呼び出される。
     実行結果（成功・失敗・件数・所要時間）は crawler_logs テーブルに記録する。
+
+    Returns:
+        (inserted, updated) のタプル
     """
     logger.info("=== CISA KEV crawler started ===")
     started_at = now_utc()
@@ -122,6 +125,7 @@ def fetch_and_store_kev() -> None:
         )
         # 新規 CVE があれば Slack に通知
         notify_new_vulnerabilities(inserted, updated)
+        return inserted, updated
     except httpx.HTTPError as exc:
         logger.error("HTTP error during CISA KEV fetch: %s", exc)
         write_crawler_log(
