@@ -102,23 +102,24 @@ class OsvVulnerabilityOut(BaseModel):
 
     @classmethod
     def model_validate(cls, obj: Any, **kwargs: Any) -> "OsvVulnerabilityOut":
-        """ORM オブジェクトからの変換（datetime → str）。"""
+        """ORM オブジェクトを dict に変換し、Pydantic 検証経路へ委譲する。"""
         if hasattr(obj, "__dict__"):
-            return cls(
-                osv_id=obj.osv_id,
-                ecosystem=obj.ecosystem,
-                package_name=obj.package_name,
-                aliases=obj.aliases or [],
-                summary=obj.summary,
-                details=obj.details,
-                severity=obj.severity,
-                cvss_score=obj.cvss_score,
-                affected_versions=obj.affected_versions or [],
-                fixed_versions=obj.fixed_versions or [],
-                references=obj.references or [],
-                published=obj.published.isoformat(),
-                modified=obj.modified.isoformat(),
-            )
+            data = {
+                "osv_id": obj.osv_id,
+                "ecosystem": obj.ecosystem,
+                "package_name": obj.package_name,
+                "aliases": obj.aliases or [],
+                "summary": obj.summary,
+                "details": obj.details,
+                "severity": obj.severity,
+                "cvss_score": obj.cvss_score,
+                "affected_versions": obj.affected_versions or [],
+                "fixed_versions": obj.fixed_versions or [],
+                "references": obj.references or [],
+                "published": obj.published.isoformat(),
+                "modified": obj.modified.isoformat(),
+            }
+            return super().model_validate(data, **kwargs)
         return super().model_validate(obj, **kwargs)
 
 
@@ -197,22 +198,23 @@ class JvnVulnerabilityOut(BaseModel):
 
     @classmethod
     def model_validate(cls, obj: Any, **kwargs: Any) -> "JvnVulnerabilityOut":
-        """ORM オブジェクトからの変換（datetime → str）。"""
+        """ORM オブジェクトを dict に変換し、Pydantic 検証経路へ委譲する。"""
         if hasattr(obj, "__dict__"):
-            return cls(
-                jvndb_id=obj.jvndb_id,
-                title=obj.title,
-                overview=obj.overview,
-                cve_ids=obj.cve_ids or [],
-                severity=obj.severity,
-                cvss_score=obj.cvss_score,
-                cvss_vector=obj.cvss_vector,
-                affected_products=obj.affected_products or [],
-                references=obj.references or [],
-                jvn_url=obj.jvn_url,
-                date_published=obj.date_published.isoformat(),
-                date_last_modified=obj.date_last_modified.isoformat(),
-            )
+            data = {
+                "jvndb_id": obj.jvndb_id,
+                "title": obj.title,
+                "overview": obj.overview,
+                "cve_ids": obj.cve_ids or [],
+                "severity": obj.severity,
+                "cvss_score": obj.cvss_score,
+                "cvss_vector": obj.cvss_vector,
+                "affected_products": obj.affected_products or [],
+                "references": obj.references or [],
+                "jvn_url": obj.jvn_url,
+                "date_published": obj.date_published.isoformat(),
+                "date_last_modified": obj.date_last_modified.isoformat(),
+            }
+            return super().model_validate(data, **kwargs)
         return super().model_validate(obj, **kwargs)
 
 
