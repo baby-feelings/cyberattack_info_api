@@ -43,7 +43,7 @@ def notify_success(
     """クローラー成功時の Slack 通知（共通）。変化がなければ通知しない。"""
     if not settings.SLACK_WEBHOOK_URL:
         return
-    if inserted == 0 and updated == 0:
+    if inserted == 0 and updated == 0 and deleted == 0:
         return
 
     emoji, label = _CRAWLER_LABELS.get(crawler_type, (":bell:", crawler_type))

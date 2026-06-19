@@ -120,13 +120,25 @@ def test_osv_notify_skips_when_no_webhook(monkeypatch):
 
 
 def test_osv_notify_skips_when_no_changes(monkeypatch):
-    """新規・更新が 0 件の場合は OSV 通知を送信しない。"""
+    """新規・更新・削除すべて 0 件の場合は OSV 通知を送信しない。"""
+    monkeypatch.setattr(
+        "app.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/test"
+    )
+    with patch("app.notifications._send_slack") as mock_send:
+        notify_osv_new_vulnerabilities(inserted=0, updated=0, deleted=0)
+        mock_send.assert_not_called()
+
+
+def test_osv_notify_sends_when_only_deleted(monkeypatch):
+    """削除のみの場合でも Slack に送信すること。"""
     monkeypatch.setattr(
         "app.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/test"
     )
     with patch("app.notifications._send_slack") as mock_send:
         notify_osv_new_vulnerabilities(inserted=0, updated=0, deleted=5)
-        mock_send.assert_not_called()
+        mock_send.assert_called_once()
+        msg = mock_send.call_args[0][0]
+        assert "削除: 5 件" in msg
 
 
 def test_osv_notify_sends_when_inserted(monkeypatch):
