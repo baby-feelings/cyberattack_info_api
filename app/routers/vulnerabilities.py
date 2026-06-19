@@ -13,8 +13,8 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.auth import require_api_key
-from app.config import settings
 from app.database import get_db
+from app.db_utils import year_month_expr
 from app.models import Vulnerability
 from app.schemas import (
     MonthlyStat,
@@ -156,14 +156,8 @@ def get_stats(
     top_vendors = [VendorStat(vendor_project=r[0], count=r[1]) for r in vendor_rows]
 
     # 月別追加件数（直近 12 ヶ月）
-    # SQLite は strftime、PostgreSQL は to_char を使う（関数名が異なるため分岐）
     cutoff = date.today() - timedelta(days=365)
-    is_sqlite = settings.DATABASE_URL.startswith("sqlite")
-    date_expr = (
-        func.strftime("%Y-%m", Vulnerability.date_added)
-        if is_sqlite
-        else func.to_char(Vulnerability.date_added, "YYYY-MM")
-    )
+    date_expr = year_month_expr(Vulnerability.date_added)
     monthly_rows = (
         db.query(
             date_expr.label("ym"),

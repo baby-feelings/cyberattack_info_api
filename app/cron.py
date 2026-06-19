@@ -126,19 +126,8 @@ def fetch_and_store_kev() -> tuple[int, int]:
         # 新規 CVE があれば Slack に通知
         notify_new_vulnerabilities(inserted, updated)
         return inserted, updated
-    except httpx.HTTPError as exc:
-        logger.error("HTTP error during CISA KEV fetch: %s", exc)
-        write_crawler_log(
-            crawler_type="KEV",
-            status="error",
-            started_at=started_at,
-            finished_at=now_utc(),
-            error_message=str(exc),
-        )
-        notify_crawl_error(str(exc))
-        raise
     except Exception as exc:
-        logger.error("Unexpected error during CISA KEV fetch: %s", exc, exc_info=True)
+        logger.error("CISA KEV crawler failed: %s", exc, exc_info=True)
         write_crawler_log(
             crawler_type="KEV",
             status="error",
