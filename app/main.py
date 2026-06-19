@@ -65,29 +65,29 @@ async def lifespan(app: FastAPI):
         id="cisa_kev_crawler",
         replace_existing=True,
     )
-    # OSV クローラー: 毎日 UTC 20:00（JST 翌日 5:00）
+    # OSV クローラー
     scheduler.add_job(
         fetch_and_store_osv,
         trigger="cron",
-        hour=20,
+        hour=settings.OSV_CRON_HOUR_UTC,
         minute=0,
         id="osv_crawler",
         replace_existing=True,
     )
-    # JVN クローラー: 毎日 UTC 21:00（JST 翌日 6:00）
+    # JVN クローラー
     scheduler.add_job(
         fetch_and_store_jvn,
         trigger="cron",
-        hour=21,
+        hour=settings.JVN_CRON_HOUR_UTC,
         minute=0,
         id="jvn_crawler",
         replace_existing=True,
     )
     scheduler.start()
     logger.info(
-        "Scheduler started: KEV daily UTC %02d:%02d, OSV daily UTC 20:00, JVN daily UTC 21:00",
-        settings.CRON_HOUR_UTC,
-        settings.CRON_MINUTE_UTC,
+        "Scheduler started: KEV UTC %02d:%02d / OSV UTC %02d:00 / JVN UTC %02d:00",
+        settings.CRON_HOUR_UTC, settings.CRON_MINUTE_UTC,
+        settings.OSV_CRON_HOUR_UTC, settings.JVN_CRON_HOUR_UTC,
     )
 
     yield  # アプリ実行中

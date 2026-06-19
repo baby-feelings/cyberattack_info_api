@@ -19,9 +19,11 @@ class Settings(BaseSettings):
         "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
     )
 
-    # クローラーの実行時刻（JST 時間を UTC に換算: JST 4:00 = UTC 19:00 前日）
-    CRON_HOUR_UTC: int = 19
+    # クローラーの実行時刻（UTC）
+    CRON_HOUR_UTC: int = 19       # KEV: JST 4:00 = UTC 19:00
     CRON_MINUTE_UTC: int = 0
+    OSV_CRON_HOUR_UTC: int = 20   # OSV: JST 5:00 = UTC 20:00
+    JVN_CRON_HOUR_UTC: int = 21   # JVN: JST 6:00 = UTC 21:00
 
     # Slack 通知用 Webhook URL（未設定時は通知をスキップ）
     SLACK_WEBHOOK_URL: str = ""

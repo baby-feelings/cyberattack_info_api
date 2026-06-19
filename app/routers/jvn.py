@@ -5,15 +5,15 @@ GET /api/jvn/stats  – 重要度別・月別の統計情報
 """
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Annotated, Any, Literal
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
-from sqlalchemy.sql.elements import ColumnElement  # noqa: F401 — used in type annotation
 
 from app.auth import require_api_key
-from app.database import engine, get_db
+from app.database import get_db
+from app.db_utils import year_month_expr
 from app.models import JvnVulnerability
 from app.schemas import (
     JvnListResponse,
@@ -30,14 +30,6 @@ router = APIRouter(
     tags=["jvn"],
     dependencies=[Depends(require_api_key)],
 )
-
-
-def _year_month_expr(column: Any) -> ColumnElement[str]:
-    """SQLite / PostgreSQL 両対応の YYYY-MM フォーマット式を返す。"""
-    if "sqlite" in engine.dialect.name:
-        return func.strftime("%Y-%m", column)  # type: ignore[return-value]
-    # PostgreSQL
-    return func.to_char(column, "YYYY-MM")  # type: ignore[return-value]
 
 
 @router.get(
@@ -150,7 +142,7 @@ def get_jvn_stats(
     ]
 
     # 月別トレンド（SQLite/PostgreSQL 両対応）
-    ym_expr = _year_month_expr(JvnVulnerability.date_last_modified)
+    ym_expr = year_month_expr(JvnVulnerability.date_last_modified)
     monthly_rows = (
         base.with_entities(
             ym_expr.label("ym"),

@@ -4,7 +4,7 @@ APIリクエスト・レスポンスの型定義とバリデーションを担�
 from datetime import date
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 
 
 class VulnerabilityOut(BaseModel):
@@ -80,38 +80,46 @@ class OsvVulnerabilityOut(BaseModel):
     osv_id: str = Field(description="OSV ID（例: GHSA-xxxx / OSV-2024-xxxx）")
     ecosystem: str = Field(description="エコシステム（例: PyPI / npm）")
     package_name: str = Field(description="パッケージ名")
-    aliases: list[str] = Field(description="エイリアス ID（CVE ID 等）")
+    aliases: list[str] = Field(default_factory=list, description="エイリアス ID（CVE ID 等）")
     summary: str = Field(description="脆弱性の概要")
     details: str | None = Field(None, description="詳細説明")
     severity: str | None = Field(None, description="重要度（CRITICAL/HIGH/MEDIUM/LOW）")
     cvss_score: float | None = Field(None, description="CVSS スコア")
-    affected_versions: list[str] = Field(description="影響を受けるバージョン（最大 30 件）")
-    fixed_versions: list[str] = Field(description="修正済みバージョン")
-    references: list[str] = Field(description="参考リンク（最大 5 件）")
+    affected_versions: list[str] = Field(
+        default_factory=list, description="影響を受けるバージョン（最大 30 件）"
+    )
+    fixed_versions: list[str] = Field(default_factory=list, description="修正済みバージョン")
+    references: list[str] = Field(default_factory=list, description="参考リンク（最大 5 件）")
     published: str = Field(description="公開日時（ISO 8601）")
     modified: str = Field(description="最終更新日時（ISO 8601）")
 
     model_config = {"from_attributes": True}
 
+    @field_serializer("published", "modified")
+    def _serialize_datetime(self, value: Any) -> str:
+        """datetime を ISO 文字列に変換する。"""
+        return value.isoformat() if hasattr(value, "isoformat") else str(value)
+
     @classmethod
-    def model_validate(cls, obj, **kwargs):  # type: ignore[override]
-        """datetime を ISO 文字列に変換して生成する。"""
+    def model_validate(cls, obj: Any, **kwargs: Any) -> "OsvVulnerabilityOut":
+        """ORM オブジェクトを dict に変換し、Pydantic 検証経路へ委譲する。"""
         if hasattr(obj, "__dict__"):
-            return cls(
-                osv_id=obj.osv_id,
-                ecosystem=obj.ecosystem,
-                package_name=obj.package_name,
-                aliases=obj.aliases or [],
-                summary=obj.summary,
-                details=obj.details,
-                severity=obj.severity,
-                cvss_score=obj.cvss_score,
-                affected_versions=obj.affected_versions or [],
-                fixed_versions=obj.fixed_versions or [],
-                references=obj.references or [],
-                published=obj.published.isoformat(),
-                modified=obj.modified.isoformat(),
-            )
+            data = {
+                "osv_id": obj.osv_id,
+                "ecosystem": obj.ecosystem,
+                "package_name": obj.package_name,
+                "aliases": obj.aliases or [],
+                "summary": obj.summary,
+                "details": obj.details,
+                "severity": obj.severity,
+                "cvss_score": obj.cvss_score,
+                "affected_versions": obj.affected_versions or [],
+                "fixed_versions": obj.fixed_versions or [],
+                "references": obj.references or [],
+                "published": obj.published.isoformat(),
+                "modified": obj.modified.isoformat(),
+            }
+            return super().model_validate(data, **kwargs)
         return super().model_validate(obj, **kwargs)
 
 
@@ -131,11 +139,15 @@ class OsvEcosystemStat(BaseModel):
     count: int
 
 
-class OsvSeverityStat(BaseModel):
-    """重要度別件数。"""
+class SeverityStat(BaseModel):
+    """重要度別件数（OSV / JVN 共通）。"""
 
     severity: str
     count: int
+
+
+# 後方互換エイリアス
+OsvSeverityStat = SeverityStat
 
 
 class OsvStatsResponse(BaseModel):
@@ -169,49 +181,41 @@ class JvnVulnerabilityOut(BaseModel):
     severity: str | None = Field(None, description="重要度（High / Medium / Low）")
     cvss_score: float | None = Field(None, description="CVSS スコア")
     cvss_vector: str | None = Field(None, description="CVSS ベクター文字列")
-    affected_products: list[dict] = Field(description="影響製品一覧")
-    references: list[dict] = Field(description="参考リンク一覧")
+    affected_products: list[dict[str, str]] = Field(
+        default_factory=list, description="影響製品一覧"
+    )
+    references: list[dict[str, str]] = Field(default_factory=list, description="参考リンク一覧")
     jvn_url: str = Field(description="JVNDB エントリの URL")
     date_published: str = Field(description="公開日時（ISO 8601）")
     date_last_modified: str = Field(description="最終更新日時（ISO 8601）")
 
     model_config = {"from_attributes": True}
 
+    @field_serializer("date_published", "date_last_modified")
+    def _serialize_datetime(self, value: Any) -> str:
+        """datetime を ISO 文字列に変換する。"""
+        return value.isoformat() if hasattr(value, "isoformat") else str(value)
+
     @classmethod
-    def model_validate(
-        cls,
-        obj: Any,
-        *,
-        strict: bool | None = None,
-        from_attributes: bool | None = None,
-        context: Any = None,
-        by_alias: bool | None = None,
-        by_name: bool | None = None,
-    ) -> "JvnVulnerabilityOut":
-        """datetime を ISO 文字列に変換して生成する。"""
+    def model_validate(cls, obj: Any, **kwargs: Any) -> "JvnVulnerabilityOut":
+        """ORM オブジェクトを dict に変換し、Pydantic 検証経路へ委譲する。"""
         if hasattr(obj, "__dict__"):
-            return cls(
-                jvndb_id=obj.jvndb_id,
-                title=obj.title,
-                overview=obj.overview,
-                cve_ids=obj.cve_ids or [],
-                severity=obj.severity,
-                cvss_score=obj.cvss_score,
-                cvss_vector=obj.cvss_vector,
-                affected_products=obj.affected_products or [],
-                references=obj.references or [],
-                jvn_url=obj.jvn_url,
-                date_published=obj.date_published.isoformat(),
-                date_last_modified=obj.date_last_modified.isoformat(),
-            )
-        return super().model_validate(
-            obj,
-            strict=strict,
-            from_attributes=from_attributes,
-            context=context,
-            by_alias=by_alias,
-            by_name=by_name,
-        )
+            data = {
+                "jvndb_id": obj.jvndb_id,
+                "title": obj.title,
+                "overview": obj.overview,
+                "cve_ids": obj.cve_ids or [],
+                "severity": obj.severity,
+                "cvss_score": obj.cvss_score,
+                "cvss_vector": obj.cvss_vector,
+                "affected_products": obj.affected_products or [],
+                "references": obj.references or [],
+                "jvn_url": obj.jvn_url,
+                "date_published": obj.date_published.isoformat(),
+                "date_last_modified": obj.date_last_modified.isoformat(),
+            }
+            return super().model_validate(data, **kwargs)
+        return super().model_validate(obj, **kwargs)
 
 
 class JvnListResponse(BaseModel):
@@ -223,11 +227,8 @@ class JvnListResponse(BaseModel):
     data: list[JvnVulnerabilityOut] = Field(description="JVN 脆弱性一覧")
 
 
-class JvnSeverityStat(BaseModel):
-    """重要度別件数。"""
-
-    severity: str
-    count: int
+# JvnSeverityStat は SeverityStat と同一のため統合
+JvnSeverityStat = SeverityStat
 
 
 class JvnStatsResponse(BaseModel):

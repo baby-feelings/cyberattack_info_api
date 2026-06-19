@@ -12,7 +12,8 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.auth import require_api_key
-from app.database import engine, get_db
+from app.database import get_db
+from app.db_utils import year_month_expr
 from app.models import OsvVulnerability
 from app.schemas import (
     MonthlyStat,
@@ -30,14 +31,6 @@ router = APIRouter(
     tags=["osv"],
     dependencies=[Depends(require_api_key)],
 )
-
-
-def _year_month_expr(column):  # type: ignore[no-untyped-def]
-    """SQLite / PostgreSQL 両対応の YYYY-MM フォーマット式を返す。"""
-    if "sqlite" in engine.dialect.name:
-        return func.strftime("%Y-%m", column)
-    # PostgreSQL
-    return func.to_char(column, "YYYY-MM")
 
 
 @router.get(
@@ -160,7 +153,7 @@ def get_osv_stats(
     ]
 
     # 月別トレンド（SQLite/PostgreSQL 両対応）
-    ym_expr = _year_month_expr(OsvVulnerability.modified)
+    ym_expr = year_month_expr(OsvVulnerability.modified)
     monthly_rows = (
         base.with_entities(ym_expr.label("ym"), func.count(OsvVulnerability.id).label("cnt"))
         .group_by(ym_expr)

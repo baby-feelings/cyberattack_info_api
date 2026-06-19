@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 import defusedxml.ElementTree as defused_ET  # XXE / billion-laughs 攻撃防止
 import httpx
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.crawler_log import now_utc, write_crawler_log
@@ -237,7 +238,7 @@ def _apply_update(existing: JvnVulnerability, data: dict) -> bool:
     return changed
 
 
-def _upsert_jvn(db, entries: list[dict]) -> tuple[int, int]:
+def _upsert_jvn(db: Session, entries: list[dict]) -> tuple[int, int]:
     """JVN エントリを jvn_vulnerabilities テーブルに Upsert する。
 
     Args:

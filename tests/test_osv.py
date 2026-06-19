@@ -1055,25 +1055,24 @@ class TestYearMonthExpr:
         """PostgreSQL ダイアレクトの場合に func.to_char を返すこと。"""
         from sqlalchemy import Column, DateTime
 
-        from app.routers.osv import _year_month_expr
+        from app.db_utils import year_month_expr
 
         col = Column("published", DateTime)
-        with patch("app.routers.osv.engine") as mock_engine:
+        with patch("app.db_utils.engine") as mock_engine:
             mock_engine.dialect.name = "postgresql"
-            result = _year_month_expr(col)
-        # to_char(...) が呼ばれていることを名前で確認
+            result = year_month_expr(col)
         assert "to_char" in str(result).lower()
 
     def test_sqlite_branch(self):
         """SQLite ダイアレクトの場合に strftime を返すこと。"""
         from sqlalchemy import Column, DateTime
 
-        from app.routers.osv import _year_month_expr
+        from app.db_utils import year_month_expr
 
         col = Column("published", DateTime)
-        with patch("app.routers.osv.engine") as mock_engine:
+        with patch("app.db_utils.engine") as mock_engine:
             mock_engine.dialect.name = "sqlite"
-            result = _year_month_expr(col)
+            result = year_month_expr(col)
         assert "strftime" in str(result).lower()
 
 

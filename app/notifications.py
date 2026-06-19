@@ -1,5 +1,5 @@
 """Slack 通知モジュール。
-クローラーが新規 CVE を検出したとき Slack Webhook へメッセージを送信する。
+クローラーが脆弱性データを更新したとき、または失敗したとき Slack Webhook へ通知する。
 SLACK_WEBHOOK_URL が未設定の場合は何もしない（サイレントスキップ）。
 """
 import logging
@@ -12,10 +12,18 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 _WEBHOOK_TIMEOUT = 10.0
+_DASHBOARD_URL = "https://cyberattackinfoapi.vercel.app/"
 
 # 接続文字列パターン（postgresql:// / sqlite:// 等）をマスク
 _CONN_STR_RE = re.compile(r"\b\w+://[^\s]+")
 _MAX_ERROR_LEN = 200
+
+# クローラー種別ごとの表示設定
+_CRAWLER_LABELS: dict[str, tuple[str, str]] = {
+    "KEV": (":shield:", "CISA KEV"),
+    "OSV": (":package:", "OSV 脆弱性データ"),
+    "JVN": (":jigsaw:", "JVN 脆弱性データ"),
+}
 
 
 def _sanitize_error(error: str) -> str:
@@ -26,114 +34,70 @@ def _sanitize_error(error: str) -> str:
     return sanitized
 
 
-def notify_new_vulnerabilities(inserted: int, updated: int) -> None:
-    """新規・更新された CVE 件数を Slack に通知する。
-
-    Args:
-        inserted: 新規追加件数
-        updated:  更新件数
-    """
-    # Webhook URL が設定されていない場合はスキップ
+def notify_success(
+    crawler_type: str,
+    inserted: int,
+    updated: int,
+    deleted: int = 0,
+) -> None:
+    """クローラー成功時の Slack 通知（共通）。変化がなければ通知しない。"""
     if not settings.SLACK_WEBHOOK_URL:
         return
-
-    # 新規追加も更新もなければ通知不要（OSV 通知と同じ基準）
-    if inserted == 0 and updated == 0:
+    if inserted == 0 and updated == 0 and deleted == 0:
         return
 
-    message = (
-        f":shield: *CISA KEV 更新通知*\n"
-        f">新規追加: *{inserted} 件*　更新: {updated} 件\n"
-        f">詳細: https://cyberattackinfoapi.vercel.app/"
-    )
+    emoji, label = _CRAWLER_LABELS.get(crawler_type, (":bell:", crawler_type))
+    lines = [
+        f"{emoji} *{label}更新通知*",
+        f">新規追加: *{inserted} 件*　更新: {updated} 件"
+        + (f"　削除: {deleted} 件" if deleted else ""),
+        f">詳細: {_DASHBOARD_URL}",
+    ]
+    _send_slack("\n".join(lines))
 
-    _send_slack(message)
+
+def notify_error(crawler_type: str, error: str) -> None:
+    """クローラーエラー時の Slack 通知（共通）。"""
+    if not settings.SLACK_WEBHOOK_URL:
+        return
+    _, label = _CRAWLER_LABELS.get(crawler_type, (":bell:", crawler_type))
+    _send_slack(f":warning: *{label}クローラーエラー*\n```{_sanitize_error(error)}```")
+
+
+# ── 後方互換ラッパー（既存テスト・呼び出し元との互換性を維持） ──────
+
+
+def notify_new_vulnerabilities(inserted: int, updated: int) -> None:
+    """KEV 成功通知（後方互換）。"""
+    notify_success("KEV", inserted, updated)
 
 
 def notify_osv_new_vulnerabilities(inserted: int, updated: int, deleted: int) -> None:
-    """OSV クローラーの実行結果を Slack に通知する。
-
-    Args:
-        inserted: 新規追加件数
-        updated:  更新件数
-        deleted:  削除件数（保持期間超過による）
-    """
-    if not settings.SLACK_WEBHOOK_URL:
-        return
-
-    # 変化がなければ通知不要
-    if inserted == 0 and updated == 0:
-        return
-
-    message = (
-        f":package: *OSV 脆弱性データ更新通知*\n"
-        f">新規追加: *{inserted} 件*　更新: {updated} 件　削除: {deleted} 件\n"
-        f">詳細: https://cyberattackinfoapi.vercel.app/"
-    )
-
-    _send_slack(message)
-
-
-def notify_osv_crawl_error(error: str) -> None:
-    """OSV クローラーのエラーを Slack に通知する。
-
-    Args:
-        error: エラーメッセージ
-    """
-    if not settings.SLACK_WEBHOOK_URL:
-        return
-
-    message = f":warning: *OSV クローラーエラー*\n```{_sanitize_error(error)}```"
-    _send_slack(message)
+    """OSV 成功通知（後方互換）。"""
+    notify_success("OSV", inserted, updated, deleted)
 
 
 def notify_jvn_new_vulnerabilities(inserted: int, updated: int) -> None:
-    """JVN クローラーの実行結果を Slack に通知する。
-
-    Args:
-        inserted: 新規追加件数
-        updated:  更新件数
-    """
-    if not settings.SLACK_WEBHOOK_URL:
-        return
-
-    # 変化がなければ通知不要
-    if inserted == 0 and updated == 0:
-        return
-
-    message = (
-        f":jigsaw: *JVN 脆弱性データ更新通知*\n"
-        f">新規追加: *{inserted} 件*　更新: {updated} 件\n"
-        f">詳細: https://cyberattackinfoapi.vercel.app/"
-    )
-
-    _send_slack(message)
-
-
-def notify_jvn_crawl_error(error: str) -> None:
-    """JVN クローラーのエラーを Slack に通知する。
-
-    Args:
-        error: エラーメッセージ
-    """
-    if not settings.SLACK_WEBHOOK_URL:
-        return
-
-    message = f":warning: *JVN クローラーエラー*\n```{_sanitize_error(error)}```"
-    _send_slack(message)
+    """JVN 成功通知（後方互換）。"""
+    notify_success("JVN", inserted, updated)
 
 
 def notify_crawl_error(error: str) -> None:
-    """クローラーのエラーを Slack に通知する。
+    """KEV エラー通知（後方互換）。"""
+    notify_error("KEV", error)
 
-    Args:
-        error: エラーメッセージ
-    """
-    if not settings.SLACK_WEBHOOK_URL:
-        return
 
-    message = f":warning: *CISA KEV クローラーエラー*\n```{_sanitize_error(error)}```"
-    _send_slack(message)
+def notify_osv_crawl_error(error: str) -> None:
+    """OSV エラー通知（後方互換）。"""
+    notify_error("OSV", error)
+
+
+def notify_jvn_crawl_error(error: str) -> None:
+    """JVN エラー通知（後方互換）。"""
+    notify_error("JVN", error)
+
+
+# ── Slack 送信 ────────────────────────────────────────────────────
 
 
 def _send_slack(message: str) -> None:
