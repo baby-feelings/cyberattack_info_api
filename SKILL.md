@@ -29,6 +29,7 @@ curl -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 ```
 
 キーが不正または未設定の場合は `403 Forbidden` が返ります。
+API キーの比較には `hmac.compare_digest` を使用し、タイミング攻撃を防止しています。
 
 ---
 
@@ -459,7 +460,8 @@ Upsert ロジック:
 - **既存レコードで `modified` 更新あり** → UPDATE
 - **既存レコードで変更なし** → スキップ
 - **`modified` が 180 日以上前のレコード** → 自動削除（`OSV_RETENTION_DAYS` で変更可）
-- クロール完了後（新規・更新あり）→ Slack 通知（`SLACK_WEBHOOK_URL` 設定時）
+- クロール完了後（新規・更新・削除あり）→ Slack 通知（`SLACK_WEBHOOK_URL` 設定時）
+- エラーメッセージは接続文字列マスク + 200 文字制限でサニタイズ
 
 **JVN:**
 - **新規 JVNDB エントリ** → INSERT
