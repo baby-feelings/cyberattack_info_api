@@ -303,7 +303,7 @@ pytest
 start htmlcov/index.html  # Mac/Linux: open htmlcov/index.html
 ```
 
-**テスト結果（最新）:** 180 テスト / カバレッジ 99%
+**テスト結果（最新）:** 184 テスト / カバレッジ 99%
 
 ---
 
@@ -329,12 +329,13 @@ cyberattack_info_api/
 │   ├── database.py        # SQLAlchemy エンジン・セッション (SQLite / PostgreSQL 共用)
 │   ├── models.py          # ORM モデル (Vulnerability / OsvVulnerability / JvnVulnerability / CrawlerLog)
 │   ├── schemas.py         # Pydantic スキーマ (リクエスト/レスポンス)
-│   ├── auth.py            # X-API-KEY 認証
-│   ├── cron.py            # CISA KEV クローラー (Upsert ロジック・Slack 通知)
-│   ├── cron_osv.py        # OSV クローラー (REST API 方式・Upsert・Slack 通知)
-│   ├── cron_jvn.py        # JVN クローラー (MyJVN API / RDF-RSS・Upsert・Slack 通知)
+│   ├── auth.py            # X-API-KEY 認証 (hmac.compare_digest)
+│   ├── db_utils.py        # DB ユーティリティ (year_month_expr 共通関数)
+│   ├── cron.py            # CISA KEV クローラー (Upsert ロジック)
+│   ├── cron_osv.py        # OSV クローラー (REST API 方式・Upsert)
+│   ├── cron_jvn.py        # JVN クローラー (MyJVN API / RDF-RSS・Upsert)
 │   ├── crawler_log.py     # クローラーログ書き込みユーティリティ
-│   ├── notifications.py   # Slack Webhook 通知（KEV・OSV・JVN 対応）
+│   ├── notifications.py   # Slack 通知 (notify_success/notify_error 共通化・エラーサニタイズ)
 │   └── routers/
 │       ├── vulnerabilities.py  # /api/vulnerabilities エンドポイント
 │       ├── osv.py              # /api/osv エンドポイント
@@ -360,6 +361,7 @@ cyberattack_info_api/
 ├── requirements.txt     # 本番依存パッケージ
 ├── requirements-dev.txt # 開発・テスト依存パッケージ
 ├── pyproject.toml       # ruff / mypy / pytest 設定
+├── security_report.html # セキュリティ脆弱性診断レポート
 └── CLAUDE.md            # Claude Code 向け開発ガイド
 ```
 
@@ -413,6 +415,8 @@ cyberattack_info_api/
 | `CISA_KEV_URL` | - | CISA KEV フィード URL（通常は変更不要） |
 | `CRON_HOUR_UTC` | - | KEV クローラー実行時刻（時・UTC）（デフォルト: `19`） |
 | `CRON_MINUTE_UTC` | - | KEV クローラー実行時刻（分・UTC）（デフォルト: `0`） |
+| `OSV_CRON_HOUR_UTC` | - | OSV クローラー実行時刻（時・UTC）（デフォルト: `20`） |
+| `JVN_CRON_HOUR_UTC` | - | JVN クローラー実行時刻（時・UTC）（デフォルト: `21`） |
 | `OSV_DAYS` | - | OSV 取得対象の直近日数（デフォルト: `30`） |
 | `OSV_RETENTION_DAYS` | - | OSV データ保持期間（日数・デフォルト: `180`） |
 | `JVN_DAYS` | - | JVN 取得対象の直近日数（デフォルト: `30`） |

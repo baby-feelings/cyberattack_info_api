@@ -85,12 +85,13 @@ app/
 ├── database.py        # SQLAlchemy エンジン（SQLite/PG 切り替え）・get_db
 ├── models.py          # ORM モデル（Vulnerability・OsvVulnerability・JvnVulnerability・CrawlerLog）
 ├── schemas.py         # Pydantic スキーマ（VulnerabilityOut・OsvVulnerabilityOut・JvnVulnerabilityOut 等）
-├── auth.py            # X-API-KEY 認証（APIKeyHeader）
+├── auth.py            # X-API-KEY 認証（APIKeyHeader・hmac.compare_digest）
+├── db_utils.py        # DB ユーティリティ（year_month_expr: SQLite/PG 両対応の日付フォーマット）
 ├── cron.py            # CISA KEV クローラー・Upsert ロジック・Slack 通知呼び出し
 ├── cron_osv.py        # OSV クローラー（REST API 方式・10 エコシステム対応）・Upsert・古いレコード削除・Slack 通知
 ├── cron_jvn.py        # JVN クローラー（MyJVN API / RDF-RSS）・Upsert・Slack 通知
 ├── crawler_log.py     # クローラー実行ログ書き込みユーティリティ（write_crawler_log・now_utc）
-├── notifications.py   # Slack Webhook 通知（KEV・OSV・JVN 更新・エラー通知）
+├── notifications.py   # Slack Webhook 通知（notify_success/notify_error 共通化・エラーサニタイズ）
 └── routers/
     ├── vulnerabilities.py  # /api/vulnerabilities エンドポイント（一覧・個別・統計）
     ├── osv.py              # /api/osv エンドポイント（一覧・統計）
@@ -119,6 +120,28 @@ dashboard/               # Vercel デプロイの React ダッシュボード
 ---
 
 ## 重要な実装上の注意事項
+
+### API キー認証のタイミング攻撃対策
+```python
+# ❌ 通常の文字列比較（タイミング攻撃に脆弱）
+if api_key != settings.API_KEY:
+
+# ✅ 定数時間比較（hmac.compare_digest）
+if not hmac.compare_digest(api_key, settings.API_KEY):
+```
+
+### CORS・Swagger の本番制限
+- CORS: 本番は `["https://cyberattackinfoapi.vercel.app"]` のみ許可。開発時は localhost も追加
+- Swagger UI / ReDoc: `settings.ENVIRONMENT != "production"` の場合のみ有効
+
+### 通知関数の共通化（notifications.py）
+`notify_success(crawler_type, inserted, updated, deleted)` と `notify_error(crawler_type, error)` の
+2 つの汎用関数に統合。旧関数（`notify_new_vulnerabilities` 等）は後方互換ラッパーとして維持。
+エラーメッセージは `_sanitize_error()` で接続文字列マスク + 200 文字制限。
+
+### DB ユーティリティの共通化（db_utils.py）
+`year_month_expr(column)` は SQLite / PostgreSQL 両対応の YYYY-MM フォーマット式を返す共通関数。
+3 つのルーター（vulnerabilities.py / osv.py / jvn.py）から共通利用する。
 
 ### SQLAlchemy 2.x スタイルの使用（mypy 互換）
 ```python
