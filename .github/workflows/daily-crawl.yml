@@ -52,14 +52,14 @@ jobs:
       - name: Trigger KEV crawl
         run: |
           echo "Triggering CISA KEV crawl..."
-          RESPONSE=$(curl -s -w "\n%{http_code}" --max-time 120 -X POST "$API_BASE_URL/admin/crawl" \
+          RESPONSE=$(curl -s -w "\n%{http_code}" --max-time 30 -X POST "$API_BASE_URL/admin/crawl" \
             -H "X-API-KEY: ${{ secrets.API_KEY }}")
           HTTP_STATUS=$(echo "$RESPONSE" | tail -1)
           BODY=$(echo "$RESPONSE" | head -n -1)
           echo "HTTP Status: $HTTP_STATUS"
           echo "Response: $BODY"
-          if [ "$HTTP_STATUS" != "200" ]; then
-            echo "KEV crawl failed with HTTP $HTTP_STATUS"
+          if [ "$HTTP_STATUS" != "202" ]; then
+            echo "KEV crawl trigger failed with HTTP $HTTP_STATUS"
             exit 1
           fi
 
@@ -77,17 +77,16 @@ jobs:
       )
     steps:
       - name: Trigger OSV crawl
-        # OSV クローラーは件数が多く時間がかかるため timeout を長めに設定
         run: |
           echo "Triggering OSV crawl..."
-          RESPONSE=$(curl -s -w "\n%{http_code}" --max-time 600 -X POST "$API_BASE_URL/admin/osv-crawl" \
+          RESPONSE=$(curl -s -w "\n%{http_code}" --max-time 30 -X POST "$API_BASE_URL/admin/osv-crawl" \
             -H "X-API-KEY: ${{ secrets.API_KEY }}")
           HTTP_STATUS=$(echo "$RESPONSE" | tail -1)
           BODY=$(echo "$RESPONSE" | head -n -1)
           echo "HTTP Status: $HTTP_STATUS"
           echo "Response: $BODY"
-          if [ "$HTTP_STATUS" != "200" ]; then
-            echo "OSV crawl failed with HTTP $HTTP_STATUS"
+          if [ "$HTTP_STATUS" != "202" ]; then
+            echo "OSV crawl trigger failed with HTTP $HTTP_STATUS"
             exit 1
           fi
 
@@ -107,13 +106,13 @@ jobs:
       - name: Trigger JVN crawl
         run: |
           echo "Triggering JVN crawl..."
-          RESPONSE=$(curl -s -w "\n%{http_code}" --max-time 600 -X POST "$API_BASE_URL/admin/jvn-crawl" \
+          RESPONSE=$(curl -s -w "\n%{http_code}" --max-time 30 -X POST "$API_BASE_URL/admin/jvn-crawl" \
             -H "X-API-KEY: ${{ secrets.API_KEY }}")
           HTTP_STATUS=$(echo "$RESPONSE" | tail -1)
           BODY=$(echo "$RESPONSE" | head -n -1)
           echo "HTTP Status: $HTTP_STATUS"
           echo "Response: $BODY"
-          if [ "$HTTP_STATUS" != "200" ]; then
-            echo "JVN crawl failed with HTTP $HTTP_STATUS"
+          if [ "$HTTP_STATUS" != "202" ]; then
+            echo "JVN crawl trigger failed with HTTP $HTTP_STATUS"
             exit 1
           fi

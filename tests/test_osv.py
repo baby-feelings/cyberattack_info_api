@@ -876,39 +876,17 @@ class TestDeleteOldOsvRecords:
 
 class TestAdminOsvCrawl:
     def test_trigger_osv_crawl(self, client):
-        """POST /admin/osv-crawl が正常にレスポンスを返すこと。"""
-        with patch("app.cron_osv._query_packages_batch", return_value=[]):
+        """POST /admin/osv-crawl が 202 を返しバックグラウンドで起動すること。"""
+        with patch("app.main.fetch_and_store_osv", return_value=(0, 0, 0)):
             res = client.post("/admin/osv-crawl", headers=HEADERS)
-        assert res.status_code == 200
+        assert res.status_code == 202
         body = res.json()
-        assert "message" in body
-        assert "inserted" in body
-        assert "updated" in body
-        assert "deleted" in body
+        assert "background" in body["message"].lower()
 
     def test_trigger_osv_crawl_requires_auth(self, client):
         """API キーなしは 403 を返すこと。"""
         res = client.post("/admin/osv-crawl")
         assert res.status_code == 403
-
-    def test_trigger_osv_crawl_with_records(self, client):
-        """OSV レコードが挿入される場合も正常に動作すること。"""
-        vulns = [
-            _make_vuln("GHSA-crawl-0001", modified="2026-06-01T00:00:00Z"),
-            _make_vuln("GHSA-crawl-0002", modified="2026-06-01T00:00:00Z",
-                       pkg_name="requests"),
-        ]
-        refs = _make_refs(vulns)
-
-        def fetch_side_effect(osv_id):
-            return next(v for v in vulns if v["id"] == osv_id)
-
-        with patch("app.cron_osv._query_packages_batch", return_value=refs):
-            with patch("app.cron_osv._fetch_vuln_by_id", side_effect=fetch_side_effect):
-                res = client.post("/admin/osv-crawl", headers=HEADERS)
-        assert res.status_code == 200
-        body = res.json()
-        assert body["inserted"] >= 0
 
 
 # ──────────────────────────────────────────────────────────────
