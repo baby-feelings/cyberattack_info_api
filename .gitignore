@@ -47,3 +47,6 @@ alembic/versions/
 
 # Icon source files (deployed via dashboard/public/)
 icon/
+
+# OpenAPI スキーマエクスポート
+cyberattack-info-api.json
