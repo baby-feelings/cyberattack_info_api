@@ -348,26 +348,13 @@ def test_admin_crawl_requires_auth(client: TestClient):
 
 
 def test_admin_crawl_success(client: TestClient, monkeypatch):
-    """POST /admin/crawl がクローラーを正常実行し結果を返すことを確認する。"""
+    """POST /admin/crawl が 202 を返しバックグラウンドでクローラーを起動すること。"""
     monkeypatch.setattr("app.auth.settings.API_KEY", TEST_API_KEY)
     with patch("app.main.fetch_and_store_kev", return_value=(3, 1)):
         response = client.post(
             "/admin/crawl",
             headers={"X-API-KEY": TEST_API_KEY},
         )
-    assert response.status_code == 200
+    assert response.status_code == 202
     body = response.json()
-    assert body["inserted"] == 3
-    assert body["updated"] == 1
-    assert "completed" in body["message"].lower()
-
-
-def test_admin_crawl_failure_returns_500(client: TestClient, monkeypatch):
-    """クローラーが例外を送出した場合に 500 を返すことを確認する。"""
-    monkeypatch.setattr("app.auth.settings.API_KEY", TEST_API_KEY)
-    with patch("app.main.fetch_and_store_kev", side_effect=RuntimeError("Network error")):
-        response = client.post(
-            "/admin/crawl",
-            headers={"X-API-KEY": TEST_API_KEY},
-        )
-    assert response.status_code == 500
+    assert "background" in body["message"].lower()

@@ -3,6 +3,7 @@
 """
 import logging
 import logging.config
+import threading
 from contextlib import asynccontextmanager
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -18,7 +19,7 @@ from app.cron_jvn import fetch_and_store_jvn
 from app.cron_osv import fetch_and_store_osv
 from app.database import Base, engine, get_db
 from app.routers import crawler_logs, jvn, osv, vulnerabilities
-from app.schemas import CrawlResponse, HealthResponse, JvnCrawlResponse, OsvCrawlResponse
+from app.schemas import HealthResponse
 
 # ──────────────────────────────────────────────
 # ロギング設定（標準出力に JSON 風ログを出力）
@@ -165,64 +166,64 @@ def health_check() -> HealthResponse:
     )
 
 
+def _run_in_background(name: str, fn) -> None:  # type: ignore[no-untyped-def]
+    """クローラーをバックグラウンドスレッドで実行する。"""
+    def _wrapper() -> None:
+        try:
+            fn()
+        except Exception as exc:
+            logger.error("Background %s failed: %s", name, exc, exc_info=True)
+    thread = threading.Thread(target=_wrapper, name=f"crawl-{name}", daemon=True)
+    thread.start()
+    logger.info("Background %s started (thread=%s)", name, thread.name)
+
+
 @app.post(
     "/admin/crawl",
-    response_model=CrawlResponse,
     tags=["admin"],
     dependencies=[Security(require_api_key)],
-    summary="クローラー手動実行",
-    description="CISA KEV フィードを即時取得して DB に Upsert する（X-API-KEY 必須）。",
+    summary="KEV クローラー手動実行（バックグラウンド）",
+    description="CISA KEV フィードの取得をバックグラウンドで開始する（X-API-KEY 必須）。"
+    "結果は /api/crawler-logs で確認。",
+    status_code=202,
 )
-def trigger_crawl() -> CrawlResponse:
-    """CISA KEV クローラーを手動で即時実行する。
-    スケジュール実行を待たずにデータを取得したい場合に使用する。
-    """
+def trigger_crawl() -> dict:
+    """CISA KEV クローラーをバックグラウンドで実行する。"""
     logger.info("Manual crawl triggered via /admin/crawl")
-    inserted, updated = fetch_and_store_kev()
-    return CrawlResponse(
-        message="Crawl completed successfully",
-        inserted=inserted,
-        updated=updated,
-    )
+    _run_in_background("KEV", fetch_and_store_kev)
+    return {"message": "KEV crawl started in background"}
 
 
 @app.post(
     "/admin/osv-crawl",
-    response_model=OsvCrawlResponse,
     tags=["admin"],
     dependencies=[Security(require_api_key)],
-    summary="OSV クローラー手動実行",
-    description="OSV GCS から直近データを即時取得して DB に Upsert する（X-API-KEY 必須）。",
+    summary="OSV クローラー手動実行（バックグラウンド）",
+    description="OSV API からの脆弱性取得をバックグラウンドで開始する（X-API-KEY 必須）。"
+    "結果は /api/crawler-logs で確認。",
+    status_code=202,
 )
-def trigger_osv_crawl() -> OsvCrawlResponse:
-    """OSV クローラーを手動で即時実行する。"""
+def trigger_osv_crawl() -> dict:
+    """OSV クローラーをバックグラウンドで実行する。"""
     logger.info("Manual OSV crawl triggered via /admin/osv-crawl")
-    inserted, updated, deleted = fetch_and_store_osv()
-    return OsvCrawlResponse(
-        message="OSV crawl completed",
-        inserted=inserted,
-        updated=updated,
-        deleted=deleted,
-    )
+    _run_in_background("OSV", fetch_and_store_osv)
+    return {"message": "OSV crawl started in background"}
 
 
 @app.post(
     "/admin/jvn-crawl",
-    response_model=JvnCrawlResponse,
     tags=["admin"],
     dependencies=[Security(require_api_key)],
-    summary="JVN クローラー手動実行",
-    description="MyJVN API から直近データを即時取得して DB に Upsert する（X-API-KEY 必須）。",
+    summary="JVN クローラー手動実行（バックグラウンド）",
+    description="MyJVN API からの脆弱性取得をバックグラウンドで開始する（X-API-KEY 必須）。"
+    "結果は /api/crawler-logs で確認。",
+    status_code=202,
 )
-def trigger_jvn_crawl() -> JvnCrawlResponse:
-    """JVN クローラーを手動で即時実行する。"""
+def trigger_jvn_crawl() -> dict:
+    """JVN クローラーをバックグラウンドで実行する。"""
     logger.info("Manual JVN crawl triggered via /admin/jvn-crawl")
-    inserted, updated = fetch_and_store_jvn()
-    return JvnCrawlResponse(
-        message="JVN crawl completed",
-        inserted=inserted,
-        updated=updated,
-    )
+    _run_in_background("JVN", fetch_and_store_jvn)
+    return {"message": "JVN crawl started in background"}
 
 
 @app.get("/", tags=["system"])
