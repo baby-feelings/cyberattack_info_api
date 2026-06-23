@@ -128,7 +128,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 ### スキル 5: OSV 脆弱性を検索する
 
-**用途:** OSV データベースから特定エコシステム・重要度の脆弱性を検索する（直近 30 日）。  
+**用途:** OSV データベースから特定エコシステム・重要度の脆弱性を検索する（ダッシュボードは過去 6 ヶ月表示）。  
 対象: PyPI / npm / Go / Maven / RubyGems / NuGet / crates.io / Packagist / Hex / **Pub**（Dart / Flutter）の主要パッケージ。
 
 ```bash
@@ -187,7 +187,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 ### スキル 7: JVN 脆弱性を検索する
 
-**用途:** JVN (Japan Vulnerability Notes) から日本国内の脆弱性情報を検索する（直近 30 日）。  
+**用途:** JVN (Japan Vulnerability Notes) から日本国内の脆弱性情報を検索する（ダッシュボードは過去 6 ヶ月表示）。  
 MyJVN API（jvndb.jvn.jp）から取得した JVNDB 登録脆弱性を対象とする。
 
 ```bash
@@ -449,8 +449,8 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | 毎日 JST 04:05（UTC 19:05） | GitHub Actions 単一 cron で KEV → OSV → JVN を順次実行（Upsert・古いレコード削除） |
 | アプリ起動時 | DB テーブルの自動作成 |
 | `POST /admin/crawl` 実行時 | KEV バックグラウンド取得（202 即時返却） |
-| `POST /admin/osv-crawl` 実行時 | OSV バックグラウンド取得（202 即時返却） |
-| `POST /admin/jvn-crawl` 実行時 | JVN バックグラウンド取得（202 即時返却） |
+| `POST /admin/osv-crawl` 実行時 | OSV バックグラウンド取得（202 即時返却・`?days=N` 対応） |
+| `POST /admin/jvn-crawl` 実行時 | JVN バックグラウンド取得（202 即時返却・`?days=N` 対応） |
 
 Upsert ロジック:
 

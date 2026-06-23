@@ -109,7 +109,7 @@ tests/
 └── test_notifications.py    # Slack 通知テスト（KEV・OSV・JVN 対応）
 
 dashboard/               # Vercel デプロイの React ダッシュボード
-                         # CISA KEV・OSV（Pub 含む 10 エコシステム）・JVN の 3 セクション構成
+                         # CISA KEV・OSV（Pub 含む 10 エコシステム・180 日表示）・JVN の 3 セクション構成
 
 .github/workflows/
 ├── ci.yml           # CI: ruff → mypy → pytest（PR 時・Python 3.10/3.11 matrix）
@@ -200,11 +200,12 @@ MyJVN API（`https://jvndb.jvn.jp/myjvn`）は RDF/RSS 1.0 形式で返す。XML
 旧スキャン機能廃止に伴い、起動時に `DROP TABLE IF EXISTS scan_results` を実行しているが、  
 DDL 競合や権限不足で失敗してもサービスを止めないよう `try/except SQLAlchemyError` で囲んである。
 
-### /admin/crawl は fetch_and_store_kev() を経由する
-`/admin/crawl`（KEV 手動クロール）は `fetch_and_store_kev()` を呼び出す。
-この関数内で `write_crawler_log()` と `notify_new_vulnerabilities()` が実行されるため、
-手動クロールでも `crawler_logs` テーブルへの記録と Slack 通知が行われる。
-OSV・JVN の `/admin/osv-crawl`・`/admin/jvn-crawl` も同様のパターン。
+### /admin/*-crawl はバックグラウンド実行（202 即時返却）
+`/admin/crawl`・`/admin/osv-crawl`・`/admin/jvn-crawl` は即座に 202 Accepted を返し、
+`threading.Thread(daemon=True)` でバックグラウンド実行する。
+Render Free プランのリクエストタイムアウト（~30s）で OSV クロール（~150s）が
+502 になる問題を回避するための設計。結果は `/api/crawler-logs` で確認する。
+OSV・JVN は `?days=N` クエリパラメータで取得対象日数を指定可能（初回バックフィル用）。
 
 ### Render Free プランのスリープ対策
 Render Free プランはアクセスがないと 15 分でスリープし APScheduler が発火しない。  
