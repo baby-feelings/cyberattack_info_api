@@ -291,16 +291,20 @@ def _upsert_jvn(db: Session, entries: list[dict]) -> tuple[int, int]:
     return inserted, updated
 
 
-def fetch_and_store_jvn() -> tuple[int, int]:
+def fetch_and_store_jvn(days: int | None = None) -> tuple[int, int]:
     """MyJVN API から脆弱性情報を取得して DB に保存する。
+
+    Args:
+        days: 取得対象の直近日数（None の場合は settings.JVN_DAYS を使用）
 
     Returns:
         (inserted, updated) のタプル
     """
+    effective_days = days if days is not None else settings.JVN_DAYS
     started_at = now_utc()
-    logger.info("JVN crawler started")
+    logger.info("JVN crawler started (days=%d)", effective_days)
 
-    cutoff = datetime.now(timezone.utc) - timedelta(days=settings.JVN_DAYS)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=effective_days)
     cutoff_date = cutoff.strftime("%Y-%m-%d")
 
     db = SessionLocal()
