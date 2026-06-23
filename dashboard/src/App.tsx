@@ -141,7 +141,7 @@ export default function App() {
           <SectionHeader
             icon={<Package size={18} className="text-emerald-400" />}
             title="OSV — Open Source Vulnerabilities"
-            subtitle="オープンソースライブラリの脆弱性（直近 30 日）"
+            subtitle="オープンソースライブラリの脆弱性（過去 6 ヶ月）"
             borderColor="border-emerald-800/40"
           />
 
@@ -157,7 +157,7 @@ export default function App() {
           <SectionHeader
             icon={<FileWarning size={18} className="text-amber-400" />}
             title="JVN — Japan Vulnerability Notes"
-            subtitle="日本国内の脆弱性情報（MyJVN / JVNDB 直近 30 日）"
+            subtitle="日本国内の脆弱性情報（MyJVN / JVNDB 過去 6 ヶ月）"
             borderColor="border-amber-800/40"
           />
 
