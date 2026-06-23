@@ -115,7 +115,7 @@ export async function fetchOsvList(params: {
   const p = new URLSearchParams()
   p.set('page', String(params.page ?? 1))
   p.set('per_page', String(params.perPage ?? 50))
-  p.set('days', String(params.days ?? 30))
+  p.set('days', String(params.days ?? 180))
   if (params.ecosystem) p.set('ecosystem', params.ecosystem)
   if (params.severity) p.set('severity', params.severity)
   if (params.search) p.set('search', params.search)
@@ -123,7 +123,7 @@ export async function fetchOsvList(params: {
   return apiFetch<OsvListResponse>(`/api/osv?${p}`)
 }
 
-export async function fetchOsvStats(days = 30): Promise<OsvStatsResponse> {
+export async function fetchOsvStats(days = 180): Promise<OsvStatsResponse> {
   return apiFetch<OsvStatsResponse>(`/api/osv/stats?days=${days}`)
 }
 
@@ -179,13 +179,13 @@ export async function fetchJvnList(params: {
   const p = new URLSearchParams()
   p.set('page', String(params.page ?? 1))
   p.set('per_page', String(params.perPage ?? 50))
-  p.set('days', String(params.days ?? 30))
+  p.set('days', String(params.days ?? 180))
   if (params.severity) p.set('severity', params.severity)
   if (params.search) p.set('search', params.search)
   if (params.sortBy) p.set('sort_by', params.sortBy)
   return apiFetch<JvnListResponse>(`/api/jvn?${p}`)
 }
 
-export async function fetchJvnStats(days = 30): Promise<JvnStatsResponse> {
+export async function fetchJvnStats(days = 180): Promise<JvnStatsResponse> {
   return apiFetch<JvnStatsResponse>(`/api/jvn/stats?days=${days}`)
 }

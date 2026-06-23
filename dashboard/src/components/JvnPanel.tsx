@@ -314,7 +314,7 @@ export function JvnPanel() {
     try {
       const [list, st] = await Promise.all([
         fetchJvnList({ severity: sev, search: q, page: p, perPage: PER_PAGE, sortBy: sort }),
-        fetchJvnStats(30),
+        fetchJvnStats(180),
       ])
       setResult(list)
       setStats(st)
@@ -353,7 +353,7 @@ export function JvnPanel() {
         <div className="flex items-center gap-2">
           <FileWarning size={16} className="text-slate-400" />
           <span className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
-            JVN 直近脆弱性（過去 30 日）
+            JVN 脆弱性（過去 6 ヶ月）
           </span>
         </div>
         <div className="flex items-center gap-3">
