@@ -31,6 +31,10 @@ curl -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 キーが不正または未設定の場合は `403 Forbidden` が返ります。
 API キーの比較には `hmac.compare_digest` を使用し、タイミング攻撃を防止しています。
 
+> **Note:** 本番環境では Swagger UI（`/docs`）と ReDoc（`/redoc`）はセキュリティ上の理由で無効化されています。
+> API 仕様の詳細は本ドキュメントまたは `README.md` を参照してください。
+> ローカル開発時は `http://localhost:8000/docs` で OpenAPI ドキュメントを参照できます。
+
 ---
 
 ## スキル一覧
@@ -444,9 +448,9 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 |----------|------|
 | 毎日 JST 04:05（UTC 19:05） | GitHub Actions 単一 cron で KEV → OSV → JVN を順次実行（Upsert・古いレコード削除） |
 | アプリ起動時 | DB テーブルの自動作成 |
-| `POST /admin/crawl` 実行時 | KEV 即時取得（スケジュール外） |
-| `POST /admin/osv-crawl` 実行時 | OSV 即時取得（スケジュール外） |
-| `POST /admin/jvn-crawl` 実行時 | JVN 即時取得（スケジュール外） |
+| `POST /admin/crawl` 実行時 | KEV バックグラウンド取得（202 即時返却） |
+| `POST /admin/osv-crawl` 実行時 | OSV バックグラウンド取得（202 即時返却） |
+| `POST /admin/jvn-crawl` 実行時 | JVN バックグラウンド取得（202 即時返却） |
 
 Upsert ロジック:
 

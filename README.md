@@ -84,6 +84,9 @@ Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
 
 全エンドポイント（`/health` を除く）で `X-API-KEY` ヘッダーが必要です。
 
+> **Note:** 本番環境では Swagger UI（`/docs`）と ReDoc（`/redoc`）はセキュリティ上の理由で無効化しています。  
+> ローカル開発時は `http://localhost:8000/docs` で OpenAPI ドキュメントを参照できます。
+
 ### GET /api/vulnerabilities — 脆弱性一覧取得（CISA KEV）
 
 ```bash
@@ -106,12 +109,31 @@ curl -H "X-API-KEY: your-key" \
   "http://localhost:8000/api/vulnerabilities/CVE-2021-44228"
 ```
 
+**レスポンス例:**
+```json
+{
+  "cve_id": "CVE-2021-44228",
+  "vendor_project": "Apache",
+  "product": "Log4j",
+  "vulnerability_name": "Apache Log4j2 Remote Code Execution Vulnerability",
+  "description": "Apache Log4j2 <=2.14.1 JNDI features...",
+  "required_action": "For all affected software assets...",
+  "date_added": "2021-12-10"
+}
+```
+
 ### GET /api/vulnerabilities/recent — 直近の脅威取得
 
 ```bash
 curl -H "X-API-KEY: your-key" \
   "http://localhost:8000/api/vulnerabilities/recent?days=30"
 ```
+
+| パラメータ | 型 | デフォルト | 説明 |
+|-----------|-----|-----------|------|
+| `days` | int | 30 | 直近何日以内に追加された脆弱性を取得 |
+
+**レスポンス:** `VulnerabilityOut` の配列（ページネーションなし）
 
 ### GET /api/vulnerabilities/stats — 統計情報（CISA KEV）
 
@@ -146,16 +168,67 @@ curl -H "X-API-KEY: your-key" \
 |-----------|-----|-----------|------|
 | `page` | int | 1 | ページ番号 |
 | `per_page` | int | 50 | 1ページあたりの件数（最大 500） |
+| `days` | int | 30 | 取得対象の直近日数 |
 | `ecosystem` | string | - | エコシステム名でフィルタ（例: `PyPI` / `Pub`） |
 | `severity` | string | - | 重要度でフィルタ（`CRITICAL` / `HIGH` / `MEDIUM` / `LOW`） |
 | `search` | string | - | パッケージ名の部分一致検索 |
 | `sort_by` | string | `modified` | ソート基準（`modified` / `cvss`） |
 
+**レスポンス例:**
+```json
+{
+  "total": 492,
+  "page": 1,
+  "per_page": 50,
+  "data": [
+    {
+      "osv_id": "GHSA-xxxx-xxxx-xxxx",
+      "ecosystem": "PyPI",
+      "package_name": "cryptography",
+      "aliases": ["CVE-2026-34073"],
+      "summary": "DNS name constraints bypass...",
+      "details": "...",
+      "severity": "HIGH",
+      "cvss_score": 7.5,
+      "affected_versions": ["<46.0.6"],
+      "fixed_versions": ["46.0.6"],
+      "references": ["https://github.com/..."],
+      "published": "2026-06-01T00:00:00+00:00",
+      "modified": "2026-06-15T00:00:00+00:00"
+    }
+  ]
+}
+```
+
 ### GET /api/osv/stats — OSV 統計情報
 
 ```bash
 curl -H "X-API-KEY: your-key" \
-  "http://localhost:8000/api/osv/stats"
+  "http://localhost:8000/api/osv/stats?days=30"
+```
+
+| パラメータ | 型 | デフォルト | 説明 |
+|-----------|-----|-----------|------|
+| `days` | int | 30 | 集計対象の直近日数 |
+
+**レスポンス例:**
+```json
+{
+  "total": 492,
+  "ecosystems": [
+    { "ecosystem": "PyPI", "count": 273 },
+    { "ecosystem": "npm", "count": 35 }
+  ],
+  "severities": [
+    { "severity": "CRITICAL", "count": 9 },
+    { "severity": "HIGH", "count": 67 },
+    { "severity": "MEDIUM", "count": 47 },
+    { "severity": "LOW", "count": 2 }
+  ],
+  "monthly_trend": [
+    { "year_month": "2026-06", "count": 120 }
+  ]
+}
 ```
 
 ### GET /api/jvn — JVN 脆弱性一覧取得
@@ -248,26 +321,50 @@ curl -H "X-API-KEY: your-key" \
 | `status` | string | - | `success` / `error`（省略時は両方） |
 | `limit` | int | 30 | 取得件数（最大 100） |
 
-### POST /admin/crawl — KEV 手動クロール（即時取得）
+**レスポンス例:**
+```json
+[
+  {
+    "id": 42,
+    "crawler_type": "OSV",
+    "status": "success",
+    "started_at": "2026-06-22T21:26:07+00:00",
+    "finished_at": "2026-06-22T21:28:33+00:00",
+    "duration_seconds": 146.1,
+    "inserted": 0,
+    "updated": 2,
+    "deleted": 0,
+    "error_message": null
+  }
+]
+```
+
+### POST /admin/crawl — KEV 手動クロール（バックグラウンド実行）
 
 ```bash
 curl -X POST -H "X-API-KEY: your-key" \
   "http://localhost:8000/admin/crawl"
+# → 202 Accepted: {"message": "KEV crawl started in background"}
 ```
 
-### POST /admin/osv-crawl — OSV 手動クロール（即時取得）
+### POST /admin/osv-crawl — OSV 手動クロール（バックグラウンド実行）
 
 ```bash
 curl -X POST -H "X-API-KEY: your-key" \
   "http://localhost:8000/admin/osv-crawl"
+# → 202 Accepted: {"message": "OSV crawl started in background"}
 ```
 
-### POST /admin/jvn-crawl — JVN 手動クロール（即時取得）
+### POST /admin/jvn-crawl — JVN 手動クロール（バックグラウンド実行）
 
 ```bash
 curl -X POST -H "X-API-KEY: your-key" \
   "http://localhost:8000/admin/jvn-crawl"
+# → 202 Accepted: {"message": "JVN crawl started in background"}
 ```
+
+> **Note:** 手動クロールはバックグラウンドで実行されるため、即座に 202 が返ります。  
+> 実行結果は `GET /api/crawler-logs` で確認してください。
 
 ### GET /health — ヘルスチェック（認証不要）
 
