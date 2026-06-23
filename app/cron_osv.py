@@ -417,7 +417,7 @@ def _upsert_osv_records(
     return inserted, updated
 
 
-def fetch_and_store_osv() -> tuple[int, int, int]:
+def fetch_and_store_osv(days: int | None = None) -> tuple[int, int, int]:
     """OSV クローラーのメインエントリポイント。
 
     OSV REST API を使い、各エコシステムの主要パッケージに影響する脆弱性を
@@ -425,12 +425,16 @@ def fetch_and_store_osv() -> tuple[int, int, int]:
     実行結果（成功・失敗・件数・所要時間）は crawler_logs テーブルに記録する。
     APScheduler から毎日呼び出しされる。
 
+    Args:
+        days: 取得対象の直近日数（None の場合は settings.OSV_DAYS を使用）
+
     Returns:
         (inserted, updated, deleted) のタプル
     """
-    logger.info("=== OSV crawler started (API mode) ===")
+    effective_days = days if days is not None else settings.OSV_DAYS
+    logger.info("=== OSV crawler started (API mode, days=%d) ===", effective_days)
     started_at = now_utc()
-    cutoff = datetime.now(timezone.utc) - timedelta(days=settings.OSV_DAYS)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=effective_days)
     total_inserted = 0
     total_updated = 0
     total_deleted = 0

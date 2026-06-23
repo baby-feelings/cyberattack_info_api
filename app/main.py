@@ -7,7 +7,7 @@ import threading
 from contextlib import asynccontextmanager
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from fastapi import FastAPI, Security
+from fastapi import FastAPI, Query, Security
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -203,11 +203,15 @@ def trigger_crawl() -> dict:
     "結果は /api/crawler-logs で確認。",
     status_code=202,
 )
-def trigger_osv_crawl() -> dict:
+def trigger_osv_crawl(
+    days: int | None = Query(
+        None, ge=1, le=365, description="取得対象の直近日数（省略時は OSV_DAYS）"
+    ),
+) -> dict:
     """OSV クローラーをバックグラウンドで実行する。"""
-    logger.info("Manual OSV crawl triggered via /admin/osv-crawl")
-    _run_in_background("OSV", fetch_and_store_osv)
-    return {"message": "OSV crawl started in background"}
+    logger.info("Manual OSV crawl triggered via /admin/osv-crawl (days=%s)", days)
+    _run_in_background("OSV", lambda: fetch_and_store_osv(days=days))
+    return {"message": f"OSV crawl started in background (days={days or 'default'})"}
 
 
 @app.post(
@@ -219,11 +223,15 @@ def trigger_osv_crawl() -> dict:
     "結果は /api/crawler-logs で確認。",
     status_code=202,
 )
-def trigger_jvn_crawl() -> dict:
+def trigger_jvn_crawl(
+    days: int | None = Query(
+        None, ge=1, le=365, description="取得対象の直近日数（省略時は JVN_DAYS）"
+    ),
+) -> dict:
     """JVN クローラーをバックグラウンドで実行する。"""
-    logger.info("Manual JVN crawl triggered via /admin/jvn-crawl")
-    _run_in_background("JVN", fetch_and_store_jvn)
-    return {"message": "JVN crawl started in background"}
+    logger.info("Manual JVN crawl triggered via /admin/jvn-crawl (days=%s)", days)
+    _run_in_background("JVN", lambda: fetch_and_store_jvn(days=days))
+    return {"message": f"JVN crawl started in background (days={days or 'default'})"}
 
 
 @app.get("/", tags=["system"])
