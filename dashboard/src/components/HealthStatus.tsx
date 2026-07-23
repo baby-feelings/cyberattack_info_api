@@ -2,6 +2,12 @@ import { useEffect, useState } from 'react'
 import { Activity, Database, Server, RefreshCw, CheckCircle, XCircle } from 'lucide-react'
 import { fetchHealth, type HealthResponse } from '../api/client'
 
+// バックエンドの environment 値（production/development）を日本語表記に変換する
+const ENVIRONMENT_LABELS: Record<string, string> = {
+  production: '本番環境',
+  development: '開発環境',
+}
+
 export function HealthStatus() {
   const [data, setData] = useState<HealthResponse | null>(null)
   const [error, setError] = useState(false)
@@ -75,7 +81,7 @@ export function HealthStatus() {
             icon: Server,
             label: '実行環境',
             ok: true,
-            okText: loading ? '—' : (data?.environment ?? '—'),
+            okText: loading ? '—' : (ENVIRONMENT_LABELS[data?.environment ?? ''] ?? data?.environment ?? '—'),
             ngText: '—',
           },
         ].map(({ icon: Icon, label, ok, okText, ngText }) => (
