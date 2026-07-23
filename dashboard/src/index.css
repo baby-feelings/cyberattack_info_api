@@ -1,9 +1,13 @@
 @import "tailwindcss";
 
-*, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+/* unlayered のままだと Tailwind の @layer utilities（padding/margin ユーティリティ）を
+   カスケードレイヤーの優先順位で無条件に上書きしてしまうため、@layer base に含める */
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
 }
 
 body {

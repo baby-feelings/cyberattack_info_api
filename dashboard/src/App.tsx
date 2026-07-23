@@ -123,7 +123,12 @@ export default function App() {
 
         {/* ══ CISA KEV タブ ══════════════════════════════════════════ */}
         {activeTab === 'kev' && (
-          <section className="flex flex-col gap-4 sm:gap-6 lg:gap-8">
+          <section
+            id="tabpanel-kev"
+            role="tabpanel"
+            aria-labelledby="tab-kev"
+            className="flex flex-col gap-4 sm:gap-6 lg:gap-8"
+          >
             <SectionHeader
               icon={<Shield size={18} className="text-blue-400" />}
               title="CISA KEV — Known Exploited Vulnerabilities"
@@ -147,7 +152,12 @@ export default function App() {
 
         {/* ══ OSV タブ ═══════════════════════════════════════════════ */}
         {activeTab === 'osv' && (
-          <section className="flex flex-col gap-4 sm:gap-6 lg:gap-8">
+          <section
+            id="tabpanel-osv"
+            role="tabpanel"
+            aria-labelledby="tab-osv"
+            className="flex flex-col gap-4 sm:gap-6 lg:gap-8"
+          >
             <SectionHeader
               icon={<Package size={18} className="text-emerald-400" />}
               title="OSV — Open Source Vulnerabilities"
@@ -162,7 +172,12 @@ export default function App() {
 
         {/* ══ JVN タブ ═══════════════════════════════════════════════ */}
         {activeTab === 'jvn' && (
-          <section className="flex flex-col gap-4 sm:gap-6 lg:gap-8">
+          <section
+            id="tabpanel-jvn"
+            role="tabpanel"
+            aria-labelledby="tab-jvn"
+            className="flex flex-col gap-4 sm:gap-6 lg:gap-8"
+          >
             <SectionHeader
               icon={<FileWarning size={18} className="text-amber-400" />}
               title="JVN — Japan Vulnerability Notes"
@@ -177,8 +192,8 @@ export default function App() {
 
       </main>
 
-      {/* フッター */}
-      <footer className="w-full border-t border-slate-800/60">
+      {/* フッター（下部固定タブバーに隠れないよう下部余白を確保） */}
+      <footer className="w-full border-t border-slate-800/60 pb-20">
         <div className="max-w-screen-xl mx-auto px-4 sm:px-8 lg:px-12 py-5 flex flex-col sm:flex-row items-center justify-between gap-1 text-xs text-slate-600">
           <span>データソース: CISA KEV / Open Source Vulnerabilities (OSV) / JVN (JVNDB)</span>
           <span>KEV → OSV → JVN: JST 04:05 一括自動更新</span>
@@ -187,12 +202,16 @@ export default function App() {
 
       {/* 下部固定タブバー */}
       <nav className="fixed bottom-0 inset-x-0 z-20 border-t border-slate-800/60 bg-[#0a0e1a]/95 backdrop-blur-md">
-        <div className="max-w-screen-xl mx-auto grid grid-cols-3">
+        <div role="tablist" className="max-w-screen-xl mx-auto grid grid-cols-3">
           {TABS.map((tab) => {
             const isActive = activeTab === tab.key
             return (
               <button
                 key={tab.key}
+                id={`tab-${tab.key}`}
+                role="tab"
+                aria-selected={isActive}
+                aria-controls={`tabpanel-${tab.key}`}
                 onClick={() => setActiveTab(tab.key)}
                 className={`flex flex-col items-center justify-center gap-1 py-2.5 text-xs font-medium transition-colors ${
                   isActive ? 'text-white' : 'text-slate-500 hover:text-slate-300'
