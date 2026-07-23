@@ -13,7 +13,8 @@ from tests.conftest import TEST_API_KEY
 
 # ── テストデータ ───────────────────────────────────────────────────
 
-_NOW = datetime(2026, 6, 18, 0, 0, 0, tzinfo=timezone.utc)
+# days フィルタのデフォルト値以内に収まるよう実行時刻基準にする
+_NOW = datetime.now(timezone.utc)
 
 
 def _make_jvn(
