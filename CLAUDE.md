@@ -109,7 +109,8 @@ tests/
 └── test_notifications.py    # Slack 通知テスト（KEV・OSV・JVN 対応）
 
 dashboard/               # Vercel デプロイの React ダッシュボード
-                         # CISA KEV・OSV（Pub 含む 10 エコシステム・180 日表示）・JVN の 3 セクション構成
+                         # CISA KEV・OSV（Pub 含む 10 エコシステム・180 日表示）・JVN を
+                         # 画面下部固定タブで切り替え表示
 
 .github/workflows/
 ├── ci.yml           # CI: ruff → mypy → pytest（PR 時・Python 3.10/3.11 matrix）
@@ -211,6 +212,22 @@ OSV・JVN は `?days=N` クエリパラメータで取得対象日数を指定�
 Render Free プランはアクセスがないと 15 分でスリープし APScheduler が発火しない。  
 `.github/workflows/daily-crawl.yml` で GitHub Actions cron が毎日 `/admin/crawl`・`/admin/osv-crawl`・`/admin/jvn-crawl` を叩いて補完している。  
 APScheduler と GitHub Actions の二重クロールは発生しない（Render がスリープ中は APScheduler が動かない）。
+
+### ダッシュボードのタブ切り替え UI（App.tsx）
+KEV / OSV / JVN の 3 データソースは、画面下部固定のタブバーで切り替え表示する構成（縦並び表示ではない）。
+`TabKey` / `TABS` 定数と `activeTab` state で選択中セクションのみを条件レンダリングし、
+サーバー稼働状況（`HealthStatus`）とエラーバナーは全タブ共通で常に表示する。
+タブには `role="tablist"/"tab"/"tabpanel"` と `aria-selected`/`aria-controls`/`aria-labelledby` を付与済み。
+
+### index.css の CSS カスケードレイヤーに関する注意
+`*, *::before, *::after` の余白リセットは必ず `@layer base` の中に書くこと。
+`@layer` の外（unlayered）に書くと、CSS カスケードレイヤーの仕様上どんな `@layer utilities`
+（Tailwind の padding/margin ユーティリティ含む）よりも優先されてしまい、
+`px-*`/`py-*`/`pb-*` 等のユーティリティが軒並み無効化される（過去に実際に発生したバグ）。
+
+### 実行環境表示の日本語化（HealthStatus.tsx）
+`/health` の `environment` フィールド（`production`/`development`）はそのまま表示せず、
+`ENVIRONMENT_LABELS` で「本番環境」/「開発環境」に変換してから表示する。
 
 ### pytest フィクスチャ構成
 - `setup_test_db`（`scope="session"`）: テスト DB のテーブル作成・削除
