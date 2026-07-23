@@ -5,7 +5,7 @@ GET /api/osv/stats  – 統計情報取得
 クローラーヘルパー関数・API クライアントのユニットテスト
 """
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
@@ -29,8 +29,8 @@ from app.models import OsvVulnerability  # noqa: E402
 TEST_API_KEY = "test-api-key-for-pytest"
 HEADERS = {"X-API-KEY": TEST_API_KEY}
 
-# テスト用の OSV エントリを生成するヘルパー
-_NOW = datetime(2026, 6, 15, 0, 0, 0, tzinfo=timezone.utc)
+# テスト用の OSV エントリを生成するヘルパー（days フィルタの範囲内に収まるよう実行時刻基準にする）
+_NOW = datetime.now(timezone.utc)
 
 
 def _make_osv(db_session, **kwargs):
@@ -207,8 +207,8 @@ class TestListOsv:
 
     def test_sort_by_modified_default(self, client, db_session):
         """sort_by 未指定（デフォルト）は更新日時降順でソートされること。"""
-        early = datetime(2026, 1, 1, tzinfo=timezone.utc)
-        late = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        early = _NOW - timedelta(days=20)
+        late = _NOW - timedelta(days=1)
         _make_osv(
             db_session, osv_id="GHSA-mod-early",
             package_name="pkg-a", modified=early, published=early,
