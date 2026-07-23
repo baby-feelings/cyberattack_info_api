@@ -32,12 +32,22 @@ function SectionHeader({
   )
 }
 
+// タブ種別
+type TabKey = 'kev' | 'osv' | 'jvn'
+
+const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
+  { key: 'kev', label: 'KEV', icon: <Shield size={20} className="text-blue-400" /> },
+  { key: 'osv', label: 'OSV', icon: <Package size={20} className="text-emerald-400" /> },
+  { key: 'jvn', label: 'JVN', icon: <FileWarning size={20} className="text-amber-400" /> },
+]
+
 export default function App() {
   const [recent, setRecent] = useState<VulnerabilityOut[]>([])
   const [stats, setStats] = useState<StatsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [refreshedAt, setRefreshedAt] = useState<Date | null>(null)
+  const [activeTab, setActiveTab] = useState<TabKey>('kev')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -97,8 +107,8 @@ export default function App() {
         </div>
       </header>
 
-      {/* メインコンテンツ */}
-      <main className="flex-1 max-w-screen-xl w-full px-4 sm:px-6 lg:px-12 py-6 sm:py-8 lg:py-10 flex flex-col gap-6 sm:gap-8 lg:gap-10">
+      {/* メインコンテンツ（下部固定タブバーの高さ分、下に余白を確保） */}
+      <main className="flex-1 max-w-screen-xl w-full px-4 sm:px-6 lg:px-12 py-6 sm:py-8 lg:py-10 pb-24 sm:pb-24 flex flex-col gap-6 sm:gap-8 lg:gap-10">
 
         {/* エラーバナー */}
         {error && (
@@ -108,72 +118,98 @@ export default function App() {
           </div>
         )}
 
-        {/* ══ サーバー稼働状況 ═══════════════════════════════════════ */}
+        {/* ══ サーバー稼働状況（全タブ共通） ═══════════════════════════ */}
         <HealthStatus />
 
-        {/* ══ CISA KEV セクション ══════════════════════════════════════ */}
-        <section className="flex flex-col gap-4 sm:gap-6 lg:gap-8">
-          <SectionHeader
-            icon={<Shield size={18} className="text-blue-400" />}
-            title="CISA KEV — Known Exploited Vulnerabilities"
-            subtitle="実際に悪用が確認された脆弱性（米 CISA 公式カタログ）"
-            borderColor="border-blue-800/40"
-          />
+        {/* ══ CISA KEV タブ ══════════════════════════════════════════ */}
+        {activeTab === 'kev' && (
+          <section className="flex flex-col gap-4 sm:gap-6 lg:gap-8">
+            <SectionHeader
+              icon={<Shield size={18} className="text-blue-400" />}
+              title="CISA KEV — Known Exploited Vulnerabilities"
+              subtitle="実際に悪用が確認された脆弱性（米 CISA 公式カタログ）"
+              borderColor="border-blue-800/40"
+            />
 
-          {/* CVE サマリーカード */}
-          <StatsCards stats={stats} recent={recent} loading={loading} />
+            {/* CVE サマリーカード */}
+            <StatsCards stats={stats} recent={recent} loading={loading} />
 
-          {/* 月別トレンド */}
-          <MonthlyTrend data={stats?.monthly_trend ?? []} loading={loading} />
+            {/* 月別トレンド */}
+            <MonthlyTrend data={stats?.monthly_trend ?? []} loading={loading} />
 
-          {/* ベンダーランキング + 直近 CVE */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6 xl:gap-8">
-            <VendorRanking data={stats?.top_vendors ?? []} loading={loading} />
-            <RecentCVEs data={recent} loading={loading} />
-          </div>
-        </section>
+            {/* ベンダーランキング + 直近 CVE */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6 xl:gap-8">
+              <VendorRanking data={stats?.top_vendors ?? []} loading={loading} />
+              <RecentCVEs data={recent} loading={loading} />
+            </div>
+          </section>
+        )}
 
-        {/* セクション区切り */}
-        <div className="border-t border-slate-700/50" />
+        {/* ══ OSV タブ ═══════════════════════════════════════════════ */}
+        {activeTab === 'osv' && (
+          <section className="flex flex-col gap-4 sm:gap-6 lg:gap-8">
+            <SectionHeader
+              icon={<Package size={18} className="text-emerald-400" />}
+              title="OSV — Open Source Vulnerabilities"
+              subtitle="オープンソースライブラリの脆弱性（過去 6 ヶ月）"
+              borderColor="border-emerald-800/40"
+            />
 
-        {/* ══ OSV セクション ═══════════════════════════════════════════ */}
-        <section className="flex flex-col gap-4 sm:gap-6 lg:gap-8">
-          <SectionHeader
-            icon={<Package size={18} className="text-emerald-400" />}
-            title="OSV — Open Source Vulnerabilities"
-            subtitle="オープンソースライブラリの脆弱性（過去 6 ヶ月）"
-            borderColor="border-emerald-800/40"
-          />
+            {/* OSV パネル（サマリーカード・チャート・一覧を内包） */}
+            <OsvPanel />
+          </section>
+        )}
 
-          {/* OSV パネル（サマリーカード・チャート・一覧を内包） */}
-          <OsvPanel />
-        </section>
+        {/* ══ JVN タブ ═══════════════════════════════════════════════ */}
+        {activeTab === 'jvn' && (
+          <section className="flex flex-col gap-4 sm:gap-6 lg:gap-8">
+            <SectionHeader
+              icon={<FileWarning size={18} className="text-amber-400" />}
+              title="JVN — Japan Vulnerability Notes"
+              subtitle="日本国内の脆弱性情報（MyJVN / JVNDB 過去 6 ヶ月）"
+              borderColor="border-amber-800/40"
+            />
 
-        {/* セクション区切り */}
-        <div className="border-t border-slate-700/50" />
-
-        {/* ══ JVN セクション ═══════════════════════════════════════════ */}
-        <section className="flex flex-col gap-4 sm:gap-6 lg:gap-8">
-          <SectionHeader
-            icon={<FileWarning size={18} className="text-amber-400" />}
-            title="JVN — Japan Vulnerability Notes"
-            subtitle="日本国内の脆弱性情報（MyJVN / JVNDB 過去 6 ヶ月）"
-            borderColor="border-amber-800/40"
-          />
-
-          {/* JVN パネル（サマリーカード・チャート・一覧を内包） */}
-          <JvnPanel />
-        </section>
+            {/* JVN パネル（サマリーカード・チャート・一覧を内包） */}
+            <JvnPanel />
+          </section>
+        )}
 
       </main>
 
       {/* フッター */}
-      <footer className="w-full border-t border-slate-800/60 mt-2 sm:mt-4">
+      <footer className="w-full border-t border-slate-800/60">
         <div className="max-w-screen-xl mx-auto px-4 sm:px-8 lg:px-12 py-5 flex flex-col sm:flex-row items-center justify-between gap-1 text-xs text-slate-600">
           <span>データソース: CISA KEV / Open Source Vulnerabilities (OSV) / JVN (JVNDB)</span>
           <span>KEV → OSV → JVN: JST 04:05 一括自動更新</span>
         </div>
       </footer>
+
+      {/* 下部固定タブバー */}
+      <nav className="fixed bottom-0 inset-x-0 z-20 border-t border-slate-800/60 bg-[#0a0e1a]/95 backdrop-blur-md">
+        <div className="max-w-screen-xl mx-auto grid grid-cols-3">
+          {TABS.map((tab) => {
+            const isActive = activeTab === tab.key
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex flex-col items-center justify-center gap-1 py-2.5 text-xs font-medium transition-colors ${
+                  isActive ? 'text-white' : 'text-slate-500 hover:text-slate-300'
+                }`}
+              >
+                <span className={isActive ? 'opacity-100' : 'opacity-60'}>{tab.icon}</span>
+                <span>{tab.label}</span>
+                <span
+                  className={`h-0.5 w-8 rounded-full transition-colors ${
+                    isActive ? 'bg-violet-500' : 'bg-transparent'
+                  }`}
+                />
+              </button>
+            )
+          })}
+        </div>
+      </nav>
 
     </div>
   )
