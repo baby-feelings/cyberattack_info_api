@@ -17,10 +17,6 @@ import httpx  # noqa: E402
 from app.osv.crawler import (  # noqa: E402
     _build_records,
     _delete_old_osv_records,
-    _extract_fixed_versions,
-    _fetch_vuln_by_id,
-    _parse_severity,
-    _query_packages_batch,
     _upsert_osv_records,
     fetch_and_store_osv,
 )
@@ -272,137 +268,6 @@ class TestOsvStats:
         assert len(body["monthly_trend"]) >= 1
 
 
-# ──────────────────────────────────────────────────────────────
-# クローラーヘルパー関数のユニットテスト
-# ──────────────────────────────────────────────────────────────
-
-
-class TestParseSeverity:
-    def test_database_specific_critical(self):
-        """database_specific.severity=CRITICAL を正しく抽出する。"""
-        vuln = {"database_specific": {"severity": "CRITICAL"}}
-        sev, score = _parse_severity(vuln)
-        assert sev == "CRITICAL"
-        assert score is None
-
-    def test_database_specific_with_cvss_score(self):
-        """database_specific.cvss.score も合わせて抽出する。"""
-        vuln = {
-            "database_specific": {
-                "severity": "HIGH",
-                "cvss": {"score": 8.1},
-            }
-        }
-        sev, score = _parse_severity(vuln)
-        assert sev == "HIGH"
-        assert score == 8.1
-
-    def test_database_specific_lowercase(self):
-        """severity が小文字でも UPPER に変換して返す。"""
-        vuln = {"database_specific": {"severity": "medium"}}
-        sev, score = _parse_severity(vuln)
-        assert sev == "MEDIUM"
-
-    def test_numeric_score_critical(self):
-        """severity[].score が 9.0 以上なら CRITICAL。"""
-        vuln = {"severity": [{"type": "CVSS_V3", "score": "9.8"}]}
-        sev, score = _parse_severity(vuln)
-        assert sev == "CRITICAL"
-        assert score == 9.8
-
-    def test_numeric_score_high(self):
-        vuln = {"severity": [{"type": "CVSS_V3", "score": "7.5"}]}
-        sev, score = _parse_severity(vuln)
-        assert sev == "HIGH"
-        assert score == 7.5
-
-    def test_numeric_score_medium(self):
-        vuln = {"severity": [{"type": "CVSS_V3", "score": "5.0"}]}
-        sev, score = _parse_severity(vuln)
-        assert sev == "MEDIUM"
-
-    def test_numeric_score_low(self):
-        vuln = {"severity": [{"type": "CVSS_V3", "score": "2.0"}]}
-        sev, score = _parse_severity(vuln)
-        assert sev == "LOW"
-
-    def test_no_severity(self):
-        """severity 情報がない場合は (None, None) を返す。"""
-        sev, score = _parse_severity({})
-        assert sev is None
-        assert score is None
-
-    def test_non_numeric_score_returns_none(self):
-        """CVSS ベクター文字列（数値でない）の場合は None を返す。"""
-        vuln = {
-            "severity": [{"type": "CVSS_V3", "score": "CVSS:3.1/AV:N/AC:L/..."}]
-        }
-        sev, score = _parse_severity(vuln)
-        assert sev is None
-        assert score is None
-
-
-class TestParseSeverityEdgeCases:
-    def test_cvss_score_type_error(self):
-        """cvss.score が変換不能な型の場合は None を返す。"""
-        vuln = {
-            "database_specific": {
-                "severity": "HIGH",
-                "cvss": {"score": None},
-            }
-        }
-        sev, score = _parse_severity(vuln)
-        assert sev == "HIGH"
-        assert score is None
-
-    def test_cvss_score_value_error(self):
-        """cvss.score が文字列で数値変換できない場合は None を返す。"""
-        vuln = {
-            "database_specific": {
-                "severity": "HIGH",
-                "cvss": {"score": "not-a-number"},
-            }
-        }
-        sev, score = _parse_severity(vuln)
-        assert sev == "HIGH"
-        assert score is None
-
-
-class TestExtractFixedVersions:
-    def test_basic(self):
-        affected = {
-            "ranges": [
-                {"type": "ECOSYSTEM", "events": [{"introduced": "0"}, {"fixed": "1.2.3"}]}
-            ]
-        }
-        assert _extract_fixed_versions(affected) == ["1.2.3"]
-
-    def test_multiple_fixed(self):
-        affected = {
-            "ranges": [
-                {
-                    "type": "ECOSYSTEM",
-                    "events": [
-                        {"introduced": "0"},
-                        {"fixed": "1.0.0"},
-                        {"introduced": "2.0.0"},
-                        {"fixed": "2.1.0"},
-                    ],
-                }
-            ]
-        }
-        assert _extract_fixed_versions(affected) == ["1.0.0", "2.1.0"]
-
-    def test_no_ranges(self):
-        assert _extract_fixed_versions({}) == []
-
-    def test_no_fixed_event(self):
-        affected = {
-            "ranges": [{"type": "GIT", "events": [{"introduced": "abc123"}]}]
-        }
-        assert _extract_fixed_versions(affected) == []
-
-
 class TestBuildRecords:
     def _vuln(self, **kwargs):
         base = {
@@ -540,114 +405,6 @@ class TestBuildRecordsEdgeCases:
 
 
 # ──────────────────────────────────────────────────────────────
-# OSV API クライアント (_query_packages_batch)
-# ──────────────────────────────────────────────────────────────
-
-
-def _mock_batch_response(vulns_per_query: list[list[dict]]) -> MagicMock:
-    """_query_packages_batch が呼ぶ httpx.Client のモックを返す。"""
-    mock_resp = MagicMock()
-    mock_resp.raise_for_status = MagicMock()
-    mock_resp.json.return_value = {
-        "results": [{"vulns": v} for v in vulns_per_query]
-    }
-    mock_client = MagicMock()
-    mock_client.__enter__ = MagicMock(return_value=mock_client)
-    mock_client.__exit__ = MagicMock(return_value=False)
-    mock_client.post = MagicMock(return_value=mock_resp)
-    return mock_client
-
-
-class TestQueryPackagesBatch:
-    def test_returns_deduped_id_refs(self):
-        """同じ ID が複数クエリから返っても1件に絞り込むこと。"""
-        ref = {"id": "GHSA-shared", "modified": "2026-06-01T00:00:00Z"}
-        mock_client = _mock_batch_response([
-            [ref],                                             # query 1
-            [ref],                                             # query 2 (重複)
-            [{"id": "GHSA-unique", "modified": "2026-06-01T00:00:00Z"}],  # query 3
-        ])
-        with patch("app.osv.crawler.httpx.Client", return_value=mock_client):
-            result = _query_packages_batch([
-                ("requests", "PyPI"),
-                ("flask", "PyPI"),
-                ("django", "PyPI"),
-            ])
-        ids = [v["id"] for v in result]
-        assert ids.count("GHSA-shared") == 1
-        assert "GHSA-unique" in ids
-
-    def test_empty_packages_returns_empty(self):
-        """空リストを渡した場合は API を呼ばず空リストを返すこと。"""
-        with patch("app.osv.crawler.httpx.Client") as mock_cls:
-            result = _query_packages_batch([])
-        mock_cls.assert_not_called()
-        assert result == []
-
-    def test_http_error_propagates(self):
-        """HTTP エラーが発生した場合は例外が伝播すること。"""
-        mock_client = MagicMock()
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client.post.return_value.raise_for_status.side_effect = (
-            httpx.HTTPStatusError("503", request=MagicMock(), response=MagicMock())
-        )
-
-        import pytest as _pytest
-        with patch("app.osv.crawler.httpx.Client", return_value=mock_client):
-            with _pytest.raises(httpx.HTTPStatusError):
-                _query_packages_batch([("requests", "PyPI")])
-
-    def test_filters_empty_vuln_ids(self):
-        """ID が空の脆弱性は除外されること。"""
-        mock_client = _mock_batch_response([
-            [{"id": "", "modified": "2026-06-01T00:00:00Z"}],
-            [{"id": "GHSA-valid", "modified": "2026-06-01T00:00:00Z"}],
-        ])
-        with patch("app.osv.crawler.httpx.Client", return_value=mock_client):
-            result = _query_packages_batch([("pkg1", "PyPI"), ("pkg2", "PyPI")])
-        assert all(v["id"] for v in result)
-        assert any(v["id"] == "GHSA-valid" for v in result)
-
-
-class TestFetchVulnById:
-    def test_returns_full_vuln(self):
-        """GET /v1/vulns/{id} が完全な脆弱性オブジェクトを返すこと。"""
-        full_vuln = _make_vuln("GHSA-detail-001")
-        mock_resp = MagicMock()
-        mock_resp.raise_for_status = MagicMock()
-        mock_resp.json.return_value = full_vuln
-
-        mock_client = MagicMock()
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client.get = MagicMock(return_value=mock_resp)
-
-        with patch("app.osv.crawler.httpx.Client", return_value=mock_client):
-            result = _fetch_vuln_by_id("GHSA-detail-001")
-
-        assert result["id"] == "GHSA-detail-001"
-        assert "affected" in result
-        mock_client.get.assert_called_once_with(
-            "https://api.osv.dev/v1/vulns/GHSA-detail-001"
-        )
-
-    def test_http_error_propagates(self):
-        """HTTP エラーが発生した場合は例外が伝播すること。"""
-        mock_client = MagicMock()
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client.get.return_value.raise_for_status.side_effect = (
-            httpx.HTTPStatusError("404", request=MagicMock(), response=MagicMock())
-        )
-
-        import pytest as _pytest
-        with patch("app.osv.crawler.httpx.Client", return_value=mock_client):
-            with _pytest.raises(httpx.HTTPStatusError):
-                _fetch_vuln_by_id("GHSA-not-found")
-
-
-# ──────────────────────────────────────────────────────────────
 # _upsert_osv_records
 # ──────────────────────────────────────────────────────────────
 
@@ -727,11 +484,11 @@ class TestFetchAndStoreOsv:
         vuln = _make_vuln("GHSA-mock-0001", modified="2026-06-01T00:00:00Z")
 
         with patch(
-            "app.osv.crawler._query_packages_batch",
+            "app.osv.crawler.query_packages_batch",
             return_value=_make_refs([vuln]),
         ):
             with patch(
-                "app.osv.crawler._fetch_vuln_by_id",
+                "app.osv.crawler.fetch_vuln_by_id",
                 return_value=vuln,
             ):
                 with patch("app.osv.crawler.SessionLocal", return_value=db_session):
@@ -752,7 +509,7 @@ class TestFetchAndStoreOsv:
                 raise httpx.HTTPError("Connection refused")
             return []
 
-        with patch("app.osv.crawler._query_packages_batch", side_effect=batch_side_effect):
+        with patch("app.osv.crawler.query_packages_batch", side_effect=batch_side_effect):
             with patch("app.osv.crawler.SessionLocal") as mock_sl:
                 mock_db = MagicMock()
                 mock_db.query.return_value.filter.return_value.first.return_value = None
@@ -772,7 +529,7 @@ class TestFetchAndStoreOsv:
                 raise RuntimeError("Unexpected error")
             return []
 
-        with patch("app.osv.crawler._query_packages_batch", side_effect=batch_side_effect):
+        with patch("app.osv.crawler.query_packages_batch", side_effect=batch_side_effect):
             with patch("app.osv.crawler.SessionLocal") as mock_sl:
                 mock_db = MagicMock()
                 mock_db.query.return_value.filter.return_value.first.return_value = None
@@ -783,11 +540,11 @@ class TestFetchAndStoreOsv:
         assert call_counts["count"] == len(POPULAR_PACKAGES)
 
     def test_old_vulns_filtered_out(self, db_session):
-        """cutoff より古い脆弱性はスキップされること（_fetch_vuln_by_id を呼ばない）。"""
+        """cutoff より古い脆弱性はスキップされること（fetch_vuln_by_id を呼ばない）。"""
         old_ref = {"id": "GHSA-old", "modified": "2000-01-01T00:00:00Z"}
 
-        with patch("app.osv.crawler._query_packages_batch", return_value=[old_ref]):
-            with patch("app.osv.crawler._fetch_vuln_by_id") as mock_fetch:
+        with patch("app.osv.crawler.query_packages_batch", return_value=[old_ref]):
+            with patch("app.osv.crawler.fetch_vuln_by_id") as mock_fetch:
                 with patch("app.osv.crawler.SessionLocal", return_value=db_session):
                     db_session.close = MagicMock()
                     inserted, updated, deleted = fetch_and_store_osv()
@@ -801,9 +558,9 @@ class TestFetchAndStoreOsv:
         """個別 ID のフェッチ失敗時はその1件をスキップして継続すること。"""
         recent_ref = {"id": "GHSA-fetch-err", "modified": "2026-06-01T00:00:00Z"}
 
-        with patch("app.osv.crawler._query_packages_batch", return_value=[recent_ref]):
+        with patch("app.osv.crawler.query_packages_batch", return_value=[recent_ref]):
             with patch(
-                "app.osv.crawler._fetch_vuln_by_id",
+                "app.osv.crawler.fetch_vuln_by_id",
                 side_effect=httpx.HTTPError("timeout"),
             ):
                 with patch("app.osv.crawler.SessionLocal", return_value=db_session):
@@ -965,19 +722,19 @@ class TestFetchAndStoreOsvAdditional:
         """modified が不正な日付形式の場合はそのレコードをスキップすること。"""
         bad_ref = {"id": "GHSA-bad-date", "modified": "not-a-valid-date"}
 
-        with patch("app.osv.crawler._query_packages_batch", return_value=[bad_ref]):
-            with patch("app.osv.crawler._fetch_vuln_by_id") as mock_fetch:
+        with patch("app.osv.crawler.query_packages_batch", return_value=[bad_ref]):
+            with patch("app.osv.crawler.fetch_vuln_by_id") as mock_fetch:
                 with patch("app.osv.crawler.SessionLocal", return_value=db_session):
                     db_session.close = MagicMock()
                     inserted, updated, deleted = fetch_and_store_osv()
 
-        # 不正な日付のため _fetch_vuln_by_id は呼ばれない
+        # 不正な日付のため fetch_vuln_by_id は呼ばれない
         mock_fetch.assert_not_called()
         assert inserted == 0
 
     def test_delete_old_records_failure_logged(self, db_session):
         """_delete_old_osv_records が失敗してもクローラー全体はエラーにならないこと。"""
-        with patch("app.osv.crawler._query_packages_batch", return_value=[]):
+        with patch("app.osv.crawler.query_packages_batch", return_value=[]):
             with patch(
                 "app.osv.crawler._delete_old_osv_records",
                 side_effect=Exception("delete failed"),

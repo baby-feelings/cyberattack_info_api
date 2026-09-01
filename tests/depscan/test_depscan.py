@@ -29,7 +29,6 @@ from app.depscan.github_client import (  # noqa: E402
     list_target_repos,
 )
 from app.depscan.models import DependencyFinding  # noqa: E402
-from app.osv.crawler import _query_versions_batch  # noqa: E402
 
 TEST_API_KEY = "test-api-key-for-pytest"
 HEADERS = {"X-API-KEY": TEST_API_KEY}
@@ -242,29 +241,6 @@ class TestGetFileContent:
 
 
 # ──────────────────────────────────────────────────────────────
-# app.osv.crawler._query_versions_batch
-# ──────────────────────────────────────────────────────────────
-
-
-class TestQueryVersionsBatch:
-    def test_maps_hits_by_position(self):
-        results = [{"vulns": [{"id": "GHSA-a"}]}, {"vulns": []}]
-        mock_client = _mock_httpx_client(post_return=_mock_response({"results": results}))
-        with patch("app.osv.crawler.httpx.Client", return_value=mock_client):
-            hits = _query_versions_batch([
-                ("PyPI", "cryptography", "3.4.7"),
-                ("PyPI", "safe-pkg", "1.0.0"),
-            ])
-        assert hits == {("PyPI", "cryptography", "3.4.7"): ["GHSA-a"]}
-
-    def test_empty_items_returns_empty(self):
-        with patch("app.osv.crawler.httpx.Client") as mock_cls:
-            result = _query_versions_batch([])
-        mock_cls.assert_not_called()
-        assert result == {}
-
-
-# ──────────────────────────────────────────────────────────────
 # app.depscan.crawler
 # ──────────────────────────────────────────────────────────────
 
@@ -324,9 +300,9 @@ class TestBuildFindings:
             "database_specific": {"severity": "HIGH"},
         }
         with patch(
-            "app.depscan.crawler._query_versions_batch",
+            "app.depscan.crawler.query_versions_batch",
             return_value={("PyPI", "cryptography", "3.4.7"): ["GHSA-crypto-001"]},
-        ), patch("app.depscan.crawler._fetch_vuln_by_id", return_value=vuln):
+        ), patch("app.depscan.crawler.fetch_vuln_by_id", return_value=vuln):
             records = _build_findings(dep_to_repos)
 
         assert len(records) == 1
@@ -337,16 +313,16 @@ class TestBuildFindings:
         assert rec["fixed_versions"] == ["3.4.8"]
 
     def test_no_hits_returns_empty(self):
-        with patch("app.depscan.crawler._query_versions_batch", return_value={}):
+        with patch("app.depscan.crawler.query_versions_batch", return_value={}):
             assert _build_findings({("PyPI", "pkg", "1.0.0"): [("u/r", "requirements.txt")]}) == []
 
     def test_vuln_fetch_failure_skipped(self):
         dep_to_repos = {("PyPI", "pkg", "1.0.0"): [("u/r", "requirements.txt")]}
         with patch(
-            "app.depscan.crawler._query_versions_batch",
+            "app.depscan.crawler.query_versions_batch",
             return_value={("PyPI", "pkg", "1.0.0"): ["GHSA-x"]},
         ), patch(
-            "app.depscan.crawler._fetch_vuln_by_id",
+            "app.depscan.crawler.fetch_vuln_by_id",
             side_effect=httpx.HTTPStatusError("500", request=MagicMock(), response=MagicMock()),
         ):
             assert _build_findings(dep_to_repos) == []

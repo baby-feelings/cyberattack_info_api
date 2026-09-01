@@ -14,216 +14,21 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.notifications import notify_osv_crawl_error, notify_osv_new_vulnerabilities
+from app.core.osv_client import (
+    BATCH_SIZE,
+    extract_fixed_versions,
+    fetch_vuln_by_id,
+    parse_severity,
+    query_packages_batch,
+)
 from app.crawler_logs.writer import now_utc, write_crawler_log
 from app.osv.models import OsvVulnerability
+from app.osv.packages import POPULAR_PACKAGES
 
 logger = logging.getLogger(__name__)
 
-# OSV REST API ベース URL
-OSV_API_BASE = "https://api.osv.dev/v1"
-
-# 1回の /v1/querybatch で送れる最大クエリ数
-BATCH_SIZE = 1000
-
-# エコシステムごとの主要パッケージ一覧（脆弱性監視対象）
-POPULAR_PACKAGES: dict[str, list[str]] = {
-    "PyPI": [
-        "django", "flask", "fastapi", "requests", "cryptography",
-        "pillow", "numpy", "pandas", "sqlalchemy", "aiohttp",
-        "paramiko", "pyyaml", "urllib3", "certifi", "setuptools",
-        "tornado", "gunicorn", "uvicorn", "httpx", "jinja2",
-        "werkzeug", "celery", "redis", "pymongo", "psycopg2",
-        "boto3", "twisted", "scrapy", "pyopenssl", "ansible",
-        "tensorflow", "torch", "scikit-learn", "lxml", "beautifulsoup4",
-        "pygments", "pydantic", "click", "rich", "pytest",
-        "black", "mypy", "ruff", "httplib2", "stripe",
-        "twilio", "sendgrid", "elasticsearch", "grpcio", "protobuf",
-        "pyarrow", "scipy", "matplotlib", "jupyter", "notebook",
-        "virtualenv", "poetry", "pipenv", "tox", "coverage",
-    ],
-    "npm": [
-        "express", "lodash", "moment", "axios", "react",
-        "webpack", "jquery", "typescript", "eslint", "prettier",
-        "next", "gatsby", "angular", "vue", "nuxt",
-        "helmet", "passport", "jsonwebtoken", "bcrypt", "mongoose",
-        "sequelize", "typeorm", "knex", "socket.io", "nodemailer",
-        "multer", "cors", "dotenv", "morgan", "compression",
-        "body-parser", "cookie-parser", "uuid", "dayjs", "date-fns",
-        "luxon", "underscore", "ramda", "redux", "rxjs",
-        "graphql", "apollo-server", "fastify", "koa", "hapi",
-        "tar", "minimatch", "glob", "semver", "debug",
-        "chalk", "commander", "yargs", "inquirer", "ora",
-    ],
-    "Go": [
-        "github.com/gin-gonic/gin",
-        "github.com/gorilla/mux",
-        "github.com/labstack/echo/v4",
-        "github.com/go-chi/chi/v5",
-        "gorm.io/gorm",
-        "github.com/golang-jwt/jwt/v5",
-        "github.com/go-redis/redis/v9",
-        "github.com/spf13/viper",
-        "go.uber.org/zap",
-        "github.com/sirupsen/logrus",
-        "github.com/google/uuid",
-        "github.com/pkg/errors",
-        "github.com/stretchr/testify",
-        "github.com/jmoiron/sqlx",
-        "golang.org/x/crypto",
-        "golang.org/x/net",
-        "golang.org/x/text",
-        "github.com/aws/aws-sdk-go-v2",
-        "google.golang.org/grpc",
-        "github.com/prometheus/client_golang",
-    ],
-    "Maven": [
-        "org.springframework:spring-core",
-        "org.springframework.boot:spring-boot",
-        "com.fasterxml.jackson.core:jackson-databind",
-        "org.apache.commons:commons-lang3",
-        "commons-io:commons-io",
-        "org.apache.logging.log4j:log4j-core",
-        "ch.qos.logback:logback-classic",
-        "org.hibernate:hibernate-core",
-        "mysql:mysql-connector-java",
-        "org.postgresql:postgresql",
-        "com.google.guava:guava",
-        "org.apache.httpcomponents:httpclient",
-        "io.netty:netty-all",
-        "org.bouncycastle:bcprov-jdk15on",
-        "com.squareup.okhttp3:okhttp",
-        "org.apache.struts:struts2-core",
-        "org.springframework.security:spring-security-core",
-        "com.h2database:h2",
-        "org.xerial:sqlite-jdbc",
-        "commons-collections:commons-collections",
-    ],
-    "RubyGems": [
-        "rails", "activesupport", "activerecord", "actionpack",
-        "devise", "nokogiri", "rack", "sinatra",
-        "bundler", "puma", "unicorn", "sidekiq",
-        "redis", "jwt", "bcrypt", "faraday",
-        "rest-client", "httparty", "carrierwave", "paperclip",
-    ],
-    "NuGet": [
-        "Newtonsoft.Json", "Microsoft.AspNetCore",
-        "Microsoft.EntityFrameworkCore", "AutoMapper",
-        "log4net", "NLog", "Serilog",
-        "RestSharp", "Flurl.Http", "Polly",
-        "MediatR", "Dapper", "StackExchange.Redis",
-        "AWSSDK.Core", "Azure.Core",
-        "System.Text.Json", "Microsoft.Data.SqlClient",
-        "Npgsql", "MySql.Data", "MongoDB.Driver",
-    ],
-    "crates.io": [
-        "serde", "tokio", "reqwest", "actix-web",
-        "hyper", "axum", "warp", "rocket",
-        "diesel", "sqlx", "redis", "openssl",
-        "ring", "rustls", "crossbeam", "rayon",
-        "clap", "log", "tracing", "anyhow",
-    ],
-    "Packagist": [
-        "laravel/framework", "symfony/symfony",
-        "guzzlehttp/guzzle", "monolog/monolog",
-        "doctrine/orm", "twig/twig",
-        "predis/predis", "nesbot/carbon",
-        "league/flysystem", "phpmailer/phpmailer",
-        "aws/aws-sdk-php", "stripe/stripe-php",
-        "intervention/image", "spatie/laravel-permission",
-        "typo3/cms-core", "drupal/core",
-    ],
-    "Hex": [
-        "phoenix", "ecto", "plug", "cowboy",
-        "ex_aws", "jason", "poison", "httpoison",
-        "guardian", "comeonin", "bcrypt_elixir",
-        "telemetry", "oban", "broadway",
-    ],
-    # Dart / Flutter パッケージ（pub.dev）
-    "Pub": [
-        # HTTP / ネットワーク
-        "dio", "http", "retrofit", "chopper", "graphql",
-        # 状態管理
-        "provider", "flutter_riverpod", "riverpod", "flutter_bloc", "bloc",
-        "get", "mobx", "signals",
-        # Firebase
-        "firebase_core", "firebase_auth", "cloud_firestore",
-        "firebase_messaging", "firebase_storage", "firebase_analytics",
-        # ローカルストレージ / DB
-        "shared_preferences", "sqflite", "hive", "isar", "drift",
-        "path_provider",
-        # ルーティング / ナビゲーション
-        "go_router", "auto_route",
-        # UI / ウィジェット
-        "flutter_svg", "cached_network_image", "flutter_screenutil",
-        "shimmer", "lottie", "photo_view",
-        # ユーティリティ
-        "url_launcher", "image_picker", "permission_handler",
-        "connectivity_plus", "package_info_plus", "device_info_plus",
-        "intl", "freezed", "json_serializable", "json_annotation",
-        "equatable", "dartz", "fpdart",
-        # セキュリティ / 認証
-        "flutter_secure_storage", "local_auth", "encrypt",
-        "google_sign_in", "sign_in_with_apple",
-        # テスト / 開発
-        "mockito", "bloc_test", "flutter_test",
-    ],
-}
-
 # 後方互換: GCS ベースのクローラーと同じエコシステム名リスト
 TARGET_ECOSYSTEMS = list(POPULAR_PACKAGES.keys())
-
-
-def _parse_severity(vuln: dict[str, Any]) -> tuple[str | None, float | None]:
-    """OSV エントリから重要度ラベルと CVSS スコアを抽出する。
-
-    優先順位:
-    1. database_specific.severity（GitHub Advisory Database が付与する文字列）
-    2. database_specific.cvss.score（数値スコア）
-    3. severity[].score が数値の場合
-
-    Returns:
-        (severity_label, cvss_score) のタプル
-    """
-    db_specific = vuln.get("database_specific", {}) or {}
-
-    # 1. database_specific.severity（CRITICAL/HIGH/MEDIUM/LOW 文字列）
-    sev_str = (db_specific.get("severity") or "").upper()
-    if sev_str in ("CRITICAL", "HIGH", "MEDIUM", "LOW"):
-        cvss_score: float | None = None
-        try:
-            raw = (db_specific.get("cvss") or {}).get("score")
-            if raw is not None:
-                cvss_score = float(raw)
-        except (TypeError, ValueError):
-            pass
-        return sev_str, cvss_score
-
-    # 2. severity 配列に数値スコアが直接格納されている場合
-    for sev in vuln.get("severity", []):
-        try:
-            score = float(sev.get("score", ""))
-            if score >= 9.0:
-                return "CRITICAL", score
-            elif score >= 7.0:
-                return "HIGH", score
-            elif score >= 4.0:
-                return "MEDIUM", score
-            else:
-                return "LOW", score
-        except (TypeError, ValueError):
-            pass
-
-    return None, None
-
-
-def _extract_fixed_versions(affected: dict[str, Any]) -> list[str]:
-    """affected エントリの ranges から修正済みバージョン（fixed イベント）を抽出する。"""
-    fixed: list[str] = []
-    for rng in affected.get("ranges", []):
-        for event in rng.get("events", []):
-            if "fixed" in event:
-                fixed.append(event["fixed"])
-    return fixed
 
 
 def _build_records(
@@ -233,7 +38,7 @@ def _build_records(
 
     1つの脆弱性が複数パッケージに影響する場合は 1 レコード/パッケージ を生成する。
     """
-    severity, cvss_score = _parse_severity(vuln)
+    severity, cvss_score = parse_severity(vuln)
 
     # 公開日時をパース（失敗時は modified で代替）
     published_str = vuln.get("published", "")
@@ -262,7 +67,7 @@ def _build_records(
 
         # 影響バージョンは最大 30 件に制限
         affected_versions = (affected.get("versions") or [])[:30]
-        fixed_versions = _extract_fixed_versions(affected)
+        fixed_versions = extract_fixed_versions(affected)
 
         records.append(
             {
@@ -283,99 +88,6 @@ def _build_records(
         )
 
     return records
-
-
-def _query_packages_batch(
-    packages: list[tuple[str, str]],  # [(package_name, ecosystem), ...]
-) -> list[dict[str, Any]]:
-    """/v1/querybatch で複数パッケージを一括クエリして {id, modified} リストを返す。
-
-    querybatch は id と modified のみ返すため、詳細は別途 _fetch_vuln_by_id で取得する。
-
-    Args:
-        packages: (パッケージ名, エコシステム) のタプルリスト（最大 BATCH_SIZE 件）
-
-    Returns:
-        {"id": ..., "modified": ...} 辞書のリスト（重複 ID は除去済み）
-    """
-    if not packages:
-        return []
-
-    queries = [
-        {"package": {"name": pkg, "ecosystem": eco}}
-        for pkg, eco in packages
-    ]
-
-    with httpx.Client(timeout=60.0) as client:
-        resp = client.post(
-            f"{OSV_API_BASE}/querybatch",
-            json={"queries": queries},
-        )
-        resp.raise_for_status()
-
-    data = resp.json()
-    # 脆弱性を ID でユニーク化（複数パッケージが同じ CVE に影響する場合の重複除去）
-    seen: set[str] = set()
-    refs: list[dict[str, Any]] = []
-    for result in data.get("results", []):
-        for v in result.get("vulns", []):
-            vid = v.get("id", "")
-            if vid and vid not in seen:
-                seen.add(vid)
-                refs.append({"id": vid, "modified": v.get("modified", "")})
-
-    return refs
-
-
-def _query_versions_batch(
-    items: list[tuple[str, str, str]],  # [(ecosystem, package_name, version), ...]
-) -> dict[tuple[str, str, str], list[str]]:
-    """/v1/querybatch にバージョン指定でバッチクエリし、各パッケージ×バージョンに
-    ヒットした脆弱性 ID を返す（DEPSCAN 機能から使用）。
-
-    querybatch はクエリと結果を同じ順序の配列で返す仕様のため、位置合わせで
-    (ecosystem, package_name, version) と結果を対応付ける。
-
-    Args:
-        items: (エコシステム, パッケージ名, バージョン) のタプルリスト
-
-    Returns:
-        {(ecosystem, package_name, version): [osv_id, ...]} の辞書
-        （ヒットなしのキーは含まない）
-    """
-    if not items:
-        return {}
-
-    result_map: dict[tuple[str, str, str], list[str]] = {}
-
-    with httpx.Client(timeout=60.0) as client:
-        for i in range(0, len(items), BATCH_SIZE):
-            chunk = items[i: i + BATCH_SIZE]
-            queries = [
-                {"version": version, "package": {"name": name, "ecosystem": eco}}
-                for eco, name, version in chunk
-            ]
-            resp = client.post(
-                f"{OSV_API_BASE}/querybatch",
-                json={"queries": queries},
-            )
-            resp.raise_for_status()
-            results = resp.json().get("results", [])
-
-            for item, result in zip(chunk, results, strict=False):
-                vuln_ids = [v["id"] for v in result.get("vulns", []) if v.get("id")]
-                if vuln_ids:
-                    result_map[item] = vuln_ids
-
-    return result_map
-
-
-def _fetch_vuln_by_id(osv_id: str) -> dict[str, Any]:
-    """GET /v1/vulns/{id} で脆弱性の完全な情報（affected・severity 等）を取得する。"""
-    with httpx.Client(timeout=30.0) as client:
-        resp = client.get(f"{OSV_API_BASE}/vulns/{osv_id}")
-        resp.raise_for_status()
-    return resp.json()
 
 
 _COMMIT_EVERY = 50  # 何件ごとにコミットするか（長時間トランザクション回避）
@@ -491,7 +203,7 @@ def fetch_and_store_osv(days: int | None = None) -> tuple[int, int, int]:
                 raw_refs: list[dict[str, Any]] = []
                 for i in range(0, len(pkg_tuples), BATCH_SIZE):
                     chunk = pkg_tuples[i: i + BATCH_SIZE]
-                    raw_refs.extend(_query_packages_batch(chunk))
+                    raw_refs.extend(query_packages_batch(chunk))
 
                 # 複数バッチにまたがる重複 ID を除去
                 seen_ids: set[str] = set()
@@ -522,7 +234,7 @@ def fetch_and_store_osv(days: int | None = None) -> tuple[int, int, int]:
                 records: list[dict[str, Any]] = []
                 for osv_id, modified in recent_refs:
                     try:
-                        vuln = _fetch_vuln_by_id(osv_id)
+                        vuln = fetch_vuln_by_id(osv_id)
                         records.extend(_build_records(vuln, modified))
                     except httpx.HTTPError as exc:
                         logger.warning("Failed to fetch %s: %s", osv_id, exc)

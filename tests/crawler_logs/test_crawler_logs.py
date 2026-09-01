@@ -285,7 +285,7 @@ class TestCrawlerLogIntegration:
         """OSV クローラー成功時に write_crawler_log が呼ばれること。"""
         from unittest.mock import patch
 
-        with patch("app.osv.crawler._query_packages_batch", return_value=[]), \
+        with patch("app.osv.crawler.query_packages_batch", return_value=[]), \
              patch("app.osv.crawler._delete_old_osv_records", return_value=5), \
              patch("app.osv.crawler.notify_osv_new_vulnerabilities"), \
              patch("app.osv.crawler.write_crawler_log") as mock_log, \

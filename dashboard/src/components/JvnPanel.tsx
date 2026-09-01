@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   FileWarning, ExternalLink, ChevronDown, ChevronUp,
-  RefreshCw, Search, X, TrendingUp,
+  RefreshCw, Search, X,
 } from 'lucide-react'
-import {
-  PieChart, Pie, Cell, Tooltip as ReTooltip, ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid,
-} from 'recharts'
 import {
   fetchJvnList, fetchJvnStats,
   type JvnVulnerabilityOut, type JvnListResponse, type JvnStatsResponse,
 } from '../api/client'
+import {
+  SeverityBadge, SeverityPieChart, MonthlyBarChart,
+  TableLoadingSkeleton, EmptyState, Pagination,
+  SeverityFilterButtons, SearchBox, SortSelector,
+} from './shared/VulnPanelParts'
 
 // JVN の重要度は High / Medium / Low（OSV とは異なる）
 const SEVERITY_CLS: Record<string, string> = {
@@ -29,17 +30,6 @@ const SEVERITY_COLORS: Record<string, string> = {
 const SEVERITIES = ['ALL', 'High', 'Medium', 'Low']
 const PER_PAGE = 30
 
-function SeverityBadge({ severity }: { severity: string | null }) {
-  const cls = severity
-    ? (SEVERITY_CLS[severity] ?? 'bg-slate-800 text-slate-400 border-slate-700')
-    : 'bg-slate-800 text-slate-500 border-slate-700'
-  return (
-    <span className={`inline-block px-1.5 py-0.5 rounded border text-xs font-semibold whitespace-nowrap ${cls}`}>
-      {severity ?? 'N/A'}
-    </span>
-  )
-}
-
 function JvnRow({ item }: { item: JvnVulnerabilityOut }) {
   const [open, setOpen] = useState(false)
   const modifiedDate = new Date(item.date_last_modified).toLocaleDateString('ja-JP', {
@@ -56,7 +46,7 @@ function JvnRow({ item }: { item: JvnVulnerabilityOut }) {
       >
         {/* 深刻度 + CVSS */}
         <td className="py-2.5 pr-3 w-20">
-          <SeverityBadge severity={item.severity} />
+          <SeverityBadge severity={item.severity} classMap={SEVERITY_CLS} />
           {item.cvss_score != null && (
             <span className="block text-[10px] text-slate-600 mt-0.5 tabular-nums">
               {item.cvss_score.toFixed(1)}
@@ -197,106 +187,6 @@ function JvnRow({ item }: { item: JvnVulnerabilityOut }) {
   )
 }
 
-// 重要度別円グラフ
-function JvnSeverityPieChart({ stats, loading }: { stats: JvnStatsResponse | null; loading: boolean }) {
-  const data = (stats?.severities ?? [])
-    .filter(s => s.severity !== 'N/A' && s.count > 0)
-    .map(s => ({ name: s.severity, value: s.count }))
-
-  return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <FileWarning size={13} className="text-slate-400" />
-        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">重要度別分布</span>
-      </div>
-      <div className="h-[210px]">
-        {loading || data.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-xs text-slate-600">
-            {loading ? '読み込み中...' : 'データなし'}
-          </div>
-        ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={data}
-                cx="50%"
-                cy="50%"
-                innerRadius={55}
-                outerRadius={85}
-                paddingAngle={2}
-                dataKey="value"
-              >
-                {data.map(entry => (
-                  <Cell key={entry.name} fill={SEVERITY_COLORS[entry.name] ?? '#475569'} />
-                ))}
-              </Pie>
-              <ReTooltip
-                contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }}
-                formatter={(value, name) => [String(value) + ' 件', String(name)]}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-        )}
-      </div>
-      {!loading && data.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {data.map(d => (
-            <span key={d.name} className="flex items-center gap-1 text-[11px] text-slate-400">
-              <span className="inline-block w-2 h-2 rounded-full" style={{ background: SEVERITY_COLORS[d.name] ?? '#475569' }} />
-              {d.name} <span className="text-slate-600">{d.value}</span>
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// 月別 JVN トレンドグラフ
-function JvnMonthlyChart({ stats, loading }: { stats: JvnStatsResponse | null; loading: boolean }) {
-  const data = stats?.monthly_trend ?? []
-
-  return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <TrendingUp size={13} className="text-slate-400" />
-        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">月別 JVN 更新トレンド</span>
-      </div>
-      <div className="h-[210px]">
-        {loading || data.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-xs text-slate-600">
-            {loading ? '読み込み中...' : 'データなし'}
-          </div>
-        ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-              <XAxis
-                dataKey="year_month"
-                tick={{ fill: '#475569', fontSize: 10 }}
-                tickLine={false}
-                axisLine={false}
-                interval="preserveStartEnd"
-              />
-              <YAxis
-                tick={{ fill: '#475569', fontSize: 10 }}
-                tickLine={false}
-                axisLine={false}
-                allowDecimals={false}
-              />
-              <ReTooltip
-                contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }}
-                formatter={(value) => [String(value) + ' 件', '件数']}
-              />
-              <Bar dataKey="count" fill="#f59e0b" radius={[3, 3, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-      </div>
-    </div>
-  )
-}
-
 export function JvnPanel() {
   const [severity, setSeverity] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -385,91 +275,54 @@ export function JvnPanel() {
 
       {/* ビジュアライゼーション: 重要度別グラフ・月別トレンド */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <JvnSeverityPieChart stats={stats} loading={loading} />
-        <JvnMonthlyChart stats={stats} loading={loading} />
+        <SeverityPieChart
+          icon={<FileWarning size={13} className="text-slate-400" />}
+          data={stats?.severities ?? []}
+          colorMap={SEVERITY_COLORS}
+          loading={loading}
+        />
+        <MonthlyBarChart
+          icon={<FileWarning size={13} className="text-slate-400" />}
+          title="月別 JVN 更新トレンド"
+          data={stats?.monthly_trend ?? []}
+          barColor="#f59e0b"
+          height={210}
+          loading={loading}
+        />
       </div>
 
       {/* 重要度フィルター + 検索 + ソート */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex gap-1">
-          {SEVERITIES.map(sev => {
-            const active = (sev === 'ALL' && severity === null) || sev === severity
-            const cls = active
-              ? sev === 'ALL'
-                ? 'bg-slate-700 text-white'
-                : (SEVERITY_CLS[sev] ?? 'bg-slate-700 text-white') + ' border'
-              : 'bg-slate-800/50 text-slate-500 hover:text-slate-300'
-            return (
-              <button
-                key={sev}
-                onClick={() => handleSev(sev)}
-                className={`px-2 py-1 rounded text-xs font-medium transition-colors ${cls}`}
-              >
-                {sev}
-              </button>
-            )
-          })}
-        </div>
+        <SeverityFilterButtons
+          severities={SEVERITIES}
+          active={severity}
+          onSelect={handleSev}
+          classMap={SEVERITY_CLS}
+        />
 
-        {/* キーワード検索 */}
-        <div className="flex items-center gap-1.5 bg-slate-800/60 border border-slate-700 rounded-lg px-2.5 py-1.5 flex-1 min-w-[160px]">
-          <Search size={11} className="text-slate-500 shrink-0" />
-          <input
-            type="text"
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1) }}
-            placeholder="JVNDB ID・タイトル・概要"
-            className="bg-transparent text-xs text-slate-300 placeholder:text-slate-600 outline-none w-full"
-          />
-          {search && (
-            <button onClick={clearSearch} className="text-slate-500 hover:text-slate-300">
-              <X size={10} />
-            </button>
-          )}
-        </div>
+        <SearchBox
+          value={search}
+          onChange={v => { setSearch(v); setPage(1) }}
+          onClear={clearSearch}
+          placeholder="JVNDB ID・タイトル・概要"
+          searchIcon={<Search size={11} className="text-slate-500 shrink-0" />}
+          clearIcon={<X size={10} />}
+        />
 
-        {/* ソートセレクター */}
-        <div className="flex items-center gap-1 bg-slate-800/60 border border-slate-700 rounded-lg px-2.5 py-1.5">
-          <span className="text-[10px] text-slate-500 whitespace-nowrap">ソート:</span>
-          <button
-            onClick={() => { setSortBy('modified'); setPage(1) }}
-            className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
-              sortBy === 'modified' ? 'bg-amber-500 text-white' : 'text-slate-400 hover:text-slate-300'
-            }`}
-          >
-            更新日
-          </button>
-          <button
-            onClick={() => { setSortBy('cvss'); setPage(1) }}
-            className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
-              sortBy === 'cvss' ? 'bg-amber-500 text-white' : 'text-slate-400 hover:text-slate-300'
-            }`}
-          >
-            CVSS
-          </button>
-        </div>
+        <SortSelector
+          sortBy={sortBy}
+          onChange={sort => { setSortBy(sort); setPage(1) }}
+          activeClass="bg-amber-500 text-white"
+        />
       </div>
 
       {/* ローディング */}
       {loading ? (
-        <div className="space-y-2 py-4">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-3 py-2">
-              <div className="h-4 w-16 bg-slate-800 rounded animate-pulse" />
-              <div className="h-4 w-36 bg-slate-800 rounded animate-pulse" />
-              <div className="h-4 flex-1 bg-slate-800 rounded animate-pulse" />
-              <div className="h-4 w-28 bg-slate-800 rounded animate-pulse" />
-            </div>
-          ))}
-        </div>
+        <TableLoadingSkeleton columnWidths={['w-16', 'w-36', 'flex-1', 'w-28']} />
 
       /* データなし */
       ) : result && result.total === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-2 py-12 text-slate-600">
-          <FileWarning size={28} />
-          <p className="text-sm">該当する JVN 脆弱性はありません</p>
-          <p className="text-xs text-slate-700">クローラーがデータを取得すると表示されます</p>
-        </div>
+        <EmptyState icon={<FileWarning size={28} />} message="該当する JVN 脆弱性はありません" />
 
       /* テーブル */
       ) : result && (
@@ -494,29 +347,7 @@ export function JvnPanel() {
             </table>
           </div>
 
-          {/* ページネーション */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between pt-2 border-t border-slate-800">
-              <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >
-                ← 前へ
-              </button>
-              <span className="text-sm text-slate-600 tabular-nums">
-                {page} / {totalPages}
-                <span className="ml-2 text-slate-700">（{result.total} 件）</span>
-              </span>
-              <button
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >
-                次へ →
-              </button>
-            </div>
-          )}
+          <Pagination page={page} totalPages={totalPages} total={result.total} onPageChange={setPage} />
         </>
       )}
     </div>
