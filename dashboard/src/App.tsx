@@ -79,7 +79,7 @@ export default function App() {
             </div>
             <div className="min-w-0">
               <p className="text-sm font-semibold text-white leading-tight truncate">
-                Cyberattack Info Dashboard
+                サイバー攻撃情報ダッシュボード
               </p>
               <p className="text-[10px] text-slate-500 leading-tight hidden sm:block">
                 CISA KEV / Open Source Vulnerabilities
