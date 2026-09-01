@@ -12,14 +12,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.auth import require_api_key
-from app.config import settings
-from app.cron import fetch_and_store_kev
-from app.cron_jvn import fetch_and_store_jvn
-from app.cron_osv import fetch_and_store_osv
-from app.database import Base, engine, get_db
-from app.routers import crawler_logs, jvn, osv, vulnerabilities
-from app.schemas import HealthResponse
+from app.core.auth import require_api_key
+from app.core.config import settings
+from app.core.database import Base, engine, get_db
+from app.core.schemas import HealthResponse
+from app.crawler_logs.router import router as crawler_logs_router
+from app.depscan.crawler import fetch_and_scan_dependencies
+from app.depscan.router import router as depscan_router
+from app.jvn.crawler import fetch_and_store_jvn
+from app.jvn.router import router as jvn_router
+from app.kev.crawler import fetch_and_store_kev
+from app.kev.router import router as kev_router
+from app.osv.crawler import fetch_and_store_osv
+from app.osv.router import router as osv_router
 
 # ──────────────────────────────────────────────
 # ロギング設定（標準出力に JSON 風ログを出力）
@@ -84,11 +89,22 @@ async def lifespan(app: FastAPI):
         id="jvn_crawler",
         replace_existing=True,
     )
+    # 依存ライブラリ脆弱性スキャナー（DEPSCAN）
+    scheduler.add_job(
+        fetch_and_scan_dependencies,
+        trigger="cron",
+        hour=settings.DEPSCAN_CRON_HOUR_UTC,
+        minute=0,
+        id="depscan_crawler",
+        replace_existing=True,
+    )
     scheduler.start()
     logger.info(
-        "Scheduler started: KEV UTC %02d:%02d / OSV UTC %02d:00 / JVN UTC %02d:00",
+        "Scheduler started: KEV UTC %02d:%02d / OSV UTC %02d:00 / JVN UTC %02d:00 / "
+        "DEPSCAN UTC %02d:00",
         settings.CRON_HOUR_UTC, settings.CRON_MINUTE_UTC,
         settings.OSV_CRON_HOUR_UTC, settings.JVN_CRON_HOUR_UTC,
+        settings.DEPSCAN_CRON_HOUR_UTC,
     )
 
     yield  # アプリ実行中
@@ -128,10 +144,11 @@ app.add_middleware(
 )
 
 # ルーター登録
-app.include_router(vulnerabilities.router)
-app.include_router(osv.router)
-app.include_router(jvn.router)
-app.include_router(crawler_logs.router)
+app.include_router(kev_router)
+app.include_router(osv_router)
+app.include_router(jvn_router)
+app.include_router(crawler_logs_router)
+app.include_router(depscan_router)
 
 
 # ──────────────────────────────────────────────
@@ -232,6 +249,22 @@ def trigger_jvn_crawl(
     logger.info("Manual JVN crawl triggered via /admin/jvn-crawl (days=%s)", days)
     _run_in_background("JVN", lambda: fetch_and_store_jvn(days=days))
     return {"message": f"JVN crawl started in background (days={days or 'default'})"}
+
+
+@app.post(
+    "/admin/depscan-crawl",
+    tags=["admin"],
+    dependencies=[Security(require_api_key)],
+    summary="依存ライブラリ脆弱性スキャン手動実行（バックグラウンド）",
+    description="GitHub 上の対象リポジトリのロックファイルを OSV API と照合する処理を"
+    "バックグラウンドで開始する（X-API-KEY 必須）。結果は /api/crawler-logs で確認。",
+    status_code=202,
+)
+def trigger_depscan_crawl() -> dict:
+    """依存ライブラリ脆弱性スキャナーをバックグラウンドで実行する。"""
+    logger.info("Manual DEPSCAN triggered via /admin/depscan-crawl")
+    _run_in_background("DEPSCAN", fetch_and_scan_dependencies)
+    return {"message": "Dependency vulnerability scan started in background"}
 
 
 @app.get("/", tags=["system"])

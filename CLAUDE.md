@@ -85,36 +85,57 @@ pip install -r requirements-dev.txt
 
 ## プロジェクト構成
 
+`app/` はドメイン（KEV / OSV / JVN / DEPSCAN / クローラーログ / 横断的共通処理）単位のパッケージで構成する。各ドメインは `models.py`（ORM）・`schemas.py`（Pydantic）・`crawler.py`（クローラー）・`router.py`（API）を1つのフォルダにまとめ、高凝集を保つ。`app/main.py` はエントリポイント固定（`uvicorn app.main:app`）のため直下から動かさない。
+
 ```
 app/
-├── main.py            # FastAPI アプリ・lifespan・ヘルスチェック
-│                      # /admin/crawl・/admin/osv-crawl・/admin/jvn-crawl
-├── config.py          # Settings（pydantic-settings）・環境変数管理
-├── database.py        # SQLAlchemy エンジン（SQLite/PG 切り替え）・get_db
-├── models.py          # ORM モデル（Vulnerability・OsvVulnerability・JvnVulnerability・CrawlerLog）
-├── schemas.py         # Pydantic スキーマ（VulnerabilityOut・OsvVulnerabilityOut・JvnVulnerabilityOut 等）
-├── auth.py            # X-API-KEY 認証（APIKeyHeader・hmac.compare_digest）
-├── db_utils.py        # DB ユーティリティ（year_month_expr: SQLite/PG 両対応の日付フォーマット）
-├── cron.py            # CISA KEV クローラー・Upsert ロジック・Slack 通知呼び出し
-├── cron_osv.py        # OSV クローラー（REST API 方式・10 エコシステム対応）・Upsert・古いレコード削除・Slack 通知
-├── cron_jvn.py        # JVN クローラー（MyJVN API / RDF-RSS）・Upsert・Slack 通知
-├── crawler_log.py     # クローラー実行ログ書き込みユーティリティ（write_crawler_log・now_utc）
-├── notifications.py   # Slack Webhook 通知（notify_success/notify_error 共通化・エラーサニタイズ）
-└── routers/
-    ├── vulnerabilities.py  # /api/vulnerabilities エンドポイント（一覧・個別・統計）
-    ├── osv.py              # /api/osv エンドポイント（一覧・統計）
-    ├── jvn.py              # /api/jvn エンドポイント（一覧・統計）
-    └── crawler_logs.py     # /api/crawler-logs エンドポイント（実行ログ一覧）
+├── main.py                 # FastAPI アプリ・lifespan・スケジューラ登録・ルーター include
+│                           # /admin/crawl・/admin/osv-crawl・/admin/jvn-crawl・/admin/depscan-crawl
+├── core/                   # 横断的インフラ（特定ドメインに属さない）
+│   ├── config.py           # Settings（pydantic-settings）・環境変数管理
+│   ├── database.py         # SQLAlchemy エンジン（SQLite/PG 切り替え）・get_db
+│   ├── auth.py             # X-API-KEY 認証（APIKeyHeader・hmac.compare_digest）
+│   ├── db_utils.py         # DB ユーティリティ（year_month_expr: SQLite/PG 両対応の日付フォーマット）
+│   ├── notifications.py    # Slack Webhook 通知（notify_success/notify_error 共通化・エラーサニタイズ）
+│   └── schemas.py          # 横断スキーマ（HealthResponse・MonthlyStat・SeverityStat）
+├── kev/                    # CISA KEV ドメイン
+│   ├── models.py           # Vulnerability
+│   ├── schemas.py          # VulnerabilityOut 等
+│   ├── crawler.py          # CISA KEV クローラー・Upsert ロジック
+│   └── router.py           # /api/vulnerabilities エンドポイント（一覧・個別・統計）
+├── osv/                    # OSV ドメイン
+│   ├── models.py           # OsvVulnerability
+│   ├── schemas.py          # OsvVulnerabilityOut 等
+│   ├── crawler.py          # OSV クローラー（REST API 方式・10 エコシステム対応）
+│   │                       # _query_versions_batch（DEPSCAN のリアルタイム照合から利用）
+│   └── router.py           # /api/osv エンドポイント（一覧・統計）
+├── jvn/                    # JVN ドメイン
+│   ├── models.py           # JvnVulnerability
+│   ├── schemas.py          # JvnVulnerabilityOut 等
+│   ├── crawler.py          # JVN クローラー（MyJVN API / RDF-RSS）
+│   └── router.py           # /api/jvn エンドポイント（一覧・統計）
+├── depscan/                # 依存ライブラリ脆弱性スキャン（DEPSCAN）ドメイン
+│   ├── models.py           # DependencyFinding
+│   ├── schemas.py          # DependencyFindingOut 等
+│   ├── crawler.py          # GitHub 全リポジトリのロックファイルを OSV API とリアルタイム照合
+│   ├── router.py           # /api/depscan エンドポイント（一覧・統計）
+│   ├── github_client.py    # GitHub API クライアント（リポジトリ一覧・ツリー・ファイル取得）
+│   └── parsers/            # 10 エコシステム分のロックファイルパーサー
+└── crawler_logs/           # クローラー実行ログドメイン
+    ├── models.py           # CrawlerLog
+    ├── schemas.py          # CrawlerLogOut
+    ├── writer.py           # write_crawler_log・now_utc（KEV/OSV/JVN/DEPSCAN 各クローラーから利用）
+    └── router.py           # /api/crawler-logs エンドポイント（実行ログ一覧）
 
-tests/
-├── conftest.py              # テスト DB・client・db_session フィクスチャ
-├── test_api.py              # KEV API エンドポイントテスト
-├── test_cron.py             # KEV クローラーユニットテスト
-├── test_crawler_logs.py     # クローラーログ API テスト
-├── test_database.py         # DB エンジン・セッションテスト
-├── test_osv.py              # OSV API・クローラーテスト
-├── test_jvn.py              # JVN API・クローラーテスト
-└── test_notifications.py    # Slack 通知テスト（KEV・OSV・JVN 対応）
+tests/                      # app/ と同じドメイン構成でミラーリング
+├── conftest.py             # テスト DB・client・db_session フィクスチャ（全サブフォルダに自動継承）
+├── test_main.py            # app.main（health/root）テスト
+├── core/                   # DB エンジン・Slack 通知テスト
+├── kev/                    # KEV クローラー・API テスト
+├── osv/                    # OSV クローラー・API テスト
+├── jvn/                    # JVN クローラー・API テスト
+├── depscan/                # DEPSCAN クローラー・API・パーサーテスト
+└── crawler_logs/           # クローラーログ API テスト
 
 dashboard/               # Vercel デプロイの React ダッシュボード
                          # CISA KEV・OSV（Pub 含む 10 エコシステム・180 日表示）・JVN を
@@ -123,7 +144,7 @@ dashboard/               # Vercel デプロイの React ダッシュボード
 .github/workflows/
 ├── ci.yml           # CI: ruff → mypy → pytest（PR 時・Python 3.10/3.11 matrix）
 ├── deploy.yml       # CD: Render Deploy Hook トリガー（main マージ時）
-└── daily-crawl.yml  # 毎日クロール: 単一 cron(UTC 19:05) で KEV → OSV → JVN を順次実行
+└── daily-crawl.yml  # 毎日クロール: 単一 cron(UTC 19:05) で KEV → OSV → JVN → DEPSCAN を順次実行
 ```
 
 ---
