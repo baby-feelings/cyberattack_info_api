@@ -14,11 +14,11 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.notifications import notify_dependency_findings, notify_depscan_crawl_error
+from app.core.osv_client import fetch_vuln_by_id, parse_severity, query_versions_batch
 from app.crawler_logs.writer import now_utc, write_crawler_log
 from app.depscan.github_client import get_file_content, get_repo_tree, list_target_repos
 from app.depscan.models import DependencyFinding
 from app.depscan.parsers import LOCKFILE_FILENAMES, parse_manifest
-from app.osv.crawler import _fetch_vuln_by_id, _parse_severity, _query_versions_batch
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +76,7 @@ def _build_findings(
     dep_to_repos: dict[DepKey, list[tuple[str, str]]],
 ) -> list[dict[str, Any]]:
     """パッケージ×バージョンを OSV に照合し、DependencyFinding レコード辞書のリストを構築する。"""
-    hits = _query_versions_batch(list(dep_to_repos.keys()))
+    hits = query_versions_batch(list(dep_to_repos.keys()))
     if not hits:
         return []
 
@@ -90,7 +90,7 @@ def _build_findings(
         for osv_id in osv_ids:
             if osv_id not in vuln_cache:
                 try:
-                    vuln_cache[osv_id] = _fetch_vuln_by_id(osv_id)
+                    vuln_cache[osv_id] = fetch_vuln_by_id(osv_id)
                 except httpx.HTTPError as exc:
                     logger.warning("Failed to fetch vuln %s: %s", osv_id, exc)
                     vuln_cache[osv_id] = None
@@ -98,7 +98,7 @@ def _build_findings(
             if vuln is None:
                 continue
 
-            severity, cvss_score = _parse_severity(vuln)
+            severity, cvss_score = parse_severity(vuln)
             summary = (vuln.get("summary") or "").strip()
             fixed_versions = sorted({
                 event["fixed"]

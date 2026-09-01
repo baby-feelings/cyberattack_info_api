@@ -83,8 +83,8 @@ def _fetch_page(cutoff_date: str, start_item: int) -> stdlib_ET.Element | None:
         return None
 
 
-def _parse_item(item: stdlib_ET.Element) -> dict | None:
-    """RSS <item> 要素から JVN 脆弱性データを抽出する。
+def _parse_core_fields(item: stdlib_ET.Element) -> dict | None:
+    """<item> 要素から識別子・タイトル・リンク・概要・日付を抽出する。
 
     Returns:
         dict 形式のデータ、必須フィールド欠損時は None
@@ -119,34 +119,56 @@ def _parse_item(item: stdlib_ET.Element) -> dict | None:
     if date_published is None or date_last_modified is None:
         return None
 
-    # CVSSv2 情報
-    cvss2 = item.find("sec:cvss", namespaces=_NS)
-    cvss_score: float | None = None
-    cvss_vector: str | None = None
-    severity: str | None = None
-    if cvss2 is not None:
-        score_str = cvss2.get("score")
-        if score_str:
-            try:
-                cvss_score = float(score_str)
-            except ValueError:
-                pass
-        cvss_vector = cvss2.get("vector") or None
-        severity_raw = cvss2.get("severity") or ""
-        # 重要度を正規化（高/中/低 → High/Medium/Low）
-        severity_map = {"高": "High", "中": "Medium", "低": "Low",
-                        "High": "High", "Medium": "Medium", "Low": "Low"}
-        severity = severity_map.get(severity_raw)
+    return {
+        "jvndb_id": identifier,
+        "title": title,
+        "overview": description,
+        "jvn_url": link,
+        "date_published": date_published,
+        "date_last_modified": date_last_modified,
+    }
 
-    # 関連 CVE ID を収集（sec:references の source="CVE" 要素から）
+
+# CVSS の重要度表記を正規化する（高/中/低 → High/Medium/Low）
+_SEVERITY_MAP = {"高": "High", "中": "Medium", "低": "Low",
+                 "High": "High", "Medium": "Medium", "Low": "Low"}
+
+
+def _parse_cvss(item: stdlib_ET.Element) -> tuple[float | None, str | None, str | None]:
+    """<item> 要素から CVSSv2 情報（スコア・ベクター・重要度）を抽出する。"""
+    cvss2 = item.find("sec:cvss", namespaces=_NS)
+    if cvss2 is None:
+        return None, None, None
+
+    cvss_score: float | None = None
+    score_str = cvss2.get("score")
+    if score_str:
+        try:
+            cvss_score = float(score_str)
+        except ValueError:
+            pass
+
+    cvss_vector = cvss2.get("vector") or None
+    severity = _SEVERITY_MAP.get(cvss2.get("severity") or "")
+    return cvss_score, cvss_vector, severity
+
+
+def _parse_cve_ids(item: stdlib_ET.Element) -> list[str]:
+    """<item> 要素から関連 CVE ID を収集する（sec:references の source="CVE" 要素から）。"""
     cve_ids: list[str] = []
     for ref in item.findall("sec:references", namespaces=_NS):
         if ref.get("source") == "CVE":
             ref_id = ref.get("id", "")
             if ref_id.startswith("CVE-"):
                 cve_ids.append(ref_id)
+    return cve_ids
 
-    # 影響製品（sec:cpe 要素の vendor/product 属性と CPE テキストから）
+
+def _parse_affected_products(item: stdlib_ET.Element) -> list[dict]:
+    """<item> 要素から影響製品一覧を抽出する。
+
+    sec:cpe 要素の vendor/product 属性と CPE テキストから構築する。
+    """
     affected_products: list[dict] = []
     for cpe_elem in item.findall("sec:cpe", namespaces=_NS):
         vendor = cpe_elem.get("vendor", "")
@@ -154,20 +176,29 @@ def _parse_item(item: stdlib_ET.Element) -> dict | None:
         cpe = cpe_elem.text or ""
         if vendor or product_name:
             affected_products.append({"vendor": vendor, "product": product_name, "cpe": cpe})
+    return affected_products
+
+
+def _parse_item(item: stdlib_ET.Element) -> dict | None:
+    """RSS <item> 要素から JVN 脆弱性データを抽出する。
+
+    Returns:
+        dict 形式のデータ、必須フィールド欠損時は None
+    """
+    core = _parse_core_fields(item)
+    if core is None:
+        return None
+
+    cvss_score, cvss_vector, severity = _parse_cvss(item)
 
     return {
-        "jvndb_id": identifier,
-        "title": title,
-        "overview": description,
-        "cve_ids": cve_ids,
+        **core,
+        "cve_ids": _parse_cve_ids(item),
         "severity": severity,
         "cvss_score": cvss_score,
         "cvss_vector": cvss_vector,
-        "affected_products": affected_products,
+        "affected_products": _parse_affected_products(item),
         "references": [],  # overview リストには詳細参考リンクが含まれないため空
-        "jvn_url": link,
-        "date_published": date_published,
-        "date_last_modified": date_last_modified,
     }
 
 

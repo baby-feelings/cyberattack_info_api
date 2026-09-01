@@ -1,0 +1,148 @@
+"""OSV クローラーが監視対象とする、エコシステムごとの主要パッケージ一覧。
+
+クロールロジック（app.osv.crawler）からデータを分離し、監視対象パッケージの
+追加・削除をロジック変更なしで行えるようにする。
+"""
+
+POPULAR_PACKAGES: dict[str, list[str]] = {
+    "PyPI": [
+        "django", "flask", "fastapi", "requests", "cryptography",
+        "pillow", "numpy", "pandas", "sqlalchemy", "aiohttp",
+        "paramiko", "pyyaml", "urllib3", "certifi", "setuptools",
+        "tornado", "gunicorn", "uvicorn", "httpx", "jinja2",
+        "werkzeug", "celery", "redis", "pymongo", "psycopg2",
+        "boto3", "twisted", "scrapy", "pyopenssl", "ansible",
+        "tensorflow", "torch", "scikit-learn", "lxml", "beautifulsoup4",
+        "pygments", "pydantic", "click", "rich", "pytest",
+        "black", "mypy", "ruff", "httplib2", "stripe",
+        "twilio", "sendgrid", "elasticsearch", "grpcio", "protobuf",
+        "pyarrow", "scipy", "matplotlib", "jupyter", "notebook",
+        "virtualenv", "poetry", "pipenv", "tox", "coverage",
+    ],
+    "npm": [
+        "express", "lodash", "moment", "axios", "react",
+        "webpack", "jquery", "typescript", "eslint", "prettier",
+        "next", "gatsby", "angular", "vue", "nuxt",
+        "helmet", "passport", "jsonwebtoken", "bcrypt", "mongoose",
+        "sequelize", "typeorm", "knex", "socket.io", "nodemailer",
+        "multer", "cors", "dotenv", "morgan", "compression",
+        "body-parser", "cookie-parser", "uuid", "dayjs", "date-fns",
+        "luxon", "underscore", "ramda", "redux", "rxjs",
+        "graphql", "apollo-server", "fastify", "koa", "hapi",
+        "tar", "minimatch", "glob", "semver", "debug",
+        "chalk", "commander", "yargs", "inquirer", "ora",
+    ],
+    "Go": [
+        "github.com/gin-gonic/gin",
+        "github.com/gorilla/mux",
+        "github.com/labstack/echo/v4",
+        "github.com/go-chi/chi/v5",
+        "gorm.io/gorm",
+        "github.com/golang-jwt/jwt/v5",
+        "github.com/go-redis/redis/v9",
+        "github.com/spf13/viper",
+        "go.uber.org/zap",
+        "github.com/sirupsen/logrus",
+        "github.com/google/uuid",
+        "github.com/pkg/errors",
+        "github.com/stretchr/testify",
+        "github.com/jmoiron/sqlx",
+        "golang.org/x/crypto",
+        "golang.org/x/net",
+        "golang.org/x/text",
+        "github.com/aws/aws-sdk-go-v2",
+        "google.golang.org/grpc",
+        "github.com/prometheus/client_golang",
+    ],
+    "Maven": [
+        "org.springframework:spring-core",
+        "org.springframework.boot:spring-boot",
+        "com.fasterxml.jackson.core:jackson-databind",
+        "org.apache.commons:commons-lang3",
+        "commons-io:commons-io",
+        "org.apache.logging.log4j:log4j-core",
+        "ch.qos.logback:logback-classic",
+        "org.hibernate:hibernate-core",
+        "mysql:mysql-connector-java",
+        "org.postgresql:postgresql",
+        "com.google.guava:guava",
+        "org.apache.httpcomponents:httpclient",
+        "io.netty:netty-all",
+        "org.bouncycastle:bcprov-jdk15on",
+        "com.squareup.okhttp3:okhttp",
+        "org.apache.struts:struts2-core",
+        "org.springframework.security:spring-security-core",
+        "com.h2database:h2",
+        "org.xerial:sqlite-jdbc",
+        "commons-collections:commons-collections",
+    ],
+    "RubyGems": [
+        "rails", "activesupport", "activerecord", "actionpack",
+        "devise", "nokogiri", "rack", "sinatra",
+        "bundler", "puma", "unicorn", "sidekiq",
+        "redis", "jwt", "bcrypt", "faraday",
+        "rest-client", "httparty", "carrierwave", "paperclip",
+    ],
+    "NuGet": [
+        "Newtonsoft.Json", "Microsoft.AspNetCore",
+        "Microsoft.EntityFrameworkCore", "AutoMapper",
+        "log4net", "NLog", "Serilog",
+        "RestSharp", "Flurl.Http", "Polly",
+        "MediatR", "Dapper", "StackExchange.Redis",
+        "AWSSDK.Core", "Azure.Core",
+        "System.Text.Json", "Microsoft.Data.SqlClient",
+        "Npgsql", "MySql.Data", "MongoDB.Driver",
+    ],
+    "crates.io": [
+        "serde", "tokio", "reqwest", "actix-web",
+        "hyper", "axum", "warp", "rocket",
+        "diesel", "sqlx", "redis", "openssl",
+        "ring", "rustls", "crossbeam", "rayon",
+        "clap", "log", "tracing", "anyhow",
+    ],
+    "Packagist": [
+        "laravel/framework", "symfony/symfony",
+        "guzzlehttp/guzzle", "monolog/monolog",
+        "doctrine/orm", "twig/twig",
+        "predis/predis", "nesbot/carbon",
+        "league/flysystem", "phpmailer/phpmailer",
+        "aws/aws-sdk-php", "stripe/stripe-php",
+        "intervention/image", "spatie/laravel-permission",
+        "typo3/cms-core", "drupal/core",
+    ],
+    "Hex": [
+        "phoenix", "ecto", "plug", "cowboy",
+        "ex_aws", "jason", "poison", "httpoison",
+        "guardian", "comeonin", "bcrypt_elixir",
+        "telemetry", "oban", "broadway",
+    ],
+    # Dart / Flutter パッケージ（pub.dev）
+    "Pub": [
+        # HTTP / ネットワーク
+        "dio", "http", "retrofit", "chopper", "graphql",
+        # 状態管理
+        "provider", "flutter_riverpod", "riverpod", "flutter_bloc", "bloc",
+        "get", "mobx", "signals",
+        # Firebase
+        "firebase_core", "firebase_auth", "cloud_firestore",
+        "firebase_messaging", "firebase_storage", "firebase_analytics",
+        # ローカルストレージ / DB
+        "shared_preferences", "sqflite", "hive", "isar", "drift",
+        "path_provider",
+        # ルーティング / ナビゲーション
+        "go_router", "auto_route",
+        # UI / ウィジェット
+        "flutter_svg", "cached_network_image", "flutter_screenutil",
+        "shimmer", "lottie", "photo_view",
+        # ユーティリティ
+        "url_launcher", "image_picker", "permission_handler",
+        "connectivity_plus", "package_info_plus", "device_info_plus",
+        "intl", "freezed", "json_serializable", "json_annotation",
+        "equatable", "dartz", "fpdart",
+        # セキュリティ / 認証
+        "flutter_secure_storage", "local_auth", "encrypt",
+        "google_sign_in", "sign_in_with_apple",
+        # テスト / 開発
+        "mockito", "bloc_test", "flutter_test",
+    ],
+}

@@ -10,13 +10,14 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
+from app.core.types import CrawlerType
 from app.crawler_logs.models import CrawlerLog
 
 logger = logging.getLogger(__name__)
 
 
 def write_crawler_log(
-    crawler_type: str,
+    crawler_type: CrawlerType,
     status: str,
     started_at: datetime,
     finished_at: datetime,
@@ -31,7 +32,7 @@ def write_crawler_log(
     クロール失敗時でもログは確実にコミットされる。
 
     Args:
-        crawler_type:  "KEV" または "OSV"
+        crawler_type:  "KEV" / "OSV" / "JVN" / "DEPSCAN"
         status:        "success" または "error"
         started_at:    クローラー開始日時（UTC）
         finished_at:   クローラー終了日時（UTC）

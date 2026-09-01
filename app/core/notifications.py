@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 
 from app.core.config import settings
+from app.core.types import CrawlerType
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ def _sanitize_error(error: str) -> str:
 
 
 def notify_success(
-    crawler_type: str,
+    crawler_type: CrawlerType,
     inserted: int,
     updated: int,
     deleted: int = 0,
@@ -61,7 +62,7 @@ def notify_success(
     _send_slack("\n".join(lines))
 
 
-def notify_error(crawler_type: str, error: str) -> None:
+def notify_error(crawler_type: CrawlerType, error: str) -> None:
     """クローラーエラー時の Slack 通知（共通）。"""
     if not settings.SLACK_WEBHOOK_URL:
         return
