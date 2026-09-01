@@ -38,6 +38,14 @@ class Settings(BaseSettings):
     # 直近何日分の脆弱性を取得対象とするか（dateLastModified フィルター）
     JVN_DAYS: int = 30
 
+    # 依存ライブラリ脆弱性スキャナー（DEPSCAN）設定
+    # GitHub API 認証用 PAT（fine-grained, Contents: Read-only 推奨）
+    GITHUB_TOKEN: str = ""
+    # スキャン対象リポジトリのオーナー（GitHub ユーザー名）
+    GITHUB_USERNAME: str = "baby-feelings"
+    # DEPSCAN: JST 7:00 = UTC 22:00（KEV→OSV→JVN の後段）
+    DEPSCAN_CRON_HOUR_UTC: int = 22
+
     model_config = SettingsConfigDict(
         # 環境に応じて .env.development または .env.production を使用
         env_file=".env",

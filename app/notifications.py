@@ -4,6 +4,7 @@ SLACK_WEBHOOK_URL が未設定の場合は何もしない（サイレントス�
 """
 import logging
 import re
+from typing import Any
 
 import httpx
 
@@ -23,7 +24,11 @@ _CRAWLER_LABELS: dict[str, tuple[str, str]] = {
     "KEV": (":shield:", "CISA KEV"),
     "OSV": (":package:", "OSV 脆弱性データ"),
     "JVN": (":jigsaw:", "JVN 脆弱性データ"),
+    "DEPSCAN": (":rotating_light:", "依存ライブラリ脆弱性"),
 }
+
+# Slack 通知に含める最大リポジトリ数（メッセージ長制限のため）
+_MAX_DEPSCAN_REPOS_IN_MESSAGE = 15
 
 
 def _sanitize_error(error: str) -> str:
@@ -95,6 +100,52 @@ def notify_osv_crawl_error(error: str) -> None:
 def notify_jvn_crawl_error(error: str) -> None:
     """JVN エラー通知（後方互換）。"""
     notify_error("JVN", error)
+
+
+def notify_depscan_crawl_error(error: str) -> None:
+    """DEPSCAN エラー通知。"""
+    notify_error("DEPSCAN", error)
+
+
+# ── DEPSCAN 専用通知 ─────────────────────────────────────────────
+
+
+def notify_dependency_findings(new_findings: list[dict[str, Any]]) -> None:
+    """依存ライブラリ脆弱性の新規検知を Slack に1通のダイジェストとして通知する。
+    リポジトリ別にグルーピングし、findings が空なら何もしない。
+
+    Args:
+        new_findings: DependencyFinding 相当のフィールドを持つ辞書のリスト
+            （"repo_full_name"・"package_name"・"installed_version"・"severity"・
+            "fixed_versions"・"osv_id" を使用。ORM セッションクローズ後の
+            DetachedInstanceError を避けるため、ORM オブジェクトではなく辞書で受け取る）
+    """
+    if not settings.SLACK_WEBHOOK_URL or not new_findings:
+        return
+
+    emoji, label = _CRAWLER_LABELS["DEPSCAN"]
+    by_repo: dict[str, list[dict[str, Any]]] = {}
+    for finding in new_findings:
+        by_repo.setdefault(finding["repo_full_name"], []).append(finding)
+
+    lines = [f"{emoji} *{label}を{len(new_findings)}件検知*", ""]
+    for repo in list(by_repo.keys())[:_MAX_DEPSCAN_REPOS_IN_MESSAGE]:
+        lines.append(f"*{repo}*")
+        for finding in by_repo[repo]:
+            sev = finding.get("severity") or "UNKNOWN"
+            fixed_versions = finding.get("fixed_versions") or []
+            fix = ", ".join(fixed_versions) if fixed_versions else "未提供"
+            lines.append(
+                f"• {finding['package_name']} {finding['installed_version']} "
+                f"({sev}) → 修正版: {fix} [{finding['osv_id']}]"
+            )
+        lines.append("")
+
+    remaining_repos = len(by_repo) - _MAX_DEPSCAN_REPOS_IN_MESSAGE
+    if remaining_repos > 0:
+        lines.append(f"...他 {remaining_repos} リポジトリ")
+
+    _send_slack("\n".join(lines).rstrip())
 
 
 # ── Slack 送信 ────────────────────────────────────────────────────

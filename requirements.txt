@@ -10,6 +10,8 @@ python-dotenv>=1.2.2
 httpx>=0.28.1
 apscheduler>=3.10.4
 defusedxml>=0.7.1
+PyYAML>=6.0.2
+tomli>=2.0.1; python_version < "3.11"
 
 # ── セキュリティピン留め（間接依存の脆弱性対策） ──────────────────
 cryptography>=48.0.1

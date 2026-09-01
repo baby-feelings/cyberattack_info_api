@@ -51,6 +51,7 @@ def clean_db():
         conn.execute(text("DELETE FROM jvn_vulnerabilities"))
         conn.execute(text("DELETE FROM osv_vulnerabilities"))
         conn.execute(text("DELETE FROM vulnerabilities"))
+        conn.execute(text("DELETE FROM dependency_findings"))
         conn.commit()
 
 

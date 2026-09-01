@@ -327,6 +327,49 @@ def _query_packages_batch(
     return refs
 
 
+def _query_versions_batch(
+    items: list[tuple[str, str, str]],  # [(ecosystem, package_name, version), ...]
+) -> dict[tuple[str, str, str], list[str]]:
+    """/v1/querybatch にバージョン指定でバッチクエリし、各パッケージ×バージョンに
+    ヒットした脆弱性 ID を返す（DEPSCAN 機能から使用）。
+
+    querybatch はクエリと結果を同じ順序の配列で返す仕様のため、位置合わせで
+    (ecosystem, package_name, version) と結果を対応付ける。
+
+    Args:
+        items: (エコシステム, パッケージ名, バージョン) のタプルリスト
+
+    Returns:
+        {(ecosystem, package_name, version): [osv_id, ...]} の辞書
+        （ヒットなしのキーは含まない）
+    """
+    if not items:
+        return {}
+
+    result_map: dict[tuple[str, str, str], list[str]] = {}
+
+    with httpx.Client(timeout=60.0) as client:
+        for i in range(0, len(items), BATCH_SIZE):
+            chunk = items[i: i + BATCH_SIZE]
+            queries = [
+                {"version": version, "package": {"name": name, "ecosystem": eco}}
+                for eco, name, version in chunk
+            ]
+            resp = client.post(
+                f"{OSV_API_BASE}/querybatch",
+                json={"queries": queries},
+            )
+            resp.raise_for_status()
+            results = resp.json().get("results", [])
+
+            for item, result in zip(chunk, results, strict=False):
+                vuln_ids = [v["id"] for v in result.get("vulns", []) if v.get("id")]
+                if vuln_ids:
+                    result_map[item] = vuln_ids
+
+    return result_map
+
+
 def _fetch_vuln_by_id(osv_id: str) -> dict[str, Any]:
     """GET /v1/vulns/{id} で脆弱性の完全な情報（affected・severity 等）を取得する。"""
     with httpx.Client(timeout=30.0) as client:
