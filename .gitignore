@@ -50,3 +50,10 @@ icon/
 
 # OpenAPI スキーマエクスポート
 cyberattack-info-api.json
+# Added by code-review-graph
+.code-review-graph/
+# .mcp.json はリポジトリの絶対パス（cwd）を含むため機種・開発者ごとに個別 install する運用
+.mcp.json
+
+# Claude Code のローカル個人設定（APIキー等を含む許可リストが混入し得るため）
+.claude/settings.local.json
