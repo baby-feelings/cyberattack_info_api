@@ -14,7 +14,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
 os.environ.setdefault("API_KEY", "test-api-key-for-pytest")
 os.environ.setdefault("ENVIRONMENT", "development")
 
-from app.database import Base, get_db  # noqa: E402
+from app.core.database import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402
 
 # ── テスト用 SQLite DB ─────────────────────────────────────────

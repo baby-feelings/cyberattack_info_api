@@ -12,15 +12,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.auth import require_api_key
-from app.config import settings
-from app.cron import fetch_and_store_kev
-from app.cron_depscan import fetch_and_scan_dependencies
-from app.cron_jvn import fetch_and_store_jvn
-from app.cron_osv import fetch_and_store_osv
-from app.database import Base, engine, get_db
-from app.routers import crawler_logs, depscan, jvn, osv, vulnerabilities
-from app.schemas import HealthResponse
+from app.core.auth import require_api_key
+from app.core.config import settings
+from app.core.database import Base, engine, get_db
+from app.core.schemas import HealthResponse
+from app.crawler_logs.router import router as crawler_logs_router
+from app.depscan.crawler import fetch_and_scan_dependencies
+from app.depscan.router import router as depscan_router
+from app.jvn.crawler import fetch_and_store_jvn
+from app.jvn.router import router as jvn_router
+from app.kev.crawler import fetch_and_store_kev
+from app.kev.router import router as kev_router
+from app.osv.crawler import fetch_and_store_osv
+from app.osv.router import router as osv_router
 
 # ──────────────────────────────────────────────
 # ロギング設定（標準出力に JSON 風ログを出力）
@@ -140,11 +144,11 @@ app.add_middleware(
 )
 
 # ルーター登録
-app.include_router(vulnerabilities.router)
-app.include_router(osv.router)
-app.include_router(jvn.router)
-app.include_router(crawler_logs.router)
-app.include_router(depscan.router)
+app.include_router(kev_router)
+app.include_router(osv_router)
+app.include_router(jvn_router)
+app.include_router(crawler_logs_router)
+app.include_router(depscan_router)
 
 
 # ──────────────────────────────────────────────

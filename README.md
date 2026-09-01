@@ -436,41 +436,29 @@ mypy app/ --ignore-missing-imports
 
 ## プロジェクト構成
 
+`app/` はドメイン（KEV / OSV / JVN / DEPSCAN / クローラーログ / 横断的共通処理）単位のパッケージ構成。各ドメインが `models.py`・`schemas.py`・`crawler.py`・`router.py` を1つのフォルダにまとめる。`tests/` も同じドメイン構成でミラーリングする。
+
 ```
 cyberattack_info_api/
 ├── app/
-│   ├── main.py            # FastAPI アプリ本体・APScheduler 設定
-│   ├── config.py          # 環境変数・設定管理 (pydantic-settings)
-│   ├── database.py        # SQLAlchemy エンジン・セッション (SQLite / PostgreSQL 共用)
-│   ├── models.py          # ORM モデル (Vulnerability / OsvVulnerability / JvnVulnerability / CrawlerLog)
-│   ├── schemas.py         # Pydantic スキーマ (リクエスト/レスポンス)
-│   ├── auth.py            # X-API-KEY 認証 (hmac.compare_digest)
-│   ├── db_utils.py        # DB ユーティリティ (year_month_expr 共通関数)
-│   ├── cron.py            # CISA KEV クローラー (Upsert ロジック)
-│   ├── cron_osv.py        # OSV クローラー (REST API 方式・Upsert)
-│   ├── cron_jvn.py        # JVN クローラー (MyJVN API / RDF-RSS・Upsert)
-│   ├── crawler_log.py     # クローラーログ書き込みユーティリティ
-│   ├── notifications.py   # Slack 通知 (notify_success/notify_error 共通化・エラーサニタイズ)
-│   └── routers/
-│       ├── vulnerabilities.py  # /api/vulnerabilities エンドポイント
-│       ├── osv.py              # /api/osv エンドポイント
-│       ├── jvn.py              # /api/jvn エンドポイント
-│       └── crawler_logs.py     # /api/crawler-logs エンドポイント
-├── tests/
-│   ├── conftest.py              # テスト用フィクスチャ (SQLite テスト DB)
-│   ├── test_api.py              # KEV API エンドポイントテスト
-│   ├── test_cron.py             # KEV クローラーユニットテスト
-│   ├── test_crawler_logs.py     # クローラーログ API テスト
-│   ├── test_database.py         # DB エンジン・セッションテスト
-│   ├── test_osv.py              # OSV API・クローラーテスト
-│   ├── test_jvn.py              # JVN API・クローラーテスト
-│   └── test_notifications.py    # Slack 通知テスト（KEV・OSV・JVN 対応）
+│   ├── main.py                 # FastAPI アプリ本体・APScheduler 設定・ルーター include
+│   ├── core/                   # 横断的インフラ（config・database・auth・db_utils・notifications・共通 schemas）
+│   ├── kev/                    # CISA KEV ドメイン（models・schemas・crawler・router）
+│   ├── osv/                    # OSV ドメイン（models・schemas・crawler・router）
+│   ├── jvn/                    # JVN ドメイン（models・schemas・crawler・router）
+│   ├── depscan/                # 依存ライブラリ脆弱性スキャン（DEPSCAN）ドメイン
+│   │   └── parsers/            # 10 エコシステム分のロックファイルパーサー
+│   └── crawler_logs/           # クローラー実行ログドメイン（models・schemas・writer・router）
+├── tests/                      # app/ と同じドメイン構成
+│   ├── conftest.py             # テスト用フィクスチャ (SQLite テスト DB、全サブフォルダに自動継承)
+│   ├── test_main.py            # app.main（health/root）テスト
+│   ├── core/ kev/ osv/ jvn/ depscan/ crawler_logs/
 ├── dashboard/               # Vercel デプロイの React ダッシュボード（KEV・OSV（Pub 含む 10 エコシステム）・JVN）
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml           # CI: lint + type check + test (PR 時に自動実行)
 │       ├── deploy.yml       # CD: Render デプロイ (main マージ時に自動実行)
-│       └── daily-crawl.yml  # 毎日クロール (単一 cron UTC 19:05 で KEV → OSV → JVN 順次実行)
+│       └── daily-crawl.yml  # 毎日クロール (単一 cron UTC 19:05 で KEV → OSV → JVN → DEPSCAN 順次実行)
 ├── .env.example         # 環境変数テンプレート
 ├── .python-version      # Python バージョン固定 (3.11)
 ├── requirements.txt     # 本番依存パッケージ
