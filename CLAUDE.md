@@ -289,6 +289,25 @@ DEPSCAN 対象の他リポジトリ（`baby-feelings` アカウント配下）�
    マージ後にローカルで `git pull` した上で手動デプロイコマンド（例: `firebase deploy`）を
    実行するまで本番に反映されない
 
+### 新規リポジトリ作成時のチェックリスト（Dependabot）
+`baby-feelings` は Organization ではなく個人アカウントのため、Organization 全体への
+一括デフォルト設定が存在しない。**新しいリポジトリを作るたびに、以下を個別に対応する
+必要がある**（DEPSCAN 自体は `list_target_repos` が毎回全リポジトリを再取得するため
+追加対応不要だが、Dependabot 側は明示的な設定が要る）。
+
+1. `.github/dependabot.yml` を追加する（version updates。ロックファイルのエコシステムに
+   合わせて `package-ecosystem` を指定する。対応エコシステムは
+   `app.depscan.parsers.LOCKFILE_FILENAMES` を参照）
+2. `Dependabot alerts` と `Dependabot security updates` を有効化する（security updates。
+   UI からは各リポジトリの `Settings → Code security` だが、GitHub API からも一括操作可能）:
+   ```bash
+   gh api -X PUT repos/baby-feelings/<repo>/vulnerability-alerts
+   gh api -X PUT repos/baby-feelings/<repo>/automated-security-fixes
+   ```
+2つとも忘れた場合でも、DEPSCAN 自体は毎日そのリポジトリを検知対象に含め Slack/Issue で
+通知するため「気づけない」ことはないが、Dependabot による自動修正PRの生成が遅れる
+（1を忘れると Dependabot が全く反応しない、2を忘れると週次の遅い version updates 頼みになる）。
+
 ### DEPSCAN のロックファイル検出は Git Tree API で1リポジトリ1回のみ
 `app.depscan.github_client.get_repo_tree` で `git/trees/{branch}?recursive=1` を使い、
 サブディレクトリ（monorepo）も含めて全ファイルパスを1回のAPI呼び出しで取得する。
