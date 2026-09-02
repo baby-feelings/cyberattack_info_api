@@ -115,3 +115,51 @@ def get_file_content(owner: str, repo: str, path: str, token: str) -> str:
     if encoding != "base64":
         raise ValueError(f"Unsupported content encoding: {encoding}")
     return base64.b64decode(content).decode("utf-8", errors="replace")
+
+
+def find_open_issue(owner: str, repo: str, title: str, token: str) -> int | None:
+    """指定タイトルと完全一致する Open な Issue を検索する（Pull Request は除外）。
+
+    Args:
+        owner: リポジトリオーナー
+        repo: リポジトリ名
+        title: 完全一致で検索する Issue タイトル
+        token: GitHub PAT（Issues: Write 権限が必要）
+
+    Returns:
+        見つかった Issue 番号。無ければ None。
+    """
+    with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
+        resp = client.get(
+            f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/issues",
+            params={"state": "open", "per_page": _PER_PAGE},
+        )
+        resp.raise_for_status()
+    for issue in resp.json():
+        if issue.get("title") == title and "pull_request" not in issue:
+            return int(issue["number"])
+    return None
+
+
+def create_issue(owner: str, repo: str, title: str, body: str, token: str) -> dict[str, Any]:
+    """Issue を新規作成する。"""
+    with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
+        resp = client.post(
+            f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/issues",
+            json={"title": title, "body": body},
+        )
+        resp.raise_for_status()
+    return dict(resp.json())
+
+
+def add_issue_comment(
+    owner: str, repo: str, issue_number: int, body: str, token: str,
+) -> dict[str, Any]:
+    """既存の Issue にコメントを追加する。"""
+    with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
+        resp = client.post(
+            f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/issues/{issue_number}/comments",
+            json={"body": body},
+        )
+        resp.raise_for_status()
+    return dict(resp.json())

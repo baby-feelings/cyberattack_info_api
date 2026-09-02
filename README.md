@@ -468,6 +468,11 @@ curl -X POST -H "X-API-KEY: your-key" \
 > **Note:** `GITHUB_TOKEN`（GitHub PAT）が未設定の場合、GitHub API への認証が失敗し
 > DEPSCAN のみエラー終了します（`/api/crawler-logs` にエラーとして記録されます）。
 > 一方 `GITHUB_USERNAME` は必須環境変数のため、未設定だとアプリ全体が起動できません。
+>
+> **Note:** 新規検知は、検知されたリポジトリ自身に GitHub Issue（タイトル固定、Open な既存
+> Issue があればコメント追記）としても自動起票される。ロックファイル読み取り
+> （`Contents: Read-only`）に加えて **`Issues: Write`** 権限が必要。権限不足等で
+> Issue 作成に失敗しても、ログに警告が記録されるのみで DEPSCAN 自体は成功として扱う。
 
 > **Note:** 手動クロールはバックグラウンドで実行されるため、即座に 202 が返ります。  
 > 実行結果は `GET /api/crawler-logs` で確認してください。
@@ -611,7 +616,7 @@ cyberattack_info_api/
 | `OSV_DAYS` | - | OSV 取得対象の直近日数（デフォルト: `30`） |
 | `OSV_RETENTION_DAYS` | - | OSV データ保持期間（日数・デフォルト: `180`） |
 | `JVN_DAYS` | - | JVN 取得対象の直近日数（デフォルト: `30`） |
-| `GITHUB_TOKEN` | - | DEPSCAN 用 GitHub PAT（fine-grained: Contents Read-only 推奨 / classic: repo スコープ）。未設定時は DEPSCAN のみエラー終了 |
+| `GITHUB_TOKEN` | - | DEPSCAN 用 GitHub PAT（fine-grained: Contents Read-only + **Issues Write** / classic: repo スコープ）。未設定時は DEPSCAN のみエラー終了。Issues Write が無い場合、Issue自動起票のみ失敗（DEPSCAN自体は成功扱い） |
 | `GITHUB_USERNAME` | ✅ | DEPSCAN のスキャン対象 GitHub アカウント。コード側にデフォルト値は持たないため、**未設定だとアプリ全体が起動しない** |
 | `DEPSCAN_CRON_HOUR_UTC` | - | DEPSCAN 実行時刻（時・UTC）（デフォルト: `22`） |
 | `SLACK_WEBHOOK_URL` | - | Slack Incoming Webhook URL（未設定時は通知スキップ） |
@@ -631,8 +636,16 @@ cyberattack_info_api/
 | CISA KEV クロール完了（新規追加・更新あり） | `:shield: CISA KEV 更新通知`（新規・更新件数） |
 | OSV クロール完了（新規・更新あり） | `:package: OSV 脆弱性データ更新通知`（新規・更新・削除件数） |
 | JVN クロール完了（新規・更新あり） | `:jigsaw: JVN 脆弱性データ更新通知`（新規・更新件数） |
-| DEPSCAN で新規検知あり | `:rotating_light: 依存ライブラリ脆弱性を検知`（リポジトリ別グルーピングしたダイジェスト1通） |
+| DEPSCAN で新規検知あり | `:rotating_light: 依存ライブラリ脆弱性を検知`（リポジトリ別グルーピング・パッケージ単位に集約したダイジェスト1通） |
 | クローラーエラー発生時 | `:warning:` エラー内容（KEV / OSV / JVN / DEPSCAN それぞれ） |
+
+### GitHub Issue 自動起票（DEPSCAN）
+
+Slack 通知に加えて、DEPSCAN の新規検知は検知されたリポジトリ自身に GitHub Issue としても自動起票される。
+
+- タイトル固定（`🚨 依存ライブラリの脆弱性が検出されました (DEPSCAN)`）。同名の Open な Issue が既にあればコメントを追記し、無ければ新規作成する（1リポジトリにつき常に1つの Open Issue に集約）
+- 本文は Slack と同じくパッケージ単位に集約した形式
+- `GITHUB_TOKEN` に `Issues: Write` 権限が無い場合、Issue 作成のみ失敗しログに警告が残る（DEPSCAN 自体は成功扱い）
 
 ---
 
