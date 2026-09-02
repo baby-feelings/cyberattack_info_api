@@ -189,3 +189,65 @@ export async function fetchJvnList(params: {
 export async function fetchJvnStats(days = 180): Promise<JvnStatsResponse> {
   return apiFetch<JvnStatsResponse>(`/api/jvn/stats?days=${days}`)
 }
+
+// ── DEPSCAN（自作アプリの依存ライブラリ脆弱性） ──────────────────
+
+export interface DependencyFindingOut {
+  repo_full_name: string
+  ecosystem: string
+  package_name: string
+  installed_version: string
+  osv_id: string
+  severity: string | null
+  cvss_score: number | null
+  summary: string
+  fixed_versions: string[]
+  manifest_path: string
+  detected_at: string
+  resolved_at: string | null
+}
+
+export interface DepscanRepoStat {
+  repo_full_name: string
+  count: number
+}
+
+export interface DepscanSeverityStat {
+  severity: string
+  count: number
+}
+
+export interface DepscanStatsResponse {
+  total: number
+  repos: DepscanRepoStat[]
+  severities: DepscanSeverityStat[]
+}
+
+export interface DepscanListResponse {
+  total: number
+  page: number
+  per_page: number
+  data: DependencyFindingOut[]
+}
+
+export async function fetchDepscanList(params: {
+  page?: number
+  perPage?: number
+  owner?: string | null
+  severity?: string | null
+  resolved?: boolean | null
+}): Promise<DepscanListResponse> {
+  const p = new URLSearchParams()
+  p.set('page', String(params.page ?? 1))
+  p.set('per_page', String(params.perPage ?? 50))
+  if (params.owner) p.set('owner', params.owner)
+  if (params.severity) p.set('severity', params.severity)
+  if (params.resolved !== null && params.resolved !== undefined) {
+    p.set('resolved', String(params.resolved))
+  }
+  return apiFetch<DepscanListResponse>(`/api/depscan?${p}`)
+}
+
+export async function fetchDepscanStats(): Promise<DepscanStatsResponse> {
+  return apiFetch<DepscanStatsResponse>('/api/depscan/stats')
+}

@@ -41,6 +41,7 @@ def list_depscan(
     page: int = Query(1, ge=1, description="ページ番号（1始まり）"),
     per_page: int = Query(50, ge=1, le=200, description="1ページあたりの件数"),
     repo: str | None = Query(None, description="リポジトリ名絞り込み（例: owner/repo）"),
+    owner: str | None = Query(None, description="リポジトリオーナー絞り込み（例: baby-feelings）"),
     ecosystem: str | None = Query(None, description="エコシステム絞り込み（例: PyPI / npm）"),
     severity: str | None = Query(
         None, description="重要度絞り込み（CRITICAL / HIGH / MEDIUM / LOW）"
@@ -52,6 +53,8 @@ def list_depscan(
 
     if repo:
         query = query.filter(DependencyFinding.repo_full_name == repo)
+    if owner:
+        query = query.filter(DependencyFinding.repo_full_name.like(f"{owner}/%"))
     if ecosystem:
         query = query.filter(DependencyFinding.ecosystem == ecosystem)
     if severity:
@@ -73,8 +76,9 @@ def list_depscan(
     )
 
     logger.info(
-        "list_depscan: total=%d, page=%d, repo=%r, ecosystem=%r, severity=%r, resolved=%r",
-        total, page, repo, ecosystem, severity, resolved,
+        "list_depscan: total=%d, page=%d, repo=%r, owner=%r, ecosystem=%r, "
+        "severity=%r, resolved=%r",
+        total, page, repo, owner, ecosystem, severity, resolved,
     )
 
     return DependencyFindingListResponse(

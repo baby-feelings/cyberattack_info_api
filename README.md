@@ -28,7 +28,7 @@ Claude Code や CI/CD ツールから「今まさに悪用されているサイ�
 | **手動クロール** | `POST /admin/crawl` / `POST /admin/osv-crawl` / `POST /admin/jvn-crawl` / `POST /admin/depscan-crawl`（バックグラウンド 202 即時返却・`?days=N` 対応） |
 | **API キー認証** | `X-API-KEY` ヘッダーによるシンプルな固定キー認証 |
 | **ヘルスチェック** | DB 接続確認付きの死活監視エンドポイント |
-| **React ダッシュボード** | CISA KEV・OSV（Pub 含む 10 エコシステム・180 日表示）・JVN を画面下部固定タブで切り替え表示（Vercel デプロイ） |
+| **React ダッシュボード** | CISA KEV・OSV（Pub 含む 10 エコシステム・180 日表示）・JVN・DEPSCAN（オーナー別フィルタ対応）を画面下部固定タブで切り替え表示（Vercel デプロイ） |
 
 ---
 
@@ -582,7 +582,7 @@ cyberattack_info_api/
 │   ├── conftest.py             # テスト用フィクスチャ (SQLite テスト DB、全サブフォルダに自動継承)
 │   ├── test_main.py            # app.main（health/root）テスト
 │   ├── core/ kev/ osv/ jvn/ depscan/ depsops/ crawler_logs/
-├── dashboard/               # Vercel デプロイの React ダッシュボード（KEV・OSV（Pub 含む 10 エコシステム）・JVN）
+├── dashboard/               # Vercel デプロイの React ダッシュボード（KEV・OSV（Pub 含む 10 エコシステム）・JVN・DEPSCAN）
 ├── .github/
 │   ├── dependabot.yml       # Dependabot（pip: / ・npm: /dashboard、週次で依存更新PRを自動作成）
 │   └── workflows/
