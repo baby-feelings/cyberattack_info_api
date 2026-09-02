@@ -111,6 +111,20 @@ class TestListDepscan:
         assert body["total"] == 1
         assert body["data"][0]["repo_full_name"] == "baby-feelings/repo-a"
 
+    def test_filter_by_owner(self, client, db_session):
+        _make_finding(db_session, repo_full_name="baby-feelings/repo-a", osv_id="GHSA-a")
+        _make_finding(db_session, repo_full_name="other-owner/repo-b", osv_id="GHSA-b")
+        res = client.get("/api/depscan?owner=baby-feelings", headers=HEADERS)
+        body = res.json()
+        assert body["total"] == 1
+        assert body["data"][0]["repo_full_name"] == "baby-feelings/repo-a"
+
+    def test_filter_by_owner_does_not_match_substring(self, client, db_session):
+        """`owner` はリポジトリオーナー単位の一致（前方一致 + '/'）で、部分文字列一致ではない。"""
+        _make_finding(db_session, repo_full_name="baby-feelings-fork/repo-a", osv_id="GHSA-a")
+        res = client.get("/api/depscan?owner=baby-feelings", headers=HEADERS)
+        assert res.json()["total"] == 0
+
     def test_filter_by_ecosystem(self, client, db_session):
         _make_finding(db_session, ecosystem="PyPI", osv_id="GHSA-py")
         _make_finding(db_session, ecosystem="npm", package_name="axios", osv_id="GHSA-npm")

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { RefreshCw, ShieldAlert, Wifi, Shield, Package, FileWarning } from 'lucide-react'
+import { RefreshCw, ShieldAlert, Wifi, Shield, Package, FileWarning, Bug } from 'lucide-react'
 import { fetchRecent, fetchStats, type VulnerabilityOut, type StatsResponse } from './api/client'
 import { HealthStatus } from './components/HealthStatus'
 import { StatsCards } from './components/StatsCards'
@@ -8,6 +8,7 @@ import { VendorRanking } from './components/VendorRanking'
 import { RecentCVEs } from './components/RecentCVEs'
 import { OsvPanel } from './components/OsvPanel'
 import { JvnPanel } from './components/JvnPanel'
+import { DepscanPanel } from './components/DepscanPanel'
 
 // セクション見出しコンポーネント
 function SectionHeader({
@@ -33,12 +34,13 @@ function SectionHeader({
 }
 
 // タブ種別
-type TabKey = 'kev' | 'osv' | 'jvn'
+type TabKey = 'kev' | 'osv' | 'jvn' | 'depscan'
 
 const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   { key: 'kev', label: 'KEV', icon: <Shield size={20} className="text-blue-400" /> },
   { key: 'osv', label: 'OSV', icon: <Package size={20} className="text-emerald-400" /> },
   { key: 'jvn', label: 'JVN', icon: <FileWarning size={20} className="text-amber-400" /> },
+  { key: 'depscan', label: 'DEPSCAN', icon: <Bug size={20} className="text-rose-400" /> },
 ]
 
 export default function App() {
@@ -190,19 +192,39 @@ export default function App() {
           </section>
         )}
 
+        {/* ══ DEPSCAN タブ ═══════════════════════════════════════════ */}
+        {activeTab === 'depscan' && (
+          <section
+            id="tabpanel-depscan"
+            role="tabpanel"
+            aria-labelledby="tab-depscan"
+            className="flex flex-col gap-4 sm:gap-6 lg:gap-8"
+          >
+            <SectionHeader
+              icon={<Bug size={18} className="text-rose-400" />}
+              title="DEPSCAN — 自作アプリの依存ライブラリ脆弱性"
+              subtitle="GitHub上の自作リポジトリの依存関係を OSV API とリアルタイム照合"
+              borderColor="border-rose-800/40"
+            />
+
+            {/* DEPSCAN パネル（サマリーカード・チャート・一覧を内包） */}
+            <DepscanPanel />
+          </section>
+        )}
+
       </main>
 
       {/* フッター（下部固定タブバーに隠れないよう下部余白を確保） */}
       <footer className="w-full border-t border-slate-800/60 pb-20">
         <div className="max-w-screen-xl mx-auto px-4 sm:px-8 lg:px-12 py-5 flex flex-col sm:flex-row items-center justify-between gap-1 text-xs text-slate-600">
-          <span>データソース: CISA KEV / Open Source Vulnerabilities (OSV) / JVN (JVNDB)</span>
-          <span>KEV → OSV → JVN: JST 04:05 一括自動更新</span>
+          <span>データソース: CISA KEV / Open Source Vulnerabilities (OSV) / JVN (JVNDB) / DEPSCAN</span>
+          <span>KEV → OSV → JVN → DEPSCAN: JST 04:05 一括自動更新</span>
         </div>
       </footer>
 
       {/* 下部固定タブバー */}
       <nav className="fixed bottom-0 inset-x-0 z-20 border-t border-slate-800/60 bg-[#0a0e1a]/95 backdrop-blur-md">
-        <div role="tablist" className="max-w-screen-xl mx-auto grid grid-cols-3">
+        <div role="tablist" className="max-w-screen-xl mx-auto grid grid-cols-4">
           {TABS.map((tab) => {
             const isActive = activeTab === tab.key
             return (

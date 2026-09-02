@@ -147,8 +147,8 @@ tests/                      # app/ と同じドメイン構成でミラーリン
 └── crawler_logs/           # クローラーログ API テスト
 
 dashboard/               # Vercel デプロイの React ダッシュボード
-                         # CISA KEV・OSV（Pub 含む 10 エコシステム・180 日表示）・JVN を
-                         # 画面下部固定タブで切り替え表示
+                         # CISA KEV・OSV（Pub 含む 10 エコシステム・180 日表示）・JVN・
+                         # DEPSCAN（オーナー別フィルタ対応）を画面下部固定タブで切り替え表示
 
 .github/
 ├── dependabot.yml   # Dependabot（pip: / ・npm: /dashboard、週次で依存更新PRを自動作成）
@@ -392,6 +392,15 @@ KEV / OSV / JVN の 3 データソースは、画面下部固定のタブバー�
 （OsvRow/JvnRow）はドメイン固有のため各パネル側に残している。
 `ChartCard` の `footer` スロットは高さ固定領域の**外側**に描画されるため、円グラフの凡例のように
 高さ制約に含めたくないコンテンツはここに渡すこと。
+
+### DepscanPanel のオーナーフィルターは repo_full_name から導出（バックエンドは owner クエリのみ追加）
+`GET /api/depscan` にリポジトリオーナー絞り込み用の `owner` クエリパラメータを追加した
+（`repo_full_name LIKE '{owner}/%'`。既存の `repo`（完全一致）とは別軸）。オーナーの選択肢
+自体は `DepscanPanel.tsx` 側で `stats.repos`（`/api/depscan/stats` が返す未解決リポジトリ一覧）
+から `repo_full_name.split('/')[0]` を抽出して動的に生成しており、専用の一覧APIは無い。
+これは DEPSCAN が実際にスキャンした（＝DB に保存済みの）リポジトリのみを反映するため、
+`GITHUB_TOKEN` の権限外のリポジトリ情報が混入することはない。オーナーが1種類のみの場合は
+フィルターボタン自体を非表示にする（現状 `baby-feelings` のみのため）。
 
 ### index.css の CSS カスケードレイヤーに関する注意
 `*, *::before, *::after` の余白リセットは必ず `@layer base` の中に書くこと。
