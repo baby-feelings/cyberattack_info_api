@@ -257,13 +257,18 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 # 特定リポジトリのみ絞り込み
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
   "https://cyberattack-info-api.onrender.com/api/depscan?repo=baby-feelings/baby_grow"
+
+# リポジトリオーナー単位で絞り込み
+curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
+  "https://cyberattack-info-api.onrender.com/api/depscan?owner=baby-feelings"
 ```
 
 | パラメータ | 型 | 説明 |
 |-----------|-----|------|
 | `page` | int | ページ番号（デフォルト: 1） |
 | `per_page` | int | 件数（デフォルト: 50、最大: 200） |
-| `repo` | string | リポジトリ名で絞り込み（例: `owner/repo`） |
+| `repo` | string | リポジトリ名で絞り込み（完全一致。例: `owner/repo`） |
+| `owner` | string | リポジトリオーナーで絞り込み（前方一致。例: `baby-feelings`） |
 | `ecosystem` | string | エコシステムで絞り込み |
 | `severity` | string | 重要度（`CRITICAL` / `HIGH` / `MEDIUM` / `LOW`） |
 | `resolved` | bool | 解決状態で絞り込み（省略時は全件） |

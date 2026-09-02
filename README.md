@@ -312,7 +312,8 @@ curl -H "X-API-KEY: your-key" \
 |-----------|-----|-----------|------|
 | `page` | int | 1 | ページ番号 |
 | `per_page` | int | 50 | 1ページあたりの件数（最大 200） |
-| `repo` | string | - | リポジトリ名で絞り込み（例: `owner/repo`） |
+| `repo` | string | - | リポジトリ名で絞り込み（完全一致。例: `owner/repo`） |
+| `owner` | string | - | リポジトリオーナーで絞り込み（前方一致。例: `baby-feelings`） |
 | `ecosystem` | string | - | エコシステムで絞り込み（例: `PyPI` / `npm`） |
 | `severity` | string | - | 重要度でフィルタ（`CRITICAL` / `HIGH` / `MEDIUM` / `LOW`） |
 | `resolved` | bool | - | 解決状態で絞り込み（省略時は全件） |
@@ -545,7 +546,7 @@ pytest
 start htmlcov/index.html  # Mac/Linux: open htmlcov/index.html
 ```
 
-**テスト結果（最新）:** 287 テスト / カバレッジ 98%
+**テスト結果（最新）:** 289 テスト / カバレッジ 98%
 
 ---
 
