@@ -251,3 +251,23 @@ export async function fetchDepscanList(params: {
 export async function fetchDepscanStats(): Promise<DepscanStatsResponse> {
   return apiFetch<DepscanStatsResponse>('/api/depscan/stats')
 }
+
+// サーバー側は「パッケージ×CVE」単位で1件として返すため、パッケージ単位に
+// 集約して表示するには該当するデータを全件取得してからクライアント側でグルーピングする
+// 必要がある（API の最大 per_page=200 でページングしながら全件取得）。
+const MAX_PER_PAGE = 200
+
+export async function fetchAllDepscanFindings(params: {
+  owner?: string | null
+  severity?: string | null
+  resolved?: boolean | null
+}): Promise<DependencyFindingOut[]> {
+  const first = await fetchDepscanList({ ...params, page: 1, perPage: MAX_PER_PAGE })
+  const all = [...first.data]
+  const totalPages = Math.ceil(first.total / MAX_PER_PAGE)
+  for (let page = 2; page <= totalPages; page++) {
+    const next = await fetchDepscanList({ ...params, page, perPage: MAX_PER_PAGE })
+    all.push(...next.data)
+  }
+  return all
+}

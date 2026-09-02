@@ -408,6 +408,20 @@ KEV / OSV / JVN の 3 データソースは、画面下部固定のタブバー�
 `GITHUB_TOKEN` の権限外のリポジトリ情報が混入することはない。オーナーが1種類のみの場合は
 フィルターボタン自体を非表示にする（現状 `baby-feelings` のみのため）。
 
+### DepscanPanel はパッケージ×バージョン単位に集約して表示する（クライアント側集約）
+`GET /api/depscan` は「パッケージ×CVE」単位で1件返す仕様（`DependencyFinding` の
+ユニークキーが `(repo_full_name, ecosystem, package_name, osv_id)` のため）。1パッケージに
+複数の CVE が紐づく場合（例: 1リポジトリの `cryptography` に13件のGHSAがヒット）、
+そのままテーブル表示すると「実際のパッケージ数よりずっと多い件数」に見えてしまい、
+Dependabot の PR 数（パッケージ単位で1PR）と数字が食い違って見える問題があった。
+これを解消するため、`fetchAllDepscanFindings`（`per_page=200` でページングしながら
+現在のフィルタ条件に一致する全件を取得）でデータを丸ごと取得し、
+`(repo_full_name, package_name, installed_version)` 単位にクライアント側で
+グルーピングしてから表示する。ページネーションもグルーピング後の配列に対して
+クライアント側で行う（サーバー側の `page`/`per_page` はこの集約目的にのみ使い、
+表示用ページングとしては使わない）。ヘッダーの件数表示は「CVE総数 / パッケージ数」の
+両方を出し、どちらの数字を見ているか誤解しないようにしている。
+
 ### index.css の CSS カスケードレイヤーに関する注意
 `*, *::before, *::after` の余白リセットは必ず `@layer base` の中に書くこと。
 `@layer` の外（unlayered）に書くと、CSS カスケードレイヤーの仕様上どんな `@layer utilities`
