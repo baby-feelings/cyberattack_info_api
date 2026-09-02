@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     # GitHub API 認証用 PAT（fine-grained, Contents: Read-only 推奨）
     GITHUB_TOKEN: str = ""
     # スキャン対象リポジトリのオーナー（GitHub ユーザー名）
-    GITHUB_USERNAME: str = "baby-feelings"
+    GITHUB_USERNAME: str
     # DEPSCAN: JST 7:00 = UTC 22:00（KEV→OSV→JVN の後段）
     DEPSCAN_CRON_HOUR_UTC: int = 22
 
