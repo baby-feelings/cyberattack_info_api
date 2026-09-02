@@ -471,4 +471,71 @@ class TestNotifyDependencyFindings:
         message = mock_send.call_args[0][0]
         assert "u/a" in message
         assert "u/b" in message
-        assert "GHSA-a" in message
+        assert "cryptography" in message
+
+    def test_consolidates_same_package_into_one_line(self):
+        """同一パッケージ×バージョンの複数CVEは1行に集約され、件数・重大度内訳を表示する。"""
+        findings = [
+            self._finding_dict(osv_id="GHSA-a", severity="HIGH", fixed_versions=["3.4.8"]),
+            self._finding_dict(osv_id="GHSA-b", severity="CRITICAL", fixed_versions=["3.5.0"]),
+            self._finding_dict(osv_id="GHSA-c", severity="HIGH", fixed_versions=["3.4.8"]),
+        ]
+        with patch("app.core.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/x"):
+            with patch("app.core.notifications._send_slack") as mock_send:
+                notify_dependency_findings(findings)
+        message = mock_send.call_args[0][0]
+        # 3件のCVEが1行（1パッケージ）に集約されている
+        assert message.count("cryptography 3.4.7") == 1
+        assert "CRITICAL×1" in message
+        assert "HIGH×2" in message
+        assert "計3件" in message
+        assert "3.4.8" in message and "3.5.0" in message
+
+    def test_sorts_packages_by_severity_within_repo(self):
+        """リポジトリ内はCRITICAL→HIGH→...の重大度順に並ぶ。"""
+        findings = [
+            self._finding_dict(package_name="low-pkg", severity="LOW", osv_id="GHSA-l"),
+            self._finding_dict(package_name="critical-pkg", severity="CRITICAL", osv_id="GHSA-c"),
+            self._finding_dict(package_name="high-pkg", severity="HIGH", osv_id="GHSA-h"),
+        ]
+        with patch("app.core.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/x"):
+            with patch("app.core.notifications._send_slack") as mock_send:
+                notify_dependency_findings(findings)
+        message = mock_send.call_args[0][0]
+        assert (
+            message.index("critical-pkg")
+            < message.index("high-pkg")
+            < message.index("low-pkg")
+        )
+
+    def test_no_repo_limit(self):
+        """対象リポジトリ数が多くても省略せず全リポジトリを表示する。"""
+        findings = [
+            self._finding_dict(repo_full_name=f"u/repo{i}", osv_id=f"GHSA-{i}")
+            for i in range(20)
+        ]
+        with patch("app.core.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/x"):
+            with patch("app.core.notifications._send_slack") as mock_send:
+                notify_dependency_findings(findings)
+        message = mock_send.call_args[0][0]
+        for i in range(20):
+            assert f"u/repo{i}" in message
+        assert "他" not in message
+
+    def test_truncates_overly_long_message(self):
+        """Slack の文字数上限を超える場合、行の途中で切らずに省略する。"""
+        findings = [
+            self._finding_dict(
+                repo_full_name=f"u/repo{i}", package_name=f"pkg-{i}", osv_id=f"GHSA-{i}",
+            )
+            for i in range(2000)
+        ]
+        with patch("app.core.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/x"):
+            with patch("app.core.notifications._send_slack") as mock_send:
+                notify_dependency_findings(findings)
+        message = mock_send.call_args[0][0]
+        assert len(message) <= 39000 + 100
+        assert message.endswith(
+            "（メッセージが長すぎるため以降省略。詳細は API / ダッシュボードを参照）"
+        )
+        assert not message.endswith("\n")
