@@ -91,7 +91,7 @@ pip install -r requirements-dev.txt
 app/
 ├── main.py                 # FastAPI アプリ・lifespan・スケジューラ登録・ルーター include
 │                           # /admin/crawl・/admin/osv-crawl・/admin/jvn-crawl・/admin/depscan-crawl
-│                           # /admin/dependabot-ops（スケジューラ登録なし・手動トリガーのみ）
+│                           # /admin/dependabot-ops
 ├── core/                   # 横断的インフラ（特定ドメインに属さない）
 │   ├── config.py           # Settings（pydantic-settings）・環境変数管理
 │   ├── database.py         # SQLAlchemy エンジン（SQLite/PG 切り替え）・get_db
@@ -155,7 +155,7 @@ dashboard/               # Vercel デプロイの React ダッシュボード
 └── workflows/
     ├── ci.yml           # CI: ruff → mypy → pytest（PR 時・Python 3.10/3.11 matrix）
     ├── deploy.yml       # CD: Render Deploy Hook トリガー（main マージ時）
-    └── daily-crawl.yml  # 毎日クロール: 単一 cron(UTC 19:05) で KEV → OSV → JVN → DEPSCAN を順次実行
+    └── daily-crawl.yml  # 毎日クロール: 単一 cron(UTC 19:05) で KEV → OSV → JVN → DEPSCAN → DEPSOPS を順次実行
 ```
 
 ---
@@ -317,10 +317,16 @@ DEPSCAN 対象の他リポジトリ（`baby-feelings` アカウント配下）�
 ### DEPSOPS（`app/depsops/`）: Dependabot PR の安全な自動マージ運用層
 DEPSCAN（検知）・Dependabot（修正PR作成）に続く3層目として、Dependabot PR のうち
 **安全性が高いものだけを自動マージする**運用層。`POST /admin/dependabot-ops` から
-`app.depsops.runner.run_dependabot_ops` を呼ぶ。他クローラーと異なり
-**APScheduler にも GitHub Actions にも一切スケジュール登録していない
-（意図的な設計。手動トリガーのみ）**。安全に運用できると分かった段階で自動化を
-検討する前提。
+`app.depsops.runner.run_dependabot_ops` を呼ぶ。当初は安全性確認のため
+APScheduler/GitHub Actions への登録なし・手動トリガーのみで運用していたが、
+半日ほど手動運用して問題ないことを確認した上で、他クローラーと同様に
+`DEPSOPS_CRON_HOUR_UTC`（デフォルト UTC 23:00 = JST 8:00、DEPSCAN の後段）で
+自動実行するようにした（`app/main.py` の `scheduler.add_job` および
+`.github/workflows/daily-crawl.yml` の `dependabot-ops` ジョブ）。
+コンフリクトで自動マージできなかった PR（rebase 依頼のみで終わった PR）は、
+翌日以降の実行時にリベースが完了していれば通常通り自動マージされる
+（複数日にまたがる自己修復。追加のポーリング処理等は無く、単に毎日の
+再実行が同じ判定ロジックを通るだけ）。
 
 判定ロジック（`_process_pr`）:
 1. `mergeable_state == "dirty"`（コンフリクト）→ `@dependabot rebase` をコメントして
@@ -451,7 +457,7 @@ main ブランチへのマージ後に自動実行。
 
 ### 毎日クロール（daily-crawl.yml）
 Render Free プランのスリープ問題を回避するため、GitHub Actions から直接 API を叩いてクロールを強制実行する。
-**単一 cron（`5 19 * * *` / JST 翌 04:05）で全 4 クローラーを順次実行する構成。**
+**単一 cron（`5 19 * * *` / JST 翌 04:05）で KEV → OSV → JVN → DEPSCAN → DEPSOPS を順次実行する構成。**
 GitHub Actions 無料プランでは複数 cron の発火が不安定なため、単一 cron に統合した。
 
 | 実行順 | ジョブ | 対象 | 備考 |
@@ -461,6 +467,7 @@ GitHub Actions 無料プランでは複数 cron の発火が不安定なため�
 | 3 | `crawl-osv` | `POST /admin/osv-crawl` | OSV 脆弱性取得（timeout 600s） |
 | 4 | `crawl-jvn` | `POST /admin/jvn-crawl` | JVN 脆弱性取得（timeout 600s） |
 | 5 | `crawl-depscan` | `POST /admin/depscan-crawl` | 依存ライブラリ脆弱性スキャン（timeout 600s） |
+| 6 | `dependabot-ops` | `POST /admin/dependabot-ops` | Dependabot PR 自動運用（DEPSCAN の後段） |
 
 - 各ジョブは `always()` で前段の失敗に関わらず実行される（`wake-up` 成功が前提）
 - `workflow_dispatch` で手動実行可能（`target: kev / osv / jvn / depscan / all`）

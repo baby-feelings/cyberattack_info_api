@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     # DEPSCAN: JST 7:00 = UTC 22:00（KEV→OSV→JVN の後段）
     DEPSCAN_CRON_HOUR_UTC: int = 22
 
+    # Dependabot PR 自動運用（DEPSOPS）設定
+    # JST 8:00 = UTC 23:00（DEPSCAN の後段。Dependabot が新規検知に反応する時間を確保）
+    DEPSOPS_CRON_HOUR_UTC: int = 23
+
     model_config = SettingsConfigDict(
         # 環境に応じて .env.development または .env.production を使用
         env_file=".env",
