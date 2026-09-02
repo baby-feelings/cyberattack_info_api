@@ -16,7 +16,7 @@ Claude Code や CI/CD ツールから「今まさに悪用されているサイ�
 | **CISA KEV 自動クローラー** | 毎日 JST 04:05 に KEV → OSV → JVN → DEPSCAN を順次実行（CISA KEV フィード取得・Upsert） |
 | **OSV 自動クローラー** | 同上（OSV API から 10 エコシステムの主要パッケージの脆弱性を取得・Upsert） |
 | **JVN 自動クローラー** | 同上（MyJVN API から国内脆弱性を取得・Upsert） |
-| **依存ライブラリ脆弱性スキャン（DEPSCAN）** | 同上（GitHub 上の自作アプリ全リポジトリのロックファイルを OSV API とリアルタイム照合） |
+| **依存ライブラリ脆弱性スキャン（DEPSCAN）** | 同上（GitHub 上の自作アプリ全リポジトリ〈プライベート含む〉のロックファイルを OSV API とリアルタイム照合。新規検知はリポジトリ自身に GitHub Issue も自動起票） |
 | **OSV 古いデータ自動削除** | 180 日以上前のレコードをクロール時に自動削除（DB 容量管理） |
 | **Render スリープ対策** | GitHub Actions cron で毎日クロールを強制実行（Free プラン対応） |
 | **一覧取得 API** | ページネーション・キーワード検索・フィルタリング対応（KEV / OSV / JVN / DEPSCAN） |
@@ -548,6 +548,7 @@ cyberattack_info_api/
 │   ├── core/ kev/ osv/ jvn/ depscan/ crawler_logs/
 ├── dashboard/               # Vercel デプロイの React ダッシュボード（KEV・OSV（Pub 含む 10 エコシステム）・JVN）
 ├── .github/
+│   ├── dependabot.yml       # Dependabot（pip: / ・npm: /dashboard、週次で依存更新PRを自動作成）
 │   └── workflows/
 │       ├── ci.yml           # CI: lint + type check + test (PR 時に自動実行)
 │       ├── deploy.yml       # CD: Render デプロイ (main マージ時に自動実行)
