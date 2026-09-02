@@ -1,6 +1,6 @@
 # ── 開発・テスト依存パッケージ ─────────────────────────────────
 -r requirements.txt
-pytest>=9.0.3
+pytest>=9.1.1
 pytest-cov>=6.0.0
 pytest-asyncio>=0.24.0
 httpx>=0.28.1
