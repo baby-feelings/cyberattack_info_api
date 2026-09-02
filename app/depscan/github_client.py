@@ -28,8 +28,12 @@ def _headers(token: str) -> dict[str, str]:
 def list_target_repos(username: str, token: str) -> list[dict[str, Any]]:
     """指定ユーザーが所有する全リポジトリを取得する（fork・archived は除外）。
 
+    `GET /users/{username}/repos` は公開リポジトリしか返さない仕様のため、
+    プライベートリポジトリも対象に含めるには認証ユーザー自身の視点で全リポジトリを
+    返す `GET /user/repos`（`affiliation=owner`）を使う必要がある。
+
     Args:
-        username: GitHub ユーザー名
+        username: GitHub ユーザー名（トークンの持ち主と一致している前提）
         token: GitHub PAT（Contents: Read-only 推奨）
 
     Returns:
@@ -40,8 +44,12 @@ def list_target_repos(username: str, token: str) -> list[dict[str, Any]]:
     with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
         while True:
             resp = client.get(
-                f"{_GITHUB_API_BASE}/users/{username}/repos",
-                params={"type": "owner", "per_page": _PER_PAGE, "page": page},
+                f"{_GITHUB_API_BASE}/user/repos",
+                params={
+                    "affiliation": "owner",
+                    "per_page": _PER_PAGE,
+                    "page": page,
+                },
             )
             resp.raise_for_status()
             batch = resp.json()

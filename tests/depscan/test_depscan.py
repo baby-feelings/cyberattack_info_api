@@ -203,6 +203,16 @@ class TestListTargetRepos:
         assert len(result) == 101
         assert mock_client.get.call_count == 2
 
+    def test_uses_authenticated_user_repos_endpoint(self):
+        """プライベートリポジトリも取得できるよう /user/repos (affiliation=owner) を使う。"""
+        repos = [{"full_name": "u/private", "fork": False, "archived": False, "private": True}]
+        mock_client = _mock_httpx_client(get_return=_mock_response(repos))
+        with patch("app.depscan.github_client.httpx.Client", return_value=mock_client):
+            list_target_repos("u", "token")
+        call = mock_client.get.call_args
+        assert call.args[0].endswith("/user/repos")
+        assert call.kwargs["params"]["affiliation"] == "owner"
+
 
 class TestGetRepoTree:
     def test_returns_blob_paths_only(self):
