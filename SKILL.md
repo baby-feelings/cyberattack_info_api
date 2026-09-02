@@ -12,7 +12,7 @@ Claude Code や AI エージェントがこの API を「スキル（道具）�
 | **ベース URL（開発）** | `http://localhost:8000` |
 | **認証方式** | `X-API-KEY` リクエストヘッダー |
 | **レスポンス形式** | JSON |
-| **データソース** | CISA KEV／OSV API／JVN MyJVN API（毎日 JST 04:05 に一括順次実行） |
+| **データソース** | CISA KEV／OSV API／JVN MyJVN API／DEPSCAN（GitHub API + OSV API）（毎日 JST 04:05 に一括順次実行） |
 | **Swagger UI** | `https://cyberattack-info-api.onrender.com/docs` |
 
 ---
@@ -241,9 +241,61 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 ---
 
-### スキル 9: クローラーの実行ログを確認する
+### スキル 9: 自作アプリの依存ライブラリ脆弱性を確認する（DEPSCAN）
 
-**用途:** KEV / OSV / JVN クローラーが正常に動作しているか、最新の実行結果（件数・所要時間・エラー）を確認する。
+**用途:** GitHub 上の自作アプリ（`baby-feelings` アカウント配下、fork・archived 除く）が依存する
+ライブラリに脆弱性がないか確認する。OSV API とリアルタイム照合するため、`POPULAR_PACKAGES` に
+含まれない任意のパッケージも検知対象になる。
+
+```bash
+# 未解決の HIGH 以上の検知結果を取得
+curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
+  "https://cyberattack-info-api.onrender.com/api/depscan?resolved=false&severity=HIGH"
+
+# 特定リポジトリのみ絞り込み
+curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
+  "https://cyberattack-info-api.onrender.com/api/depscan?repo=baby-feelings/baby_grow"
+```
+
+| パラメータ | 型 | 説明 |
+|-----------|-----|------|
+| `page` | int | ページ番号（デフォルト: 1） |
+| `per_page` | int | 件数（デフォルト: 50、最大: 200） |
+| `repo` | string | リポジトリ名で絞り込み（例: `owner/repo`） |
+| `ecosystem` | string | エコシステムで絞り込み |
+| `severity` | string | 重要度（`CRITICAL` / `HIGH` / `MEDIUM` / `LOW`） |
+| `resolved` | bool | 解決状態で絞り込み（省略時は全件） |
+
+---
+
+### スキル 10: DEPSCAN 統計情報を取得する
+
+**用途:** 未解決の依存ライブラリ脆弱性について、リポジトリ別・重要度別の件数を把握する。
+
+```bash
+curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
+  "https://cyberattack-info-api.onrender.com/api/depscan/stats"
+```
+
+**レスポンス例:**
+```json
+{
+  "total": 3,
+  "repos": [
+    { "repo_full_name": "baby-feelings/baby_grow", "count": 2 }
+  ],
+  "severities": [
+    { "severity": "HIGH", "count": 2 },
+    { "severity": "MEDIUM", "count": 1 }
+  ]
+}
+```
+
+---
+
+### スキル 11: クローラーの実行ログを確認する
+
+**用途:** KEV / OSV / JVN / DEPSCAN クローラーが正常に動作しているか、最新の実行結果（件数・所要時間・エラー）を確認する。
 
 ```bash
 # 直近 10 件の実行ログを取得
@@ -261,7 +313,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 | パラメータ | 型 | 説明 |
 |-----------|-----|------|
-| `crawler_type` | string | `KEV` / `OSV` / `JVN`（省略時は全種別） |
+| `crawler_type` | string | `KEV` / `OSV` / `JVN` / `DEPSCAN`（省略時は全種別） |
 | `status` | string | `success` / `error`（省略時は両方） |
 | `limit` | int | 取得件数（デフォルト: 30、最大: 100） |
 
@@ -285,7 +337,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 ---
 
-### スキル 10: サービス状態を確認する
+### スキル 12: サービス状態を確認する
 
 **用途:** API サーバーと DB が正常稼働しているか確認する。
 
@@ -363,6 +415,15 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
   | claude -p "直近の高重要度 JVN 脆弱性を整理し、対処優先度を教えてください"
 ```
 
+### パターン 6: 自作アプリ群の未対応脆弱性を棚卸しする（DEPSCAN）
+
+```bash
+curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
+  "https://cyberattack-info-api.onrender.com/api/depscan?resolved=false" \
+  | claude -p "リポジトリ別に整理し、CRITICAL/HIGH を優先度順にリストアップしてください。
+               各項目に修正済みバージョンへの更新コマンド案も添えてください"
+```
+
 ---
 
 ## フィールド定義
@@ -414,12 +475,29 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | `date_published` | string (ISO 8601) | 公開日時 |
 | `date_last_modified` | string (ISO 8601) | 最終更新日時 |
 
+### DependencyFindingOut（DEPSCAN 検知結果）
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| `repo_full_name` | string | 検知元リポジトリ（例: `baby-feelings/baby_grow`） |
+| `ecosystem` | string | エコシステム（`PyPI` / `npm` / `Pub` 等） |
+| `package_name` | string | パッケージ名 |
+| `installed_version` | string | ロックファイルに記載されていたインストール済みバージョン |
+| `osv_id` | string | OSV ID（例: `GHSA-xxxx-xxxx-xxxx`） |
+| `severity` | string \| null | 重要度（`CRITICAL` / `HIGH` / `MEDIUM` / `LOW`） |
+| `cvss_score` | float \| null | CVSS スコア |
+| `summary` | string | 脆弱性の概要 |
+| `fixed_versions` | string[] | 修正済みバージョン |
+| `manifest_path` | string | 検知元のロックファイルパス（例: `dashboard/package-lock.json`） |
+| `detected_at` | string (ISO 8601) | 初回検知日時 |
+| `resolved_at` | string \| null (ISO 8601) | 解決日時（未解決なら `null`） |
+
 ### CrawlerLogOut（クローラー実行ログ）
 
 | フィールド | 型 | 説明 |
 |-----------|-----|------|
 | `id` | int | ログ ID |
-| `crawler_type` | string | クローラー種別（`KEV` / `OSV` / `JVN`） |
+| `crawler_type` | string | クローラー種別（`KEV` / `OSV` / `JVN` / `DEPSCAN`） |
 | `status` | string | 実行結果（`success` / `error`） |
 | `started_at` | string (ISO 8601) | 開始日時 |
 | `finished_at` | string (ISO 8601) | 終了日時 |
@@ -446,11 +524,12 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 | タイミング | 処理 |
 |----------|------|
-| 毎日 JST 04:05（UTC 19:05） | GitHub Actions 単一 cron で KEV → OSV → JVN を順次実行（Upsert・古いレコード削除） |
+| 毎日 JST 04:05（UTC 19:05） | GitHub Actions 単一 cron で KEV → OSV → JVN → DEPSCAN を順次実行（Upsert・古いレコード削除） |
 | アプリ起動時 | DB テーブルの自動作成 |
 | `POST /admin/crawl` 実行時 | KEV バックグラウンド取得（202 即時返却） |
 | `POST /admin/osv-crawl` 実行時 | OSV バックグラウンド取得（202 即時返却・`?days=N` 対応） |
 | `POST /admin/jvn-crawl` 実行時 | JVN バックグラウンド取得（202 即時返却・`?days=N` 対応） |
+| `POST /admin/depscan-crawl` 実行時 | DEPSCAN バックグラウンド取得（202 即時返却・GitHub 全リポジトリ再スキャン） |
 
 Upsert ロジック:
 
@@ -472,4 +551,13 @@ Upsert ロジック:
 - **既存エントリで `date_last_modified` 更新あり** → UPDATE
 - **既存エントリで変更なし** → スキップ
 - クロール完了後（新規・更新あり）→ Slack 通知（`SLACK_WEBHOOK_URL` 設定時）
+- 実行結果は `crawler_logs` テーブルに自動記録
+
+**DEPSCAN:**
+- GitHub 上の対象リポジトリ（fork・archived 除く）のロックファイルを収集・パースし、
+  `(ecosystem, package_name, version)` を OSV API にバージョン指定でリアルタイムクエリ
+  （既存の `OsvVulnerability` テーブルとは照合しない）
+- **新規検知** → INSERT → Slack 通知（リポジトリ別グルーピングした1通のダイジェスト）
+- **今回のスキャンで検知されなくなった既存レコード** → `resolved_at` を設定（削除はしない）
+- `GITHUB_TOKEN` / `GITHUB_USERNAME` 未設定時はエラー終了し `crawler_logs` にエラー記録
 - 実行結果は `crawler_logs` テーブルに自動記録
