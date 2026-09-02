@@ -235,7 +235,22 @@ MyJVN API（`https://jvndb.jvn.jp/myjvn`）は RDF/RSS 1.0 形式で返す。XML
 そのため DEPSCAN は `app.core.osv_client.query_versions_batch` で **バージョン指定の OSV API を
 その場でクエリ**し、既存 DB とは独立して脆弱性を判定する。GitHub リポジトリの列挙は
 `GITHUB_USERNAME`（fork・archived は自動除外）、認証は `GITHUB_TOKEN`（fine-grained PAT,
-Contents: Read-only 推奨）を使用する。
+Contents: Read-only + **Issues: Write** 推奨）を使用する。
+
+### `list_target_repos` はプライベートリポジトリも対象に含める
+`GET /users/{username}/repos`（公開リポジトリのみ返す仕様）ではなく、認証ユーザー自身の
+視点で全リポジトリを返す `GET /user/repos`（`affiliation=owner`）を使う。前者を使っていた際は
+プライベートリポジトリが一切スキャンされないバグがあった（PR #72 で修正）。
+
+### DEPSCAN の新規検知は GitHub Issue としても自動起票する
+`app.depscan.crawler._file_github_issues` が、新規検知を検知されたリポジトリ自身に
+Issue として起票する（Slack通知と同じ `new_snapshots` を使用）。タイトル固定文字列で
+Open Issue を検索し、あれば `add_issue_comment` で追記、無ければ `create_issue` で新規作成する
+（1リポジトリにつき常に1つの Open Issue に集約するため）。本文の整形ロジック
+（`format_package_lines`）は Slack 通知（`app.core.notifications`）と共有するため
+`app.core.finding_format` に切り出してある。GitHub API 呼び出し失敗（`Issues: Write` 権限
+不足等）はリポジトリ単位で `except httpx.HTTPError` により握りつぶし、DEPSCAN 全体の
+成功可否には影響させない。
 
 ### DEPSCAN のロックファイル検出は Git Tree API で1リポジトリ1回のみ
 `app.depscan.github_client.get_repo_tree` で `git/trees/{branch}?recursive=1` を使い、
@@ -361,8 +376,9 @@ GitHub Actions 無料プランでは複数 cron の発火が不安定なため�
 - **Start Command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 - **Environment Variables:** `DATABASE_URL`, `API_KEY`, `ENVIRONMENT=production`, `GITHUB_USERNAME`
   （DEPSCAN スキャン対象アカウント。コード側にデフォルト値なし、**未設定だとアプリが起動しない**）、
-  `SLACK_WEBHOOK_URL`（任意）、`GITHUB_TOKEN`（任意、DEPSCAN 用 PAT。Contents: Read-only 推奨。
-  未設定時は DEPSCAN のみエラー終了）
+  `SLACK_WEBHOOK_URL`（任意）、`GITHUB_TOKEN`（任意、DEPSCAN 用 PAT。Contents: Read-only +
+  Issues: Write 推奨。未設定時は DEPSCAN のみエラー終了。Issues: Write が無い場合は
+  Issue自動起票のみ失敗）
 
 ### GitHub Secrets の設定
 

@@ -13,10 +13,22 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.core.notifications import notify_dependency_findings, notify_depscan_crawl_error
+from app.core.finding_format import format_package_lines
+from app.core.notifications import (
+    DASHBOARD_URL,
+    notify_dependency_findings,
+    notify_depscan_crawl_error,
+)
 from app.core.osv_client import fetch_vuln_by_id, parse_severity, query_versions_batch
 from app.crawler_logs.writer import now_utc, write_crawler_log
-from app.depscan.github_client import get_file_content, get_repo_tree, list_target_repos
+from app.depscan.github_client import (
+    add_issue_comment,
+    create_issue,
+    find_open_issue,
+    get_file_content,
+    get_repo_tree,
+    list_target_repos,
+)
 from app.depscan.models import DependencyFinding
 from app.depscan.parsers import LOCKFILE_FILENAMES, parse_manifest
 
@@ -26,6 +38,9 @@ logger = logging.getLogger(__name__)
 FindingKey = tuple[str, str, str, str]
 # (ecosystem, package_name, version) キー型のエイリアス
 DepKey = tuple[str, str, str]
+
+# GitHub Issue自動起票時のタイトル（Open Issue検索の一致キーも兼ねる）
+_ISSUE_TITLE = "🚨 依存ライブラリの脆弱性が検出されました (DEPSCAN)"
 
 
 def _discover_manifests(owner: str, repo: str, default_branch: str, token: str) -> list[str]:
@@ -203,6 +218,44 @@ def _resolve_stale_findings(db: Session, current_keys: set[FindingKey]) -> int:
     return resolved
 
 
+def _file_github_issues(new_snapshots: list[dict[str, Any]]) -> None:
+    """新規検知を、検知されたリポジトリ自身に GitHub Issue として自動起票する。
+
+    同名の Open な Issue が既にあればコメントを追記し、無ければ新規作成する。
+    GitHub API 呼び出しが失敗しても（Issues 書き込み権限が無いトークン等）、
+    DEPSCAN 全体の成功を妨げないようリポジトリ単位で例外を握りつぶす。
+    """
+    if not new_snapshots:
+        return
+
+    by_repo: dict[str, list[dict[str, Any]]] = {}
+    for finding in new_snapshots:
+        by_repo.setdefault(finding["repo_full_name"], []).append(finding)
+
+    timestamp = now_utc().strftime("%Y-%m-%d %H:%M UTC")
+    token = settings.GITHUB_TOKEN
+
+    for full_name, findings in by_repo.items():
+        owner, repo = full_name.split("/", 1)
+        body = (
+            f"DEPSCAN が依存ライブラリの脆弱性を検知しました（{timestamp}）。\n\n"
+            + "\n".join(format_package_lines(findings))
+            + f"\n\n---\n詳細: {DASHBOARD_URL}"
+        )
+        try:
+            issue_number = find_open_issue(owner, repo, _ISSUE_TITLE, token)
+            if issue_number is not None:
+                add_issue_comment(owner, repo, issue_number, body, token)
+                logger.info(
+                    "DEPSCAN: added comment to existing issue #%d in %s", issue_number, full_name,
+                )
+            else:
+                issue = create_issue(owner, repo, _ISSUE_TITLE, body, token)
+                logger.info("DEPSCAN: created issue #%s in %s", issue.get("number"), full_name)
+        except httpx.HTTPError as exc:
+            logger.warning("DEPSCAN: failed to file GitHub issue for %s: %s", full_name, exc)
+
+
 def fetch_and_scan_dependencies() -> tuple[int, int, int]:
     """DEPSCAN のメインエントリポイント。
 
@@ -269,4 +322,5 @@ def fetch_and_scan_dependencies() -> tuple[int, int, int]:
         deleted=resolved_count,
     )
     notify_dependency_findings(new_snapshots)
+    _file_github_issues(new_snapshots)
     return new_count, resolved_count, repos_scanned

@@ -19,11 +19,15 @@ from app.depscan.crawler import (  # noqa: E402
     _build_findings,
     _collect_dependencies,
     _discover_manifests,
+    _file_github_issues,
     _resolve_stale_findings,
     _upsert_findings,
     fetch_and_scan_dependencies,
 )
 from app.depscan.github_client import (  # noqa: E402
+    add_issue_comment,
+    create_issue,
+    find_open_issue,
     get_file_content,
     get_repo_tree,
     list_target_repos,
@@ -250,6 +254,53 @@ class TestGetFileContent:
                 get_file_content("owner", "repo", "path", "token")
 
 
+class TestFindOpenIssue:
+    def test_returns_matching_issue_number(self):
+        issues = [
+            {"number": 5, "title": "別件のIssue"},
+            {"number": 7, "title": "🚨 依存ライブラリの脆弱性が検出されました (DEPSCAN)"},
+        ]
+        mock_client = _mock_httpx_client(get_return=_mock_response(issues))
+        with patch("app.depscan.github_client.httpx.Client", return_value=mock_client):
+            result = find_open_issue(
+                "owner", "repo", "🚨 依存ライブラリの脆弱性が検出されました (DEPSCAN)", "token",
+            )
+        assert result == 7
+
+    def test_returns_none_when_not_found(self):
+        mock_client = _mock_httpx_client(get_return=_mock_response([]))
+        with patch("app.depscan.github_client.httpx.Client", return_value=mock_client):
+            result = find_open_issue("owner", "repo", "存在しないタイトル", "token")
+        assert result is None
+
+    def test_ignores_pull_requests(self):
+        """タイトルが一致してもPull Requestは除外する（issues APIはPRも含んで返すため）。"""
+        issues = [{"number": 3, "title": "同じタイトル", "pull_request": {"url": "..."}}]
+        mock_client = _mock_httpx_client(get_return=_mock_response(issues))
+        with patch("app.depscan.github_client.httpx.Client", return_value=mock_client):
+            result = find_open_issue("owner", "repo", "同じタイトル", "token")
+        assert result is None
+
+
+class TestCreateIssueAndComment:
+    def test_create_issue_posts_title_and_body(self):
+        mock_client = _mock_httpx_client(post_return=_mock_response({"number": 42}))
+        with patch("app.depscan.github_client.httpx.Client", return_value=mock_client):
+            result = create_issue("owner", "repo", "タイトル", "本文", "token")
+        assert result == {"number": 42}
+        call = mock_client.post.call_args
+        assert call.kwargs["json"] == {"title": "タイトル", "body": "本文"}
+
+    def test_add_issue_comment_posts_body(self):
+        mock_client = _mock_httpx_client(post_return=_mock_response({"id": 1}))
+        with patch("app.depscan.github_client.httpx.Client", return_value=mock_client):
+            result = add_issue_comment("owner", "repo", 42, "追記内容", "token")
+        assert result == {"id": 1}
+        call = mock_client.post.call_args
+        assert call.args[0].endswith("/issues/42/comments")
+        assert call.kwargs["json"] == {"body": "追記内容"}
+
+
 # ──────────────────────────────────────────────────────────────
 # app.depscan.crawler
 # ──────────────────────────────────────────────────────────────
@@ -410,12 +461,14 @@ class TestFetchAndScanDependencies:
                 "manifest_path": "requirements.txt", "detected_at": _NOW,
             }],
         ), patch("app.depscan.crawler.SessionLocal", return_value=db_session), \
-           patch("app.depscan.crawler.notify_dependency_findings") as mock_notify:
+           patch("app.depscan.crawler.notify_dependency_findings") as mock_notify, \
+           patch("app.depscan.crawler._file_github_issues") as mock_file_issues:
             new_count, resolved_count, repos_scanned = fetch_and_scan_dependencies()
 
         assert new_count == 1
         assert repos_scanned == 1
         mock_notify.assert_called_once()
+        mock_file_issues.assert_called_once()
 
     def test_error_path_logs_and_notifies(self, db_session):
         with patch(
@@ -427,6 +480,65 @@ class TestFetchAndScanDependencies:
             with pytest.raises(RuntimeError):
                 fetch_and_scan_dependencies()
         mock_notify_error.assert_called_once()
+
+
+class TestFileGithubIssues:
+    def _finding(self, **kwargs):
+        base = {
+            "repo_full_name": "baby-feelings/baby_grow",
+            "package_name": "cryptography",
+            "installed_version": "3.4.7",
+            "severity": "HIGH",
+            "fixed_versions": ["3.4.8"],
+            "osv_id": "GHSA-001",
+        }
+        base.update(kwargs)
+        return base
+
+    def test_does_nothing_when_no_new_findings(self):
+        with patch("app.depscan.crawler.find_open_issue") as mock_find:
+            _file_github_issues([])
+        mock_find.assert_not_called()
+
+    def test_creates_issue_when_none_open(self):
+        with patch("app.depscan.crawler.find_open_issue", return_value=None), \
+             patch("app.depscan.crawler.create_issue") as mock_create, \
+             patch("app.depscan.crawler.add_issue_comment") as mock_comment:
+            _file_github_issues([self._finding()])
+        mock_create.assert_called_once()
+        args = mock_create.call_args[0]
+        assert args[0] == "baby-feelings"
+        assert args[1] == "baby_grow"
+        assert "cryptography" in args[3]
+        mock_comment.assert_not_called()
+
+    def test_comments_on_existing_open_issue(self):
+        with patch("app.depscan.crawler.find_open_issue", return_value=7), \
+             patch("app.depscan.crawler.create_issue") as mock_create, \
+             patch("app.depscan.crawler.add_issue_comment") as mock_comment:
+            _file_github_issues([self._finding()])
+        mock_comment.assert_called_once()
+        assert mock_comment.call_args[0][2] == 7
+        mock_create.assert_not_called()
+
+    def test_groups_by_repo(self):
+        findings = [
+            self._finding(repo_full_name="u/a", osv_id="GHSA-a"),
+            self._finding(repo_full_name="u/b", osv_id="GHSA-b"),
+        ]
+        with patch("app.depscan.crawler.find_open_issue", return_value=None), \
+             patch("app.depscan.crawler.create_issue") as mock_create, \
+             patch("app.depscan.crawler.add_issue_comment"):
+            _file_github_issues(findings)
+        assert mock_create.call_count == 2
+
+    def test_http_error_does_not_raise(self):
+        """権限不足等でIssue作成が失敗しても、DEPSCAN全体を失敗させない。"""
+        with patch(
+            "app.depscan.crawler.find_open_issue",
+            side_effect=httpx.HTTPStatusError("403", request=MagicMock(), response=MagicMock()),
+        ):
+            _file_github_issues([self._finding()])  # 例外を送出しないことを確認
 
 
 # ──────────────────────────────────────────────────────────────
