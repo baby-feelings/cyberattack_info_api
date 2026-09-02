@@ -426,6 +426,17 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
                各項目に修正済みバージョンへの更新コマンド案も添えてください"
 ```
 
+> **実際の修正は Dependabot が担当。** DEPSCAN は検知・通知のみで、修正コードは生成しない。
+> 検知後は対象リポジトリの Dependabot 更新 PR をマージすることで対応する。
+> - PR マージ前に `mergeable: MERGEABLE` を確認し、メジャーバージョンアップは
+>   マージ後のデプロイ結果（Vercel 等）を必ず確認する
+> - `package-lock.json` 等の競合でマージできない PR には `@dependabot rebase` とコメントする
+> - 対象パッケージが別 PR で既に修正済みの場合、Dependabot が PR を自動クローズすることがある
+> - 本番反映方法（自動デプロイ／手動デプロイ）はリポジトリごとに異なるため、マージ後に
+>   そのリポジトリのデプロイ方式を確認する
+> - 脆弱性検知に即応する「Dependabot security updates」は、`dependabot.yml` を置くだけでは
+>   有効にならず、各リポジトリの `Settings → Code security` で個別に ON にする必要がある
+
 ---
 
 ## フィールド定義

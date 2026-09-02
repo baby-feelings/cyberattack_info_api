@@ -257,6 +257,13 @@ Open Issue を検索し、あれば `add_issue_comment` で追記、無ければ
 ### Dependabot を本リポジトリおよび DEPSCAN 対象の全リポジトリで有効化している
 DEPSCAN が「検知」、Dependabot が「実際の修正 PR 作成」を担う役割分担。本リポジトリの
 `.github/dependabot.yml` は `pip`（`/`）・`npm`（`/dashboard`）を週次でチェックする。
+
+GitHub の Dependabot には独立した2つの機能があり、**`dependabot.yml` を置くだけでは
+「Dependabot version updates」（週次の通常バージョンアップPR）しか有効にならない**。
+DEPSCAN が検知したような脆弱性に対して即座に修正PRを出す「Dependabot security updates」は、
+各リポジトリの `Settings → Code security` で個別に ON にする必要がある（`Dependency graph`・
+`Dependabot alerts`・`Dependabot security updates` の3点、`Grouped security updates` も
+推奨）。有効化すると、既存の Open な Dependabot alert 全件に対して自動でPRが作成される。
 **Dependabot PR は内容を確認せず自動マージしないこと。** マイナー/パッチ更新は概ね安全だが、
 メジャーバージョンアップは非互換な依存衝突を起こしうる（実例: `typescript` 6.0.3→7.0.2 が
 `typescript-eslint@8.61.0` の peer 依存 `typescript >=4.8.4 <6.1.0` と衝突し、Vercel の
@@ -264,6 +271,23 @@ DEPSCAN が「検知」、Dependabot が「実際の修正 PR 作成」を担う
 固定している）。マージ前に CI（Test & Lint）に加え、フロントエンド変更は Vercel のプレビュー
 デプロイが `Deployment has completed` になっているかを確認する。マージ後にビルドが壊れた場合は
 該当パッケージのバージョンを差し戻す fix PR で対応する。
+
+DEPSCAN 対象の他リポジトリ（`baby-feelings` アカウント配下）でも同様に Dependabot を有効化
+済み。それらの PR をマージする際のチェックリスト:
+
+1. マージ前に `mergeable: MERGEABLE` を確認する（`gh pr view <num> --json mergeable`）。CI が
+   設定されていないリポジトリも多く、その場合は内容確認のみで判断する
+2. メジャーバージョンアップは上記と同様、マージ後のデプロイ結果を確認してから次に進む
+3. 複数の Dependabot PR を連続でマージすると、後続 PR が `package-lock.json` 等の競合で
+   `Pull Request has merge conflicts` になることがある。その場合は該当 PR に
+   `@dependabot rebase` とコメントすればリベースされる（数分待って再マージ）
+4. リベース後、対象パッケージが別 PR のマージで既に修正済みバージョンに達していた場合、
+   Dependabot が PR を自動でクローズすることがある（`state: CLOSED`, `mergedAt: null`）。
+   これは異常ではなく「対応不要になった」ことを意味する
+5. **本番反映方法はリポジトリごとに異なる**。Vercel 連携があるリポジトリはマージ時点で
+   自動デプロイされるが、`todo-app`（Firebase Hosting）のように CI/CD が無いリポジトリは
+   マージ後にローカルで `git pull` した上で手動デプロイコマンド（例: `firebase deploy`）を
+   実行するまで本番に反映されない
 
 ### DEPSCAN のロックファイル検出は Git Tree API で1リポジトリ1回のみ
 `app.depscan.github_client.get_repo_tree` で `git/trees/{branch}?recursive=1` を使い、
