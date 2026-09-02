@@ -97,6 +97,9 @@ app/
 │   ├── auth.py             # X-API-KEY 認証（APIKeyHeader・hmac.compare_digest）
 │   ├── db_utils.py         # DB ユーティリティ（year_month_expr: SQLite/PG 両対応の日付フォーマット）
 │   ├── notifications.py    # Slack Webhook 通知（notify_success/notify_error 共通化・エラーサニタイズ）
+│   ├── osv_client.py       # OSV API 汎用クライアント（query_versions_batch・fetch_vuln_by_id・
+│   │                       # parse_severity 等。app.osv.crawler と app.depscan.crawler の両方が利用）
+│   ├── types.py            # CrawlerType（"KEV"/"OSV"/"JVN"/"DEPSCAN" の Literal 型）
 │   └── schemas.py          # 横断スキーマ（HealthResponse・MonthlyStat・SeverityStat）
 ├── kev/                    # CISA KEV ドメイン
 │   ├── models.py           # Vulnerability
@@ -106,8 +109,8 @@ app/
 ├── osv/                    # OSV ドメイン
 │   ├── models.py           # OsvVulnerability
 │   ├── schemas.py          # OsvVulnerabilityOut 等
-│   ├── crawler.py          # OSV クローラー（REST API 方式・10 エコシステム対応）
-│   │                       # _query_versions_batch（DEPSCAN のリアルタイム照合から利用）
+│   ├── crawler.py          # OSV クローラー（REST API 方式・10 エコシステム対応、Upsert ロジック）
+│   ├── packages.py         # POPULAR_PACKAGES（監視対象パッケージ一覧、ロジックから分離したデータ）
 │   └── router.py           # /api/osv エンドポイント（一覧・統計）
 ├── jvn/                    # JVN ドメイン
 │   ├── models.py           # JvnVulnerability
@@ -210,7 +213,7 @@ OSV REST API の `/v1/querybatch` は `{id, modified}` しか返さないため�
 2. cutoff（`OSV_DAYS` 日前）より新しいものだけ `GET /v1/vulns/{id}` で完全情報を取得
 
 ### OSV クローラーの対象エコシステム
-`POPULAR_PACKAGES` dict に定義された 10 エコシステムの主要パッケージを監視対象とする:
+`app/osv/packages.py` の `POPULAR_PACKAGES` dict に定義された 10 エコシステムの主要パッケージを監視対象とする:
 PyPI / npm / Go / Maven / RubyGems / NuGet / crates.io / Packagist / Hex / **Pub**（Dart / Flutter）
 
 ### OSV クローラーの DB 保護
@@ -225,6 +228,19 @@ MyJVN API（`https://jvndb.jvn.jp/myjvn`）は RDF/RSS 1.0 形式で返す。XML
 - CVE 参照: `<sec:references source="CVE" ...>` の `source` 属性（`type` 属性ではない）
 - `<title>` / `<link>` は RSS 既定名前空間（`rss:`）に属するため `rss:title` / `rss:link` で検索
 - defusedxml を使用して XXE / Billion-laughs 攻撃を防止
+
+### DEPSCAN はリアルタイムで OSV API に照合する（事前クロール済みデータには頼らない）
+既存の `OsvVulnerability` テーブルは `POPULAR_PACKAGES`（各エコシステム50〜60件の主要パッケージ）しか
+収録していないため、GitHub 上の自作アプリが依存する任意のパッケージを検知するには不十分。
+そのため DEPSCAN は `app.core.osv_client.query_versions_batch` で **バージョン指定の OSV API を
+その場でクエリ**し、既存 DB とは独立して脆弱性を判定する。GitHub リポジトリの列挙は
+`GITHUB_USERNAME`（fork・archived は自動除外）、認証は `GITHUB_TOKEN`（fine-grained PAT,
+Contents: Read-only 推奨）を使用する。
+
+### DEPSCAN のロックファイル検出は Git Tree API で1リポジトリ1回のみ
+`app.depscan.github_client.get_repo_tree` で `git/trees/{branch}?recursive=1` を使い、
+サブディレクトリ（monorepo）も含めて全ファイルパスを1回のAPI呼び出しで取得する。
+対応する10エコシステムのロックファイル名は `app.depscan.parsers.LOCKFILE_FILENAMES` で判定する。
 
 ### lifespan の scan_results テーブル削除はベストエフォート
 旧スキャン機能廃止に伴い、起動時に `DROP TABLE IF EXISTS scan_results` を実行しているが、  
@@ -247,6 +263,16 @@ KEV / OSV / JVN の 3 データソースは、画面下部固定のタブバー�
 `TabKey` / `TABS` 定数と `activeTab` state で選択中セクションのみを条件レンダリングし、
 サーバー稼働状況（`HealthStatus`）とエラーバナーは全タブ共通で常に表示する。
 タブには `role="tablist"/"tab"/"tabpanel"` と `aria-selected`/`aria-controls`/`aria-labelledby` を付与済み。
+
+### OsvPanel/JvnPanel の共通パーツ（VulnPanelParts.tsx）
+`dashboard/src/components/shared/VulnPanelParts.tsx` に、両パネルで共通の
+`SeverityBadge`・`ChartCard`・`SeverityPieChart`・`MonthlyBarChart`・`TableLoadingSkeleton`・
+`EmptyState`・`Pagination`・`SeverityFilterButtons`・`SearchBox`・`SortSelector` を切り出し済み。
+深刻度の値・配色（OSV: CRITICAL/HIGH/MEDIUM/LOW、JVN: High/Medium/Low）はドメイン固有のため
+`classMap`/`colorMap` として呼び出し側から渡す。エコシステム別棒グラフ（OSV固有）や行コンポーネント
+（OsvRow/JvnRow）はドメイン固有のため各パネル側に残している。
+`ChartCard` の `footer` スロットは高さ固定領域の**外側**に描画されるため、円グラフの凡例のように
+高さ制約に含めたくないコンテンツはここに渡すこと。
 
 ### index.css の CSS カスケードレイヤーに関する注意
 `*, *::before, *::after` の余白リセットは必ず `@layer base` の中に書くこと。
@@ -297,7 +323,7 @@ main ブランチへのマージ後に自動実行。
 
 ### 毎日クロール（daily-crawl.yml）
 Render Free プランのスリープ問題を回避するため、GitHub Actions から直接 API を叩いてクロールを強制実行する。
-**単一 cron（`5 19 * * *` / JST 翌 04:05）で全 3 クローラーを順次実行する構成。**
+**単一 cron（`5 19 * * *` / JST 翌 04:05）で全 4 クローラーを順次実行する構成。**
 GitHub Actions 無料プランでは複数 cron の発火が不安定なため、単一 cron に統合した。
 
 | 実行順 | ジョブ | 対象 | 備考 |
@@ -306,12 +332,11 @@ GitHub Actions 無料プランでは複数 cron の発火が不安定なため�
 | 2 | `crawl-kev` | `POST /admin/crawl` | KEV フィード取得 |
 | 3 | `crawl-osv` | `POST /admin/osv-crawl` | OSV 脆弱性取得（timeout 600s） |
 | 4 | `crawl-jvn` | `POST /admin/jvn-crawl` | JVN 脆弱性取得（timeout 600s） |
+| 5 | `crawl-depscan` | `POST /admin/depscan-crawl` | 依存ライブラリ脆弱性スキャン（timeout 600s） |
 
 - 各ジョブは `always()` で前段の失敗に関わらず実行される（`wake-up` 成功が前提）
-- `workflow_dispatch` で手動実行可能（`target: kev / osv / jvn / all`）
-
+- `workflow_dispatch` で手動実行可能（`target: kev / osv / jvn / depscan / all`）
 - GitHub Secrets に `API_KEY`（Render 環境変数と同じ値）を設定すること
-- `workflow_dispatch` で手動実行も可能（`target: kev / osv / jvn / both / all`）
 
 ---
 
@@ -327,7 +352,8 @@ GitHub Actions 無料プランでは複数 cron の発火が不安定なため�
 ### Render の設定
 - **Build Command:** `pip install -r requirements.txt`
 - **Start Command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-- **Environment Variables:** `DATABASE_URL`, `API_KEY`, `ENVIRONMENT=production`, `SLACK_WEBHOOK_URL`（任意）
+- **Environment Variables:** `DATABASE_URL`, `API_KEY`, `ENVIRONMENT=production`, `SLACK_WEBHOOK_URL`（任意）、
+  `GITHUB_TOKEN`（DEPSCAN 用 PAT、Contents: Read-only 推奨）, `GITHUB_USERNAME`（DEPSCAN スキャン対象アカウント）
 
 ### GitHub Secrets の設定
 

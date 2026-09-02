@@ -13,18 +13,19 @@ Claude Code や CI/CD ツールから「今まさに悪用されているサイ�
 
 | 機能 | 説明 |
 |------|------|
-| **CISA KEV 自動クローラー** | 毎日 JST 04:05 に KEV → OSV → JVN を順次実行（CISA KEV フィード取得・Upsert） |
+| **CISA KEV 自動クローラー** | 毎日 JST 04:05 に KEV → OSV → JVN → DEPSCAN を順次実行（CISA KEV フィード取得・Upsert） |
 | **OSV 自動クローラー** | 同上（OSV API から 10 エコシステムの主要パッケージの脆弱性を取得・Upsert） |
 | **JVN 自動クローラー** | 同上（MyJVN API から国内脆弱性を取得・Upsert） |
+| **依存ライブラリ脆弱性スキャン（DEPSCAN）** | 同上（GitHub 上の自作アプリ全リポジトリのロックファイルを OSV API とリアルタイム照合） |
 | **OSV 古いデータ自動削除** | 180 日以上前のレコードをクロール時に自動削除（DB 容量管理） |
 | **Render スリープ対策** | GitHub Actions cron で毎日クロールを強制実行（Free プラン対応） |
-| **一覧取得 API** | ページネーション・キーワード検索・フィルタリング対応（KEV / OSV / JVN） |
+| **一覧取得 API** | ページネーション・キーワード検索・フィルタリング対応（KEV / OSV / JVN / DEPSCAN） |
 | **直近脅威 API** | 過去 N 日以内に追加された脆弱性を即座に取得（KEV） |
 | **CVE 個別取得** | CVE ID を指定して脆弱性詳細を 1 件取得（KEV） |
-| **統計 API** | ベンダー別ランキング・月別トレンド・重要度別集計（KEV / OSV / JVN） |
-| **クローラー実行ログ API** | KEV / OSV / JVN クローラーの実行履歴（成否・件数・所要時間）を取得 |
-| **Slack 通知** | 新規追加・更新時・エラー時に Slack へ自動通知（KEV / OSV / JVN） |
-| **手動クロール** | `POST /admin/crawl` / `POST /admin/osv-crawl` / `POST /admin/jvn-crawl`（バックグラウンド 202 即時返却・`?days=N` 対応） |
+| **統計 API** | ベンダー別ランキング・月別トレンド・重要度別集計（KEV / OSV / JVN / DEPSCAN） |
+| **クローラー実行ログ API** | KEV / OSV / JVN / DEPSCAN クローラーの実行履歴（成否・件数・所要時間）を取得 |
+| **Slack 通知** | 新規追加・更新時・エラー時に Slack へ自動通知（KEV / OSV / JVN / DEPSCAN） |
+| **手動クロール** | `POST /admin/crawl` / `POST /admin/osv-crawl` / `POST /admin/jvn-crawl` / `POST /admin/depscan-crawl`（バックグラウンド 202 即時返却・`?days=N` 対応） |
 | **API キー認証** | `X-API-KEY` ヘッダーによるシンプルな固定キー認証 |
 | **ヘルスチェック** | DB 接続確認付きの死活監視エンドポイント |
 | **React ダッシュボード** | CISA KEV・OSV（Pub 含む 10 エコシステム・180 日表示）・JVN を画面下部固定タブで切り替え表示（Vercel デプロイ） |
@@ -298,9 +299,75 @@ curl -H "X-API-KEY: your-key" \
 }
 ```
 
+### GET /api/depscan — 依存ライブラリ脆弱性の検知結果一覧取得
+
+GitHub 上の自作アプリ全リポジトリのロックファイルを OSV API とリアルタイム照合した検知結果を取得します。
+
+```bash
+curl -H "X-API-KEY: your-key" \
+  "http://localhost:8000/api/depscan?resolved=false&severity=HIGH"
+```
+
+| パラメータ | 型 | デフォルト | 説明 |
+|-----------|-----|-----------|------|
+| `page` | int | 1 | ページ番号 |
+| `per_page` | int | 50 | 1ページあたりの件数（最大 200） |
+| `repo` | string | - | リポジトリ名で絞り込み（例: `owner/repo`） |
+| `ecosystem` | string | - | エコシステムで絞り込み（例: `PyPI` / `npm`） |
+| `severity` | string | - | 重要度でフィルタ（`CRITICAL` / `HIGH` / `MEDIUM` / `LOW`） |
+| `resolved` | bool | - | 解決状態で絞り込み（省略時は全件） |
+
+**レスポンス例:**
+```json
+{
+  "total": 1,
+  "page": 1,
+  "per_page": 50,
+  "data": [
+    {
+      "repo_full_name": "baby-feelings/baby_grow",
+      "ecosystem": "PyPI",
+      "package_name": "cryptography",
+      "installed_version": "3.4.7",
+      "osv_id": "GHSA-xxxx-xxxx-xxxx",
+      "severity": "HIGH",
+      "cvss_score": 7.5,
+      "summary": "...",
+      "fixed_versions": ["3.4.8"],
+      "manifest_path": "requirements.txt",
+      "detected_at": "2026-08-01T04:05:00+00:00",
+      "resolved_at": null
+    }
+  ]
+}
+```
+
+### GET /api/depscan/stats — 依存ライブラリ脆弱性の統計情報
+
+未解決の検知結果について、リポジトリ別件数・重要度別件数を返します。
+
+```bash
+curl -H "X-API-KEY: your-key" \
+  "http://localhost:8000/api/depscan/stats"
+```
+
+**レスポンス例:**
+```json
+{
+  "total": 3,
+  "repos": [
+    { "repo_full_name": "baby-feelings/baby_grow", "count": 2 }
+  ],
+  "severities": [
+    { "severity": "HIGH", "count": 2 },
+    { "severity": "MEDIUM", "count": 1 }
+  ]
+}
+```
+
 ### GET /api/crawler-logs — クローラー実行ログ一覧
 
-KEV / OSV / JVN クローラーの実行履歴（成否・件数・所要時間）を新しい順に返します。
+KEV / OSV / JVN / DEPSCAN クローラーの実行履歴（成否・件数・所要時間）を新しい順に返します。
 
 ```bash
 curl -H "X-API-KEY: your-key" \
@@ -317,7 +384,7 @@ curl -H "X-API-KEY: your-key" \
 
 | パラメータ | 型 | デフォルト | 説明 |
 |-----------|-----|-----------|------|
-| `crawler_type` | string | - | `KEV` / `OSV` / `JVN`（省略時は全種別） |
+| `crawler_type` | string | - | `KEV` / `OSV` / `JVN` / `DEPSCAN`（省略時は全種別） |
 | `status` | string | - | `success` / `error`（省略時は両方） |
 | `limit` | int | 30 | 取得件数（最大 100） |
 
@@ -380,6 +447,17 @@ curl -X POST -H "X-API-KEY: your-key" \
 | パラメータ | 型 | デフォルト | 説明 |
 |-----------|-----|-----------|------|
 | `days` | int | JVN_DAYS (30) | 取得対象の直近日数（1〜365） |
+
+### POST /admin/depscan-crawl — 依存ライブラリ脆弱性スキャン手動実行（バックグラウンド実行）
+
+```bash
+curl -X POST -H "X-API-KEY: your-key" \
+  "http://localhost:8000/admin/depscan-crawl"
+# → 202 Accepted: {"message": "Dependency vulnerability scan started in background"}
+```
+
+> **Note:** `GITHUB_TOKEN`（GitHub PAT）・`GITHUB_USERNAME` が未設定の場合、GitHub API への認証が
+> 失敗しエラー終了します（`/api/crawler-logs` にエラーとして記録されます）。
 
 > **Note:** 手動クロールはバックグラウンドで実行されるため、即座に 202 が返ります。  
 > 実行結果は `GET /api/crawler-logs` で確認してください。
@@ -523,6 +601,9 @@ cyberattack_info_api/
 | `OSV_DAYS` | - | OSV 取得対象の直近日数（デフォルト: `30`） |
 | `OSV_RETENTION_DAYS` | - | OSV データ保持期間（日数・デフォルト: `180`） |
 | `JVN_DAYS` | - | JVN 取得対象の直近日数（デフォルト: `30`） |
+| `GITHUB_TOKEN` | - | DEPSCAN 用 GitHub PAT（fine-grained: Contents Read-only 推奨 / classic: repo スコープ）。未設定時は DEPSCAN のみエラー終了 |
+| `GITHUB_USERNAME` | - | DEPSCAN のスキャン対象 GitHub アカウント（デフォルト: `baby-feelings`） |
+| `DEPSCAN_CRON_HOUR_UTC` | - | DEPSCAN 実行時刻（時・UTC）（デフォルト: `22`） |
 | `SLACK_WEBHOOK_URL` | - | Slack Incoming Webhook URL（未設定時は通知スキップ） |
 
 ---
@@ -540,7 +621,8 @@ cyberattack_info_api/
 | CISA KEV クロール完了（新規追加・更新あり） | `:shield: CISA KEV 更新通知`（新規・更新件数） |
 | OSV クロール完了（新規・更新あり） | `:package: OSV 脆弱性データ更新通知`（新規・更新・削除件数） |
 | JVN クロール完了（新規・更新あり） | `:jigsaw: JVN 脆弱性データ更新通知`（新規・更新件数） |
-| クローラーエラー発生時 | `:warning:` エラー内容（KEV / OSV / JVN それぞれ） |
+| DEPSCAN で新規検知あり | `:rotating_light: 依存ライブラリ脆弱性を検知`（リポジトリ別グルーピングしたダイジェスト1通） |
+| クローラーエラー発生時 | `:warning:` エラー内容（KEV / OSV / JVN / DEPSCAN それぞれ） |
 
 ---
 
@@ -548,13 +630,14 @@ cyberattack_info_api/
 
 | タイミング | 処理 |
 |----------|------|
-| 毎日 JST 04:05（UTC 19:05）| GitHub Actions 単一 cron で KEV → OSV → JVN を順次実行 |
+| 毎日 JST 04:05（UTC 19:05）| GitHub Actions 単一 cron で KEV → OSV → JVN → DEPSCAN を順次実行 |
 | アプリ起動時 | DB テーブルの自動作成 |
 | `POST /admin/crawl` 実行時 | KEV 即時取得（スケジュール外） |
 | `POST /admin/osv-crawl` 実行時 | OSV バックグラウンド取得（`?days=N` で日数指定可） |
 | `POST /admin/jvn-crawl` 実行時 | JVN バックグラウンド取得（`?days=N` で日数指定可） |
+| `POST /admin/depscan-crawl` 実行時 | DEPSCAN バックグラウンド取得（GitHub 全リポジトリを再スキャン） |
 
-> **Note:** APScheduler（アプリ内スケジューラ）も UTC 19:00 / 20:00 / 21:00 に設定されていますが、  
+> **Note:** APScheduler（アプリ内スケジューラ）も UTC 19:00 / 20:00 / 21:00 / 22:00 に設定されていますが、  
 > Render Free プランのスリープ中は発火しません。GitHub Actions の単一 cron がその補完として機能します。
 
 ---
