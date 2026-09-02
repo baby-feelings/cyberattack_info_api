@@ -487,7 +487,7 @@ curl -X POST -H "X-API-KEY: your-key" \
 > **Note:** 手動クロールはバックグラウンドで実行されるため、即座に 202 が返ります。  
 > 実行結果は `GET /api/crawler-logs` で確認してください。
 
-### POST /admin/dependabot-ops — Dependabot PR 自動運用（手動トリガーのみ・バックグラウンド実行）
+### POST /admin/dependabot-ops — Dependabot PR 自動運用（バックグラウンド実行）
 
 ```bash
 curl -X POST -H "X-API-KEY: your-key" \
@@ -507,8 +507,10 @@ DEPSCAN が検知した脆弱性は、対象リポジトリで有効化した De
   コンフリクトあり等）は自動マージせず Slack に通知するのみ。コンフリクトの場合は
   `@dependabot rebase` コメントを自動投稿する
 - 自動マージした PR・要確認PRの両方を毎回 Slack に通知する（監査目的）
-- **APScheduler / GitHub Actions のいずれにもスケジュール登録されていない。このエンドポイントを
-  明示的に呼んだ時のみ実行される**（DEPSCAN 等の他クローラーと異なり自動実行なし）
+- コンフリクトで自動マージできなかった PR は、翌日以降の実行でリベースが完了していれば
+  自動的にマージされる（複数日にまたがる自己修復）
+- 毎日 JST 08:00（UTC 23:00、DEPSCAN の後段）に自動実行される他、このエンドポイントを
+  手動で呼んで即時実行することも可能
 - 実行結果は `GET /api/crawler-logs?crawler_type=DEPSOPS` で確認可能
   （`inserted`=自動マージ件数、`updated`=要確認件数）
 
@@ -589,7 +591,7 @@ cyberattack_info_api/
 │   └── workflows/
 │       ├── ci.yml           # CI: lint + type check + test (PR 時に自動実行)
 │       ├── deploy.yml       # CD: Render デプロイ (main マージ時に自動実行)
-│       └── daily-crawl.yml  # 毎日クロール (単一 cron UTC 19:05 で KEV → OSV → JVN → DEPSCAN 順次実行)
+│       └── daily-crawl.yml  # 毎日クロール (単一 cron UTC 19:05 で KEV → OSV → JVN → DEPSCAN → DEPSOPS 順次実行)
 ├── .env.example         # 環境変数テンプレート
 ├── .python-version      # Python バージョン固定 (3.11)
 ├── requirements.txt     # 本番依存パッケージ
@@ -657,6 +659,7 @@ cyberattack_info_api/
 | `GITHUB_TOKEN` | - | DEPSCAN/DEPSOPS 共用の GitHub PAT（fine-grained: Contents Read-only + **Issues Write** + **Pull requests Write** / classic: repo スコープ）。未設定時は DEPSCAN/DEPSOPS のみエラー終了。Issues Write が無い場合、Issue自動起票のみ失敗（DEPSCAN自体は成功扱い）。Pull requests Write が無い場合、DEPSOPSのPRマージ・rebase依頼のみ失敗 |
 | `GITHUB_USERNAME` | ✅ | DEPSCAN のスキャン対象 GitHub アカウント。コード側にデフォルト値は持たないため、**未設定だとアプリ全体が起動しない** |
 | `DEPSCAN_CRON_HOUR_UTC` | - | DEPSCAN 実行時刻（時・UTC）（デフォルト: `22`） |
+| `DEPSOPS_CRON_HOUR_UTC` | - | DEPSOPS 実行時刻（時・UTC）（デフォルト: `23`） |
 | `SLACK_WEBHOOK_URL` | - | Slack Incoming Webhook URL（未設定時は通知スキップ） |
 
 ---
@@ -692,18 +695,16 @@ Slack 通知に加えて、DEPSCAN の新規検知は検知されたリポジト
 
 | タイミング | 処理 |
 |----------|------|
-| 毎日 JST 04:05（UTC 19:05）| GitHub Actions 単一 cron で KEV → OSV → JVN → DEPSCAN を順次実行 |
+| 毎日 JST 04:05（UTC 19:05）| GitHub Actions 単一 cron で KEV → OSV → JVN → DEPSCAN → DEPSOPS を順次実行 |
 | アプリ起動時 | DB テーブルの自動作成 |
 | `POST /admin/crawl` 実行時 | KEV 即時取得（スケジュール外） |
 | `POST /admin/osv-crawl` 実行時 | OSV バックグラウンド取得（`?days=N` で日数指定可） |
 | `POST /admin/jvn-crawl` 実行時 | JVN バックグラウンド取得（`?days=N` で日数指定可） |
 | `POST /admin/depscan-crawl` 実行時 | DEPSCAN バックグラウンド取得（GitHub 全リポジトリを再スキャン） |
-| `POST /admin/dependabot-ops` 実行時 | DEPSOPS バックグラウンド実行（**スケジュール登録なし・手動トリガーのみ**） |
+| `POST /admin/dependabot-ops` 実行時 | DEPSOPS バックグラウンド実行（Dependabot PR の自動マージ判定） |
 
-> **Note:** APScheduler（アプリ内スケジューラ）も UTC 19:00 / 20:00 / 21:00 / 22:00 に設定されていますが、  
+> **Note:** APScheduler（アプリ内スケジューラ）も UTC 19:00 / 20:00 / 21:00 / 22:00 / 23:00 に設定されていますが、  
 > Render Free プランのスリープ中は発火しません。GitHub Actions の単一 cron がその補完として機能します。
-> DEPSOPS（Dependabot PR 自動運用）のみ、他クローラーと異なり APScheduler にも GitHub Actions にも
-> スケジュール登録されていません。安全性確認のため、まずは明示的なAPI呼び出しでのみ動作する運用です。
 
 ---
 

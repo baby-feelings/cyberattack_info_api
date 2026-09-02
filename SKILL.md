@@ -442,11 +442,11 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 > - 脆弱性検知に即応する「Dependabot security updates」は、`dependabot.yml` を置くだけでは
 >   有効にならず、各リポジトリの `Settings → Code security` で個別に ON にする必要がある
 >
-> **上記のマージ判断を自動化したい場合は `POST /admin/dependabot-ops`（DEPSOPS）を使う。**
+> **上記のマージ判断は `POST /admin/dependabot-ops`（DEPSOPS）が毎日 JST 08:00 に自動実行する。**
 > マイナー/パッチ・CIあり・コンフリクトなしの PR だけを自動マージし、それ以外
-> （メジャーバージョンアップ等）は Slack 通知のみで人の判断に委ねる。ただしスケジュール
-> 登録は無いため、このエンドポイントを都度呼ぶ必要がある（スキル 11 の
-> `crawler_type=DEPSOPS` で実行結果を確認できる）。
+> （メジャーバージョンアップ等）は Slack 通知のみで人の判断に委ねる。即時実行したい場合は
+> このエンドポイントを手動で呼ぶことも可能（スキル 11 の `crawler_type=DEPSOPS` で
+> 実行結果を確認できる）。
 
 ---
 
@@ -548,13 +548,13 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 | タイミング | 処理 |
 |----------|------|
-| 毎日 JST 04:05（UTC 19:05） | GitHub Actions 単一 cron で KEV → OSV → JVN → DEPSCAN を順次実行（Upsert・古いレコード削除） |
+| 毎日 JST 04:05（UTC 19:05） | GitHub Actions 単一 cron で KEV → OSV → JVN → DEPSCAN → DEPSOPS を順次実行（Upsert・古いレコード削除） |
 | アプリ起動時 | DB テーブルの自動作成 |
 | `POST /admin/crawl` 実行時 | KEV バックグラウンド取得（202 即時返却） |
 | `POST /admin/osv-crawl` 実行時 | OSV バックグラウンド取得（202 即時返却・`?days=N` 対応） |
 | `POST /admin/jvn-crawl` 実行時 | JVN バックグラウンド取得（202 即時返却・`?days=N` 対応） |
 | `POST /admin/depscan-crawl` 実行時 | DEPSCAN バックグラウンド取得（202 即時返却・GitHub 全リポジトリ再スキャン） |
-| `POST /admin/dependabot-ops` 実行時 | DEPSOPS バックグラウンド実行（202 即時返却・**スケジュール登録なし、手動トリガーのみ**） |
+| `POST /admin/dependabot-ops` 実行時 | DEPSOPS バックグラウンド実行（202 即時返却・毎日 JST 08:00 自動実行 + 手動トリガー可） |
 
 Upsert ロジック:
 
@@ -607,5 +607,6 @@ Upsert ロジック:
 - 自動マージ・flagged いずれも毎回 Slack 通知（監査目的、0件同士の場合のみスキップ）
 - `inserted`=自動マージ件数、`updated`=flagged件数として `crawler_logs` に記録
   （`deleted` は未使用）
-- **他クローラーと異なりスケジュール登録が一切無い**（`POST /admin/dependabot-ops`
-  を明示的に呼んだ時のみ実行される安全設計）
+- 毎日 JST 08:00（DEPSCAN の後段）に自動実行される他、`POST /admin/dependabot-ops`
+  で手動実行も可能。コンフリクトで自動マージできなかった PR は、翌日以降の実行時に
+  リベースが完了していれば自動的にマージされる（複数日にまたがる自己修復）

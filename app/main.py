@@ -99,13 +99,22 @@ async def lifespan(app: FastAPI):
         id="depscan_crawler",
         replace_existing=True,
     )
+    # Dependabot PR 自動運用（DEPSOPS）
+    scheduler.add_job(
+        run_dependabot_ops,
+        trigger="cron",
+        hour=settings.DEPSOPS_CRON_HOUR_UTC,
+        minute=0,
+        id="dependabot_ops",
+        replace_existing=True,
+    )
     scheduler.start()
     logger.info(
         "Scheduler started: KEV UTC %02d:%02d / OSV UTC %02d:00 / JVN UTC %02d:00 / "
-        "DEPSCAN UTC %02d:00",
+        "DEPSCAN UTC %02d:00 / DEPSOPS UTC %02d:00",
         settings.CRON_HOUR_UTC, settings.CRON_MINUTE_UTC,
         settings.OSV_CRON_HOUR_UTC, settings.JVN_CRON_HOUR_UTC,
-        settings.DEPSCAN_CRON_HOUR_UTC,
+        settings.DEPSCAN_CRON_HOUR_UTC, settings.DEPSOPS_CRON_HOUR_UTC,
     )
 
     yield  # アプリ実行中
