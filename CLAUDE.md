@@ -91,6 +91,7 @@ pip install -r requirements-dev.txt
 app/
 ├── main.py                 # FastAPI アプリ・lifespan・スケジューラ登録・ルーター include
 │                           # /admin/crawl・/admin/osv-crawl・/admin/jvn-crawl・/admin/depscan-crawl
+│                           # /admin/dependabot-ops（スケジューラ登録なし・手動トリガーのみ）
 ├── core/                   # 横断的インフラ（特定ドメインに属さない）
 │   ├── config.py           # Settings（pydantic-settings）・環境変数管理
 │   ├── database.py         # SQLAlchemy エンジン（SQLite/PG 切り替え）・get_db
@@ -99,7 +100,7 @@ app/
 │   ├── notifications.py    # Slack Webhook 通知（notify_success/notify_error 共通化・エラーサニタイズ）
 │   ├── osv_client.py       # OSV API 汎用クライアント（query_versions_batch・fetch_vuln_by_id・
 │   │                       # parse_severity 等。app.osv.crawler と app.depscan.crawler の両方が利用）
-│   ├── types.py            # CrawlerType（"KEV"/"OSV"/"JVN"/"DEPSCAN" の Literal 型）
+│   ├── types.py            # CrawlerType（"KEV"/"OSV"/"JVN"/"DEPSCAN"/"DEPSOPS" の Literal 型）
 │   └── schemas.py          # 横断スキーマ（HealthResponse・MonthlyStat・SeverityStat）
 ├── kev/                    # CISA KEV ドメイン
 │   ├── models.py           # Vulnerability
@@ -124,10 +125,14 @@ app/
 │   ├── router.py           # /api/depscan エンドポイント（一覧・統計）
 │   ├── github_client.py    # GitHub API クライアント（リポジトリ一覧・ツリー・ファイル取得）
 │   └── parsers/            # 10 エコシステム分のロックファイルパーサー
+├── depsops/                # Dependabot PR 自動運用（DEPSOPS）ドメイン。models/router 無し
+│   ├── runner.py           # crawler.py 相当。run_dependabot_ops（判定・マージ・Slack通知）
+│   ├── github_client.py    # GitHub API クライアント（PR一覧・詳細・マージ・rebase依頼・CI有無判定）
+│   └── classify.py         # PRタイトルからのバージョンアップ種別判定（classify_bump）
 └── crawler_logs/           # クローラー実行ログドメイン
     ├── models.py           # CrawlerLog
     ├── schemas.py          # CrawlerLogOut
-    ├── writer.py           # write_crawler_log・now_utc（KEV/OSV/JVN/DEPSCAN 各クローラーから利用）
+    ├── writer.py           # write_crawler_log・now_utc（KEV/OSV/JVN/DEPSCAN/DEPSOPS 各クローラーから利用）
     └── router.py           # /api/crawler-logs エンドポイント（実行ログ一覧）
 
 tests/                      # app/ と同じドメイン構成でミラーリング
@@ -138,6 +143,7 @@ tests/                      # app/ と同じドメイン構成でミラーリン
 ├── osv/                    # OSV クローラー・API テスト
 ├── jvn/                    # JVN クローラー・API テスト
 ├── depscan/                # DEPSCAN クローラー・API・パーサーテスト
+├── depsops/                # DEPSOPS 判定ロジック・GitHub操作・Slack通知テスト
 └── crawler_logs/           # クローラーログ API テスト
 
 dashboard/               # Vercel デプロイの React ダッシュボード
@@ -308,6 +314,41 @@ DEPSCAN 対象の他リポジトリ（`baby-feelings` アカウント配下）�
 通知するため「気づけない」ことはないが、Dependabot による自動修正PRの生成が遅れる
 （1を忘れると Dependabot が全く反応しない、2を忘れると週次の遅い version updates 頼みになる）。
 
+### DEPSOPS（`app/depsops/`）: Dependabot PR の安全な自動マージ運用層
+DEPSCAN（検知）・Dependabot（修正PR作成）に続く3層目として、Dependabot PR のうち
+**安全性が高いものだけを自動マージする**運用層。`POST /admin/dependabot-ops` から
+`app.depsops.runner.run_dependabot_ops` を呼ぶ。他クローラーと異なり
+**APScheduler にも GitHub Actions にも一切スケジュール登録していない
+（意図的な設計。手動トリガーのみ）**。安全に運用できると分かった段階で自動化を
+検討する前提。
+
+判定ロジック（`_process_pr`）:
+1. `mergeable_state == "dirty"`（コンフリクト）→ `@dependabot rebase` をコメントして
+   flagged 扱い（マージしない）
+2. 対象リポジトリに CI（`.github/workflows` の存在）が無い → 常に flagged
+   （CI が無いと自動マージの安全性を検証する手段が無いため）
+3. PR タイトルから `app.depsops.classify.classify_bump` で判定した結果が
+   `"major"` または `"unknown"`（タイトルから `from X to Y` 形式のバージョンを
+   抽出できない grouped PR 等）→ flagged
+4. `mergeable_state != "clean"`（CI 失敗・レビュー待ち等）→ flagged
+5. 上記いずれにも該当しない（マイナー/パッチ・CI あり・コンフリクトなし）→ 自動マージ
+
+`classify_bump` は正規表現でタイトルから `from X to Y` を抽出し、メジャーバージョン
+（`major.minor` の `major`）が変わっていれば `"major"` とする。**0.x 系は minor の
+変化も `"major"` 扱いにする**（semver の慣習で 0.x は minor が実質的な破壊的変更を
+意味するため）。バージョンが抽出できない場合は安全側に倒し `"unknown"` とし、
+自動マージしない。
+
+マージ・要確認（flagged）いずれも `notify_dependabot_ops`（`app.core.notifications`）で
+**毎回** Slack 通知する（0 件同士の場合のみスキップ）。監査性を優先し、自動マージした
+という事実も必ず可視化する設計。crawler_logs には `crawler_type="DEPSOPS"` で記録し、
+`inserted`=自動マージ件数、`updated`=要確認件数として保存する（`deleted` は未使用）。
+
+`app.depsops.github_client` は `app.depscan.github_client` とは別モジュール
+（ロックファイル収集とPR運用でドメインが異なるため）。ただし `list_target_repos`
+（対象リポジトリ一覧取得）は DEPSCAN 側のものをそのまま import して再利用している
+（DRY。リポジトリ一覧取得ロジック自体はドメイン非依存のため）。
+
 ### DEPSCAN のロックファイル検出は Git Tree API で1リポジトリ1回のみ
 `app.depscan.github_client.get_repo_tree` で `git/trees/{branch}?recursive=1` を使い、
 サブディレクトリ（monorepo）も含めて全ファイルパスを1回のAPI呼び出しで取得する。
@@ -432,9 +473,10 @@ GitHub Actions 無料プランでは複数 cron の発火が不安定なため�
 - **Start Command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 - **Environment Variables:** `DATABASE_URL`, `API_KEY`, `ENVIRONMENT=production`, `GITHUB_USERNAME`
   （DEPSCAN スキャン対象アカウント。コード側にデフォルト値なし、**未設定だとアプリが起動しない**）、
-  `SLACK_WEBHOOK_URL`（任意）、`GITHUB_TOKEN`（任意、DEPSCAN 用 PAT。Contents: Read-only +
-  Issues: Write 推奨。未設定時は DEPSCAN のみエラー終了。Issues: Write が無い場合は
-  Issue自動起票のみ失敗）
+  `SLACK_WEBHOOK_URL`（任意）、`GITHUB_TOKEN`（任意、DEPSCAN/DEPSOPS 共用の PAT。
+  Contents: Read-only + Issues: Write + Pull requests: Write 推奨。未設定時は DEPSCAN/DEPSOPS
+  のみエラー終了。Issues: Write が無い場合は Issue自動起票のみ失敗、Pull requests: Write が
+  無い場合は DEPSOPS のPRマージ・rebase依頼コメントのみ失敗）
 
 ### GitHub Secrets の設定
 

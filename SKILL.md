@@ -315,7 +315,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 | パラメータ | 型 | 説明 |
 |-----------|-----|------|
-| `crawler_type` | string | `KEV` / `OSV` / `JVN` / `DEPSCAN`（省略時は全種別） |
+| `crawler_type` | string | `KEV` / `OSV` / `JVN` / `DEPSCAN` / `DEPSOPS`（省略時は全種別） |
 | `status` | string | `success` / `error`（省略時は両方） |
 | `limit` | int | 取得件数（デフォルト: 30、最大: 100） |
 
@@ -436,6 +436,12 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 >   そのリポジトリのデプロイ方式を確認する
 > - 脆弱性検知に即応する「Dependabot security updates」は、`dependabot.yml` を置くだけでは
 >   有効にならず、各リポジトリの `Settings → Code security` で個別に ON にする必要がある
+>
+> **上記のマージ判断を自動化したい場合は `POST /admin/dependabot-ops`（DEPSOPS）を使う。**
+> マイナー/パッチ・CIあり・コンフリクトなしの PR だけを自動マージし、それ以外
+> （メジャーバージョンアップ等）は Slack 通知のみで人の判断に委ねる。ただしスケジュール
+> 登録は無いため、このエンドポイントを都度呼ぶ必要がある（スキル 11 の
+> `crawler_type=DEPSOPS` で実行結果を確認できる）。
 
 ---
 
@@ -510,7 +516,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | フィールド | 型 | 説明 |
 |-----------|-----|------|
 | `id` | int | ログ ID |
-| `crawler_type` | string | クローラー種別（`KEV` / `OSV` / `JVN` / `DEPSCAN`） |
+| `crawler_type` | string | クローラー種別（`KEV` / `OSV` / `JVN` / `DEPSCAN` / `DEPSOPS`） |
 | `status` | string | 実行結果（`success` / `error`） |
 | `started_at` | string (ISO 8601) | 開始日時 |
 | `finished_at` | string (ISO 8601) | 終了日時 |
@@ -543,6 +549,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | `POST /admin/osv-crawl` 実行時 | OSV バックグラウンド取得（202 即時返却・`?days=N` 対応） |
 | `POST /admin/jvn-crawl` 実行時 | JVN バックグラウンド取得（202 即時返却・`?days=N` 対応） |
 | `POST /admin/depscan-crawl` 実行時 | DEPSCAN バックグラウンド取得（202 即時返却・GitHub 全リポジトリ再スキャン） |
+| `POST /admin/dependabot-ops` 実行時 | DEPSOPS バックグラウンド実行（202 即時返却・**スケジュール登録なし、手動トリガーのみ**） |
 
 Upsert ロジック:
 
@@ -583,3 +590,17 @@ Upsert ロジック:
 - 検知された脆弱性の実際の修正は、対象リポジトリで有効化した **Dependabot** が更新PRを
   自動作成する運用（DEPSCAN は検知・通知に専念し、修正コードの自動生成は行わない）
 - 実行結果は `crawler_logs` テーブルに自動記録
+
+**DEPSOPS:**
+- DEPSCAN 対象の全リポジトリを走査し、Dependabot が作成した Open な PR を判定する
+- **自動マージする条件**（すべて満たす場合のみ）: マイナー/パッチ更新（PRタイトルの
+  `from X to Y` から判定。0.x系はminorの変化もメジャー扱い）・CI（`.github/workflows`）
+  ありのリポジトリ・コンフリクトなし（`mergeable_state == "clean"`）
+- 条件を満たさない PR（メジャーバージョンアップ・CI 未設定・バージョン判定不可・
+  コンフリクトあり等）は自動マージせず flagged 扱い。コンフリクトの場合は
+  `@dependabot rebase` を自動コメント
+- 自動マージ・flagged いずれも毎回 Slack 通知（監査目的、0件同士の場合のみスキップ）
+- `inserted`=自動マージ件数、`updated`=flagged件数として `crawler_logs` に記録
+  （`deleted` は未使用）
+- **他クローラーと異なりスケジュール登録が一切無い**（`POST /admin/dependabot-ops`
+  を明示的に呼んだ時のみ実行される安全設計）

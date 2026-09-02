@@ -402,7 +402,7 @@ curl -H "X-API-KEY: your-key" \
 
 | パラメータ | 型 | デフォルト | 説明 |
 |-----------|-----|-----------|------|
-| `crawler_type` | string | - | `KEV` / `OSV` / `JVN` / `DEPSCAN`（省略時は全種別） |
+| `crawler_type` | string | - | `KEV` / `OSV` / `JVN` / `DEPSCAN` / `DEPSOPS`（省略時は全種別） |
 | `status` | string | - | `success` / `error`（省略時は両方） |
 | `limit` | int | 30 | 取得件数（最大 100） |
 
@@ -486,6 +486,31 @@ curl -X POST -H "X-API-KEY: your-key" \
 > **Note:** 手動クロールはバックグラウンドで実行されるため、即座に 202 が返ります。  
 > 実行結果は `GET /api/crawler-logs` で確認してください。
 
+### POST /admin/dependabot-ops — Dependabot PR 自動運用（手動トリガーのみ・バックグラウンド実行）
+
+```bash
+curl -X POST -H "X-API-KEY: your-key" \
+  "http://localhost:8000/admin/dependabot-ops"
+# → 202 Accepted: {"message": "Dependabot PR operations started in background"}
+```
+
+DEPSCAN が検知した脆弱性は、対象リポジトリで有効化した Dependabot が修正 PR を作成する（
+[運用ルール](#post-admindepscan-crawl--依存ライブラリ脆弱性スキャン手動実行バックグラウンド実行)参照）。
+このエンドポイントは、その Dependabot PR のうち **安全性の高いものだけを自動マージする**運用層の仕組み。
+
+- DEPSCAN 対象の全リポジトリを走査し、Open な Dependabot PR を判定する
+- **自動マージする条件**（すべて満たす場合のみ）: マイナー/パッチ更新（PR タイトルの
+  `from X to Y` から判定）・対象リポジトリに CI（`.github/workflows`）が存在する・
+  コンフリクトが無い（`mergeable_state == "clean"`）
+- 上記を満たさない PR（メジャーバージョンアップ・CI 未設定・バージョン判定不可・
+  コンフリクトあり等）は自動マージせず Slack に通知するのみ。コンフリクトの場合は
+  `@dependabot rebase` コメントを自動投稿する
+- 自動マージした PR・要確認PRの両方を毎回 Slack に通知する（監査目的）
+- **APScheduler / GitHub Actions のいずれにもスケジュール登録されていない。このエンドポイントを
+  明示的に呼んだ時のみ実行される**（DEPSCAN 等の他クローラーと異なり自動実行なし）
+- 実行結果は `GET /api/crawler-logs?crawler_type=DEPSOPS` で確認可能
+  （`inserted`=自動マージ件数、`updated`=要確認件数）
+
 ### GET /health — ヘルスチェック（認証不要）
 
 ```bash
@@ -520,7 +545,7 @@ pytest
 start htmlcov/index.html  # Mac/Linux: open htmlcov/index.html
 ```
 
-**テスト結果（最新）:** 184 テスト / カバレッジ 99%
+**テスト結果（最新）:** 287 テスト / カバレッジ 98%
 
 ---
 
@@ -550,11 +575,13 @@ cyberattack_info_api/
 │   ├── jvn/                    # JVN ドメイン（models・schemas・crawler・router）
 │   ├── depscan/                # 依存ライブラリ脆弱性スキャン（DEPSCAN）ドメイン
 │   │   └── parsers/            # 10 エコシステム分のロックファイルパーサー
+│   ├── depsops/                # Dependabot PR 自動運用（DEPSOPS）ドメイン（models 無し。
+│   │                           # crawler.py 相当は runner.py、router 無し・main.py で直接 include）
 │   └── crawler_logs/           # クローラー実行ログドメイン（models・schemas・writer・router）
 ├── tests/                      # app/ と同じドメイン構成
 │   ├── conftest.py             # テスト用フィクスチャ (SQLite テスト DB、全サブフォルダに自動継承)
 │   ├── test_main.py            # app.main（health/root）テスト
-│   ├── core/ kev/ osv/ jvn/ depscan/ crawler_logs/
+│   ├── core/ kev/ osv/ jvn/ depscan/ depsops/ crawler_logs/
 ├── dashboard/               # Vercel デプロイの React ダッシュボード（KEV・OSV（Pub 含む 10 エコシステム）・JVN）
 ├── .github/
 │   ├── dependabot.yml       # Dependabot（pip: / ・npm: /dashboard、週次で依存更新PRを自動作成）
@@ -626,7 +653,7 @@ cyberattack_info_api/
 | `OSV_DAYS` | - | OSV 取得対象の直近日数（デフォルト: `30`） |
 | `OSV_RETENTION_DAYS` | - | OSV データ保持期間（日数・デフォルト: `180`） |
 | `JVN_DAYS` | - | JVN 取得対象の直近日数（デフォルト: `30`） |
-| `GITHUB_TOKEN` | - | DEPSCAN 用 GitHub PAT（fine-grained: Contents Read-only + **Issues Write** / classic: repo スコープ）。未設定時は DEPSCAN のみエラー終了。Issues Write が無い場合、Issue自動起票のみ失敗（DEPSCAN自体は成功扱い） |
+| `GITHUB_TOKEN` | - | DEPSCAN/DEPSOPS 共用の GitHub PAT（fine-grained: Contents Read-only + **Issues Write** + **Pull requests Write** / classic: repo スコープ）。未設定時は DEPSCAN/DEPSOPS のみエラー終了。Issues Write が無い場合、Issue自動起票のみ失敗（DEPSCAN自体は成功扱い）。Pull requests Write が無い場合、DEPSOPSのPRマージ・rebase依頼のみ失敗 |
 | `GITHUB_USERNAME` | ✅ | DEPSCAN のスキャン対象 GitHub アカウント。コード側にデフォルト値は持たないため、**未設定だとアプリ全体が起動しない** |
 | `DEPSCAN_CRON_HOUR_UTC` | - | DEPSCAN 実行時刻（時・UTC）（デフォルト: `22`） |
 | `SLACK_WEBHOOK_URL` | - | Slack Incoming Webhook URL（未設定時は通知スキップ） |
@@ -647,7 +674,8 @@ cyberattack_info_api/
 | OSV クロール完了（新規・更新あり） | `:package: OSV 脆弱性データ更新通知`（新規・更新・削除件数） |
 | JVN クロール完了（新規・更新あり） | `:jigsaw: JVN 脆弱性データ更新通知`（新規・更新件数） |
 | DEPSCAN で新規検知あり | `:rotating_light: 依存ライブラリ脆弱性を検知`（リポジトリ別グルーピング・パッケージ単位に集約したダイジェスト1通） |
-| クローラーエラー発生時 | `:warning:` エラー内容（KEV / OSV / JVN / DEPSCAN それぞれ） |
+| `POST /admin/dependabot-ops` 実行完了（自動マージ・要確認いずれかが1件以上） | `:robot_face: Dependabot PR 自動運用`（自動マージ済みPR一覧・要確認PR一覧と理由） |
+| クローラーエラー発生時 | `:warning:` エラー内容（KEV / OSV / JVN / DEPSCAN / DEPSOPS それぞれ） |
 
 ### GitHub Issue 自動起票（DEPSCAN）
 
@@ -669,9 +697,12 @@ Slack 通知に加えて、DEPSCAN の新規検知は検知されたリポジト
 | `POST /admin/osv-crawl` 実行時 | OSV バックグラウンド取得（`?days=N` で日数指定可） |
 | `POST /admin/jvn-crawl` 実行時 | JVN バックグラウンド取得（`?days=N` で日数指定可） |
 | `POST /admin/depscan-crawl` 実行時 | DEPSCAN バックグラウンド取得（GitHub 全リポジトリを再スキャン） |
+| `POST /admin/dependabot-ops` 実行時 | DEPSOPS バックグラウンド実行（**スケジュール登録なし・手動トリガーのみ**） |
 
 > **Note:** APScheduler（アプリ内スケジューラ）も UTC 19:00 / 20:00 / 21:00 / 22:00 に設定されていますが、  
 > Render Free プランのスリープ中は発火しません。GitHub Actions の単一 cron がその補完として機能します。
+> DEPSOPS（Dependabot PR 自動運用）のみ、他クローラーと異なり APScheduler にも GitHub Actions にも
+> スケジュール登録されていません。安全性確認のため、まずは明示的なAPI呼び出しでのみ動作する運用です。
 
 ---
 
