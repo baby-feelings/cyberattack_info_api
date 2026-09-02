@@ -51,13 +51,22 @@ def _collect_dependencies(
     """
     dep_to_repos: dict[DepKey, list[tuple[str, str]]] = {}
     repos = list_target_repos(username, token)
+    logger.info("DEPSCAN: %d target repos to scan", len(repos))
 
-    for repo_info in repos:
+    for i, repo_info in enumerate(repos, start=1):
         full_name = repo_info["full_name"]
         owner, repo = full_name.split("/", 1)
         default_branch = repo_info.get("default_branch") or "main"
+        logger.info("DEPSCAN: [%d/%d] scanning %s", i, len(repos), full_name)
 
-        for path in _discover_manifests(owner, repo, default_branch, token):
+        manifest_paths = _discover_manifests(owner, repo, default_branch, token)
+        if manifest_paths:
+            logger.info(
+                "DEPSCAN: [%d/%d] %s: %d manifest(s) found: %s",
+                i, len(repos), full_name, len(manifest_paths), manifest_paths,
+            )
+
+        for path in manifest_paths:
             filename = path.rsplit("/", 1)[-1]
             try:
                 content = get_file_content(owner, repo, path, token)
@@ -69,6 +78,7 @@ def _collect_dependencies(
                 key = (ref.ecosystem, ref.name, ref.version)
                 dep_to_repos.setdefault(key, []).append((full_name, path))
 
+    logger.info("DEPSCAN: repo scan complete, %d unique dependencies found", len(dep_to_repos))
     return dep_to_repos, len(repos)
 
 
