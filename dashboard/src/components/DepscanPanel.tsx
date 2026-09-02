@@ -5,8 +5,8 @@ import {
 } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip as ReTooltip, XAxis, YAxis } from 'recharts'
 import {
-  fetchDepscanList, fetchDepscanStats,
-  type DependencyFindingOut, type DepscanListResponse, type DepscanStatsResponse,
+  fetchAllDepscanFindings, fetchDepscanStats,
+  type DependencyFindingOut, type DepscanStatsResponse,
 } from '../api/client'
 import {
   SeverityBadge, ChartCard, SeverityPieChart,
@@ -30,6 +30,12 @@ const SEVERITY_COLORS: Record<string, string> = {
   'N/A':    '#475569',
 }
 
+const SEVERITY_ORDER: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 }
+
+function severityRank(severity: string | null): number {
+  return SEVERITY_ORDER[severity ?? ''] ?? 4
+}
+
 const REPO_CHART_COLORS = [
   '#7c3aed', '#0ea5e9', '#22d3ee', '#f59e0b',
   '#f43f5e', '#8b5cf6', '#f97316', '#6366f1',
@@ -43,9 +49,73 @@ function ownerOf(repoFullName: string): string {
   return repoFullName.split('/')[0] ?? repoFullName
 }
 
-function DepscanRow({ item }: { item: DependencyFindingOut }) {
+// サーバーは「パッケージ×CVE」単位で1件返すため、同一パッケージ・同一バージョンの
+// 複数CVEを1グループに集約する（Slack通知・GitHub Issue自動起票と同じ考え方）。
+interface FindingGroup {
+  repo_full_name: string
+  package_name: string
+  installed_version: string
+  findings: DependencyFindingOut[]
+}
+
+function groupFindings(data: DependencyFindingOut[]): FindingGroup[] {
+  const map = new Map<string, FindingGroup>()
+  for (const f of data) {
+    const key = `${f.repo_full_name}|${f.package_name}|${f.installed_version}`
+    let g = map.get(key)
+    if (!g) {
+      g = {
+        repo_full_name: f.repo_full_name,
+        package_name: f.package_name,
+        installed_version: f.installed_version,
+        findings: [],
+      }
+      map.set(key, g)
+    }
+    g.findings.push(f)
+  }
+  return Array.from(map.values())
+}
+
+function groupBestSeverityRank(g: FindingGroup): number {
+  return Math.min(...g.findings.map(f => severityRank(f.severity)))
+}
+
+function groupLatestDetectedAt(g: FindingGroup): string {
+  return g.findings.reduce((max, f) => (f.detected_at > max ? f.detected_at : max), g.findings[0].detected_at)
+}
+
+function groupIsResolved(g: FindingGroup): boolean {
+  return g.findings.every(f => f.resolved_at)
+}
+
+function groupFixedVersions(g: FindingGroup): string[] {
+  const set = new Set<string>()
+  for (const f of g.findings) {
+    for (const v of f.fixed_versions) set.add(v)
+  }
+  return Array.from(set).sort()
+}
+
+function groupSeverityCounts(g: FindingGroup): [string, number][] {
+  const counts = new Map<string, number>()
+  for (const f of g.findings) {
+    const sev = f.severity ?? 'N/A'
+    counts.set(sev, (counts.get(sev) ?? 0) + 1)
+  }
+  return Array.from(counts.entries()).sort(
+    (a, b) => severityRank(a[0] === 'N/A' ? null : a[0]) - severityRank(b[0] === 'N/A' ? null : b[0]),
+  )
+}
+
+function DepscanGroupRow({ group }: { group: FindingGroup }) {
   const [open, setOpen] = useState(false)
-  const detectedDate = new Date(item.detected_at).toLocaleDateString('ja-JP', {
+  const bestSeverity = group.findings
+    .slice()
+    .sort((a, b) => severityRank(a.severity) - severityRank(b.severity))[0].severity
+  const fixedVersions = groupFixedVersions(group)
+  const severityCounts = groupSeverityCounts(group)
+  const latestDate = new Date(groupLatestDetectedAt(group)).toLocaleDateString('ja-JP', {
     year: 'numeric', month: 'short', day: 'numeric',
   })
 
@@ -56,27 +126,25 @@ function DepscanRow({ item }: { item: DependencyFindingOut }) {
         onClick={() => setOpen(o => !o)}
       >
         <td className="py-2.5 pr-3 w-20">
-          <SeverityBadge severity={item.severity} classMap={SEVERITY_CLS} />
-          {item.cvss_score != null && (
-            <span className="block text-[10px] text-slate-600 mt-0.5 tabular-nums">
-              {item.cvss_score.toFixed(1)}
-            </span>
-          )}
+          <SeverityBadge severity={bestSeverity} classMap={SEVERITY_CLS} />
+          <span className="block text-[10px] text-slate-600 mt-0.5 tabular-nums">
+            計{group.findings.length}件
+          </span>
         </td>
 
         {/* リポジトリ */}
         <td className="py-2.5 pr-3 w-52">
           <a
-            href={`https://github.com/${item.repo_full_name}`}
+            href={`https://github.com/${group.repo_full_name}`}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-slate-300 hover:text-white text-xs transition-colors truncate max-w-[200px]"
             onClick={e => e.stopPropagation()}
           >
-            {item.repo_full_name}
+            {group.repo_full_name}
             <ExternalLink size={9} className="shrink-0" />
           </a>
-          {item.resolved_at && (
+          {groupIsResolved(group) && (
             <span className="inline-flex items-center gap-0.5 mt-0.5 text-[10px] text-emerald-500">
               <CheckCircle2 size={9} /> 解決済み
             </span>
@@ -85,29 +153,40 @@ function DepscanRow({ item }: { item: DependencyFindingOut }) {
 
         {/* パッケージ */}
         <td className="py-2.5 pr-3 w-40">
-          <p className="text-slate-300 font-mono text-xs">{item.package_name}</p>
-          <p className="text-slate-600 text-[10px] mt-0.5 font-mono">{item.installed_version}</p>
+          <p className="text-slate-300 font-mono text-xs">{group.package_name}</p>
+          <p className="text-slate-600 text-[10px] mt-0.5 font-mono">{group.installed_version}</p>
         </td>
 
         {/* 修正版 */}
         <td className="py-2.5 pr-3 w-32">
-          {item.fixed_versions.length > 0 ? (
+          {fixedVersions.length > 0 ? (
             <p className="text-emerald-500 text-[10px] font-mono">
-              {item.fixed_versions[0]}
-              {item.fixed_versions.length > 1 && ` +${item.fixed_versions.length - 1}`}
+              {fixedVersions[0]}
+              {fixedVersions.length > 1 && ` +${fixedVersions.length - 1}`}
             </p>
           ) : (
             <span className="text-slate-700 text-xs">未提供</span>
           )}
         </td>
 
-        {/* 概要 */}
+        {/* 重大度内訳 */}
         <td className="py-2.5 pr-3">
-          <p className="text-slate-400 text-xs truncate max-w-[240px]">{item.summary}</p>
+          <div className="flex flex-wrap gap-1">
+            {severityCounts.map(([sev, count]) => (
+              <span
+                key={sev}
+                className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${
+                  SEVERITY_CLS[sev] ?? 'bg-slate-800 text-slate-500 border-slate-700'
+                }`}
+              >
+                {sev}×{count}
+              </span>
+            ))}
+          </div>
         </td>
 
         <td className="py-2.5 text-xs text-slate-600 tabular-nums whitespace-nowrap w-24">
-          {detectedDate}
+          {latestDate}
         </td>
 
         <td className="py-2.5 pl-2 text-right w-5">
@@ -117,36 +196,46 @@ function DepscanRow({ item }: { item: DependencyFindingOut }) {
         </td>
       </tr>
 
-      {/* 展開: 詳細・修正バージョン全件・ロックファイルパス・OSVリンク */}
+      {/* 展開: 個々のCVE一覧 */}
       {open && (
         <tr className="bg-slate-800/30">
-          <td colSpan={7} className="px-4 py-3 text-xs text-slate-400 space-y-2">
-            {item.summary && (
-              <p className="leading-relaxed whitespace-pre-wrap">{item.summary}</p>
-            )}
-            {item.fixed_versions.length > 0 && (
-              <p className="flex flex-wrap items-center gap-1.5">
-                <span className="text-slate-500">修正済みバージョン:</span>
-                {item.fixed_versions.map(v => (
-                  <span key={v} className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[10px] font-mono">
-                    {v}
-                  </span>
-                ))}
-              </p>
-            )}
-            <p className="flex items-center gap-1.5">
-              <span className="text-slate-500">ロックファイル:</span>
-              <span className="font-mono text-[10px] text-slate-400">{item.manifest_path}</span>
+          <td colSpan={7} className="px-4 py-3 text-xs text-slate-400">
+            <p className="text-slate-500 mb-2">
+              ロックファイル: <span className="font-mono text-slate-400">{group.findings[0].manifest_path}</span>
             </p>
-            <a
-              href={`https://osv.dev/vulnerability/${item.osv_id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-violet-400 hover:text-violet-300 underline underline-offset-2 text-[10px]"
-            >
-              {item.osv_id} を OSV.dev で確認
-              <ExternalLink size={9} />
-            </a>
+            <div className="space-y-2.5">
+              {group.findings
+                .slice()
+                .sort((a, b) => severityRank(a.severity) - severityRank(b.severity))
+                .map(f => (
+                  <div key={f.osv_id} className="flex flex-col gap-1 border-l-2 border-slate-700 pl-2.5">
+                    <div className="flex items-center gap-2">
+                      <SeverityBadge severity={f.severity} classMap={SEVERITY_CLS} />
+                      {f.cvss_score != null && (
+                        <span className="text-[10px] text-slate-600 tabular-nums">{f.cvss_score.toFixed(1)}</span>
+                      )}
+                      <a
+                        href={`https://osv.dev/vulnerability/${f.osv_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-violet-400 hover:text-violet-300 font-mono text-[10px]"
+                      >
+                        {f.osv_id}
+                        <ExternalLink size={8} />
+                      </a>
+                    </div>
+                    <p className="leading-relaxed">{f.summary}</p>
+                    {f.fixed_versions.length > 0 && (
+                      <p className="flex flex-wrap items-center gap-1">
+                        <span className="text-slate-500">修正版:</span>
+                        {f.fixed_versions.map(v => (
+                          <span key={v} className="text-emerald-500 font-mono text-[10px]">{v}</span>
+                        ))}
+                      </p>
+                    )}
+                  </div>
+                ))}
+            </div>
           </td>
         </tr>
       )}
@@ -209,23 +298,20 @@ export function DepscanPanel() {
   const [severity, setSeverity] = useState<string | null>(null)
   const [showResolved, setShowResolved] = useState(false)
   const [page, setPage] = useState(1)
-  const [result, setResult] = useState<DepscanListResponse | null>(null)
+  const [findings, setFindings] = useState<DependencyFindingOut[]>([])
   const [stats, setStats] = useState<DepscanStatsResponse | null>(null)
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async (
-    own: string | null, sev: string | null, resolved: boolean, p: number,
+    own: string | null, sev: string | null, resolved: boolean,
   ) => {
     setLoading(true)
     try {
-      const [list, st] = await Promise.all([
-        fetchDepscanList({
-          owner: own, severity: sev, page: p, perPage: PER_PAGE,
-          resolved: resolved ? null : false,
-        }),
+      const [all, st] = await Promise.all([
+        fetchAllDepscanFindings({ owner: own, severity: sev, resolved: resolved ? null : false }),
         fetchDepscanStats(),
       ])
-      setResult(list)
+      setFindings(all)
       setStats(st)
     } catch {
       // エラーは握りつぶし（データなし状態として扱う）
@@ -235,8 +321,8 @@ export function DepscanPanel() {
   }, [])
 
   useEffect(() => {
-    load(owner, severity, showResolved, page)
-  }, [load, owner, severity, showResolved, page])
+    load(owner, severity, showResolved)
+  }, [load, owner, severity, showResolved])
 
   // オーナー一覧は stats.repos（未解決分の全リポジトリ）から動的に導出する。
   // 表示されるのは DB に保存済み＝DEPSCAN が GITHUB_TOKEN の権限内で実際に
@@ -248,6 +334,17 @@ export function DepscanPanel() {
     return Array.from(set).sort()
   }, [stats])
 
+  // パッケージ×バージョン単位に集約し、重大度が高い順・検知が新しい順に並べる
+  const groups = useMemo(() => {
+    const g = groupFindings(findings)
+    g.sort((a, b) => {
+      const r = groupBestSeverityRank(a) - groupBestSeverityRank(b)
+      if (r !== 0) return r
+      return groupLatestDetectedAt(b).localeCompare(groupLatestDetectedAt(a))
+    })
+    return g
+  }, [findings])
+
   function handleOwner(o: string) {
     setOwner(o === 'ALL' ? null : o)
     setPage(1)
@@ -258,7 +355,8 @@ export function DepscanPanel() {
     setPage(1)
   }
 
-  const totalPages = result ? Math.ceil(result.total / PER_PAGE) : 0
+  const totalPages = Math.ceil(groups.length / PER_PAGE)
+  const pageGroups = groups.slice((page - 1) * PER_PAGE, page * PER_PAGE)
 
   const critCount = stats?.severities.find(s => s.severity === 'CRITICAL')?.count ?? 0
   const highCount = stats?.severities.find(s => s.severity === 'HIGH')?.count ?? 0
@@ -287,11 +385,11 @@ export function DepscanPanel() {
                   HIGH {highCount}
                 </span>
               )}
-              <span className="text-slate-500">/ {stats.total} 件</span>
+              <span className="text-slate-500">/ {stats.total} 件（{groups.length} パッケージ）</span>
             </div>
           )}
           <button
-            onClick={() => load(owner, severity, showResolved, page)}
+            onClick={() => load(owner, severity, showResolved)}
             disabled={loading}
             className="text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40 p-1 rounded"
             title="再読み込み"
@@ -361,11 +459,11 @@ export function DepscanPanel() {
         <TableLoadingSkeleton columnWidths={['w-16', 'w-40', 'w-28', 'flex-1']} />
 
       /* データなし */
-      ) : result && result.total === 0 ? (
+      ) : groups.length === 0 ? (
         <EmptyState icon={<Bug size={28} />} message="該当する依存ライブラリ脆弱性はありません" />
 
-      /* テーブル */
-      ) : result && (
+      /* テーブル（パッケージ単位に集約） */
+      ) : (
         <>
           <div className="overflow-x-auto -mx-1 px-1">
             <table className="w-full text-sm min-w-[760px]">
@@ -375,23 +473,23 @@ export function DepscanPanel() {
                   <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-52">リポジトリ</th>
                   <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-40">パッケージ</th>
                   <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-32">修正版</th>
-                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3">概要</th>
+                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3">重大度内訳</th>
                   <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-24">検知日</th>
                   <th className="w-5" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
-                {result.data.map((item, i) => (
-                  <DepscanRow
-                    key={`${item.repo_full_name}-${item.package_name}-${item.osv_id}-${i}`}
-                    item={item}
+                {pageGroups.map((group, i) => (
+                  <DepscanGroupRow
+                    key={`${group.repo_full_name}-${group.package_name}-${group.installed_version}-${i}`}
+                    group={group}
                   />
                 ))}
               </tbody>
             </table>
           </div>
 
-          <Pagination page={page} totalPages={totalPages} total={result.total} onPageChange={setPage} />
+          <Pagination page={page} totalPages={totalPages} total={groups.length} onPageChange={setPage} />
         </>
       )}
     </div>
