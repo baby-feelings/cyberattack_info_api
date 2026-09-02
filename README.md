@@ -456,8 +456,9 @@ curl -X POST -H "X-API-KEY: your-key" \
 # → 202 Accepted: {"message": "Dependency vulnerability scan started in background"}
 ```
 
-> **Note:** `GITHUB_TOKEN`（GitHub PAT）・`GITHUB_USERNAME` が未設定の場合、GitHub API への認証が
-> 失敗しエラー終了します（`/api/crawler-logs` にエラーとして記録されます）。
+> **Note:** `GITHUB_TOKEN`（GitHub PAT）が未設定の場合、GitHub API への認証が失敗し
+> DEPSCAN のみエラー終了します（`/api/crawler-logs` にエラーとして記録されます）。
+> 一方 `GITHUB_USERNAME` は必須環境変数のため、未設定だとアプリ全体が起動できません。
 
 > **Note:** 手動クロールはバックグラウンドで実行されるため、即座に 202 が返ります。  
 > 実行結果は `GET /api/crawler-logs` で確認してください。
@@ -602,7 +603,7 @@ cyberattack_info_api/
 | `OSV_RETENTION_DAYS` | - | OSV データ保持期間（日数・デフォルト: `180`） |
 | `JVN_DAYS` | - | JVN 取得対象の直近日数（デフォルト: `30`） |
 | `GITHUB_TOKEN` | - | DEPSCAN 用 GitHub PAT（fine-grained: Contents Read-only 推奨 / classic: repo スコープ）。未設定時は DEPSCAN のみエラー終了 |
-| `GITHUB_USERNAME` | - | DEPSCAN のスキャン対象 GitHub アカウント（デフォルト: `baby-feelings`） |
+| `GITHUB_USERNAME` | ✅ | DEPSCAN のスキャン対象 GitHub アカウント。コード側にデフォルト値は持たないため、**未設定だとアプリ全体が起動しない** |
 | `DEPSCAN_CRON_HOUR_UTC` | - | DEPSCAN 実行時刻（時・UTC）（デフォルト: `22`） |
 | `SLACK_WEBHOOK_URL` | - | Slack Incoming Webhook URL（未設定時は通知スキップ） |
 

@@ -42,6 +42,7 @@ jobs:
           DATABASE_URL: sqlite:///./test.db
           API_KEY: test-api-key-for-pytest
           ENVIRONMENT: development
+          GITHUB_USERNAME: test-github-user
         run: pytest tests/ -v --cov=app --cov-report=xml --cov-report=html:htmlcov --cov-fail-under=90
 
       # ── カバレッジレポート ──────────────────────────────────

@@ -559,5 +559,6 @@ Upsert ロジック:
   （既存の `OsvVulnerability` テーブルとは照合しない）
 - **新規検知** → INSERT → Slack 通知（リポジトリ別グルーピングした1通のダイジェスト）
 - **今回のスキャンで検知されなくなった既存レコード** → `resolved_at` を設定（削除はしない）
-- `GITHUB_TOKEN` / `GITHUB_USERNAME` 未設定時はエラー終了し `crawler_logs` にエラー記録
+- `GITHUB_TOKEN` 未設定時は DEPSCAN のみエラー終了し `crawler_logs` にエラー記録
+  （`GITHUB_USERNAME` は必須環境変数のため、未設定だとアプリ自体が起動しない）
 - 実行結果は `crawler_logs` テーブルに自動記録

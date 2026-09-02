@@ -13,6 +13,7 @@ from sqlalchemy.orm import sessionmaker
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
 os.environ.setdefault("API_KEY", "test-api-key-for-pytest")
 os.environ.setdefault("ENVIRONMENT", "development")
+os.environ.setdefault("GITHUB_USERNAME", "test-github-user")
 
 from app.core.database import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402

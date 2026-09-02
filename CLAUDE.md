@@ -242,6 +242,13 @@ Contents: Read-only 推奨）を使用する。
 サブディレクトリ（monorepo）も含めて全ファイルパスを1回のAPI呼び出しで取得する。
 対応する10エコシステムのロックファイル名は `app.depscan.parsers.LOCKFILE_FILENAMES` で判定する。
 
+### GITHUB_USERNAME は必須環境変数（デフォルト値なし）
+`GITHUB_TOKEN`（DEPSCAN 専用、未設定でもアプリは起動しDEPSCANだけがエラー終了）とは異なり、
+`GITHUB_USERNAME` は `app/core/config.py` の `Settings` でデフォルト値を持たない必須項目。
+未設定だと `Settings()` のインスタンス化（アプリ起動時）に失敗し、**アプリ全体が起動できない**。
+ローカル開発・CI 双方で `GITHUB_USERNAME` を環境変数として明示的に設定する必要がある
+（`tests/conftest.py` の `os.environ.setdefault` と `.github/workflows/ci.yml` の `env:` を参照）。
+
 ### lifespan の scan_results テーブル削除はベストエフォート
 旧スキャン機能廃止に伴い、起動時に `DROP TABLE IF EXISTS scan_results` を実行しているが、  
 DDL 競合や権限不足で失敗してもサービスを止めないよう `try/except SQLAlchemyError` で囲んである。
@@ -352,8 +359,10 @@ GitHub Actions 無料プランでは複数 cron の発火が不安定なため�
 ### Render の設定
 - **Build Command:** `pip install -r requirements.txt`
 - **Start Command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-- **Environment Variables:** `DATABASE_URL`, `API_KEY`, `ENVIRONMENT=production`, `SLACK_WEBHOOK_URL`（任意）、
-  `GITHUB_TOKEN`（DEPSCAN 用 PAT、Contents: Read-only 推奨）, `GITHUB_USERNAME`（DEPSCAN スキャン対象アカウント）
+- **Environment Variables:** `DATABASE_URL`, `API_KEY`, `ENVIRONMENT=production`, `GITHUB_USERNAME`
+  （DEPSCAN スキャン対象アカウント。コード側にデフォルト値なし、**未設定だとアプリが起動しない**）、
+  `SLACK_WEBHOOK_URL`（任意）、`GITHUB_TOKEN`（任意、DEPSCAN 用 PAT。Contents: Read-only 推奨。
+  未設定時は DEPSCAN のみエラー終了）
 
 ### GitHub Secrets の設定
 
