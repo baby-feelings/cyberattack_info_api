@@ -374,6 +374,15 @@ curl -H "X-API-KEY: your-key" \
 >
 > なお DEPSCAN は対応ロックファイル（10 エコシステム分。一覧は [`app/depscan/parsers/__init__.py`](app/depscan/parsers/__init__.py) の `LOCKFILE_FILENAMES` を参照）が存在するリポジトリのみをスキャン対象とする。ロックファイルが存在しないリポジトリの一覧は API では取得できず、Render の実行ログ（`DEPSCAN: [i/N] scanning ...` の行）でのみ確認できる。
 
+> **検知された脆弱性の実際の修正について**
+> DEPSCAN は検知・通知のみを行い、修正コードは生成しない。実際の修正は、DEPSCAN 対象の各リポジトリで有効化した **Dependabot** の更新 PR をマージすることで対応する。マージ運用のポイント:
+> - PR マージ前に `mergeable: MERGEABLE` を確認する（CI が無いリポジトリも多い）
+> - **メジャーバージョンアップを含む PR は要注意**（例: `typescript` 6.0.3→7.0.2 が `typescript-eslint` との非互換で Vercel ビルドを壊した実例あり）。マージ後は Vercel 等のデプロイ結果を確認する
+> - 複数 PR を連続マージすると `package-lock.json` 等の競合で後続 PR がマージ不可になることがある。PR に `@dependabot rebase` とコメントすればリベースされる
+> - リベース後、対象パッケージが別 PR で既に修正済みだった場合、Dependabot が PR を自動クローズすることがある（異常ではない）
+> - **本番反映方法はリポジトリごとに異なる**。Vercel 連携があるリポジトリはマージ時点で自動デプロイされるが、CI/CD の無いリポジトリ（Firebase Hosting 等）はマージ後にローカルで `pull` し手動でデプロイコマンドを実行するまで反映されない
+> - 脆弱性検知時に即座に修正 PR を出す「Dependabot security updates」は、`dependabot.yml` を置くだけでは有効にならず、各リポジトリの `Settings → Code security` で個別に ON にする必要がある
+
 ### GET /api/crawler-logs — クローラー実行ログ一覧
 
 KEV / OSV / JVN / DEPSCAN クローラーの実行履歴（成否・件数・所要時間）を新しい順に返します。
