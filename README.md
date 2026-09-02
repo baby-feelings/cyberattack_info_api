@@ -365,6 +365,15 @@ curl -H "X-API-KEY: your-key" \
 }
 ```
 
+> **対応が必要なリポジトリの確認方法**
+> DEPSCAN の検知結果（対応が必要なリポジトリ・パッケージ）は常に変動するため、本 README には固定リストを記載しない。最新の状態は以下のいずれかで確認する。
+> - `GET /api/depscan?resolved=false&severity=CRITICAL`（`severity=HIGH` も併せて確認）で未解決の重大度の高い検知を一覧取得
+> - `GET /api/depscan/stats` でリポジトリ別・重要度別の件数サマリーを取得
+> - ダッシュボード（Vercel）の DEPSCAN タブ
+> - Slack 通知（新規検知時に自動送信される `:rotating_light:` メッセージ）
+>
+> なお DEPSCAN は対応ロックファイル（10 エコシステム分。一覧は [`app/depscan/parsers/__init__.py`](app/depscan/parsers/__init__.py) の `LOCKFILE_FILENAMES` を参照）が存在するリポジトリのみをスキャン対象とする。ロックファイルが存在しないリポジトリの一覧は API では取得できず、Render の実行ログ（`DEPSCAN: [i/N] scanning ...` の行）でのみ確認できる。
+
 ### GET /api/crawler-logs — クローラー実行ログ一覧
 
 KEV / OSV / JVN / DEPSCAN クローラーの実行履歴（成否・件数・所要時間）を新しい順に返します。
