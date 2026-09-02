@@ -144,10 +144,12 @@ dashboard/               # Vercel デプロイの React ダッシュボード
                          # CISA KEV・OSV（Pub 含む 10 エコシステム・180 日表示）・JVN を
                          # 画面下部固定タブで切り替え表示
 
-.github/workflows/
-├── ci.yml           # CI: ruff → mypy → pytest（PR 時・Python 3.10/3.11 matrix）
-├── deploy.yml       # CD: Render Deploy Hook トリガー（main マージ時）
-└── daily-crawl.yml  # 毎日クロール: 単一 cron(UTC 19:05) で KEV → OSV → JVN → DEPSCAN を順次実行
+.github/
+├── dependabot.yml   # Dependabot（pip: / ・npm: /dashboard、週次で依存更新PRを自動作成）
+└── workflows/
+    ├── ci.yml           # CI: ruff → mypy → pytest（PR 時・Python 3.10/3.11 matrix）
+    ├── deploy.yml       # CD: Render Deploy Hook トリガー（main マージ時）
+    └── daily-crawl.yml  # 毎日クロール: 単一 cron(UTC 19:05) で KEV → OSV → JVN → DEPSCAN を順次実行
 ```
 
 ---
@@ -251,6 +253,17 @@ Open Issue を検索し、あれば `add_issue_comment` で追記、無ければ
 `app.core.finding_format` に切り出してある。GitHub API 呼び出し失敗（`Issues: Write` 権限
 不足等）はリポジトリ単位で `except httpx.HTTPError` により握りつぶし、DEPSCAN 全体の
 成功可否には影響させない。
+
+### Dependabot を本リポジトリおよび DEPSCAN 対象の全リポジトリで有効化している
+DEPSCAN が「検知」、Dependabot が「実際の修正 PR 作成」を担う役割分担。本リポジトリの
+`.github/dependabot.yml` は `pip`（`/`）・`npm`（`/dashboard`）を週次でチェックする。
+**Dependabot PR は内容を確認せず自動マージしないこと。** マイナー/パッチ更新は概ね安全だが、
+メジャーバージョンアップは非互換な依存衝突を起こしうる（実例: `typescript` 6.0.3→7.0.2 が
+`typescript-eslint@8.61.0` の peer 依存 `typescript >=4.8.4 <6.1.0` と衝突し、Vercel の
+`npm install` が失敗した。`typescript-eslint` 側が TypeScript 7 系に対応するまで `~6.0.3` に
+固定している）。マージ前に CI（Test & Lint）に加え、フロントエンド変更は Vercel のプレビュー
+デプロイが `Deployment has completed` になっているかを確認する。マージ後にビルドが壊れた場合は
+該当パッケージのバージョンを差し戻す fix PR で対応する。
 
 ### DEPSCAN のロックファイル検出は Git Tree API で1リポジトリ1回のみ
 `app.depscan.github_client.get_repo_tree` で `git/trees/{branch}?recursive=1` を使い、

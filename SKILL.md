@@ -243,9 +243,11 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 ### スキル 9: 自作アプリの依存ライブラリ脆弱性を確認する（DEPSCAN）
 
-**用途:** GitHub 上の自作アプリ（`baby-feelings` アカウント配下、fork・archived 除く）が依存する
-ライブラリに脆弱性がないか確認する。OSV API とリアルタイム照合するため、`POPULAR_PACKAGES` に
-含まれない任意のパッケージも検知対象になる。
+**用途:** GitHub 上の自作アプリ（`baby-feelings` アカウント配下、プライベートリポジトリ含む・
+fork・archived 除く）が依存するライブラリに脆弱性がないか確認する。OSV API とリアルタイム照合
+するため、`POPULAR_PACKAGES` に含まれない任意のパッケージも検知対象になる。対応ロックファイル
+（`requirements.txt` / `package-lock.json` / `pubspec.lock` 等 10 エコシステム）が存在しない
+リポジトリはスキャン対象外。
 
 ```bash
 # 未解決の HIGH 以上の検知結果を取得
@@ -554,11 +556,19 @@ Upsert ロジック:
 - 実行結果は `crawler_logs` テーブルに自動記録
 
 **DEPSCAN:**
-- GitHub 上の対象リポジトリ（fork・archived 除く）のロックファイルを収集・パースし、
-  `(ecosystem, package_name, version)` を OSV API にバージョン指定でリアルタイムクエリ
-  （既存の `OsvVulnerability` テーブルとは照合しない）
-- **新規検知** → INSERT → Slack 通知（リポジトリ別グルーピングした1通のダイジェスト）
+- GitHub 上の対象リポジトリ（プライベート含む・fork・archived 除く）のロックファイルを
+  収集・パースし、`(ecosystem, package_name, version)` を OSV API にバージョン指定で
+  リアルタイムクエリ（既存の `OsvVulnerability` テーブルとは照合しない）
+- **新規検知** → INSERT →
+  - Slack 通知（リポジトリ別グルーピング・パッケージ単位に集約〈重大度別件数＋修正済み
+    バージョン一覧〉した1通のダイジェスト）
+  - 検知されたリポジトリ自身に GitHub Issue も自動起票（タイトル固定・Open Issue があれば
+    コメント追記、無ければ新規作成）
 - **今回のスキャンで検知されなくなった既存レコード** → `resolved_at` を設定（削除はしない）
 - `GITHUB_TOKEN` 未設定時は DEPSCAN のみエラー終了し `crawler_logs` にエラー記録
-  （`GITHUB_USERNAME` は必須環境変数のため、未設定だとアプリ自体が起動しない）
+  （`GITHUB_USERNAME` は必須環境変数のため、未設定だとアプリ自体が起動しない）。
+  Issue 自動起票には `Issues: Write` 権限も必要（無い場合は Issue 作成のみ失敗し、
+  DEPSCAN 自体は成功扱い）
+- 検知された脆弱性の実際の修正は、対象リポジトリで有効化した **Dependabot** が更新PRを
+  自動作成する運用（DEPSCAN は検知・通知に専念し、修正コードの自動生成は行わない）
 - 実行結果は `crawler_logs` テーブルに自動記録
