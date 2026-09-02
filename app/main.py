@@ -19,6 +19,7 @@ from app.core.schemas import HealthResponse
 from app.crawler_logs.router import router as crawler_logs_router
 from app.depscan.crawler import fetch_and_scan_dependencies
 from app.depscan.router import router as depscan_router
+from app.depsops.runner import run_dependabot_ops
 from app.jvn.crawler import fetch_and_store_jvn
 from app.jvn.router import router as jvn_router
 from app.kev.crawler import fetch_and_store_kev
@@ -265,6 +266,25 @@ def trigger_depscan_crawl() -> dict:
     logger.info("Manual DEPSCAN triggered via /admin/depscan-crawl")
     _run_in_background("DEPSCAN", fetch_and_scan_dependencies)
     return {"message": "Dependency vulnerability scan started in background"}
+
+
+@app.post(
+    "/admin/dependabot-ops",
+    tags=["admin"],
+    dependencies=[Security(require_api_key)],
+    summary="Dependabot PR 自動運用（手動トリガーのみ・バックグラウンド）",
+    description="DEPSCAN 対象の全リポジトリの Open な Dependabot PR を判定し、"
+    "マイナー/パッチ更新かつ CI 設定ありでコンフリクトが無いものだけ自動マージする"
+    "（X-API-KEY 必須）。それ以外は Slack に通知するのみで自動マージしない。"
+    "スケジューラには登録されておらず、このエンドポイントを叩いた時のみ実行される。"
+    "結果は /api/crawler-logs（crawler_type=DEPSOPS）で確認。",
+    status_code=202,
+)
+def trigger_dependabot_ops() -> dict:
+    """Dependabot PR 自動運用（DEPSOPS）をバックグラウンドで実行する。"""
+    logger.info("Manual DEPSOPS triggered via /admin/dependabot-ops")
+    _run_in_background("DEPSOPS", run_dependabot_ops)
+    return {"message": "Dependabot PR operations started in background"}
 
 
 @app.get("/", tags=["system"])

@@ -27,6 +27,7 @@ _CRAWLER_LABELS: dict[str, tuple[str, str]] = {
     "OSV": (":package:", "OSV 脆弱性データ"),
     "JVN": (":jigsaw:", "JVN 脆弱性データ"),
     "DEPSCAN": (":rotating_light:", "依存ライブラリ脆弱性"),
+    "DEPSOPS": (":robot_face:", "Dependabot PR 自動運用"),
 }
 
 # Slack Incoming Webhook の text フィールド上限（40,000文字）に対する安全マージン
@@ -109,6 +110,11 @@ def notify_depscan_crawl_error(error: str) -> None:
     notify_error("DEPSCAN", error)
 
 
+def notify_depsops_crawl_error(error: str) -> None:
+    """DEPSOPS エラー通知。"""
+    notify_error("DEPSOPS", error)
+
+
 # ── DEPSCAN 専用通知 ─────────────────────────────────────────────
 
 
@@ -148,6 +154,49 @@ def notify_dependency_findings(new_findings: list[dict[str, Any]]) -> None:
         lines.append(f"*{repo}*")
         lines.extend(format_package_lines(by_repo[repo]))
         lines.append("")
+
+    message = _truncate_for_slack("\n".join(lines).rstrip())
+    _send_slack(message)
+
+
+# ── DEPSOPS 専用通知 ─────────────────────────────────────────────
+
+
+def notify_dependabot_ops(
+    merged: list[dict[str, Any]],
+    flagged: list[dict[str, Any]],
+) -> None:
+    """DEPSOPS（Dependabot PR 自動運用）の実行結果を Slack に通知する。
+
+    自動マージした PR・人の確認が必要な PR（メジャーバージョンアップ・CI 未設定・
+    CI 失敗等）の両方を毎回通知する（監査性重視。0 件でも実行自体はしたことが
+    分かるよう、merged/flagged が両方空の場合のみ送信をスキップする）。
+
+    Args:
+        merged: 自動マージした PR の辞書リスト
+            （"repo_full_name"・"pr_number"・"title" を使用）
+        flagged: 自動マージしなかった PR の辞書リスト
+            （上記に加え "reason" を使用）
+    """
+    if not settings.SLACK_WEBHOOK_URL or (not merged and not flagged):
+        return
+
+    emoji, label = _CRAWLER_LABELS["DEPSOPS"]
+    lines = [f"{emoji} *{label}*", ""]
+
+    if merged:
+        lines.append(f"✅ *自動マージ（{len(merged)}件）*")
+        for item in merged:
+            lines.append(f"• `{item['repo_full_name']}` #{item['pr_number']} {item['title']}")
+        lines.append("")
+
+    if flagged:
+        lines.append(f"⚠️ *要確認（{len(flagged)}件）*")
+        for item in flagged:
+            lines.append(
+                f"• `{item['repo_full_name']}` #{item['pr_number']} {item['title']}"
+                f"（{item['reason']}）"
+            )
 
     message = _truncate_for_slack("\n".join(lines).rstrip())
     _send_slack(message)
