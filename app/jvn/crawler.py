@@ -322,14 +322,33 @@ def _upsert_jvn(db: Session, entries: list[dict]) -> tuple[int, int]:
     return inserted, updated
 
 
-def fetch_and_store_jvn(days: int | None = None) -> tuple[int, int]:
+def _delete_old_jvn_records(db: Session) -> int:
+    """保持期間（JVN_RETENTION_DAYS）を超えた JVN レコードを削除する。
+
+    date_last_modified が cutoff より古いレコードを一括削除して DB 容量を管理する。
+
+    Returns:
+        削除件数
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(days=settings.JVN_RETENTION_DAYS)
+    deleted = (
+        db.query(JvnVulnerability)
+        .filter(JvnVulnerability.date_last_modified < cutoff)
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    logger.info("JVN old records deleted: %d (date_last_modified < %s)", deleted, cutoff.date())
+    return deleted
+
+
+def fetch_and_store_jvn(days: int | None = None) -> tuple[int, int, int]:
     """MyJVN API から脆弱性情報を取得して DB に保存する。
 
     Args:
         days: 取得対象の直近日数（None の場合は settings.JVN_DAYS を使用）
 
     Returns:
-        (inserted, updated) のタプル
+        (inserted, updated, deleted) のタプル
     """
     effective_days = days if days is not None else settings.JVN_DAYS
     started_at = now_utc()
@@ -343,11 +362,18 @@ def fetch_and_store_jvn(days: int | None = None) -> tuple[int, int]:
         entries = _fetch_all_entries(cutoff_date)
         inserted, updated = _upsert_jvn(db, entries)
 
+        # 保持期間を超えた古いレコードを削除（DB 容量管理）。失敗してもクロール自体は成功扱いとする
+        deleted = 0
+        try:
+            deleted = _delete_old_jvn_records(db)
+        except Exception as exc:
+            logger.error("Failed to delete old JVN records: %s", exc, exc_info=True)
+
         finished_at = now_utc()
         duration = (finished_at - started_at).total_seconds()
         logger.info(
-            "JVN crawler done: inserted=%d, updated=%d, duration=%.1fs",
-            inserted, updated, duration,
+            "JVN crawler done: inserted=%d, updated=%d, deleted=%d, duration=%.1fs",
+            inserted, updated, deleted, duration,
         )
 
         write_crawler_log(
@@ -357,9 +383,10 @@ def fetch_and_store_jvn(days: int | None = None) -> tuple[int, int]:
             finished_at=finished_at,
             inserted=inserted,
             updated=updated,
+            deleted=deleted,
         )
-        notify_jvn_new_vulnerabilities(inserted=inserted, updated=updated)
-        return inserted, updated
+        notify_jvn_new_vulnerabilities(inserted=inserted, updated=updated, deleted=deleted)
+        return inserted, updated, deleted
 
     except Exception as exc:
         finished_at = now_utc()

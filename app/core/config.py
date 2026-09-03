@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     OSV_CRON_HOUR_UTC: int = 20   # OSV: JST 5:00 = UTC 20:00
     JVN_CRON_HOUR_UTC: int = 21   # JVN: JST 6:00 = UTC 21:00
 
+    # KEV データの保持期間（日数）: この日数より古い date_added レコードを定期削除する
+    KEV_RETENTION_DAYS: int = 180
+
     # Slack 通知用 Webhook URL（未設定時は通知をスキップ）
     SLACK_WEBHOOK_URL: str = ""
 
@@ -37,6 +40,8 @@ class Settings(BaseSettings):
     # JVN クローラー設定
     # 直近何日分の脆弱性を取得対象とするか（dateLastModified フィルター）
     JVN_DAYS: int = 30
+    # JVN データの保持期間（日数）: この日数より古い date_last_modified レコードを定期削除する
+    JVN_RETENTION_DAYS: int = 180
 
     # 依存ライブラリ脆弱性スキャナー（DEPSCAN）設定
     # GitHub API 認証用 PAT（fine-grained, Contents: Read-only 推奨）

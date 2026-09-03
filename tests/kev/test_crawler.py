@@ -152,6 +152,7 @@ def test_fetch_and_store_kev_integration():
     with (
         patch("app.kev.crawler._fetch_cisa_kev", return_value=SAMPLE_ENTRIES),
         patch("app.kev.crawler._upsert_vulnerabilities", return_value=(2, 0)),
+        patch("app.kev.crawler._delete_old_kev_records", return_value=0),
         patch("app.kev.crawler.SessionLocal") as mock_session_cls,
     ):
         mock_db = MagicMock()
@@ -176,6 +177,69 @@ def test_fetch_and_store_kev_raises_http_error():
 
         # finally ブロックで DB がクローズされることを確認
         mock_db.close.assert_called_once()
+
+
+# ── _delete_old_kev_records ──────────────────────────────────────
+
+
+class TestDeleteOldKevRecords:
+    def _make_vuln(self, cve_id: str, date_added: date) -> Vulnerability:
+        return Vulnerability(
+            cve_id=cve_id,
+            vendor_project="TestVendor",
+            product="TestProduct",
+            vulnerability_name="Test vuln",
+            description="desc",
+            required_action=None,
+            date_added=date_added,
+        )
+
+    def test_deletes_old_records(self, db_session: Session):
+        """保持期間（KEV_RETENTION_DAYS）を超えた古いレコードが削除されること。"""
+        from app.kev.crawler import _delete_old_kev_records
+
+        db_session.add(self._make_vuln("CVE-2000-0001", date(2000, 1, 1)))
+        db_session.commit()
+
+        deleted = _delete_old_kev_records(db_session)
+
+        assert deleted == 1
+        assert db_session.query(Vulnerability).count() == 0
+
+    def test_keeps_recent_records(self, db_session: Session):
+        """保持期間内の新しいレコードは削除されないこと。"""
+        from app.kev.crawler import _delete_old_kev_records
+
+        db_session.add(self._make_vuln("CVE-2026-0001", date.today()))
+        db_session.commit()
+
+        deleted = _delete_old_kev_records(db_session)
+
+        assert deleted == 0
+        assert db_session.query(Vulnerability).count() == 1
+
+    def test_empty_db_returns_zero(self, db_session: Session):
+        from app.kev.crawler import _delete_old_kev_records
+
+        assert _delete_old_kev_records(db_session) == 0
+
+    def test_delete_failure_does_not_fail_crawler(self):
+        """_delete_old_kev_records が失敗してもクローラー全体はエラーにならないこと。"""
+        with (
+            patch("app.kev.crawler._fetch_cisa_kev", return_value=SAMPLE_ENTRIES),
+            patch("app.kev.crawler._upsert_vulnerabilities", return_value=(2, 0)),
+            patch(
+                "app.kev.crawler._delete_old_kev_records",
+                side_effect=Exception("delete failed"),
+            ),
+            patch("app.kev.crawler.SessionLocal") as mock_session_cls,
+        ):
+            mock_db = MagicMock()
+            mock_session_cls.return_value = mock_db
+
+            inserted, updated, deleted = fetch_and_store_kev()
+
+        assert (inserted, updated, deleted) == (2, 0, 0)
 
 
 def test_fetch_and_store_kev_raises_unexpected_error():
