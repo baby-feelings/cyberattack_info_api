@@ -1,5 +1,6 @@
 """app.auth.router（GitHub ログイン API）のテスト。"""
 import os
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
@@ -8,6 +9,9 @@ os.environ.setdefault("ENVIRONMENT", "development")
 os.environ.setdefault("GITHUB_USERNAME", "test-github-user")
 
 from app.auth.session import create_session_token  # noqa: E402
+from app.depscan.models import UserScan  # noqa: E402
+
+_NOW = datetime.now(timezone.utc)
 
 
 class TestGithubLogin:
@@ -70,6 +74,33 @@ class TestGithubCallback:
         mock_thread.start.assert_called_once()
         # バックグラウンドスキャンがログインユーザー本人のトークンで起動されること
         assert mock_thread_cls.call_args.kwargs["args"] == ("octocat", "gho_abc")
+
+    def test_skips_scan_when_recently_scanned(self, client, db_session):
+        """直近24時間以内にスキャン済みなら、ログインしても再スキャンを起動しない。"""
+        db_session.add(UserScan(
+            username="octocat", status="done", repos_scanned=5,
+            started_at=_NOW, finished_at=_NOW,
+        ))
+        db_session.commit()
+
+        client.cookies.set("gh_oauth_state", "matching-state")
+        with patch("app.auth.router.settings.GITHUB_OAUTH_CLIENT_ID", "client-123"), \
+             patch("app.auth.router.settings.GITHUB_OAUTH_CLIENT_SECRET", "secret"), \
+             patch("app.auth.router.settings.SESSION_SECRET_KEY", "test-secret"), \
+             patch("app.auth.router.settings.FRONTEND_URL", "https://dashboard.example.com"), \
+             patch(
+                 "app.auth.router.exchange_code_for_token", return_value="gho_abc",
+             ), \
+             patch(
+                 "app.auth.router.get_authenticated_user_login", return_value="octocat",
+             ), \
+             patch("app.auth.router.threading.Thread") as mock_thread_cls:
+            res = client.get(
+                "/auth/github/callback?code=abc&state=matching-state", follow_redirects=False,
+            )
+
+        assert res.status_code == 302
+        mock_thread_cls.assert_not_called()
 
 
 class TestScanStatus:

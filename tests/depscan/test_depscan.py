@@ -5,7 +5,7 @@ GitHub API クライアント・クローラーロジック・Slack通知のユ�
 外部 HTTP 通信（GitHub API・OSV API）はすべてモックする。
 """
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
@@ -26,6 +26,7 @@ from app.depscan.crawler import (  # noqa: E402
     fetch_and_scan_dependencies,
     get_user_scan_status,
     run_depscan_for_user,
+    should_rescan_for_user,
 )
 from app.depscan.github_client import (  # noqa: E402
     add_issue_comment,
@@ -813,3 +814,36 @@ class TestGetUserScanStatus:
         assert scan is not None
         assert scan.status == "done"
         assert scan.repos_scanned == 3
+
+
+class TestShouldRescanForUser:
+    def test_no_scan_yet_returns_true(self, db_session):
+        assert should_rescan_for_user(db_session, "octocat") is True
+
+    def test_error_status_returns_true(self, db_session):
+        db_session.add(UserScan(
+            username="octocat", status="error", started_at=_NOW, finished_at=_NOW,
+            error_message="boom",
+        ))
+        db_session.commit()
+        assert should_rescan_for_user(db_session, "octocat") is True
+
+    def test_running_status_returns_false(self, db_session):
+        db_session.add(UserScan(username="octocat", status="running", started_at=_NOW))
+        db_session.commit()
+        assert should_rescan_for_user(db_session, "octocat") is False
+
+    def test_recent_done_scan_returns_false(self, db_session):
+        db_session.add(UserScan(
+            username="octocat", status="done", started_at=_NOW, finished_at=_NOW,
+        ))
+        db_session.commit()
+        assert should_rescan_for_user(db_session, "octocat") is False
+
+    def test_stale_done_scan_returns_true(self, db_session):
+        stale = _NOW - timedelta(hours=25)
+        db_session.add(UserScan(
+            username="octocat", status="done", started_at=stale, finished_at=stale,
+        ))
+        db_session.commit()
+        assert should_rescan_for_user(db_session, "octocat") is True
