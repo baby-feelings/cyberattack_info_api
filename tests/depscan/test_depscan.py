@@ -14,6 +14,7 @@ os.environ.setdefault("ENVIRONMENT", "development")
 
 import httpx  # noqa: E402
 
+from app.auth.session import create_session_token  # noqa: E402
 from app.core.notifications import notify_dependency_findings  # noqa: E402
 from app.depscan.crawler import (  # noqa: E402
     _build_findings,
@@ -23,6 +24,8 @@ from app.depscan.crawler import (  # noqa: E402
     _resolve_stale_findings,
     _upsert_findings,
     fetch_and_scan_dependencies,
+    get_user_scan_status,
+    run_depscan_for_user,
 )
 from app.depscan.github_client import (  # noqa: E402
     add_issue_comment,
@@ -32,7 +35,7 @@ from app.depscan.github_client import (  # noqa: E402
     get_repo_tree,
     list_target_repos,
 )
-from app.depscan.models import DependencyFinding  # noqa: E402
+from app.depscan.models import DependencyFinding, UserScan  # noqa: E402
 
 TEST_API_KEY = "test-api-key-for-pytest"
 HEADERS = {"X-API-KEY": TEST_API_KEY}
@@ -153,6 +156,35 @@ class TestListDepscan:
         res = client.get("/api/depscan?per_page=2&page=1", headers=HEADERS)
         assert len(res.json()["data"]) == 2
 
+    def test_session_token_forces_owner_scope(self, client, db_session):
+        """セッショントークン認証時、owner指定に関わらずログインユーザー本人のみに絞り込まれる。"""
+        _make_finding(db_session, repo_full_name="octocat/repo-a", osv_id="GHSA-mine")
+        _make_finding(db_session, repo_full_name="baby-feelings/baby_grow", osv_id="GHSA-others")
+        with patch("app.depscan.router.settings.SESSION_SECRET_KEY", "test-secret"):
+            token = create_session_token("octocat")
+            res = client.get(
+                "/api/depscan?owner=baby-feelings",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        body = res.json()
+        assert body["total"] == 1
+        assert body["data"][0]["repo_full_name"] == "octocat/repo-a"
+
+    def test_session_token_rejects_mismatched_repo_param(self, client, db_session):
+        with patch("app.depscan.router.settings.SESSION_SECRET_KEY", "test-secret"):
+            token = create_session_token("octocat")
+            res = client.get(
+                "/api/depscan?repo=baby-feelings/baby_grow",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        assert res.status_code == 403
+
+    def test_invalid_session_token_and_no_api_key_returns_403(self, client):
+        res = client.get(
+            "/api/depscan", headers={"Authorization": "Bearer not-a-real-token"},
+        )
+        assert res.status_code == 403
+
 
 class TestDepscanStats:
     def test_empty(self, client):
@@ -174,6 +206,18 @@ class TestDepscanStats:
         body = res.json()
         assert body["total"] == 1
         assert body["repos"] == [{"repo_full_name": "baby-feelings/repo-a", "count": 1}]
+
+    def test_session_token_forces_owner_scope(self, client, db_session):
+        _make_finding(db_session, repo_full_name="octocat/repo-a", osv_id="GHSA-mine")
+        _make_finding(db_session, repo_full_name="baby-feelings/baby_grow", osv_id="GHSA-others")
+        with patch("app.depscan.router.settings.SESSION_SECRET_KEY", "test-secret"):
+            token = create_session_token("octocat")
+            res = client.get(
+                "/api/depscan/stats", headers={"Authorization": f"Bearer {token}"},
+            )
+        body = res.json()
+        assert body["total"] == 1
+        assert body["repos"] == [{"repo_full_name": "octocat/repo-a", "count": 1}]
 
 
 # ──────────────────────────────────────────────────────────────
@@ -460,6 +504,27 @@ class TestResolveStaleFindings:
         resolved = _resolve_stale_findings(db_session, current_keys={key})
         assert resolved == 0
 
+    def test_repo_owner_prefix_scopes_to_matching_repos_only(self, db_session):
+        """repo_owner_prefix指定時、他オーナーの未解決findingには一切影響しない。"""
+        _make_finding(
+            db_session, repo_full_name="baby-feelings/baby_grow", osv_id="GHSA-baby-feelings",
+        )
+        _make_finding(db_session, repo_full_name="octocat/hello-world", osv_id="GHSA-octocat")
+
+        resolved = _resolve_stale_findings(
+            db_session, current_keys=set(), repo_owner_prefix="octocat",
+        )
+
+        assert resolved == 1
+        baby_feelings_finding = (
+            db_session.query(DependencyFinding).filter_by(osv_id="GHSA-baby-feelings").first()
+        )
+        octocat_finding = (
+            db_session.query(DependencyFinding).filter_by(osv_id="GHSA-octocat").first()
+        )
+        assert baby_feelings_finding.resolved_at is None
+        assert octocat_finding.resolved_at is not None
+
 
 class TestFetchAndScanDependencies:
     def test_success_path(self, db_session):
@@ -665,3 +730,86 @@ class TestNotifyDependencyFindings:
             "（メッセージが長すぎるため以降省略。詳細は API / ダッシュボードを参照）"
         )
         assert not message.endswith("\n")
+
+
+# ──────────────────────────────────────────────────────────────
+# app.depscan.crawler.run_depscan_for_user / get_user_scan_status
+# ──────────────────────────────────────────────────────────────
+
+
+class TestRunDepscanForUser:
+    def test_success_path_records_done_status(self, db_session):
+        with patch(
+            "app.depscan.crawler._collect_dependencies",
+            return_value=({("PyPI", "pkg", "1.0.0"): [("octocat/repo", "requirements.txt")]}, 1),
+        ), patch(
+            "app.depscan.crawler._build_findings",
+            return_value=[{
+                "repo_full_name": "octocat/repo", "ecosystem": "PyPI", "package_name": "pkg",
+                "installed_version": "1.0.0", "osv_id": "GHSA-001", "severity": "HIGH",
+                "cvss_score": 7.5, "summary": "vuln", "fixed_versions": [],
+                "manifest_path": "requirements.txt", "detected_at": _NOW,
+            }],
+        ), patch("app.depscan.crawler.SessionLocal", return_value=db_session):
+            run_depscan_for_user("octocat", "gho_token")
+
+        scan = db_session.query(UserScan).filter_by(username="octocat").first()
+        assert scan.status == "done"
+        assert scan.repos_scanned == 1
+        assert scan.finished_at is not None
+        findings_count = (
+            db_session.query(DependencyFinding).filter_by(repo_full_name="octocat/repo").count()
+        )
+        assert findings_count == 1
+
+    def test_does_not_resolve_other_owners_findings(self, db_session):
+        """他オーナー（baby-feelings等）の未解決findingを誤って解決済みにしないこと。"""
+        _make_finding(db_session, repo_full_name="baby-feelings/baby_grow", osv_id="GHSA-untouched")
+
+        with patch(
+            "app.depscan.crawler._collect_dependencies", return_value=({}, 0),
+        ), patch(
+            "app.depscan.crawler._build_findings", return_value=[],
+        ), patch("app.depscan.crawler.SessionLocal", return_value=db_session):
+            run_depscan_for_user("octocat", "gho_token")
+
+        untouched = db_session.query(DependencyFinding).filter_by(osv_id="GHSA-untouched").first()
+        assert untouched.resolved_at is None
+
+    def test_failure_records_error_status(self, db_session):
+        with patch(
+            "app.depscan.crawler._collect_dependencies",
+            side_effect=RuntimeError("GitHub API down"),
+        ), patch("app.depscan.crawler.SessionLocal", return_value=db_session):
+            run_depscan_for_user("octocat", "gho_token")  # 例外を送出しないことを確認
+
+        scan = db_session.query(UserScan).filter_by(username="octocat").first()
+        assert scan.status == "error"
+        assert "GitHub API down" in scan.error_message
+
+    def test_second_run_updates_existing_status_row(self, db_session):
+        with patch(
+            "app.depscan.crawler._collect_dependencies", return_value=({}, 0),
+        ), patch(
+            "app.depscan.crawler._build_findings", return_value=[],
+        ), patch("app.depscan.crawler.SessionLocal", return_value=db_session):
+            run_depscan_for_user("octocat", "gho_token")
+            run_depscan_for_user("octocat", "gho_token")
+
+        assert db_session.query(UserScan).filter_by(username="octocat").count() == 1
+
+
+class TestGetUserScanStatus:
+    def test_returns_none_when_never_scanned(self, db_session):
+        assert get_user_scan_status(db_session, "nobody") is None
+
+    def test_returns_recorded_scan(self, db_session):
+        db_session.add(UserScan(
+            username="octocat", status="done", repos_scanned=3,
+            started_at=_NOW, finished_at=_NOW,
+        ))
+        db_session.commit()
+        scan = get_user_scan_status(db_session, "octocat")
+        assert scan is not None
+        assert scan.status == "done"
+        assert scan.repos_scanned == 3
