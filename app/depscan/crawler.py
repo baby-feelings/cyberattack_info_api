@@ -6,6 +6,7 @@ OSV API とリアルタイム照合して脆弱な依存パッケージを検知
 APScheduler から毎日呼び出される。
 """
 import logging
+from datetime import timedelta, timezone
 from typing import Any
 
 import httpx
@@ -336,6 +337,33 @@ def fetch_and_scan_dependencies() -> tuple[int, int, int]:
 def get_user_scan_status(db: Session, username: str) -> UserScan | None:
     """指定ユーザーの直近のオンデマンドスキャン状況を取得する。"""
     return db.query(UserScan).filter(UserScan.username == username).first()
+
+
+# オンデマンドスキャンの再実行間隔。直近のスキャンがこの時間内に完了していれば
+# 再スキャンせず、DB に保存済みの結果をそのまま返す（baby-feelings 向けの毎日
+# クロールと同様、1日1回程度の頻度で十分という運用方針に合わせる）
+RESCAN_INTERVAL_HOURS = 24
+
+
+def should_rescan_for_user(db: Session, username: str) -> bool:
+    """ログインしたユーザーに対し、オンデマンドスキャンを再実行すべきか判定する。
+
+    - 直近のスキャン記録が無い、またはエラー終了している場合 → 再スキャンする
+    - 実行中の場合 → 重複起動を避けるため再スキャンしない
+    - 完了済みで `RESCAN_INTERVAL_HOURS` 時間以内なら → 再スキャンしない（DB参照のみ）
+    """
+    scan = get_user_scan_status(db, username)
+    if scan is None or scan.status == "error":
+        return True
+    if scan.status == "running":
+        return False
+    # SQLite は DateTime(timezone=True) でもtz情報を保持せず naive で返すため、
+    # PostgreSQL（本番）・SQLite（開発/テスト）どちらでも比較できるよう補完する
+    started_at = scan.started_at
+    if started_at.tzinfo is None:
+        started_at = started_at.replace(tzinfo=timezone.utc)
+    cutoff = now_utc() - timedelta(hours=RESCAN_INTERVAL_HOURS)
+    return started_at < cutoff
 
 
 def _set_user_scan_status(

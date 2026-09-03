@@ -23,7 +23,7 @@ from app.auth.github_oauth import (
 from app.auth.session import create_session_token, decode_session_token
 from app.core.config import settings
 from app.core.database import get_db
-from app.depscan.crawler import get_user_scan_status, run_depscan_for_user
+from app.depscan.crawler import get_user_scan_status, run_depscan_for_user, should_rescan_for_user
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +80,7 @@ def github_login() -> RedirectResponse:
 
 @router.get("/github/callback", summary="GitHub OAuth コールバック（内部利用）")
 def github_callback(
+    db: Annotated[Session, Depends(get_db)],
     code: str = Query(...),
     state: str = Query(...),
     gh_oauth_state: str | None = Cookie(None),
@@ -99,13 +100,17 @@ def github_callback(
     username = get_authenticated_user_login(access_token)
     logger.info("DEPSCAN dashboard login: %s", username)
 
-    # 初回・再ログインに関わらず、都度オンデマンドでその人のリポジトリをスキャンする
-    # （バックグラウンドスレッドで実行。ここでは待たずにセッション発行へ進む）
-    thread = threading.Thread(
-        target=run_depscan_for_user, args=(username, access_token),
-        name=f"depscan-user-{username}", daemon=True,
-    )
-    thread.start()
+    # 直近 RESCAN_INTERVAL_HOURS 時間以内にスキャン済みなら再スキャンせず DB の結果を
+    # そのまま使う（毎回ログインの度にスキャンして待たせないようにするため）。
+    # スキャンする場合はバックグラウンドスレッドで実行し、ここでは待たずセッション発行へ進む
+    if should_rescan_for_user(db, username):
+        thread = threading.Thread(
+            target=run_depscan_for_user, args=(username, access_token),
+            name=f"depscan-user-{username}", daemon=True,
+        )
+        thread.start()
+    else:
+        logger.info("DEPSCAN on-demand scan skipped for %s (recently scanned)", username)
 
     session_token = create_session_token(username)
     redirect_url = (
