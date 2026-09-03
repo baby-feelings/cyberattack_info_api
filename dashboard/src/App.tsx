@@ -1,9 +1,9 @@
 import { useEffect, useState, useCallback } from 'react'
-import { RefreshCw, ShieldAlert, Wifi, Shield, Package, FileWarning, Bug } from 'lucide-react'
+import { RefreshCw, ShieldAlert, Wifi, Shield, Package, FileWarning, Bug, BarChart2 } from 'lucide-react'
 import { fetchRecent, fetchStats, type VulnerabilityOut, type StatsResponse } from './api/client'
 import { HealthStatus } from './components/HealthStatus'
 import { StatsCards } from './components/StatsCards'
-import { MonthlyTrend } from './components/MonthlyTrend'
+import { MonthlyBarChart } from './components/shared/VulnPanelParts'
 import { VendorRanking } from './components/VendorRanking'
 import { RecentCVEs } from './components/RecentCVEs'
 import { OsvPanel } from './components/OsvPanel'
@@ -144,8 +144,15 @@ export default function App() {
             {/* CVE サマリーカード */}
             <StatsCards stats={stats} recent={recent} loading={loading} />
 
-            {/* 月別トレンド */}
-            <MonthlyTrend data={stats?.monthly_trend ?? []} loading={loading} />
+            {/* 月別トレンド（OSV・JVNと同じ棒グラフ表示） */}
+            <MonthlyBarChart
+              icon={<BarChart2 size={13} className="text-slate-400" />}
+              title="月別 CVE 追加数トレンド"
+              data={stats?.monthly_trend ?? []}
+              barColor="#7c3aed"
+              height={220}
+              loading={loading}
+            />
 
             {/* ベンダーランキング + 直近 CVE */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6 xl:gap-8">
