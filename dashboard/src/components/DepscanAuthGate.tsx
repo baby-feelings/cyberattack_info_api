@@ -72,11 +72,19 @@ export function DepscanAuthGate() {
     setChecked(true)
   }, [])
 
+  // トークン失効時の自動ログアウト等、内部的な処理から呼ぶ（確認ダイアログなし）
   const handleLogout = useCallback(() => {
     clearStoredSession()
     setSession(null)
     setScanStatus(null)
   }, [])
+
+  // ログアウトボタン押下時のみ呼ぶ（誤クリック防止の確認ダイアログを挟む）
+  function handleLogoutClick() {
+    if (window.confirm('ログアウトしますか？')) {
+      handleLogout()
+    }
+  }
 
   // ログイン中は、オンデマンドスキャンが完了する（またはエラーになる）まで進捗をポーリングする
   useEffect(() => {
@@ -145,7 +153,7 @@ export function DepscanAuthGate() {
           ログイン中: <span className="text-slate-300 font-medium">{session.username}</span>
         </span>
         <button
-          onClick={handleLogout}
+          onClick={handleLogoutClick}
           className="flex items-center gap-1 text-slate-500 hover:text-slate-300 transition-colors"
         >
           <LogOut size={12} />
