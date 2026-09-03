@@ -293,7 +293,9 @@ function RepoBarChart({ stats, loading }: { stats: DepscanStatsResponse | null; 
   )
 }
 
-export function DepscanPanel() {
+// authToken 指定時（GitHubログイン経由）は、サーバー側でログインユーザー本人が
+// 所有するリポジトリのみに強制的に絞り込まれる（オーナーフィルターは実質不要になる）
+export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
   const [owner, setOwner] = useState<string | null>(null)
   const [severity, setSeverity] = useState<string | null>(null)
   const [showResolved, setShowResolved] = useState(false)
@@ -308,8 +310,10 @@ export function DepscanPanel() {
     setLoading(true)
     try {
       const [all, st] = await Promise.all([
-        fetchAllDepscanFindings({ owner: own, severity: sev, resolved: resolved ? null : false }),
-        fetchDepscanStats(),
+        fetchAllDepscanFindings({
+          owner: own, severity: sev, resolved: resolved ? null : false, authToken,
+        }),
+        fetchDepscanStats(authToken),
       ])
       setFindings(all)
       setStats(st)
@@ -318,7 +322,7 @@ export function DepscanPanel() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [authToken])
 
   useEffect(() => {
     load(owner, severity, showResolved)
