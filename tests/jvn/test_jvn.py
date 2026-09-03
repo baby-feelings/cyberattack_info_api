@@ -263,7 +263,7 @@ def test_upsert_jvn_deduplicates(db_session):
 
 
 def test_fetch_and_store_jvn_success(monkeypatch):
-    """クローラーが正常終了し (inserted, updated) を返すこと。"""
+    """クローラーが正常終了し (inserted, updated, deleted) を返すこと。"""
     monkeypatch.setattr("app.jvn.crawler._fetch_all_entries", lambda cutoff_date: [])
     monkeypatch.setattr("app.jvn.crawler.write_crawler_log", lambda *a, **kw: None)
     monkeypatch.setattr(
@@ -272,9 +272,10 @@ def test_fetch_and_store_jvn_success(monkeypatch):
 
     from app.jvn.crawler import fetch_and_store_jvn
 
-    inserted, updated = fetch_and_store_jvn()
+    inserted, updated, deleted = fetch_and_store_jvn()
     assert inserted == 0
     assert updated == 0
+    assert deleted == 0
 
 
 def test_fetch_and_store_jvn_error(monkeypatch):
@@ -290,6 +291,58 @@ def test_fetch_and_store_jvn_error(monkeypatch):
 
     with pytest.raises(RuntimeError, match="API down"):
         fetch_and_store_jvn()
+
+
+# ── _delete_old_jvn_records ──────────────────────────────────────
+
+
+class TestDeleteOldJvnRecords:
+    def test_deletes_old_records(self, db_session):
+        """保持期間（JVN_RETENTION_DAYS）を超えた古いレコードが削除されること。"""
+        from app.jvn.crawler import _delete_old_jvn_records
+
+        old_dt = datetime(2000, 1, 1, tzinfo=timezone.utc)
+        db_session.add(_make_jvn(jvndb_id="JVNDB-2000-000001", date_last_modified=old_dt))
+        db_session.commit()
+
+        deleted = _delete_old_jvn_records(db_session)
+
+        assert deleted == 1
+        assert db_session.query(JvnVulnerability).count() == 0
+
+    def test_keeps_recent_records(self, db_session):
+        """保持期間内の新しいレコードは削除されないこと。"""
+        from app.jvn.crawler import _delete_old_jvn_records
+
+        db_session.add(_make_jvn(jvndb_id="JVNDB-2026-000099", date_last_modified=_NOW))
+        db_session.commit()
+
+        deleted = _delete_old_jvn_records(db_session)
+
+        assert deleted == 0
+        assert db_session.query(JvnVulnerability).count() == 1
+
+    def test_empty_db_returns_zero(self, db_session):
+        from app.jvn.crawler import _delete_old_jvn_records
+
+        assert _delete_old_jvn_records(db_session) == 0
+
+    def test_delete_failure_does_not_fail_crawler(self, monkeypatch):
+        """_delete_old_jvn_records が失敗してもクローラー全体はエラーにならないこと。"""
+        monkeypatch.setattr("app.jvn.crawler._fetch_all_entries", lambda cutoff_date: [])
+        monkeypatch.setattr("app.jvn.crawler.write_crawler_log", lambda *a, **kw: None)
+        monkeypatch.setattr(
+            "app.jvn.crawler.notify_jvn_new_vulnerabilities", lambda **kw: None
+        )
+        monkeypatch.setattr(
+            "app.jvn.crawler._delete_old_jvn_records",
+            MagicMock(side_effect=Exception("delete failed")),
+        )
+
+        from app.jvn.crawler import fetch_and_store_jvn
+
+        inserted, updated, deleted = fetch_and_store_jvn()
+        assert (inserted, updated, deleted) == (0, 0, 0)
 
 
 def test_parse_item_skips_non_jvndb(monkeypatch):

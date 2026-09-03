@@ -3,7 +3,7 @@
 脆弱性情報を取得し、DB に Upsert する定期バッチ処理を担う。
 """
 import logging
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 import httpx
@@ -95,13 +95,32 @@ def _upsert_vulnerabilities(db: Session, entries: list[dict[str, Any]]) -> tuple
     return inserted, updated
 
 
-def fetch_and_store_kev() -> tuple[int, int]:
+def _delete_old_kev_records(db: Session) -> int:
+    """保持期間（KEV_RETENTION_DAYS）を超えた KEV レコードを削除する。
+
+    date_added が cutoff より古いレコードを一括削除して DB 容量を管理する。
+
+    Returns:
+        削除件数
+    """
+    cutoff = date.today() - timedelta(days=settings.KEV_RETENTION_DAYS)
+    deleted = (
+        db.query(Vulnerability)
+        .filter(Vulnerability.date_added < cutoff)
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    logger.info("KEV old records deleted: %d (date_added < %s)", deleted, cutoff)
+    return deleted
+
+
+def fetch_and_store_kev() -> tuple[int, int, int]:
     """CISA KEV フィードを取得し DB に保存するメインエントリポイント。
     APScheduler および /admin/crawl から呼び出される。
     実行結果（成功・失敗・件数・所要時間）は crawler_logs テーブルに記録する。
 
     Returns:
-        (inserted, updated) のタプル
+        (inserted, updated, deleted) のタプル
     """
     logger.info("=== CISA KEV crawler started ===")
     started_at = now_utc()
@@ -109,10 +128,17 @@ def fetch_and_store_kev() -> tuple[int, int]:
     try:
         entries = _fetch_cisa_kev()
         inserted, updated = _upsert_vulnerabilities(db, entries)
+
+        # 保持期間を超えた古いレコードを削除（DB 容量管理）。失敗してもクロール自体は成功扱いとする
+        deleted = 0
+        try:
+            deleted = _delete_old_kev_records(db)
+        except Exception as exc:
+            logger.error("Failed to delete old KEV records: %s", exc, exc_info=True)
+
         logger.info(
-            "=== CISA KEV crawler completed: inserted=%d, updated=%d ===",
-            inserted,
-            updated,
+            "=== CISA KEV crawler completed: inserted=%d, updated=%d, deleted=%d ===",
+            inserted, updated, deleted,
         )
         # 実行ログを記録
         write_crawler_log(
@@ -122,10 +148,11 @@ def fetch_and_store_kev() -> tuple[int, int]:
             finished_at=now_utc(),
             inserted=inserted,
             updated=updated,
+            deleted=deleted,
         )
         # 新規 CVE があれば Slack に通知
-        notify_new_vulnerabilities(inserted, updated)
-        return inserted, updated
+        notify_new_vulnerabilities(inserted, updated, deleted)
+        return inserted, updated, deleted
     except Exception as exc:
         logger.error("CISA KEV crawler failed: %s", exc, exc_info=True)
         write_crawler_log(

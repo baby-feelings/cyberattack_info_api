@@ -75,9 +75,9 @@ def notify_error(crawler_type: CrawlerType, error: str) -> None:
 # ── 後方互換ラッパー（既存テスト・呼び出し元との互換性を維持） ──────
 
 
-def notify_new_vulnerabilities(inserted: int, updated: int) -> None:
+def notify_new_vulnerabilities(inserted: int, updated: int, deleted: int = 0) -> None:
     """KEV 成功通知（後方互換）。"""
-    notify_success("KEV", inserted, updated)
+    notify_success("KEV", inserted, updated, deleted)
 
 
 def notify_osv_new_vulnerabilities(inserted: int, updated: int, deleted: int) -> None:
@@ -85,9 +85,9 @@ def notify_osv_new_vulnerabilities(inserted: int, updated: int, deleted: int) ->
     notify_success("OSV", inserted, updated, deleted)
 
 
-def notify_jvn_new_vulnerabilities(inserted: int, updated: int) -> None:
+def notify_jvn_new_vulnerabilities(inserted: int, updated: int, deleted: int = 0) -> None:
     """JVN 成功通知（後方互換）。"""
-    notify_success("JVN", inserted, updated)
+    notify_success("JVN", inserted, updated, deleted)
 
 
 def notify_crawl_error(error: str) -> None:
