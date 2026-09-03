@@ -50,6 +50,20 @@ class Settings(BaseSettings):
     # JST 8:00 = UTC 23:00（DEPSCAN の後段。Dependabot が新規検知に反応する時間を確保）
     DEPSOPS_CRON_HOUR_UTC: int = 23
 
+    # GitHub ログイン（DEPSCAN ダッシュボードのアクセス制御）設定
+    # OAuth App の Client ID / Secret（未設定時は /auth/github/* がエラーを返すのみで
+    # アプリ全体は起動する。GITHUB_TOKEN 同様のソフトフェイル方針）
+    GITHUB_OAUTH_CLIENT_ID: str = ""
+    GITHUB_OAUTH_CLIENT_SECRET: str = ""
+    # セッショントークン（JWT）の署名鍵。未設定のまま本番運用しないこと
+    SESSION_SECRET_KEY: str = ""
+    # OAuth コールバック後にリダイレクトするダッシュボードの URL
+    FRONTEND_URL: str = "https://cyberattackinfoapi.vercel.app"
+    # OAuth の redirect_uri 組み立てに使う、本 API 自身の公開 URL
+    # （GitHub OAuth App の Authorization callback URL と scheme まで一致させる必要があるため、
+    # リクエストヘッダーから動的に推測せず固定値を持つ）
+    API_BASE_URL_FOR_OAUTH: str = "https://cyberattack-info-api.onrender.com"
+
     model_config = SettingsConfigDict(
         # 環境に応じて .env.development または .env.production を使用
         env_file=".env",

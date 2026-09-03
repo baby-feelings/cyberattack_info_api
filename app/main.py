@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.auth.router import router as auth_router
 from app.core.auth import require_api_key
 from app.core.config import settings
 from app.core.database import Base, engine, get_db
@@ -150,10 +151,11 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
     allow_methods=["GET", "POST"],
-    allow_headers=["X-API-KEY"],
+    allow_headers=["X-API-KEY", "Authorization"],
 )
 
 # ルーター登録
+app.include_router(auth_router)
 app.include_router(kev_router)
 app.include_router(osv_router)
 app.include_router(jvn_router)

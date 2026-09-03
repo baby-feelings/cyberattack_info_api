@@ -86,3 +86,30 @@ class DependencyFinding(Base):
             f"<DependencyFinding {self.repo_full_name} "
             f"{self.package_name}@{self.installed_version} ({self.osv_id})>"
         )
+
+
+class UserScan(Base):
+    """GitHub ログイン経由でのオンデマンド DEPSCAN スキャンの実行状況。
+
+    baby-feelings 以外の任意の GitHub アカウントがダッシュボードにログインした際、
+    そのアカウント所有リポジトリを初回スキャンする処理の進捗をフロントエンドが
+    ポーリングできるようにするための状態テーブル（1ユーザー1行）。
+    """
+
+    __tablename__ = "depscan_user_scans"
+
+    # ログインした GitHub ユーザー名（login）
+    username: Mapped[str] = mapped_column(String(255), primary_key=True)
+
+    # "running" / "done" / "error"
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+
+    # スキャン対象リポジトリ数（完了後にセット）
+    repos_scanned: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    def __repr__(self) -> str:
+        return f"<UserScan {self.username} status={self.status}>"

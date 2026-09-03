@@ -14,6 +14,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
 os.environ.setdefault("API_KEY", "test-api-key-for-pytest")
 os.environ.setdefault("ENVIRONMENT", "development")
 os.environ.setdefault("GITHUB_USERNAME", "test-github-user")
+os.environ.setdefault("SESSION_SECRET_KEY", "test-session-secret-key-for-pytest")
 
 from app.core.database import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402
@@ -53,6 +54,7 @@ def clean_db():
         conn.execute(text("DELETE FROM osv_vulnerabilities"))
         conn.execute(text("DELETE FROM vulnerabilities"))
         conn.execute(text("DELETE FROM dependency_findings"))
+        conn.execute(text("DELETE FROM depscan_user_scans"))
         conn.commit()
 
 
