@@ -54,6 +54,28 @@ class TestPackageLockJson:
     def test_invalid_json_returns_empty(self):
         assert parse_package_lock_json("not json") == []
 
+    def test_skips_packages_without_version(self):
+        content = """
+        {
+          "packages": {
+            "node_modules/no-version": {"name": "no-version"}
+          }
+        }
+        """
+        assert parse_package_lock_json(content) == []
+
+    def test_lockfile_v1_dependencies_fallback(self):
+        content = """
+        {
+          "dependencies": {
+            "express": {"version": "4.18.2"},
+            "no-version": {}
+          }
+        }
+        """
+        refs = parse_package_lock_json(content)
+        assert refs == [DependencyRef("npm", "express", "4.18.2")]
+
 
 class TestPubspecLock:
     def test_parses_packages(self):
@@ -72,6 +94,16 @@ packages:
 
     def test_invalid_yaml_returns_empty(self):
         assert parse_pubspec_lock("packages: [unclosed") == []
+
+    def test_non_mapping_yaml_returns_empty(self):
+        assert parse_pubspec_lock("- just\n- a\n- list\n") == []
+
+    def test_missing_packages_key_returns_empty(self):
+        assert parse_pubspec_lock("name: my_app\n") == []
+
+    def test_skips_non_mapping_package_entry(self):
+        content = "packages:\n  dio: \"not a mapping\"\n"
+        assert parse_pubspec_lock(content) == []
 
 
 class TestGoSum:
@@ -142,6 +174,36 @@ class TestPackagesLockJson:
         refs = parse_packages_lock_json(content)
         assert refs == [DependencyRef("NuGet", "Newtonsoft.Json", "13.0.1")]
 
+    def test_invalid_json_returns_empty(self):
+        assert parse_packages_lock_json("not json") == []
+
+    def test_missing_dependencies_key_returns_empty(self):
+        assert parse_packages_lock_json('{"version": 1}') == []
+
+    def test_skips_non_mapping_framework_deps(self):
+        content = '{"dependencies": {"net6.0": "not a mapping"}}'
+        assert parse_packages_lock_json(content) == []
+
+    def test_skips_non_mapping_package_info(self):
+        content = '{"dependencies": {"net6.0": {"SomePkg": "not a mapping"}}}'
+        assert parse_packages_lock_json(content) == []
+
+    def test_skips_entries_without_resolved_version(self):
+        content = '{"dependencies": {"net6.0": {"SomePkg": {"type": "Direct"}}}}'
+        assert parse_packages_lock_json(content) == []
+
+    def test_dedupes_same_package_across_frameworks(self):
+        content = """
+        {
+          "dependencies": {
+            "net6.0": {"Newtonsoft.Json": {"resolved": "13.0.1"}},
+            "net7.0": {"Newtonsoft.Json": {"resolved": "13.0.1"}}
+          }
+        }
+        """
+        refs = parse_packages_lock_json(content)
+        assert refs == [DependencyRef("NuGet", "Newtonsoft.Json", "13.0.1")]
+
 
 class TestCargoLock:
     def test_parses_packages(self):
@@ -169,6 +231,9 @@ class TestComposerLock:
         refs = parse_composer_lock(content)
         assert DependencyRef("Packagist", "laravel/framework", "10.0.0") in refs
         assert DependencyRef("Packagist", "phpunit/phpunit", "9.5.0") in refs
+
+    def test_invalid_json_returns_empty(self):
+        assert parse_composer_lock("not json") == []
 
 
 class TestMixLock:
