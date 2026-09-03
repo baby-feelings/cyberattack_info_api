@@ -10,7 +10,7 @@ python-dotenv>=1.2.3
 httpx>=0.28.1
 apscheduler>=3.10.4
 defusedxml>=0.7.1
-PyJWT>=2.10.1
+PyJWT>=2.13.0
 PyYAML>=6.0.3
 tomli>=2.0.1; python_version < "3.11"
 
