@@ -23,7 +23,7 @@ from app.auth.github_oauth import (
 from app.auth.session import create_session_token, decode_session_token
 from app.core.config import settings
 from app.core.database import get_db
-from app.depscan.crawler import get_user_scan_status, run_depscan_for_user, should_rescan_for_user
+from app.depscan.user_scan import get_user_scan_status, run_depscan_for_user, should_rescan_for_user
 
 logger = logging.getLogger(__name__)
 

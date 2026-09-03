@@ -24,9 +24,6 @@ from app.depscan.crawler import (  # noqa: E402
     _resolve_stale_findings,
     _upsert_findings,
     fetch_and_scan_dependencies,
-    get_user_scan_status,
-    run_depscan_for_user,
-    should_rescan_for_user,
 )
 from app.depscan.github_client import (  # noqa: E402
     add_issue_comment,
@@ -37,6 +34,11 @@ from app.depscan.github_client import (  # noqa: E402
     list_target_repos,
 )
 from app.depscan.models import DependencyFinding, UserScan  # noqa: E402
+from app.depscan.user_scan import (  # noqa: E402
+    get_user_scan_status,
+    run_depscan_for_user,
+    should_rescan_for_user,
+)
 
 TEST_API_KEY = "test-api-key-for-pytest"
 HEADERS = {"X-API-KEY": TEST_API_KEY}
@@ -734,24 +736,24 @@ class TestNotifyDependencyFindings:
 
 
 # ──────────────────────────────────────────────────────────────
-# app.depscan.crawler.run_depscan_for_user / get_user_scan_status
+# app.depscan.user_scan.run_depscan_for_user / get_user_scan_status
 # ──────────────────────────────────────────────────────────────
 
 
 class TestRunDepscanForUser:
     def test_success_path_records_done_status(self, db_session):
         with patch(
-            "app.depscan.crawler._collect_dependencies",
+            "app.depscan.user_scan._collect_dependencies",
             return_value=({("PyPI", "pkg", "1.0.0"): [("octocat/repo", "requirements.txt")]}, 1),
         ), patch(
-            "app.depscan.crawler._build_findings",
+            "app.depscan.user_scan._build_findings",
             return_value=[{
                 "repo_full_name": "octocat/repo", "ecosystem": "PyPI", "package_name": "pkg",
                 "installed_version": "1.0.0", "osv_id": "GHSA-001", "severity": "HIGH",
                 "cvss_score": 7.5, "summary": "vuln", "fixed_versions": [],
                 "manifest_path": "requirements.txt", "detected_at": _NOW,
             }],
-        ), patch("app.depscan.crawler.SessionLocal", return_value=db_session):
+        ), patch("app.depscan.user_scan.SessionLocal", return_value=db_session):
             run_depscan_for_user("octocat", "gho_token")
 
         scan = db_session.query(UserScan).filter_by(username="octocat").first()
@@ -768,10 +770,10 @@ class TestRunDepscanForUser:
         _make_finding(db_session, repo_full_name="baby-feelings/baby_grow", osv_id="GHSA-untouched")
 
         with patch(
-            "app.depscan.crawler._collect_dependencies", return_value=({}, 0),
+            "app.depscan.user_scan._collect_dependencies", return_value=({}, 0),
         ), patch(
-            "app.depscan.crawler._build_findings", return_value=[],
-        ), patch("app.depscan.crawler.SessionLocal", return_value=db_session):
+            "app.depscan.user_scan._build_findings", return_value=[],
+        ), patch("app.depscan.user_scan.SessionLocal", return_value=db_session):
             run_depscan_for_user("octocat", "gho_token")
 
         untouched = db_session.query(DependencyFinding).filter_by(osv_id="GHSA-untouched").first()
@@ -779,9 +781,9 @@ class TestRunDepscanForUser:
 
     def test_failure_records_error_status(self, db_session):
         with patch(
-            "app.depscan.crawler._collect_dependencies",
+            "app.depscan.user_scan._collect_dependencies",
             side_effect=RuntimeError("GitHub API down"),
-        ), patch("app.depscan.crawler.SessionLocal", return_value=db_session):
+        ), patch("app.depscan.user_scan.SessionLocal", return_value=db_session):
             run_depscan_for_user("octocat", "gho_token")  # 例外を送出しないことを確認
 
         scan = db_session.query(UserScan).filter_by(username="octocat").first()
@@ -790,10 +792,10 @@ class TestRunDepscanForUser:
 
     def test_second_run_updates_existing_status_row(self, db_session):
         with patch(
-            "app.depscan.crawler._collect_dependencies", return_value=({}, 0),
+            "app.depscan.user_scan._collect_dependencies", return_value=({}, 0),
         ), patch(
-            "app.depscan.crawler._build_findings", return_value=[],
-        ), patch("app.depscan.crawler.SessionLocal", return_value=db_session):
+            "app.depscan.user_scan._build_findings", return_value=[],
+        ), patch("app.depscan.user_scan.SessionLocal", return_value=db_session):
             run_depscan_for_user("octocat", "gho_token")
             run_depscan_for_user("octocat", "gho_token")
 
