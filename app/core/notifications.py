@@ -72,49 +72,6 @@ def notify_error(crawler_type: CrawlerType, error: str) -> None:
     _send_slack(f":warning: *{label}クローラーエラー*\n```{_sanitize_error(error)}```")
 
 
-# ── 後方互換ラッパー（既存テスト・呼び出し元との互換性を維持） ──────
-
-
-def notify_new_vulnerabilities(inserted: int, updated: int, deleted: int = 0) -> None:
-    """KEV 成功通知（後方互換）。"""
-    notify_success("KEV", inserted, updated, deleted)
-
-
-def notify_osv_new_vulnerabilities(inserted: int, updated: int, deleted: int) -> None:
-    """OSV 成功通知（後方互換）。"""
-    notify_success("OSV", inserted, updated, deleted)
-
-
-def notify_jvn_new_vulnerabilities(inserted: int, updated: int, deleted: int = 0) -> None:
-    """JVN 成功通知（後方互換）。"""
-    notify_success("JVN", inserted, updated, deleted)
-
-
-def notify_crawl_error(error: str) -> None:
-    """KEV エラー通知（後方互換）。"""
-    notify_error("KEV", error)
-
-
-def notify_osv_crawl_error(error: str) -> None:
-    """OSV エラー通知（後方互換）。"""
-    notify_error("OSV", error)
-
-
-def notify_jvn_crawl_error(error: str) -> None:
-    """JVN エラー通知（後方互換）。"""
-    notify_error("JVN", error)
-
-
-def notify_depscan_crawl_error(error: str) -> None:
-    """DEPSCAN エラー通知。"""
-    notify_error("DEPSCAN", error)
-
-
-def notify_depsops_crawl_error(error: str) -> None:
-    """DEPSOPS エラー通知。"""
-    notify_error("DEPSOPS", error)
-
-
 # ── DEPSCAN 専用通知 ─────────────────────────────────────────────
 
 

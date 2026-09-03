@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.core.notifications import notify_crawl_error, notify_new_vulnerabilities
+from app.core.notifications import notify_error, notify_success
 from app.crawler_logs.writer import now_utc, write_crawler_log
 from app.kev.models import Vulnerability
 
@@ -151,7 +151,7 @@ def fetch_and_store_kev() -> tuple[int, int, int]:
             deleted=deleted,
         )
         # 新規 CVE があれば Slack に通知
-        notify_new_vulnerabilities(inserted, updated, deleted)
+        notify_success("KEV", inserted, updated, deleted)
         return inserted, updated, deleted
     except Exception as exc:
         logger.error("CISA KEV crawler failed: %s", exc, exc_info=True)
@@ -162,7 +162,7 @@ def fetch_and_store_kev() -> tuple[int, int, int]:
             finished_at=now_utc(),
             error_message=str(exc),
         )
-        notify_crawl_error(str(exc))
+        notify_error("KEV", str(exc))
         raise
     finally:
         db.close()

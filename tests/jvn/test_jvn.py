@@ -144,7 +144,7 @@ def test_get_jvn_stats_severity_breakdown(client, db_session):
 
 def test_strip_html():
     """HTML タグが除去されること。"""
-    from app.jvn.crawler import _strip_html
+    from app.jvn.parser import _strip_html
 
     assert _strip_html("<p>テスト</p>") == "テスト"
     assert _strip_html("<a href='#'>リンク</a>テキスト") == "リンクテキスト"
@@ -153,7 +153,7 @@ def test_strip_html():
 
 def test_parse_datetime_valid():
     """正常な ISO 8601 日付文字列がパースされること。"""
-    from app.jvn.crawler import _parse_datetime
+    from app.jvn.parser import _parse_datetime
 
     dt = _parse_datetime("2026-06-18T00:00:00+09:00")
     assert dt is not None
@@ -164,7 +164,7 @@ def test_parse_datetime_valid():
 
 def test_parse_datetime_none():
     """None 入力は None を返すこと。"""
-    from app.jvn.crawler import _parse_datetime
+    from app.jvn.parser import _parse_datetime
 
     assert _parse_datetime(None) is None
     assert _parse_datetime("") is None
@@ -172,7 +172,7 @@ def test_parse_datetime_none():
 
 def test_parse_datetime_invalid():
     """不正な文字列は None を返すこと。"""
-    from app.jvn.crawler import _parse_datetime
+    from app.jvn.parser import _parse_datetime
 
     assert _parse_datetime("not-a-date") is None
 
@@ -267,7 +267,7 @@ def test_fetch_and_store_jvn_success(monkeypatch):
     monkeypatch.setattr("app.jvn.crawler._fetch_all_entries", lambda cutoff_date: [])
     monkeypatch.setattr("app.jvn.crawler.write_crawler_log", lambda *a, **kw: None)
     monkeypatch.setattr(
-        "app.jvn.crawler.notify_jvn_new_vulnerabilities", lambda **kw: None
+        "app.jvn.crawler.notify_success", lambda *a, **kw: None
     )
 
     from app.jvn.crawler import fetch_and_store_jvn
@@ -285,7 +285,7 @@ def test_fetch_and_store_jvn_error(monkeypatch):
         lambda cutoff_date: (_ for _ in ()).throw(RuntimeError("API down")),  # type: ignore[arg-type]
     )
     monkeypatch.setattr("app.jvn.crawler.write_crawler_log", lambda *a, **kw: None)
-    monkeypatch.setattr("app.jvn.crawler.notify_jvn_crawl_error", lambda *a, **kw: None)
+    monkeypatch.setattr("app.jvn.crawler.notify_error", lambda *a, **kw: None)
 
     from app.jvn.crawler import fetch_and_store_jvn
 
@@ -332,7 +332,7 @@ class TestDeleteOldJvnRecords:
         monkeypatch.setattr("app.jvn.crawler._fetch_all_entries", lambda cutoff_date: [])
         monkeypatch.setattr("app.jvn.crawler.write_crawler_log", lambda *a, **kw: None)
         monkeypatch.setattr(
-            "app.jvn.crawler.notify_jvn_new_vulnerabilities", lambda **kw: None
+            "app.jvn.crawler.notify_success", lambda *a, **kw: None
         )
         monkeypatch.setattr(
             "app.jvn.crawler._delete_old_jvn_records",
@@ -349,7 +349,7 @@ def test_parse_item_skips_non_jvndb(monkeypatch):
     """JVNDB- で始まらない sec:identifier はスキップされること。"""
     import defusedxml.ElementTree as ET
 
-    from app.jvn.crawler import _parse_item
+    from app.jvn.parser import parse_item as _parse_item
 
     # 実際の MyJVN API と同じ構造: sec:identifier が JVN# 形式
     xml_str = """<item xmlns:dc="http://purl.org/dc/elements/1.1/"
@@ -370,7 +370,7 @@ def test_parse_item_valid():
     """正常な JVNDB アイテムが実際の MyJVN API 構造でパースされること。"""
     import defusedxml.ElementTree as ET
 
-    from app.jvn.crawler import _parse_item
+    from app.jvn.parser import parse_item as _parse_item
 
     # 実際の MyJVN API レスポンスと同じ要素構造を使用
     xml_str = """<item xmlns:dc="http://purl.org/dc/elements/1.1/"
@@ -458,7 +458,7 @@ def test_parse_item_missing_title_returns_none():
     """title が空の場合は None を返すこと。"""
     import defusedxml.ElementTree as ET
 
-    from app.jvn.crawler import _parse_item
+    from app.jvn.parser import parse_item as _parse_item
 
     xml_str = """<item xmlns:dc="http://purl.org/dc/elements/1.1/"
                        xmlns:dcterms="http://purl.org/dc/terms/"
@@ -476,7 +476,7 @@ def test_parse_item_missing_dates_returns_none():
     """日付が欠損している場合は None を返すこと。"""
     import defusedxml.ElementTree as ET
 
-    from app.jvn.crawler import _parse_item
+    from app.jvn.parser import parse_item as _parse_item
 
     xml_str = """<item xmlns:dc="http://purl.org/dc/elements/1.1/"
                        xmlns:dcterms="http://purl.org/dc/terms/"
@@ -493,7 +493,7 @@ def test_parse_item_invalid_cvss_score():
     """CVSS score が数値でない場合はスコアが None になること。"""
     import defusedxml.ElementTree as ET
 
-    from app.jvn.crawler import _parse_item
+    from app.jvn.parser import parse_item as _parse_item
 
     xml_str = """<item xmlns:dc="http://purl.org/dc/elements/1.1/"
                        xmlns:dcterms="http://purl.org/dc/terms/"

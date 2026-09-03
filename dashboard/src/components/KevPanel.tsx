@@ -3,7 +3,7 @@ import {
   Shield, ExternalLink, ChevronDown, ChevronUp,
   RefreshCw, Search, X, BarChart2, Trophy,
 } from 'lucide-react'
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as ReTooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip as ReTooltip, XAxis, YAxis } from 'recharts'
 import {
   fetchVulnerabilities, fetchStats, fetchRecent,
   type VulnerabilityOut, type VulnerabilityListResponse, type StatsResponse,
@@ -14,6 +14,12 @@ import {
 } from './shared/VulnPanelParts'
 
 const PER_PAGE = 30
+
+// ベンダー別棒グラフの色（順番で割り当て。OSV の EcosystemBarChart と同じパレット）
+const VENDOR_CHART_COLORS = [
+  '#7c3aed', '#0ea5e9', '#22d3ee', '#f59e0b',
+  '#f43f5e', '#8b5cf6', '#f97316', '#6366f1',
+]
 
 function KevRow({ item }: { item: VulnerabilityOut }) {
   const [open, setOpen] = useState(false)
@@ -75,7 +81,7 @@ function KevRow({ item }: { item: VulnerabilityOut }) {
   )
 }
 
-// ベンダー別棒グラフ（上位8件。OSV の EcosystemBarChart と同じ構成）
+// ベンダー別棒グラフ（上位8件。OSV の EcosystemBarChart と同じくベンダーごとに色分け）
 function VendorBarChart({ stats, loading }: { stats: StatsResponse | null; loading: boolean }) {
   const data = (stats?.top_vendors ?? []).slice(0, 8)
 
@@ -110,7 +116,11 @@ function VendorBarChart({ stats, loading }: { stats: StatsResponse | null; loadi
             contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }}
             formatter={(value) => [String(value) + ' 件', '件数']}
           />
-          <Bar dataKey="count" fill="#7c3aed" radius={[3, 3, 0, 0]} />
+          <Bar dataKey="count" radius={[3, 3, 0, 0]}>
+            {data.map((_entry, index) => (
+              <Cell key={`cell-${index}`} fill={VENDOR_CHART_COLORS[index % VENDOR_CHART_COLORS.length]} />
+            ))}
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
     </ChartCard>

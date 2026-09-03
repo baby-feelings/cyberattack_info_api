@@ -1,9 +1,9 @@
 """MyJVN API クローラー。
 JVN DB (jvndb.jvn.jp) から脆弱性情報を取得し、jvn_vulnerabilities テーブルに Upsert する。
 MyJVN REST API の getVulnOverviewList メソッドを使用し、直近 JVN_DAYS 日分を取得する。
+XML の <item> 要素からのフィールド抽出（パース処理）は app.jvn.parser が担当する。
 """
 import logging
-import re
 import time
 import xml.etree.ElementTree as stdlib_ET  # Element 型のみ使用（defusedxml は型を非公開）
 from datetime import datetime, timedelta, timezone
@@ -15,9 +15,11 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.core.notifications import notify_jvn_crawl_error, notify_jvn_new_vulnerabilities
+from app.core.notifications import notify_error, notify_success
 from app.crawler_logs.writer import now_utc, write_crawler_log
 from app.jvn.models import JvnVulnerability
+from app.jvn.parser import NS as _NS
+from app.jvn.parser import parse_item as _parse_item
 
 logger = logging.getLogger(__name__)
 
@@ -29,31 +31,6 @@ _MAX_COUNT_ITEM = 50
 
 # 定期コミット間隔（Neon 無料プランの長時間トランザクションタイムアウト対策）
 _COMMIT_EVERY = 50
-
-# XML 名前空間マッピング
-_NS = {
-    "rss": "http://purl.org/rss/1.0/",
-    "dc": "http://purl.org/dc/elements/1.1/",
-    "dcterms": "http://purl.org/dc/terms/",
-    "sec": "http://jvn.jp/rss/mod_sec/3.0/",
-    "status": "http://jvndb.jvn.jp/myjvn/Status",
-}
-
-
-def _strip_html(text: str) -> str:
-    """HTML タグを除去してプレーンテキストを返す。"""
-    return re.sub(r"<[^>]+>", "", text).strip()
-
-
-def _parse_datetime(value: str | None) -> datetime | None:
-    """ISO 8601 日付文字列を timezone-aware datetime に変換する。"""
-    if not value:
-        return None
-    try:
-        # +09:00 等のタイムゾーン付き文字列を処理
-        return datetime.fromisoformat(value)
-    except (ValueError, TypeError):
-        return None
 
 
 def _fetch_page(cutoff_date: str, start_item: int) -> stdlib_ET.Element | None:
@@ -81,125 +58,6 @@ def _fetch_page(cutoff_date: str, start_item: int) -> stdlib_ET.Element | None:
     except (httpx.HTTPError, stdlib_ET.ParseError) as exc:
         logger.error("MyJVN API fetch failed (start=%d): %s", start_item, exc)
         return None
-
-
-def _parse_core_fields(item: stdlib_ET.Element) -> dict | None:
-    """<item> 要素から識別子・タイトル・リンク・概要・日付を抽出する。
-
-    Returns:
-        dict 形式のデータ、必須フィールド欠損時は None
-    """
-    # JVNDB ID（例: JVNDB-2026-020171）— MyJVN API は sec:identifier を使用
-    identifier = item.findtext("sec:identifier", namespaces=_NS) or ""
-    if not identifier.startswith("JVNDB-"):
-        # JVN ID（JVN#xxxxxxxx 形式）は対象外
-        return None
-
-    # RSS 1.0 の title/link は既定名前空間（rss:）またはプレフィックスなしの両方に対応
-    title = (
-        item.findtext("rss:title", namespaces=_NS)
-        or item.findtext("title", namespaces=_NS)
-        or ""
-    )
-    link = (
-        item.findtext("rss:link", namespaces=_NS)
-        or item.findtext("link", namespaces=_NS)
-        or ""
-    )
-    description = _strip_html(
-        item.findtext("rss:description", namespaces=_NS)
-        or item.findtext("description", namespaces=_NS)
-        or ""
-    )
-    date_published = _parse_datetime(item.findtext("dc:date", namespaces=_NS))
-    date_last_modified = _parse_datetime(item.findtext("dcterms:modified", namespaces=_NS))
-
-    if not identifier or not title or not link:
-        return None
-    if date_published is None or date_last_modified is None:
-        return None
-
-    return {
-        "jvndb_id": identifier,
-        "title": title,
-        "overview": description,
-        "jvn_url": link,
-        "date_published": date_published,
-        "date_last_modified": date_last_modified,
-    }
-
-
-# CVSS の重要度表記を正規化する（高/中/低 → High/Medium/Low）
-_SEVERITY_MAP = {"高": "High", "中": "Medium", "低": "Low",
-                 "High": "High", "Medium": "Medium", "Low": "Low"}
-
-
-def _parse_cvss(item: stdlib_ET.Element) -> tuple[float | None, str | None, str | None]:
-    """<item> 要素から CVSSv2 情報（スコア・ベクター・重要度）を抽出する。"""
-    cvss2 = item.find("sec:cvss", namespaces=_NS)
-    if cvss2 is None:
-        return None, None, None
-
-    cvss_score: float | None = None
-    score_str = cvss2.get("score")
-    if score_str:
-        try:
-            cvss_score = float(score_str)
-        except ValueError:
-            pass
-
-    cvss_vector = cvss2.get("vector") or None
-    severity = _SEVERITY_MAP.get(cvss2.get("severity") or "")
-    return cvss_score, cvss_vector, severity
-
-
-def _parse_cve_ids(item: stdlib_ET.Element) -> list[str]:
-    """<item> 要素から関連 CVE ID を収集する（sec:references の source="CVE" 要素から）。"""
-    cve_ids: list[str] = []
-    for ref in item.findall("sec:references", namespaces=_NS):
-        if ref.get("source") == "CVE":
-            ref_id = ref.get("id", "")
-            if ref_id.startswith("CVE-"):
-                cve_ids.append(ref_id)
-    return cve_ids
-
-
-def _parse_affected_products(item: stdlib_ET.Element) -> list[dict]:
-    """<item> 要素から影響製品一覧を抽出する。
-
-    sec:cpe 要素の vendor/product 属性と CPE テキストから構築する。
-    """
-    affected_products: list[dict] = []
-    for cpe_elem in item.findall("sec:cpe", namespaces=_NS):
-        vendor = cpe_elem.get("vendor", "")
-        product_name = cpe_elem.get("product", "")
-        cpe = cpe_elem.text or ""
-        if vendor or product_name:
-            affected_products.append({"vendor": vendor, "product": product_name, "cpe": cpe})
-    return affected_products
-
-
-def _parse_item(item: stdlib_ET.Element) -> dict | None:
-    """RSS <item> 要素から JVN 脆弱性データを抽出する。
-
-    Returns:
-        dict 形式のデータ、必須フィールド欠損時は None
-    """
-    core = _parse_core_fields(item)
-    if core is None:
-        return None
-
-    cvss_score, cvss_vector, severity = _parse_cvss(item)
-
-    return {
-        **core,
-        "cve_ids": _parse_cve_ids(item),
-        "severity": severity,
-        "cvss_score": cvss_score,
-        "cvss_vector": cvss_vector,
-        "affected_products": _parse_affected_products(item),
-        "references": [],  # overview リストには詳細参考リンクが含まれないため空
-    }
 
 
 def _fetch_all_entries(cutoff_date: str) -> list[dict]:
@@ -385,7 +243,7 @@ def fetch_and_store_jvn(days: int | None = None) -> tuple[int, int, int]:
             updated=updated,
             deleted=deleted,
         )
-        notify_jvn_new_vulnerabilities(inserted=inserted, updated=updated, deleted=deleted)
+        notify_success("JVN", inserted, updated, deleted)
         return inserted, updated, deleted
 
     except Exception as exc:
@@ -398,7 +256,7 @@ def fetch_and_store_jvn(days: int | None = None) -> tuple[int, int, int]:
             finished_at=finished_at,
             error_message=str(exc),
         )
-        notify_jvn_crawl_error(str(exc))
+        notify_error("JVN", str(exc))
         raise
     finally:
         db.close()

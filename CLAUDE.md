@@ -186,7 +186,8 @@ if not hmac.compare_digest(api_key, settings.API_KEY):
 
 ### 通知関数の共通化（notifications.py）
 `notify_success(crawler_type, inserted, updated, deleted)` と `notify_error(crawler_type, error)` の
-2 つの汎用関数に統合。旧関数（`notify_new_vulnerabilities` 等）は後方互換ラッパーとして維持。
+2 つの汎用関数に統合。各クローラー（KEV/OSV/JVN/DEPSCAN/DEPSOPS）はこれらを直接呼び出す
+（`notify_new_vulnerabilities` 等のクローラー別ラッパーは廃止済み、DRY違反だったため削除）。
 エラーメッセージは `_sanitize_error()` で接続文字列マスク + 200 文字制限。
 
 ### DB ユーティリティの共通化（db_utils.py）
