@@ -8,7 +8,7 @@ import { VendorRanking } from './components/VendorRanking'
 import { RecentCVEs } from './components/RecentCVEs'
 import { OsvPanel } from './components/OsvPanel'
 import { JvnPanel } from './components/JvnPanel'
-import { DepscanPanel } from './components/DepscanPanel'
+import { DepscanAuthGate } from './components/DepscanAuthGate'
 
 // セクション見出しコンポーネント
 function SectionHeader({
@@ -49,7 +49,10 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [refreshedAt, setRefreshedAt] = useState<Date | null>(null)
-  const [activeTab, setActiveTab] = useState<TabKey>('kev')
+  // GitHub OAuth コールバックからの復帰（?depscan_token=...）時は DEPSCAN タブを自動選択する
+  const [activeTab, setActiveTab] = useState<TabKey>(() => (
+    new URLSearchParams(window.location.search).has('depscan_token') ? 'depscan' : 'kev'
+  ))
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -207,8 +210,8 @@ export default function App() {
               borderColor="border-rose-800/40"
             />
 
-            {/* DEPSCAN パネル（サマリーカード・チャート・一覧を内包） */}
-            <DepscanPanel />
+            {/* GitHub ログイン後、本人所有リポジトリの DEPSCAN パネルを表示 */}
+            <DepscanAuthGate />
           </section>
         )}
 

@@ -3,10 +3,13 @@
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://cyberattack-info-api.onrender.com'
 const API_KEY = import.meta.env.VITE_API_KEY || ''
 
-async function apiFetch<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { 'X-API-KEY': API_KEY },
-  })
+// authToken 指定時は X-API-KEY の代わりに GitHub ログインのセッショントークンを送る
+// （DEPSCAN のログインユーザー向けエンドポイント用。サーバー側で本人所有リポジトリに強制的に絞り込まれる）
+async function apiFetch<T>(path: string, authToken?: string): Promise<T> {
+  const headers: Record<string, string> = authToken
+    ? { Authorization: `Bearer ${authToken}` }
+    : { 'X-API-KEY': API_KEY }
+  const res = await fetch(`${BASE_URL}${path}`, { headers })
   if (!res.ok) throw new Error(`API error ${res.status}: ${path}`)
   return res.json() as Promise<T>
 }
@@ -236,6 +239,7 @@ export async function fetchDepscanList(params: {
   owner?: string | null
   severity?: string | null
   resolved?: boolean | null
+  authToken?: string
 }): Promise<DepscanListResponse> {
   const p = new URLSearchParams()
   p.set('page', String(params.page ?? 1))
@@ -245,11 +249,11 @@ export async function fetchDepscanList(params: {
   if (params.resolved !== null && params.resolved !== undefined) {
     p.set('resolved', String(params.resolved))
   }
-  return apiFetch<DepscanListResponse>(`/api/depscan?${p}`)
+  return apiFetch<DepscanListResponse>(`/api/depscan?${p}`, params.authToken)
 }
 
-export async function fetchDepscanStats(): Promise<DepscanStatsResponse> {
-  return apiFetch<DepscanStatsResponse>('/api/depscan/stats')
+export async function fetchDepscanStats(authToken?: string): Promise<DepscanStatsResponse> {
+  return apiFetch<DepscanStatsResponse>('/api/depscan/stats', authToken)
 }
 
 // サーバー側は「パッケージ×CVE」単位で1件として返すため、パッケージ単位に
@@ -261,6 +265,7 @@ export async function fetchAllDepscanFindings(params: {
   owner?: string | null
   severity?: string | null
   resolved?: boolean | null
+  authToken?: string
 }): Promise<DependencyFindingOut[]> {
   const first = await fetchDepscanList({ ...params, page: 1, perPage: MAX_PER_PAGE })
   const all = [...first.data]
@@ -270,4 +275,36 @@ export async function fetchAllDepscanFindings(params: {
     all.push(...next.data)
   }
   return all
+}
+
+// ── DEPSCAN ダッシュボード用 GitHub ログイン（Issue #107） ────────────
+
+export interface ScanStatusResponse {
+  username: string
+  status: 'not_started' | 'running' | 'done' | 'error'
+  repos_scanned?: number
+  started_at?: string
+  finished_at?: string | null
+  error_message?: string | null
+}
+
+// GitHub OAuth 認可画面へのリダイレクト先 URL（そのまま <a href> に指定する）
+export function githubLoginUrl(): string {
+  return `${BASE_URL}/auth/github/login`
+}
+
+// セッショントークンが無効・期限切れの場合（401）を、それ以外のエラー
+// （ネットワーク瞬断・サーバー一時エラー等）と区別するための専用エラー型。
+// 呼び出し側は Unauthorized のみをログアウトのトリガーとして扱うべきで、
+// それ以外の一時的なエラーでユーザーを毎回ログアウトさせてはならない。
+export class UnauthorizedError extends Error {}
+
+// ログイン中ユーザーのオンデマンドスキャン進捗を取得する
+export async function fetchScanStatus(authToken: string): Promise<ScanStatusResponse> {
+  const res = await fetch(`${BASE_URL}/auth/scan-status`, {
+    headers: { Authorization: `Bearer ${authToken}` },
+  })
+  if (res.status === 401) throw new UnauthorizedError('Session token is invalid or expired')
+  if (!res.ok) throw new Error(`Scan status error ${res.status}`)
+  return res.json()
 }
