@@ -13,8 +13,8 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
-      // テストが一切importしないファイルもレポートに含める（未着手箇所を可視化するため）
-      all: true,
+      // include を指定すると、テストが一切 import しないファイルもレポートに
+      // 含まれる（未着手箇所を可視化するため）
       include: ['src/**/*.{ts,tsx}'],
       exclude: ['src/main.tsx', 'src/vite-env.d.ts', 'src/test/**', '**/*.test.{ts,tsx}'],
     },
