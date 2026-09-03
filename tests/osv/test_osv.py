@@ -755,14 +755,14 @@ class TestFetchAndStoreOsvAdditional:
                 raise RuntimeError("outer error")
 
         with patch("app.osv.crawler.POPULAR_PACKAGES", BadPackages()):
-            with patch("app.osv.crawler.notify_osv_crawl_error") as mock_notify:
+            with patch("app.osv.crawler.notify_error") as mock_notify:
                 with patch("app.osv.crawler.SessionLocal") as mock_sl:
                     mock_sl.return_value = MagicMock()
                     with _pytest.raises(RuntimeError, match="outer error"):
                         fetch_and_store_osv()
 
         mock_notify.assert_called_once()
-        assert "outer error" in mock_notify.call_args[0][0]
+        assert "outer error" in mock_notify.call_args[0][1]
 
 
 # ──────────────────────────────────────────────────────────────

@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.core.notifications import notify_osv_crawl_error, notify_osv_new_vulnerabilities
+from app.core.notifications import notify_error, notify_success
 from app.core.osv_client import (
     BATCH_SIZE,
     extract_fixed_versions,
@@ -272,7 +272,7 @@ def fetch_and_store_osv(days: int | None = None) -> tuple[int, int, int]:
             deleted=total_deleted,
             error_message=str(exc),
         )
-        notify_osv_crawl_error(str(exc))
+        notify_error("OSV", str(exc))
         raise
     finally:
         db.close()
@@ -292,5 +292,5 @@ def fetch_and_store_osv(days: int | None = None) -> tuple[int, int, int]:
         deleted=total_deleted,
     )
     # 新規・更新があった場合のみ Slack 通知
-    notify_osv_new_vulnerabilities(total_inserted, total_updated, total_deleted)
+    notify_success("OSV", total_inserted, total_updated, total_deleted)
     return total_inserted, total_updated, total_deleted

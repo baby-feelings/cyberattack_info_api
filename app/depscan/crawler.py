@@ -17,7 +17,7 @@ from app.core.finding_format import format_package_lines
 from app.core.notifications import (
     DASHBOARD_URL,
     notify_dependency_findings,
-    notify_depscan_crawl_error,
+    notify_error,
 )
 from app.core.osv_client import fetch_vuln_by_id, parse_severity, query_versions_batch
 from app.crawler_logs.writer import now_utc, write_crawler_log
@@ -310,7 +310,7 @@ def fetch_and_scan_dependencies() -> tuple[int, int, int]:
             deleted=resolved_count,
             error_message=str(exc),
         )
-        notify_depscan_crawl_error(str(exc))
+        notify_error("DEPSCAN", str(exc))
         raise
     finally:
         db.close()

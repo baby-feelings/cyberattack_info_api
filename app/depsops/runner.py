@@ -14,7 +14,7 @@ from typing import Any
 import httpx
 
 from app.core.config import settings
-from app.core.notifications import notify_dependabot_ops, notify_depsops_crawl_error
+from app.core.notifications import notify_dependabot_ops, notify_error
 from app.crawler_logs.writer import now_utc, write_crawler_log
 from app.depscan.github_client import list_target_repos
 from app.depsops.classify import classify_bump
@@ -140,7 +140,7 @@ def run_dependabot_ops() -> tuple[int, int, int]:
             deleted=0,
             error_message=str(exc),
         )
-        notify_depsops_crawl_error(str(exc))
+        notify_error("DEPSOPS", str(exc))
         raise
 
     logger.info(

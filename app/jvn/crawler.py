@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.core.notifications import notify_jvn_crawl_error, notify_jvn_new_vulnerabilities
+from app.core.notifications import notify_error, notify_success
 from app.crawler_logs.writer import now_utc, write_crawler_log
 from app.jvn.models import JvnVulnerability
 from app.jvn.parser import NS as _NS
@@ -243,7 +243,7 @@ def fetch_and_store_jvn(days: int | None = None) -> tuple[int, int, int]:
             updated=updated,
             deleted=deleted,
         )
-        notify_jvn_new_vulnerabilities(inserted=inserted, updated=updated, deleted=deleted)
+        notify_success("JVN", inserted, updated, deleted)
         return inserted, updated, deleted
 
     except Exception as exc:
@@ -256,7 +256,7 @@ def fetch_and_store_jvn(days: int | None = None) -> tuple[int, int, int]:
             finished_at=finished_at,
             error_message=str(exc),
         )
-        notify_jvn_crawl_error(str(exc))
+        notify_error("JVN", str(exc))
         raise
     finally:
         db.close()

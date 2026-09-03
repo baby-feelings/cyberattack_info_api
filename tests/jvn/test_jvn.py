@@ -267,7 +267,7 @@ def test_fetch_and_store_jvn_success(monkeypatch):
     monkeypatch.setattr("app.jvn.crawler._fetch_all_entries", lambda cutoff_date: [])
     monkeypatch.setattr("app.jvn.crawler.write_crawler_log", lambda *a, **kw: None)
     monkeypatch.setattr(
-        "app.jvn.crawler.notify_jvn_new_vulnerabilities", lambda **kw: None
+        "app.jvn.crawler.notify_success", lambda *a, **kw: None
     )
 
     from app.jvn.crawler import fetch_and_store_jvn
@@ -285,7 +285,7 @@ def test_fetch_and_store_jvn_error(monkeypatch):
         lambda cutoff_date: (_ for _ in ()).throw(RuntimeError("API down")),  # type: ignore[arg-type]
     )
     monkeypatch.setattr("app.jvn.crawler.write_crawler_log", lambda *a, **kw: None)
-    monkeypatch.setattr("app.jvn.crawler.notify_jvn_crawl_error", lambda *a, **kw: None)
+    monkeypatch.setattr("app.jvn.crawler.notify_error", lambda *a, **kw: None)
 
     from app.jvn.crawler import fetch_and_store_jvn
 
@@ -332,7 +332,7 @@ class TestDeleteOldJvnRecords:
         monkeypatch.setattr("app.jvn.crawler._fetch_all_entries", lambda cutoff_date: [])
         monkeypatch.setattr("app.jvn.crawler.write_crawler_log", lambda *a, **kw: None)
         monkeypatch.setattr(
-            "app.jvn.crawler.notify_jvn_new_vulnerabilities", lambda **kw: None
+            "app.jvn.crawler.notify_success", lambda *a, **kw: None
         )
         monkeypatch.setattr(
             "app.jvn.crawler._delete_old_jvn_records",

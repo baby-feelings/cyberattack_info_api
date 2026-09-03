@@ -6,30 +6,24 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 
-from app.core.notifications import (
-    _sanitize_error,
-    notify_crawl_error,
-    notify_new_vulnerabilities,
-    notify_osv_crawl_error,
-    notify_osv_new_vulnerabilities,
-)
+from app.core.notifications import _sanitize_error, notify_error, notify_success
 
 
 def test_notify_skips_when_no_webhook(monkeypatch):
     """SLACK_WEBHOOK_URL が未設定の場合は送信しない。"""
     monkeypatch.setattr("app.core.notifications.settings.SLACK_WEBHOOK_URL", "")
     with patch("app.core.notifications._send_slack") as mock_send:
-        notify_new_vulnerabilities(inserted=5, updated=2)
+        notify_success("KEV", inserted=5, updated=2)
         mock_send.assert_not_called()
 
 
 def test_notify_skips_when_no_changes(monkeypatch):
-    """新規追加・更新ともに 0 件の場合は送信しない。"""
+    """新規追加・更新・削除がすべて 0 件の場合は送信しない。"""
     monkeypatch.setattr(
         "app.core.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/test"
     )
     with patch("app.core.notifications._send_slack") as mock_send:
-        notify_new_vulnerabilities(inserted=0, updated=0)
+        notify_success("KEV", inserted=0, updated=0)
         mock_send.assert_not_called()
 
 
@@ -39,7 +33,7 @@ def test_notify_sends_when_inserted(monkeypatch):
         "app.core.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/test"
     )
     with patch("app.core.notifications._send_slack") as mock_send:
-        notify_new_vulnerabilities(inserted=10, updated=1)
+        notify_success("KEV", inserted=10, updated=1)
         mock_send.assert_called_once()
         # メッセージに件数が含まれることを確認
         msg = mock_send.call_args[0][0]
@@ -52,29 +46,64 @@ def test_notify_sends_when_updated_only(monkeypatch):
         "app.core.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/test"
     )
     with patch("app.core.notifications._send_slack") as mock_send:
-        notify_new_vulnerabilities(inserted=0, updated=5)
+        notify_success("KEV", inserted=0, updated=5)
         mock_send.assert_called_once()
         msg = mock_send.call_args[0][0]
         assert "5" in msg
 
 
-def test_notify_crawl_error_sends_message(monkeypatch):
+def test_notify_sends_when_only_deleted(monkeypatch):
+    """削除のみの場合でも Slack に送信し、削除件数が含まれること。"""
+    monkeypatch.setattr(
+        "app.core.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/test"
+    )
+    with patch("app.core.notifications._send_slack") as mock_send:
+        notify_success("OSV", inserted=0, updated=0, deleted=5)
+        mock_send.assert_called_once()
+        msg = mock_send.call_args[0][0]
+        assert "削除: 5 件" in msg
+
+
+def test_notify_message_uses_crawler_label(monkeypatch):
+    """crawler_type ごとのラベル・絵文字がメッセージに反映されること。"""
+    monkeypatch.setattr(
+        "app.core.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/test"
+    )
+    with patch("app.core.notifications._send_slack") as mock_send:
+        notify_success("JVN", inserted=7, updated=3)
+        msg = mock_send.call_args[0][0]
+        assert "JVN 脆弱性データ" in msg
+        assert "7" in msg
+        assert "3" in msg
+
+
+def test_notify_unknown_crawler_type_falls_back_to_generic_label(monkeypatch):
+    """未知の crawler_type でも汎用ラベルで送信されること（KeyError にならない）。"""
+    monkeypatch.setattr(
+        "app.core.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/test"
+    )
+    with patch("app.core.notifications._send_slack") as mock_send:
+        notify_success("UNKNOWN", inserted=1, updated=0)
+        mock_send.assert_called_once()
+
+
+def test_notify_error_sends_message(monkeypatch):
     """エラー通知が正しく送信される。"""
     monkeypatch.setattr(
         "app.core.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/test"
     )
     with patch("app.core.notifications._send_slack") as mock_send:
-        notify_crawl_error("Connection timeout")
+        notify_error("KEV", "Connection timeout")
         mock_send.assert_called_once()
         msg = mock_send.call_args[0][0]
         assert "Connection timeout" in msg
 
 
-def test_notify_crawl_error_skips_without_webhook(monkeypatch):
+def test_notify_error_skips_without_webhook(monkeypatch):
     """Webhook URL 未設定時はエラー通知もスキップ。"""
     monkeypatch.setattr("app.core.notifications.settings.SLACK_WEBHOOK_URL", "")
     with patch("app.core.notifications._send_slack") as mock_send:
-        notify_crawl_error("some error")
+        notify_error("KEV", "some error")
         mock_send.assert_not_called()
 
 
@@ -88,7 +117,7 @@ def test_send_slack_success(monkeypatch):
 
     with patch("app.core.notifications.httpx.Client") as mock_client_cls:
         mock_client_cls.return_value.__enter__.return_value.post.return_value = mock_resp
-        notify_new_vulnerabilities(inserted=3, updated=0)
+        notify_success("KEV", inserted=3, updated=0)
 
     mock_client_cls.return_value.__enter__.return_value.post.assert_called_once()
 
@@ -103,157 +132,7 @@ def test_send_slack_http_error_does_not_raise(monkeypatch):
             httpx.ConnectError("connection refused")
         )
         # 例外が外に漏れないことを確認
-        notify_new_vulnerabilities(inserted=1, updated=0)
-
-
-# ──────────────────────────────────────────────────────────────
-# OSV 通知
-# ──────────────────────────────────────────────────────────────
-
-
-def test_osv_notify_skips_when_no_webhook(monkeypatch):
-    """SLACK_WEBHOOK_URL 未設定時は OSV 通知を送信しない。"""
-    monkeypatch.setattr("app.core.notifications.settings.SLACK_WEBHOOK_URL", "")
-    with patch("app.core.notifications._send_slack") as mock_send:
-        notify_osv_new_vulnerabilities(inserted=5, updated=2, deleted=10)
-        mock_send.assert_not_called()
-
-
-def test_osv_notify_skips_when_no_changes(monkeypatch):
-    """新規・更新・削除すべて 0 件の場合は OSV 通知を送信しない。"""
-    monkeypatch.setattr(
-        "app.core.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/test"
-    )
-    with patch("app.core.notifications._send_slack") as mock_send:
-        notify_osv_new_vulnerabilities(inserted=0, updated=0, deleted=0)
-        mock_send.assert_not_called()
-
-
-def test_osv_notify_sends_when_only_deleted(monkeypatch):
-    """削除のみの場合でも Slack に送信すること。"""
-    monkeypatch.setattr(
-        "app.core.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/test"
-    )
-    with patch("app.core.notifications._send_slack") as mock_send:
-        notify_osv_new_vulnerabilities(inserted=0, updated=0, deleted=5)
-        mock_send.assert_called_once()
-        msg = mock_send.call_args[0][0]
-        assert "削除: 5 件" in msg
-
-
-def test_osv_notify_sends_when_inserted(monkeypatch):
-    """OSV 新規追加があれば Slack に送信し、件数が含まれること。"""
-    monkeypatch.setattr(
-        "app.core.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/test"
-    )
-    with patch("app.core.notifications._send_slack") as mock_send:
-        notify_osv_new_vulnerabilities(inserted=8, updated=3, deleted=2)
-        mock_send.assert_called_once()
-        msg = mock_send.call_args[0][0]
-        assert "8" in msg
-        assert "3" in msg
-        assert "2" in msg
-
-
-def test_osv_notify_sends_when_updated_only(monkeypatch):
-    """OSV 更新のみの場合も送信されること。"""
-    monkeypatch.setattr(
-        "app.core.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/test"
-    )
-    with patch("app.core.notifications._send_slack") as mock_send:
-        notify_osv_new_vulnerabilities(inserted=0, updated=5, deleted=0)
-        mock_send.assert_called_once()
-
-
-def test_osv_crawl_error_sends_message(monkeypatch):
-    """OSV エラー通知が正しく送信される。"""
-    monkeypatch.setattr(
-        "app.core.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/test"
-    )
-    with patch("app.core.notifications._send_slack") as mock_send:
-        notify_osv_crawl_error("OSV API timeout")
-        mock_send.assert_called_once()
-        msg = mock_send.call_args[0][0]
-        assert "OSV API timeout" in msg
-
-
-def test_osv_crawl_error_skips_without_webhook(monkeypatch):
-    """Webhook URL 未設定時は OSV エラー通知もスキップ。"""
-    monkeypatch.setattr("app.core.notifications.settings.SLACK_WEBHOOK_URL", "")
-    with patch("app.core.notifications._send_slack") as mock_send:
-        notify_osv_crawl_error("some error")
-        mock_send.assert_not_called()
-
-
-# ──────────────────────────────────────────────────────────────
-# JVN 通知
-# ──────────────────────────────────────────────────────────────
-
-from app.core.notifications import (  # noqa: E402
-    notify_jvn_crawl_error,
-    notify_jvn_new_vulnerabilities,
-)
-
-
-def test_jvn_notify_skips_when_no_webhook(monkeypatch):
-    """SLACK_WEBHOOK_URL 未設定時は JVN 通知を送信しない。"""
-    monkeypatch.setattr("app.core.notifications.settings.SLACK_WEBHOOK_URL", "")
-    with patch("app.core.notifications._send_slack") as mock_send:
-        notify_jvn_new_vulnerabilities(inserted=5, updated=2)
-        mock_send.assert_not_called()
-
-
-def test_jvn_notify_skips_when_no_changes(monkeypatch):
-    """新規・更新が 0 件の場合は JVN 通知を送信しない。"""
-    monkeypatch.setattr(
-        "app.core.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/test"
-    )
-    with patch("app.core.notifications._send_slack") as mock_send:
-        notify_jvn_new_vulnerabilities(inserted=0, updated=0)
-        mock_send.assert_not_called()
-
-
-def test_jvn_notify_sends_when_inserted(monkeypatch):
-    """JVN 新規追加があれば Slack に送信し、件数が含まれること。"""
-    monkeypatch.setattr(
-        "app.core.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/test"
-    )
-    with patch("app.core.notifications._send_slack") as mock_send:
-        notify_jvn_new_vulnerabilities(inserted=7, updated=3)
-        mock_send.assert_called_once()
-        msg = mock_send.call_args[0][0]
-        assert "7" in msg
-        assert "3" in msg
-
-
-def test_jvn_notify_sends_when_updated_only(monkeypatch):
-    """JVN 更新のみの場合も送信されること。"""
-    monkeypatch.setattr(
-        "app.core.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/test"
-    )
-    with patch("app.core.notifications._send_slack") as mock_send:
-        notify_jvn_new_vulnerabilities(inserted=0, updated=4)
-        mock_send.assert_called_once()
-
-
-def test_jvn_crawl_error_sends_message(monkeypatch):
-    """JVN エラー通知が正しく送信される。"""
-    monkeypatch.setattr(
-        "app.core.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/test"
-    )
-    with patch("app.core.notifications._send_slack") as mock_send:
-        notify_jvn_crawl_error("JVN API timeout")
-        mock_send.assert_called_once()
-        msg = mock_send.call_args[0][0]
-        assert "JVN API timeout" in msg
-
-
-def test_jvn_crawl_error_skips_without_webhook(monkeypatch):
-    """Webhook URL 未設定時は JVN エラー通知もスキップ。"""
-    monkeypatch.setattr("app.core.notifications.settings.SLACK_WEBHOOK_URL", "")
-    with patch("app.core.notifications._send_slack") as mock_send:
-        notify_jvn_crawl_error("some error")
-        mock_send.assert_not_called()
+        notify_success("KEV", inserted=1, updated=0)
 
 
 # ── _sanitize_error テスト ────────────────────────────────────────

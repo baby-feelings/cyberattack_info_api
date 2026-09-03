@@ -557,7 +557,7 @@ class TestFetchAndScanDependencies:
             "app.depscan.crawler._collect_dependencies",
             side_effect=RuntimeError("GitHub API down"),
         ), patch("app.depscan.crawler.SessionLocal", return_value=db_session), \
-           patch("app.depscan.crawler.notify_depscan_crawl_error") as mock_notify_error:
+           patch("app.depscan.crawler.notify_error") as mock_notify_error:
             import pytest
             with pytest.raises(RuntimeError):
                 fetch_and_scan_dependencies()
