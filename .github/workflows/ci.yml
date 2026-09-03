@@ -79,9 +79,7 @@ jobs:
         working-directory: dashboard
         run: npm ci
 
-      # ── テスト実行（Vitest） ──────────────────────────────
-      # 注意: OsvPanel/JvnPanel/KevPanel はまだテスト未整備のため、
-      # 現時点ではカバレッジしきい値による失敗判定は行わない
+      # ── テスト実行（Vitest。プロジェクト全体で90%未満なら失敗、vite.config.ts参照） ──
       - name: Run tests with Vitest
         working-directory: dashboard
         run: npm run test:coverage
