@@ -273,6 +273,12 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | `severity` | string | 重要度（`CRITICAL` / `HIGH` / `MEDIUM` / `LOW`） |
 | `resolved` | bool | 解決状態で絞り込み（省略時は全件） |
 
+> **Note:** `X-API-KEY` での呼び出しは上記の通り絞り込みなしのフルアクセス（Claude Code
+> 等の既存クライアント向け）。React ダッシュボードの DEPSCAN タブは別途 GitHub ログイン
+> （`Authorization: Bearer <セッショントークン>`）を要求し、ログイン中のユーザー本人が
+> 所有するリポジトリのみに強制的に絞り込まれる（下記「GitHub ログイン API」参照）。
+> Claude Code からの利用では引き続き `X-API-KEY` を使えばよく、影響はない。
+
 ---
 
 ### スキル 10: DEPSCAN 統計情報を取得する
@@ -297,6 +303,25 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
   ]
 }
 ```
+
+---
+
+## 参考: GitHub ログイン API（DEPSCAN ダッシュボード用・ブラウザ専用）
+
+React ダッシュボードの DEPSCAN タブ向けの GitHub OAuth ログイン機能。ブラウザでの
+インタラクティブな認可が前提のため、Claude Code や CI から `curl` で直接呼び出す
+スキルではない（参考情報として記載）。
+
+| エンドポイント | 用途 |
+|---------------|------|
+| `GET /auth/github/login` | GitHub 認可画面へリダイレクト（`<a href>` で開く） |
+| `GET /auth/github/callback` | OAuth コールバック（内部利用のみ） |
+| `GET /auth/scan-status` | ログイン中ユーザーのオンデマンドスキャン進捗を取得（`Authorization: Bearer <セッショントークン>` 必須） |
+
+ログインすると、その GitHub アカウント自身が所有するリポジトリを対象にオンデマンドで
+DEPSCAN スキャンが実行され（直近24時間以内にスキャン済みならスキップ）、`/api/depscan`・
+`/api/depscan/stats` はそのユーザー本人が所有するリポジトリのみに強制的に絞り込まれる。
+`X-API-KEY` によるフルアクセス（スキル 9・10 で解説した既存の利用方法）には一切影響しない。
 
 ---
 
@@ -595,6 +620,11 @@ Upsert ロジック:
 - 検知された脆弱性の実際の修正は、対象リポジトリで有効化した **Dependabot** が更新PRを
   自動作成する運用（DEPSCAN は検知・通知に専念し、修正コードの自動生成は行わない）
 - 実行結果は `crawler_logs` テーブルに自動記録
+- 上記は `GITHUB_USERNAME` 向けの毎日クロール（`fetch_and_scan_dependencies`）の挙動。
+  DEPSCAN ダッシュボードの GitHub ログイン経由のオンデマンドスキャン
+  （`run_depscan_for_user`）は独立した別経路で、Slack通知・GitHub Issue起票・
+  `crawler_logs` への記録は行わない。進捗は `depscan_user_scans` テーブルに記録し、
+  直近24時間以内にスキャン済みなら再スキャンをスキップする
 
 **DEPSOPS:**
 - DEPSCAN 対象の全リポジトリを走査し、Dependabot が作成した Open な PR を判定する

@@ -92,6 +92,10 @@ app/
 ├── main.py                 # FastAPI アプリ・lifespan・スケジューラ登録・ルーター include
 │                           # /admin/crawl・/admin/osv-crawl・/admin/jvn-crawl・/admin/depscan-crawl
 │                           # /admin/dependabot-ops
+├── auth/                   # GitHub ログイン（DEPSCAN ダッシュボードのアクセス制御）ドメイン。models 無し
+│   ├── router.py           # /auth/github/login・/auth/github/callback・/auth/scan-status
+│   ├── github_oauth.py     # GitHub OAuth（Web Application Flow）クライアント
+│   └── session.py          # セッショントークン（JWT）の発行・検証
 ├── core/                   # 横断的インフラ（特定ドメインに属さない）
 │   ├── config.py           # Settings（pydantic-settings）・環境変数管理
 │   ├── database.py         # SQLAlchemy エンジン（SQLite/PG 切り替え）・get_db
@@ -119,10 +123,13 @@ app/
 │   ├── crawler.py          # JVN クローラー（MyJVN API / RDF-RSS）
 │   └── router.py           # /api/jvn エンドポイント（一覧・統計）
 ├── depscan/                # 依存ライブラリ脆弱性スキャン（DEPSCAN）ドメイン
-│   ├── models.py           # DependencyFinding
+│   ├── models.py           # DependencyFinding・UserScan（GitHub ログイン経由のオンデマンドスキャン状況）
 │   ├── schemas.py          # DependencyFindingOut 等
-│   ├── crawler.py          # GitHub 全リポジトリのロックファイルを OSV API とリアルタイム照合
-│   ├── router.py           # /api/depscan エンドポイント（一覧・統計）
+│   ├── crawler.py          # GitHub 全リポジトリのロックファイルを OSV API とリアルタイム照合。
+│   │                       # run_depscan_for_user/get_user_scan_status/should_rescan_for_user
+│   │                       # （GitHub ログイン経由のオンデマンドスキャン）も含む
+│   ├── router.py           # /api/depscan エンドポイント（一覧・統計。X-API-KEY またはセッション
+│   │                       # トークンの二重認証）
 │   ├── github_client.py    # GitHub API クライアント（リポジトリ一覧・ツリー・ファイル取得）
 │   └── parsers/            # 10 エコシステム分のロックファイルパーサー
 ├── depsops/                # Dependabot PR 自動運用（DEPSOPS）ドメイン。models/router 無し
@@ -138,6 +145,7 @@ app/
 tests/                      # app/ と同じドメイン構成でミラーリング
 ├── conftest.py             # テスト DB・client・db_session フィクスチャ（全サブフォルダに自動継承）
 ├── test_main.py            # app.main（health/root）テスト
+├── auth/                   # GitHub OAuth クライアント・セッショントークン・ログインAPIテスト
 ├── core/                   # DB エンジン・Slack 通知テスト
 ├── kev/                    # KEV クローラー・API テスト
 ├── osv/                    # OSV クローラー・API テスト
@@ -148,7 +156,8 @@ tests/                      # app/ と同じドメイン構成でミラーリン
 
 dashboard/               # Vercel デプロイの React ダッシュボード
                          # CISA KEV・OSV（Pub 含む 10 エコシステム・180 日表示）・JVN・
-                         # DEPSCAN（オーナー別フィルタ対応）を画面下部固定タブで切り替え表示
+                         # DEPSCAN（GitHub ログイン必須。本人所有リポジトリのみ表示）を
+                         # 画面下部固定タブで切り替え表示
 
 .github/
 ├── dependabot.yml   # Dependabot（pip: / ・npm: /dashboard、週次で依存更新PRを自動作成）
@@ -422,6 +431,72 @@ Dependabot の PR 数（パッケージ単位で1PR）と数字が食い違っ�
 表示用ページングとしては使わない）。ヘッダーの件数表示は「CVE総数 / パッケージ数」の
 両方を出し、どちらの数字を見ているか誤解しないようにしている。
 
+### DEPSCAN ダッシュボードの GitHub ログイン・アクセス制御（Issue #107）
+DEPSCAN タブは誰でも閲覧できてしまう状態だったため、任意の GitHub アカウントで OAuth
+ログインし、**本人が所有するリポジトリの検知結果のみ**を表示するようにした。UI上のゲート
+ではなく、バックエンド側で強制するアクセス制御である点が重要。
+
+**GitHub OAuth（Web Application Flow）:**
+`app/auth/router.py` の `/auth/github/login` → GitHub 認可画面へリダイレクト（CSRF対策の
+`state` を httpOnly Cookie に保持）→ `/auth/github/callback` で `code` を `access_token` に
+交換し、`GET /user` でログインユーザー名（`login`）を取得 → セッション JWT（PyJWT、
+`SESSION_SECRET_KEY` で HS256 署名、24時間有効）を発行し、フロントエンド
+（`FRONTEND_URL`）へ `?depscan_token=...&depscan_user=...` としてリダイレクトする。
+OAuth スコープは `repo`（GitHub OAuth App は fine-grained PAT のような読み取り専用スコープ
+を持たないため、本人所有の公開・非公開リポジトリへの読み取りアクセスに必要）。
+
+**`/api/depscan`・`/api/depscan/stats` の二重認証:**
+`app/depscan/router.py` の `_resolve_access` が `X-API-KEY`（既存の共有鍵、絞り込みなしの
+フルアクセス。Claude Code 等の既存クライアント向け・SKILL.md の運用を壊さないため維持）
+または `Authorization: Bearer <セッションJWT>` を受け付ける。セッション認証の場合は
+`owner` クエリパラメータをログインユーザー名で強制上書きし、`repo` パラメータで
+`{username}/` 以外のリポジトリを直接指定しようとした場合は 403 で拒否する
+（owner 制限の迂回防止）。
+
+**オンデマンドスキャン（`run_depscan_for_user`）:**
+DEPSCAN の毎日クロール（`fetch_and_scan_dependencies`）は `GITHUB_USERNAME`
+（baby-feelings）専用のため、任意のアカウントに対応するにはログイン時にその場でスキャン
+する必要がある。既存の `_collect_dependencies`/`_build_findings`/`_upsert_findings` は
+username/token で汎用化済みのためそのまま再利用し、`run_depscan_for_user` を新設。
+毎日クロールとは意図的に独立させており、Slack通知・GitHub Issue自動起票・
+`crawler_logs` への記録は**行わない**（第三者のログインのたびにノイズが出ないようにする
+ため）。進捗は専用の `UserScan` テーブル（`depscan_user_scans`。username が主キー）に
+`running`/`done`/`error` を記録し、`GET /auth/scan-status`（セッションJWT必須）で
+ポーリング取得する。
+
+**`_resolve_stale_findings` への `repo_owner_prefix`（クロスユーザー事故防止）:**
+`_resolve_stale_findings` はテーブル全体を対象に「今回検知されなかった既存レコード」を
+`resolved_at` 済みにする関数。オンデマンドスキャンでこれを無絞り込みのまま呼ぶと、
+1ユーザーの少数リポジトリのスキャン結果で baby-feelings 含む無関係な全ユーザーの
+未解決 finding を誤って解決済み扱いにしてしまう。これを防ぐため、`repo_full_name LIKE
+'{repo_owner_prefix}/%'` で絞り込む任意引数を追加し、`run_depscan_for_user` から
+ログインユーザー名を渡している。
+
+**24時間以内は再スキャンしない（`should_rescan_for_user`）:**
+当初は毎回ログインの度に必ずスキャンしていたが、リポジトリ数が多いアカウントほど毎回の
+ログインで完了まで待たされる問題があった。ユーザーからのフィードバックを受け、直近
+`RESCAN_INTERVAL_HOURS`（24時間）以内に完了したスキャンがあれば再スキャンせず DB の
+結果をそのまま使うよう変更。実行中（`status == "running"`）の場合は重複起動防止のため
+再スキャンしない。エラー終了時は毎回再試行対象とする（一時的な失敗で長時間ブロックしない
+ため）。フロントエンド側の変更は不要で、スキャンをスキップした場合は
+`/auth/scan-status` が直近の `status: "done"` を即座に返すため自然にローディングなしで
+即表示される。SQLite（開発/テスト）は `DateTime(timezone=True)` でも tz 情報を保持せず
+naive で返すため、比較前に `tzinfo=UTC` を補完している（PostgreSQL 本番では発生しない
+差異）。
+
+**フロントエンド（`DepscanAuthGate.tsx`）:**
+未ログイン時は「GitHubでログイン」ボタンを表示。OAuthコールバックからの復帰
+（`/?depscan_token=...&depscan_user=...`）を検出して `localStorage` にセッションを保存し、
+URLからは `history.replaceState` で即座に取り除く（リロード時の再送信・共有URLへの
+トークン漏洩防止）。ログイン後は `/auth/scan-status` を4秒間隔でポーリングし、スキャン
+完了まで（既にキャッシュがあれば実質即座に）ローディング表示。**ネットワーク瞬断等の
+一時的なエラーではログアウトさせず、セッショントークンが実際に無効（401）な場合のみ
+ログアウト扱いにする**（`client.ts` の `UnauthorizedError` で区別。ローカル動作確認中に
+「fetch失敗のたびに毎回ログアウトしてしまう」不具合を発見し修正済み）。ログアウトボタンは
+`window.confirm` による確認ダイアログを挟んでから `localStorage` をクリアする（誤クリック
+防止。トークン失効時の自動ログアウトなど内部処理からの呼び出しでは確認しない）。
+`App.tsx` は URL に `depscan_token` があれば DEPSCAN タブを自動選択する。
+
 ### index.css の CSS カスケードレイヤーに関する注意
 `*, *::before, *::after` の余白リセットは必ず `@layer base` の中に書くこと。
 `@layer` の外（unlayered）に書くと、CSS カスケードレイヤーの仕様上どんな `@layer utilities`
@@ -506,7 +581,15 @@ GitHub Actions 無料プランでは複数 cron の発火が不安定なため�
   `SLACK_WEBHOOK_URL`（任意）、`GITHUB_TOKEN`（任意、DEPSCAN/DEPSOPS 共用の PAT。
   Contents: Read-only + Issues: Write + Pull requests: Write 推奨。未設定時は DEPSCAN/DEPSOPS
   のみエラー終了。Issues: Write が無い場合は Issue自動起票のみ失敗、Pull requests: Write が
-  無い場合は DEPSOPS のPRマージ・rebase依頼コメントのみ失敗）
+  無い場合は DEPSOPS のPRマージ・rebase依頼コメントのみ失敗）。DEPSCAN ダッシュボードの
+  GitHub ログイン用に `GITHUB_OAUTH_CLIENT_ID`・`GITHUB_OAUTH_CLIENT_SECRET`（GitHub
+  OAuth App の Client ID/Secret）・`SESSION_SECRET_KEY`（セッションJWT署名鍵。
+  `python -c "import secrets; print(secrets.token_urlsafe(32))"` 等で生成）も設定する
+  （いずれも任意項目・ソフトフェイル方針だが、未設定だと `/auth/*` が 503 を返すのみで
+  DEPSCAN タブが機能しない）。`FRONTEND_URL`（既定値: Vercel の本番URL）・
+  `API_BASE_URL_FOR_OAUTH`（既定値: Render の本番URL。GitHub OAuth App の
+  Authorization callback URL と scheme まで一致させる必要があるため固定値で持つ）は
+  値を変える場合のみ設定すればよい
 
 ### GitHub Secrets の設定
 
