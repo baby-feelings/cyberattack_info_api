@@ -59,3 +59,41 @@ jobs:
         with:
           files: coverage.xml
           fail_ci_if_error: false
+
+  dashboard-test:
+    name: Dashboard Test & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Install dependencies
+        working-directory: dashboard
+        run: npm ci
+
+      # ── テスト実行（Vitest） ──────────────────────────────
+      # 注意: OsvPanel/JvnPanel/KevPanel はまだテスト未整備のため、
+      # 現時点ではカバレッジしきい値による失敗判定は行わない
+      - name: Run tests with Vitest
+        working-directory: dashboard
+        run: npm run test:coverage
+
+      - name: Upload coverage HTML report as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-coverage-html-report
+          path: dashboard/coverage/
+          retention-days: 30
+
+      # ── 型チェック・ビルド ────────────────────────────────
+      - name: Build (includes tsc type check)
+        working-directory: dashboard
+        run: npm run build
