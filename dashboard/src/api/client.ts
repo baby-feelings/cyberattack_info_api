@@ -31,6 +31,19 @@ export async function fetchStats(): Promise<StatsResponse> {
   return apiFetch<StatsResponse>('/api/vulnerabilities/stats')
 }
 
+// 脆弱性一覧（ページネーション・キーワード検索対応）
+export async function fetchVulnerabilities(params: {
+  page?: number
+  perPage?: number
+  search?: string
+}): Promise<VulnerabilityListResponse> {
+  const p = new URLSearchParams()
+  p.set('page', String(params.page ?? 1))
+  p.set('per_page', String(params.perPage ?? 50))
+  if (params.search) p.set('search', params.search)
+  return apiFetch<VulnerabilityListResponse>(`/api/vulnerabilities?${p}`)
+}
+
 // 型定義
 export interface HealthResponse {
   status: 'ok' | 'degraded'
@@ -62,6 +75,13 @@ export interface StatsResponse {
   total_vulnerabilities: number
   top_vendors: VendorStat[]
   monthly_trend: MonthlyStat[]
+}
+
+export interface VulnerabilityListResponse {
+  total: number
+  page: number
+  per_page: number
+  data: VulnerabilityOut[]
 }
 
 // ── OSV 脆弱性 ─────────────────────────────────────────────

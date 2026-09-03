@@ -1,11 +1,7 @@
-import { useEffect, useState, useCallback } from 'react'
-import { RefreshCw, ShieldAlert, Wifi, Shield, Package, FileWarning, Bug, BarChart2 } from 'lucide-react'
-import { fetchRecent, fetchStats, type VulnerabilityOut, type StatsResponse } from './api/client'
+import { useState } from 'react'
+import { ShieldAlert, Shield, Package, FileWarning, Bug } from 'lucide-react'
 import { HealthStatus } from './components/HealthStatus'
-import { StatsCards } from './components/StatsCards'
-import { MonthlyBarChart } from './components/shared/VulnPanelParts'
-import { VendorRanking } from './components/VendorRanking'
-import { RecentCVEs } from './components/RecentCVEs'
+import { KevPanel } from './components/KevPanel'
 import { OsvPanel } from './components/OsvPanel'
 import { JvnPanel } from './components/JvnPanel'
 import { DepscanAuthGate } from './components/DepscanAuthGate'
@@ -44,32 +40,10 @@ const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
 ]
 
 export default function App() {
-  const [recent, setRecent] = useState<VulnerabilityOut[]>([])
-  const [stats, setStats] = useState<StatsResponse | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [refreshedAt, setRefreshedAt] = useState<Date | null>(null)
   // GitHub OAuth コールバックからの復帰（?depscan_token=...）時は DEPSCAN タブを自動選択する
   const [activeTab, setActiveTab] = useState<TabKey>(() => (
     new URLSearchParams(window.location.search).has('depscan_token') ? 'depscan' : 'kev'
   ))
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const [recentData, statsData] = await Promise.all([fetchRecent(30), fetchStats()])
-      setRecent(recentData)
-      setStats(statsData)
-      setRefreshedAt(new Date())
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '不明なエラー')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => { load() }, [load])
 
   return (
     <div className="min-h-screen bg-[#0a0e1a] text-slate-100 flex flex-col items-center">
@@ -92,36 +66,11 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            {refreshedAt && (
-              <div className="hidden md:flex items-center gap-1.5 text-xs text-slate-500">
-                <Wifi size={11} className="text-emerald-500" />
-                <span>{refreshedAt.toLocaleTimeString('ja-JP')}</span>
-              </div>
-            )}
-            <button
-              onClick={load}
-              disabled={loading}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-xs font-medium text-slate-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
-              <span>更新</span>
-            </button>
-          </div>
-
         </div>
       </header>
 
       {/* メインコンテンツ（下部固定タブバーの高さ分、下に余白を確保） */}
       <main className="flex-1 max-w-screen-xl w-full px-4 sm:px-6 lg:px-12 py-6 sm:py-8 lg:py-10 pb-24 sm:pb-24 flex flex-col gap-6 sm:gap-8 lg:gap-10">
-
-        {/* エラーバナー */}
-        {error && (
-          <div className="flex items-start gap-3 bg-red-950/60 border border-red-800/60 text-red-300 rounded-xl px-4 py-3 text-sm">
-            <span className="shrink-0 mt-0.5">⚠️</span>
-            <span>データ取得エラー: {error}</span>
-          </div>
-        )}
 
         {/* ══ サーバー稼働状況（全タブ共通） ═══════════════════════════ */}
         <HealthStatus />
@@ -141,24 +90,8 @@ export default function App() {
               borderColor="border-blue-800/40"
             />
 
-            {/* CVE サマリーカード */}
-            <StatsCards stats={stats} recent={recent} loading={loading} />
-
-            {/* 月別トレンド（OSV・JVNと同じ棒グラフ表示） */}
-            <MonthlyBarChart
-              icon={<BarChart2 size={13} className="text-slate-400" />}
-              title="月別 CVE 追加数トレンド"
-              data={stats?.monthly_trend ?? []}
-              barColor="#7c3aed"
-              height={220}
-              loading={loading}
-            />
-
-            {/* ベンダーランキング + 直近 CVE */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6 xl:gap-8">
-              <VendorRanking data={stats?.top_vendors ?? []} loading={loading} />
-              <RecentCVEs data={recent} loading={loading} />
-            </div>
+            {/* KEV パネル（サマリー・チャート・一覧を内包。OSV/JVN と同じ構成） */}
+            <KevPanel />
           </section>
         )}
 
