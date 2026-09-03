@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Bug, ExternalLink, ChevronDown, ChevronUp,
-  RefreshCw, CheckCircle2, BarChart2,
+  RefreshCw, CheckCircle2, BarChart2, Sparkles,
 } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip as ReTooltip, XAxis, YAxis } from 'recharts'
 import {
-  fetchAllDepscanFindings, fetchDepscanStats,
+  fetchAllDepscanFindings, fetchDepscanStats, fetchCrawlerLogs,
   type DependencyFindingOut, type DepscanStatsResponse,
 } from '../api/client'
 import {
@@ -43,6 +43,8 @@ const REPO_CHART_COLORS = [
 
 const SEVERITIES = ['ALL', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
 const PER_PAGE = 30
+// 新しいDEPSCANクロールが完了していないかを確認する間隔（ミリ秒）
+const UPDATE_CHECK_INTERVAL_MS = 120000
 
 // リポジトリ full_name（"owner/repo"）からオーナー名部分を取り出す
 function ownerOf(repoFullName: string): string {
@@ -303,6 +305,20 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
   const [findings, setFindings] = useState<DependencyFindingOut[]>([])
   const [stats, setStats] = useState<DepscanStatsResponse | null>(null)
   const [loading, setLoading] = useState(true)
+  const [newDataAvailable, setNewDataAvailable] = useState(false)
+  // 表示中データの基準となる、最後に確認した最新クロールログID
+  // （ポーリング用 effect から常に最新値を読めるよう state ではなく ref で持つ）
+  const lastSeenLogIdRef = useRef<number | null>(null)
+
+  // 直近成功した DEPSCAN クロールログの ID を取得する（取得失敗時は null）
+  const fetchLatestLogId = useCallback(async (): Promise<number | null> => {
+    try {
+      const logs = await fetchCrawlerLogs({ crawlerType: 'DEPSCAN', status: 'success', limit: 1 })
+      return logs[0]?.id ?? null
+    } catch {
+      return null
+    }
+  }, [])
 
   const load = useCallback(async (
     own: string | null, sev: string | null, resolved: boolean,
@@ -322,11 +338,30 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
     } finally {
       setLoading(false)
     }
-  }, [authToken])
+    // 表示したデータの基準として、この時点の最新クロールログIDを記録する
+    lastSeenLogIdRef.current = await fetchLatestLogId()
+    setNewDataAvailable(false)
+  }, [authToken, fetchLatestLogId])
 
   useEffect(() => {
     load(owner, severity, showResolved)
   }, [load, owner, severity, showResolved])
+
+  // 定期的に新しい DEPSCAN クロールが完了していないか確認し、あればバナーで通知する
+  // （バックグラウンドで自動更新はせず、ユーザーが更新ボタンを押すまで表示は変えない）
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      const latestId = await fetchLatestLogId()
+      if (
+        latestId !== null
+        && lastSeenLogIdRef.current !== null
+        && latestId !== lastSeenLogIdRef.current
+      ) {
+        setNewDataAvailable(true)
+      }
+    }, UPDATE_CHECK_INTERVAL_MS)
+    return () => clearInterval(interval)
+  }, [fetchLatestLogId])
 
   // オーナー一覧は stats.repos（未解決分の全リポジトリ）から動的に導出する。
   // 表示されるのは DB に保存済み＝DEPSCAN が GITHUB_TOKEN の権限内で実際に
@@ -367,6 +402,22 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg flex flex-col gap-5">
+
+      {/* 新着データ通知バナー（自動更新はせず、ボタン押下で明示的に更新） */}
+      {newDataAvailable && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-xs text-violet-300">
+          <span className="flex items-center gap-1.5">
+            <Sparkles size={13} />
+            新しいデータがあります
+          </span>
+          <button
+            onClick={() => load(owner, severity, showResolved)}
+            className="px-2.5 py-1 rounded-md bg-violet-600 hover:bg-violet-500 text-white font-medium transition-colors"
+          >
+            更新
+          </button>
+        </div>
+      )}
 
       {/* ヘッダー */}
       <div className="flex items-center justify-between">
