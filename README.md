@@ -1,7 +1,7 @@
 # Cyberattack Info API
 
 [![CI](https://github.com/baby-feelings/cyberattack_info_api/actions/workflows/ci.yml/badge.svg)](https://github.com/baby-feelings/cyberattack_info_api/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-99%25-brightgreen)](https://github.com/baby-feelings/cyberattack_info_api/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen)](https://github.com/baby-feelings/cyberattack_info_api/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.11-blue)](https://www.python.org/)
 
 米 CISA の [Known Exploited Vulnerabilities (KEV) Catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog)・[OSV (Open Source Vulnerabilities)](https://osv.dev/)・[JVN (Japan Vulnerability Notes)](https://jvndb.jvn.jp/) を定期収集し、REST API として配信するプラットフォームです。  
@@ -17,6 +17,7 @@ Claude Code や CI/CD ツールから「今まさに悪用されているサイ�
 | **OSV 自動クローラー** | 同上（OSV API から 10 エコシステムの主要パッケージの脆弱性を取得・Upsert） |
 | **JVN 自動クローラー** | 同上（MyJVN API から国内脆弱性を取得・Upsert） |
 | **依存ライブラリ脆弱性スキャン（DEPSCAN）** | 同上（GitHub 上の自作アプリ全リポジトリ〈プライベート含む〉のロックファイルを OSV API とリアルタイム照合。新規検知はリポジトリ自身に GitHub Issue も自動起票） |
+| **DEPSCAN ダッシュボードの GitHub ログイン** | 任意の GitHub アカウントで OAuth ログインし、本人が所有するリポジトリの検知結果のみ閲覧可能（サーバー側で強制するアクセス制御）。ログイン時にオンデマンドでスキャンを実行し、直近 24 時間以内にスキャン済みなら再スキャンせず結果を即座に表示 |
 | **OSV 古いデータ自動削除** | 180 日以上前のレコードをクロール時に自動削除（DB 容量管理） |
 | **Render スリープ対策** | GitHub Actions cron で毎日クロールを強制実行（Free プラン対応） |
 | **一覧取得 API** | ページネーション・キーワード検索・フィルタリング対応（KEV / OSV / JVN / DEPSCAN） |
@@ -28,7 +29,7 @@ Claude Code や CI/CD ツールから「今まさに悪用されているサイ�
 | **手動クロール** | `POST /admin/crawl` / `POST /admin/osv-crawl` / `POST /admin/jvn-crawl` / `POST /admin/depscan-crawl`（バックグラウンド 202 即時返却・`?days=N` 対応） |
 | **API キー認証** | `X-API-KEY` ヘッダーによるシンプルな固定キー認証 |
 | **ヘルスチェック** | DB 接続確認付きの死活監視エンドポイント |
-| **React ダッシュボード** | CISA KEV・OSV（Pub 含む 10 エコシステム・180 日表示）・JVN・DEPSCAN（オーナー別フィルタ対応）を画面下部固定タブで切り替え表示（Vercel デプロイ） |
+| **React ダッシュボード** | CISA KEV・OSV（Pub 含む 10 エコシステム・180 日表示）・JVN・DEPSCAN（GitHub ログイン必須、本人所有リポジトリのみ表示）を画面下部固定タブで切り替え表示（Vercel デプロイ） |
 
 ---
 
@@ -384,6 +385,41 @@ curl -H "X-API-KEY: your-key" \
 > - **本番反映方法はリポジトリごとに異なる**。Vercel 連携があるリポジトリはマージ時点で自動デプロイされるが、CI/CD の無いリポジトリ（Firebase Hosting 等）はマージ後にローカルで `pull` し手動でデプロイコマンドを実行するまで反映されない
 > - 脆弱性検知時に即座に修正 PR を出す「Dependabot security updates」は、`dependabot.yml` を置くだけでは有効にならず、各リポジトリの `Settings → Code security` で個別に ON にする必要がある
 
+### GET /auth/github/login — GitHub ログイン開始（DEPSCAN ダッシュボード用）
+
+ブラウザから直接アクセスする（`<a href>` でリダイレクトさせる）エンドポイント。`curl` での確認には向かない。
+
+```
+https://cyberattack-info-api.onrender.com/auth/github/login
+```
+
+GitHub の認可画面へリダイレクトする。認可後は `/auth/github/callback` へ戻り、セッショントークン（JWT）を発行してダッシュボード（`FRONTEND_URL`）へ `?depscan_token=...&depscan_user=...` としてリダイレクトする。ログインの都度、そのアカウントが所有するリポジトリをオンデマンドでスキャンする（直近 24 時間以内にスキャン済みならスキップして DB の結果をそのまま使う）。
+
+`GITHUB_OAUTH_CLIENT_ID`・`GITHUB_OAUTH_CLIENT_SECRET` が未設定の場合は `503 Service Unavailable` を返す。
+
+### GET /auth/scan-status — オンデマンドスキャンの進捗確認
+
+```bash
+curl -H "Authorization: Bearer $DEPSCAN_SESSION_TOKEN" \
+  "https://cyberattack-info-api.onrender.com/auth/scan-status"
+```
+
+**レスポンス例:**
+```json
+{
+  "username": "octocat",
+  "status": "done",
+  "repos_scanned": 5,
+  "started_at": "2026-09-03T10:00:00+00:00",
+  "finished_at": "2026-09-03T10:00:12+00:00",
+  "error_message": null
+}
+```
+
+`status` は `not_started` / `running` / `done` / `error` のいずれか。`Authorization: Bearer <セッショントークン>` が無効・期限切れの場合は `401 Unauthorized` を返す。
+
+> **Note:** `GET /api/depscan`・`GET /api/depscan/stats` は、既存の `X-API-KEY`（フルアクセス）に加えて `Authorization: Bearer <セッショントークン>` でも呼び出せる。セッショントークン使用時はログイン中のユーザー本人が所有するリポジトリのみに自動的に絞り込まれる（`owner` パラメータは無視され、`repo` パラメータで他人のリポジトリを指定すると `403 Forbidden` になる）。
+
 ### GET /api/crawler-logs — クローラー実行ログ一覧
 
 KEV / OSV / JVN / DEPSCAN クローラーの実行履歴（成否・件数・所要時間）を新しい順に返します。
@@ -537,18 +573,19 @@ curl http://localhost:8000/health
 # 全テストを実行（カバレッジ付き）
 pytest
 
-# 特定のテストファイルのみ実行
-pytest tests/test_api.py -v
-pytest tests/test_osv.py -v
-pytest tests/test_jvn.py -v
-pytest tests/test_notifications.py -v
+# 特定のドメインのみ実行
+pytest tests/kev/ -v
+pytest tests/osv/ -v
+pytest tests/jvn/ -v
+pytest tests/depscan/ -v
+pytest tests/auth/ -v
 
 # HTML カバレッジレポートを生成して開く
 pytest
 start htmlcov/index.html  # Mac/Linux: open htmlcov/index.html
 ```
 
-**テスト結果（最新）:** 289 テスト / カバレッジ 98%
+**テスト結果（最新）:** 323 テスト / カバレッジ 98%
 
 ---
 
@@ -572,6 +609,7 @@ mypy app/ --ignore-missing-imports
 cyberattack_info_api/
 ├── app/
 │   ├── main.py                 # FastAPI アプリ本体・APScheduler 設定・ルーター include
+│   ├── auth/                   # GitHub ログイン（DEPSCAN ダッシュボードのアクセス制御）ドメイン
 │   ├── core/                   # 横断的インフラ（config・database・auth・db_utils・notifications・共通 schemas）
 │   ├── kev/                    # CISA KEV ドメイン（models・schemas・crawler・router）
 │   ├── osv/                    # OSV ドメイン（models・schemas・crawler・router）
@@ -585,7 +623,8 @@ cyberattack_info_api/
 │   ├── conftest.py             # テスト用フィクスチャ (SQLite テスト DB、全サブフォルダに自動継承)
 │   ├── test_main.py            # app.main（health/root）テスト
 │   ├── core/ kev/ osv/ jvn/ depscan/ depsops/ crawler_logs/
-├── dashboard/               # Vercel デプロイの React ダッシュボード（KEV・OSV（Pub 含む 10 エコシステム）・JVN・DEPSCAN）
+├── dashboard/               # Vercel デプロイの React ダッシュボード（KEV・OSV（Pub 含む 10 エコシステム）・JVN・
+│                           # DEPSCAN〈GitHub ログイン必須〉）
 ├── .github/
 │   ├── dependabot.yml       # Dependabot（pip: / ・npm: /dashboard、週次で依存更新PRを自動作成）
 │   └── workflows/
@@ -626,7 +665,11 @@ cyberattack_info_api/
    | `DATABASE_URL` | Neon の接続文字列 |
    | `API_KEY` | ランダムな秘密キー（`openssl rand -hex 32`） |
    | `ENVIRONMENT` | `production` |
+   | `GITHUB_USERNAME` | DEPSCAN のスキャン対象アカウント（必須。未設定だとアプリが起動しない） |
    | `SLACK_WEBHOOK_URL` | Slack Webhook URL（任意） |
+   | `GITHUB_TOKEN` | DEPSCAN/DEPSOPS 用 GitHub PAT（任意。未設定時は DEPSCAN/DEPSOPS のみエラー終了） |
+   | `GITHUB_OAUTH_CLIENT_ID` / `GITHUB_OAUTH_CLIENT_SECRET` | DEPSCAN ダッシュボードの GitHub ログイン用（任意。[GitHub Developer Settings](https://github.com/settings/developers) で OAuth App を作成して取得。Authorization callback URL は `https://<Renderのドメイン>/auth/github/callback`） |
+   | `SESSION_SECRET_KEY` | セッションJWT署名鍵（任意。`python -c "import secrets; print(secrets.token_urlsafe(32))"` で生成） |
 
 5. **Deploy Hook URL** を取得 → GitHub Secrets の `RENDER_DEPLOY_HOOK_URL` に登録
 
@@ -661,6 +704,11 @@ cyberattack_info_api/
 | `DEPSCAN_CRON_HOUR_UTC` | - | DEPSCAN 実行時刻（時・UTC）（デフォルト: `22`） |
 | `DEPSOPS_CRON_HOUR_UTC` | - | DEPSOPS 実行時刻（時・UTC）（デフォルト: `23`） |
 | `SLACK_WEBHOOK_URL` | - | Slack Incoming Webhook URL（未設定時は通知スキップ） |
+| `GITHUB_OAUTH_CLIENT_ID` | - | DEPSCAN ダッシュボードの GitHub ログイン用 OAuth App の Client ID。未設定時は `/auth/github/login` が `503` を返すのみ |
+| `GITHUB_OAUTH_CLIENT_SECRET` | - | 同 OAuth App の Client Secret |
+| `SESSION_SECRET_KEY` | - | セッショントークン（JWT・HS256）の署名鍵。未設定のまま本番運用しないこと |
+| `FRONTEND_URL` | - | OAuth コールバック後にリダイレクトするダッシュボード URL（デフォルト: Vercel の本番URL） |
+| `API_BASE_URL_FOR_OAUTH` | - | OAuth の `redirect_uri` 組み立てに使う本 API 自身の公開 URL。GitHub OAuth App の Authorization callback URL と一致させる必要がある（デフォルト: Render の本番URL） |
 
 ---
 
@@ -677,9 +725,11 @@ cyberattack_info_api/
 | CISA KEV クロール完了（新規追加・更新あり） | `:shield: CISA KEV 更新通知`（新規・更新件数） |
 | OSV クロール完了（新規・更新あり） | `:package: OSV 脆弱性データ更新通知`（新規・更新・削除件数） |
 | JVN クロール完了（新規・更新あり） | `:jigsaw: JVN 脆弱性データ更新通知`（新規・更新件数） |
-| DEPSCAN で新規検知あり | `:rotating_light: 依存ライブラリ脆弱性を検知`（リポジトリ別グルーピング・パッケージ単位に集約したダイジェスト1通） |
+| DEPSCAN（毎日クロール）で新規検知あり | `:rotating_light: 依存ライブラリ脆弱性を検知`（リポジトリ別グルーピング・パッケージ単位に集約したダイジェスト1通） |
 | `POST /admin/dependabot-ops` 実行完了（自動マージ・要確認いずれかが1件以上） | `:robot_face: Dependabot PR 自動運用`（自動マージ済みPR一覧・要確認PR一覧と理由） |
 | クローラーエラー発生時 | `:warning:` エラー内容（KEV / OSV / JVN / DEPSCAN / DEPSOPS それぞれ） |
+
+> **Note:** DEPSCAN ダッシュボードの GitHub ログイン経由のオンデマンドスキャン（`GITHUB_USERNAME` 以外の任意アカウントでのログインを含む）では、誰がログインしても Slack 通知・GitHub Issue 起票は一切行われない。Slack 通知が飛ぶのは `GITHUB_USERNAME`（`baby-feelings`）向けの毎日クロールのみ。
 
 ### GitHub Issue 自動起票（DEPSCAN）
 
