@@ -286,6 +286,20 @@ Open Issue を検索し、あれば `add_issue_comment` で追記、無ければ
 不足等）はリポジトリ単位で `except httpx.HTTPError` により握りつぶし、DEPSCAN 全体の
 成功可否には影響させない。
 
+### DEPSCAN の解決済みレコードは保持期間超過で自動削除する（未解決は対象外）
+`app.depscan.crawler._delete_old_depscan_records` が、`resolved_at` が
+`DEPSCAN_RETENTION_DAYS`（デフォルト 180 日）より古いレコードのみを削除する
+（KEV/OSV/JVN と同様の DB 容量管理）。**未解決のレコードは経過期間に関わらず削除しない**
+（対応が必要な情報のため、履歴として残す）。`_resolve_stale_findings` の直後・
+`fetch_and_scan_dependencies` 内で呼ばれ、削除失敗はクロール全体を失敗させないよう
+try/except で握りつぶす（KEV/OSV/JVN の削除処理と同じ方針）。
+
+`CrawlerLog`（`crawler_type="DEPSCAN"`）の `inserted`/`updated`/`deleted` は他クローラーと
+意味が異なる点に注意: `inserted`=新規検知件数（共通）、`deleted`=今回のスキャンで解決済みに
+した件数（削除ではない。既存の挙動を維持するため据え置き）、`updated`=今回新設した保持期間
+超過の**実削除**件数（DEPSCAN の `updated` は元々常に 0 だったため、新しいカラムを追加せずに
+ここへ格納している）。
+
 ### Dependabot を本リポジトリおよび DEPSCAN 対象の全リポジトリで有効化している
 DEPSCAN が「検知」、Dependabot が「実際の修正 PR 作成」を担う役割分担。本リポジトリの
 `.github/dependabot.yml` は `pip`（`/`）・`npm`（`/dashboard`）を週次でチェックする。

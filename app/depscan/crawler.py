@@ -6,6 +6,7 @@ OSV API とリアルタイム照合して脆弱な依存パッケージを検知
 APScheduler から毎日呼び出される。
 """
 import logging
+from datetime import timedelta
 from typing import Any
 
 import httpx
@@ -225,6 +226,29 @@ def _resolve_stale_findings(
     return resolved
 
 
+def _delete_old_depscan_records(db: Session) -> int:
+    """保持期間（DEPSCAN_RETENTION_DAYS）を超えて解決済みのままの DEPSCAN レコードを削除する。
+
+    resolved_at が cutoff より古い（=解決済みのまま長期間経過した）レコードのみを
+    対象とする。未解決のレコードは対応が必要な情報のため、経過期間に関わらず削除しない。
+
+    Returns:
+        削除件数
+    """
+    cutoff = now_utc() - timedelta(days=settings.DEPSCAN_RETENTION_DAYS)
+    deleted = (
+        db.query(DependencyFinding)
+        .filter(
+            DependencyFinding.resolved_at.is_not(None),
+            DependencyFinding.resolved_at < cutoff,
+        )
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    logger.info("DEPSCAN old resolved records deleted: %d (resolved_at < %s)", deleted, cutoff)
+    return deleted
+
+
 def _file_github_issues(new_snapshots: list[dict[str, Any]]) -> None:
     """新規検知を、検知されたリポジトリ自身に GitHub Issue として自動起票する。
 
@@ -277,6 +301,7 @@ def fetch_and_scan_dependencies() -> tuple[int, int, int]:
     started_at = now_utc()
     new_count = 0
     resolved_count = 0
+    purged_count = 0
     repos_scanned = 0
     new_snapshots: list[dict[str, Any]] = []
 
@@ -299,6 +324,12 @@ def fetch_and_scan_dependencies() -> tuple[int, int, int]:
         }
         resolved_count = _resolve_stale_findings(db, current_keys)
 
+        # 保持期間超過の削除失敗はクロール全体を失敗させない（KEV/OSV/JVN と同様の方針）
+        try:
+            purged_count = _delete_old_depscan_records(db)
+        except Exception as exc:
+            logger.error("Failed to delete old DEPSCAN records: %s", exc, exc_info=True)
+
     except Exception as exc:
         write_crawler_log(
             crawler_type="DEPSCAN",
@@ -306,7 +337,7 @@ def fetch_and_scan_dependencies() -> tuple[int, int, int]:
             started_at=started_at,
             finished_at=now_utc(),
             inserted=new_count,
-            updated=0,
+            updated=purged_count,
             deleted=resolved_count,
             error_message=str(exc),
         )
@@ -316,8 +347,8 @@ def fetch_and_scan_dependencies() -> tuple[int, int, int]:
         db.close()
 
     logger.info(
-        "=== DEPSCAN completed: new=%d, resolved=%d, repos=%d ===",
-        new_count, resolved_count, repos_scanned,
+        "=== DEPSCAN completed: new=%d, resolved=%d, purged=%d, repos=%d ===",
+        new_count, resolved_count, purged_count, repos_scanned,
     )
     write_crawler_log(
         crawler_type="DEPSCAN",
@@ -325,7 +356,7 @@ def fetch_and_scan_dependencies() -> tuple[int, int, int]:
         started_at=started_at,
         finished_at=now_utc(),
         inserted=new_count,
-        updated=0,
+        updated=purged_count,
         deleted=resolved_count,
     )
     notify_dependency_findings(new_snapshots)

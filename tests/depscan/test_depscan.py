@@ -529,6 +529,51 @@ class TestResolveStaleFindings:
         assert octocat_finding.resolved_at is not None
 
 
+class TestDeleteOldDepscanRecords:
+    def test_deletes_old_resolved_records(self, db_session):
+        """保持期間（DEPSCAN_RETENTION_DAYS）を超えて解決済みのレコードが削除されること。"""
+        from app.depscan.crawler import _delete_old_depscan_records
+
+        old_resolved = _NOW - timedelta(days=181)
+        _make_finding(db_session, osv_id="GHSA-old-resolved", resolved_at=old_resolved)
+
+        deleted = _delete_old_depscan_records(db_session)
+
+        assert deleted == 1
+        assert db_session.query(DependencyFinding).count() == 0
+
+    def test_keeps_recently_resolved_records(self, db_session):
+        """保持期間内に解決したレコードは削除されないこと。"""
+        from app.depscan.crawler import _delete_old_depscan_records
+
+        recent_resolved = _NOW - timedelta(days=1)
+        _make_finding(db_session, osv_id="GHSA-recent-resolved", resolved_at=recent_resolved)
+
+        deleted = _delete_old_depscan_records(db_session)
+
+        assert deleted == 0
+        assert db_session.query(DependencyFinding).count() == 1
+
+    def test_keeps_unresolved_records_regardless_of_age(self, db_session):
+        """未解決のレコードは detected_at がどれだけ古くても削除されないこと。"""
+        from app.depscan.crawler import _delete_old_depscan_records
+
+        very_old = _NOW - timedelta(days=1000)
+        _make_finding(
+            db_session, osv_id="GHSA-unresolved-old", detected_at=very_old, resolved_at=None,
+        )
+
+        deleted = _delete_old_depscan_records(db_session)
+
+        assert deleted == 0
+        assert db_session.query(DependencyFinding).count() == 1
+
+    def test_empty_db_returns_zero(self, db_session):
+        from app.depscan.crawler import _delete_old_depscan_records
+
+        assert _delete_old_depscan_records(db_session) == 0
+
+
 class TestFetchAndScanDependencies:
     def test_success_path(self, db_session):
         with patch(
@@ -551,6 +596,24 @@ class TestFetchAndScanDependencies:
         assert repos_scanned == 1
         mock_notify.assert_called_once()
         mock_file_issues.assert_called_once()
+
+    def test_delete_failure_does_not_fail_crawler(self, db_session):
+        """_delete_old_depscan_records が失敗してもクローラー全体はエラーにならないこと。"""
+        with patch(
+            "app.depscan.crawler._collect_dependencies", return_value=({}, 0),
+        ), patch(
+            "app.depscan.crawler._build_findings", return_value=[],
+        ), patch("app.depscan.crawler.SessionLocal", return_value=db_session), \
+           patch(
+               "app.depscan.crawler._delete_old_depscan_records",
+               side_effect=Exception("delete failed"),
+           ), \
+           patch("app.depscan.crawler.notify_dependency_findings"), \
+           patch("app.depscan.crawler._file_github_issues"):
+            new_count, resolved_count, repos_scanned = fetch_and_scan_dependencies()
+
+        assert new_count == 0
+        assert repos_scanned == 0
 
     def test_error_path_logs_and_notifies(self, db_session):
         with patch(
