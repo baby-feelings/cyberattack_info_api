@@ -558,8 +558,8 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | `finished_at` | string (ISO 8601) | 終了日時 |
 | `duration_seconds` | float | 所要時間（秒） |
 | `inserted` | int | 新規挿入件数 |
-| `updated` | int | 更新件数 |
-| `deleted` | int | 削除件数（OSV のみ） |
+| `updated` | int | 更新件数（KEV/OSV/JVN）。DEPSCAN では保持期間超過による削除件数を表す |
+| `deleted` | int | 削除件数（KEV/OSV/JVN）。DEPSCAN では解決済みにした件数を表す |
 | `error_message` | string \| null | エラーメッセージ（エラー時のみ） |
 
 ---
@@ -618,7 +618,9 @@ Upsert ロジック:
     バージョン一覧〉した1通のダイジェスト）
   - 検知されたリポジトリ自身に GitHub Issue も自動起票（タイトル固定・Open Issue があれば
     コメント追記、無ければ新規作成）
-- **今回のスキャンで検知されなくなった既存レコード** → `resolved_at` を設定（削除はしない）
+- **今回のスキャンで検知されなくなった既存レコード** → `resolved_at` を設定
+- **`resolved_at` が 180 日以上前のレコード** → 自動削除（`DEPSCAN_RETENTION_DAYS` で変更可。
+  未解決レコードは対象外）
 - `GITHUB_TOKEN` 未設定時は DEPSCAN のみエラー終了し `crawler_logs` にエラー記録
   （`GITHUB_USERNAME` は必須環境変数のため、未設定だとアプリ自体が起動しない）。
   Issue 自動起票には `Issues: Write` 権限も必要（無い場合は Issue 作成のみ失敗し、

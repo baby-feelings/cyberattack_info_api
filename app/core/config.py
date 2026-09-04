@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     GITHUB_USERNAME: str
     # DEPSCAN: JST 7:00 = UTC 22:00（KEV→OSV→JVN の後段）
     DEPSCAN_CRON_HOUR_UTC: int = 22
+    # DEPSCAN データの保持期間（日数）: 解決済み（resolved_at 設定済み）のまま
+    # この日数を超えて経過したレコードのみ定期削除する（未解決レコードは対象外）
+    DEPSCAN_RETENTION_DAYS: int = 180
 
     # Dependabot PR 自動運用（DEPSOPS）設定
     # JST 8:00 = UTC 23:00（DEPSCAN の後段。Dependabot が新規検知に反応する時間を確保）
