@@ -1,7 +1,10 @@
 // API クライアント: 本番 API への全リクエストを集約する
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://cyberattack-info-api.onrender.com'
-const API_KEY = import.meta.env.VITE_API_KEY || ''
+// このダッシュボードはブラウザに配信される公開資産のため、/admin/* も保護する
+// 管理者用キーではなく、読み取り専用エンドポイント（KEV/OSV/JVN/crawler-logs）にしか
+// 通用しない PUBLIC_API_KEY を埋め込む（バックエンド側は require_public_api_key で受理）。
+const API_KEY = import.meta.env.VITE_PUBLIC_API_KEY || ''
 
 // authToken 指定時は X-API-KEY の代わりに GitHub ログインのセッショントークンを送る
 // （DEPSCAN のログインユーザー向けエンドポイント用。サーバー側で本人所有リポジトリに強制的に絞り込まれる）

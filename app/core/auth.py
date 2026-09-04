@@ -36,3 +36,30 @@ def require_api_key(api_key: str = Security(_api_key_header)) -> str:
             detail="Invalid or missing API Key. Set X-API-KEY header.",
         )
     return api_key
+
+
+def require_public_api_key(api_key: str = Security(_api_key_header)) -> str:
+    """読み取り専用エンドポイント向けの認証依存関数。
+    管理者用 API_KEY に加えて、公開ダッシュボード用の PUBLIC_API_KEY も許可する。
+    /admin/* 等の管理系エンドポイントは require_api_key（API_KEY のみ）で保護されて
+    いるため、PUBLIC_API_KEY がブラウザの JS バンドルから漏洩しても管理操作はできない。
+
+    Args:
+        api_key: リクエストの X-API-KEY ヘッダー値
+
+    Returns:
+        検証済みの API キー文字列
+
+    Raises:
+        HTTPException 403: いずれのキーにも一致しない、または欠落している場合
+    """
+    if api_key:
+        if hmac.compare_digest(api_key, settings.API_KEY):
+            return api_key
+        if settings.PUBLIC_API_KEY and hmac.compare_digest(api_key, settings.PUBLIC_API_KEY):
+            return api_key
+    logger.warning("Unauthorized public API access attempt")
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Invalid or missing API Key. Set X-API-KEY header.",
+    )

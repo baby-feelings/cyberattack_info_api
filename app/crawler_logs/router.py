@@ -8,7 +8,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.core.auth import require_api_key
+from app.core.auth import require_public_api_key
 from app.core.database import get_db
 from app.crawler_logs.models import CrawlerLog
 from app.crawler_logs.schemas import CrawlerLogOut
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix="/api/crawler-logs",
     tags=["crawler-logs"],
-    dependencies=[Depends(require_api_key)],
+    dependencies=[Depends(require_public_api_key)],
 )
 
 

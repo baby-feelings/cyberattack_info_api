@@ -171,6 +171,22 @@ dashboard/               # Vercel デプロイの React ダッシュボード
 
 ## 重要な実装上の注意事項
 
+### 公開ダッシュボード用キー（PUBLIC_API_KEY）と管理者用キー（API_KEY）の分離
+React ダッシュボード（`dashboard/`）は Vercel でビルドされ静的資産としてブラウザに配信される。
+Vite の `VITE_` 接頭辞の環境変数はビルド時に JS バンドルへ平文で埋め込まれるため、
+ダッシュボードに管理者用 `API_KEY`（`/admin/crawl`・`/admin/dependabot-ops` 等、書き込み・
+実行系エンドポイントも保護する単一キー）を設定すると、誰でもバンドルから抽出して
+管理操作を実行できてしまう（実際に本番でこの状態が発生し、キーローテーションで対応した
+インシデントあり）。これを防ぐため、読み取り専用エンドポイント（KEV/OSV/JVN/crawler-logs
+の各 router）だけは `app.core.auth.require_public_api_key`（`API_KEY` または
+`PUBLIC_API_KEY` のいずれかを許可）で保護し、ダッシュボードの `VITE_PUBLIC_API_KEY` には
+`PUBLIC_API_KEY` の値のみを設定する。`/admin/*`（`app/main.py`）は従来通り
+`require_api_key`（`API_KEY` のみ許可）のままで、`PUBLIC_API_KEY` では通らない。
+DEPSCAN（`app/depscan/router.py`）はダッシュボードから `X-API-KEY` を一切送らず GitHub
+ログインのセッショントークンのみを使うため、この分離の対象外（`_resolve_access` は
+引き続き `API_KEY` のみを直接比較する）。Claude Code 等の既存クライアントは引き続き
+`API_KEY` を使えばよく、SKILL.md の運用は変わらない。
+
 ### API キー認証のタイミング攻撃対策
 ```python
 # ❌ 通常の文字列比較（タイミング攻撃に脆弱）
