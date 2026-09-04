@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from app.core.auth import require_api_key
+from app.core.auth import require_public_api_key
 from app.core.database import get_db
 from app.core.db_utils import year_month_expr
 from app.core.schemas import MonthlyStat
@@ -25,7 +25,7 @@ router = APIRouter(
     prefix="/api/vulnerabilities",
     tags=["vulnerabilities"],
     # 全エンドポイントに X-API-KEY 認証を適用
-    dependencies=[Depends(require_api_key)],
+    dependencies=[Depends(require_public_api_key)],
 )
 
 

@@ -31,6 +31,12 @@ curl -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 キーが不正または未設定の場合は `403 Forbidden` が返ります。
 API キーの比較には `hmac.compare_digest` を使用し、タイミング攻撃を防止しています。
 
+> **Note:** 上記の `API_KEY` は管理者用・フルアクセスキー（`/admin/*` を含む全エンドポイントに使用可）。
+> 別途、読み取り専用エンドポイント（KEV/OSV/JVN/crawler-logs）だけに通用する `PUBLIC_API_KEY`
+> も存在する（React ダッシュボードのビルド成果物に埋め込まれるキーで、ブラウザから誰でも
+> 抽出できるため管理者用キーとは分離してある）。Claude Code からの利用では引き続き
+> `API_KEY` を使えばよく、影響はない。
+
 > **Note:** 本番環境では Swagger UI（`/docs`）と ReDoc（`/redoc`）はセキュリティ上の理由で無効化されています。
 > API 仕様の詳細は本ドキュメントまたは `README.md` を参照してください。
 > ローカル開発時は `http://localhost:8000/docs` で OpenAPI ドキュメントを参照できます。

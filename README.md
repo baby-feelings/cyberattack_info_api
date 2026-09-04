@@ -663,7 +663,8 @@ cyberattack_info_api/
    | 変数名 | 値 |
    |--------|-----|
    | `DATABASE_URL` | Neon の接続文字列 |
-   | `API_KEY` | ランダムな秘密キー（`openssl rand -hex 32`） |
+   | `API_KEY` | 管理者用・フルアクセスの秘密キー（`openssl rand -hex 32`）。**ブラウザに配信されるダッシュボードには絶対に設定しないこと** |
+   | `PUBLIC_API_KEY` | 公開ダッシュボード用の読み取り専用キー（任意・別途 `openssl rand -hex 32`）。Vercel の `VITE_PUBLIC_API_KEY` と同じ値を設定する |
    | `ENVIRONMENT` | `production` |
    | `GITHUB_USERNAME` | DEPSCAN のスキャン対象アカウント（必須。未設定だとアプリが起動しない） |
    | `SLACK_WEBHOOK_URL` | Slack Webhook URL（任意） |
@@ -689,7 +690,8 @@ cyberattack_info_api/
 | 変数名 | 必須 | 説明 |
 |--------|------|------|
 | `DATABASE_URL` | ✅ | DB 接続文字列（SQLite or PostgreSQL） |
-| `API_KEY` | ✅ | X-API-KEY 認証キー（十分に長いランダム文字列） |
+| `API_KEY` | ✅ | X-API-KEY 認証キー（管理者用・フルアクセス。十分に長いランダム文字列。**ダッシュボードには絶対に設定しないこと**） |
+| `PUBLIC_API_KEY` | - | 公開ダッシュボード用の読み取り専用 X-API-KEY（任意。未設定時は読み取り専用エンドポイントも `API_KEY` のみで認証される） |
 | `ENVIRONMENT` | - | `development` / `production`（デフォルト: `development`） |
 | `CISA_KEV_URL` | - | CISA KEV フィード URL（通常は変更不要） |
 | `CRON_HOUR_UTC` | - | KEV クローラー実行時刻（時・UTC）（デフォルト: `19`） |

@@ -8,8 +8,14 @@ class Settings(BaseSettings):
     # データベース接続文字列（例: postgresql://user:pass@host/dbname）
     DATABASE_URL: str
 
-    # API認証キー（X-API-KEY ヘッダーで受け取る固定キー）
+    # API認証キー（X-API-KEY ヘッダーで受け取る固定キー。管理者用・フルアクセス）
     API_KEY: str
+
+    # 公開ダッシュボード用の読み取り専用 API キー（X-API-KEY ヘッダー）。
+    # React ダッシュボードのビルド成果物（VITE_ 環境変数）はブラウザに配信され誰でも
+    # 抽出できるため、/admin/* も保護する API_KEY をダッシュボードに埋め込まない。
+    # 未設定の場合、読み取り専用エンドポイントは API_KEY のみで認証される（後方互換）。
+    PUBLIC_API_KEY: str = ""
 
     # 実行環境識別子（development / production）
     ENVIRONMENT: str = "development"
