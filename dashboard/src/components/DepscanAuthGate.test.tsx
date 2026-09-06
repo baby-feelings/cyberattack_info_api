@@ -2,24 +2,24 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { DepscanAuthGate } from './DepscanAuthGate'
-import { fetchScanStatus, UnauthorizedError, githubLoginUrl } from '../api/client'
+import { fetchScanStatus, logout, UnauthorizedError, githubLoginUrl } from '../api/client'
 
 vi.mock('../api/client', async () => {
   const actual = await vi.importActual<typeof import('../api/client')>('../api/client')
   return {
     ...actual,
     fetchScanStatus: vi.fn(),
+    logout: vi.fn().mockResolvedValue(undefined),
     githubLoginUrl: vi.fn(() => 'https://cyberattack-info-api.onrender.com/auth/github/login'),
   }
 })
 
 vi.mock('./DepscanPanel', () => ({
-  DepscanPanel: ({ authToken }: { authToken?: string }) => (
-    <div data-testid="depscan-panel">panel for {authToken}</div>
-  ),
+  DepscanPanel: () => <div data-testid="depscan-panel">panel</div>,
 }))
 
 const mockedFetchScanStatus = vi.mocked(fetchScanStatus)
+const mockedLogout = vi.mocked(logout)
 
 function setUrl(search: string) {
   window.history.pushState({}, '', `/${search}`)
@@ -29,6 +29,7 @@ describe('DepscanAuthGate', () => {
   beforeEach(() => {
     localStorage.clear()
     setUrl('')
+    mockedLogout.mockResolvedValue(undefined)
     vi.useFakeTimers({ shouldAdvanceTime: true })
   })
 
@@ -46,8 +47,7 @@ describe('DepscanAuthGate', () => {
     expect(githubLoginUrl).toHaveBeenCalled()
   })
 
-  it('restores a session from localStorage and shows the scanning state', async () => {
-    localStorage.setItem('depscan_session_token', 'tok-abc')
+  it('restores the displayed username from localStorage and shows the scanning state', async () => {
     localStorage.setItem('depscan_session_user', 'octocat')
     mockedFetchScanStatus.mockResolvedValue({ username: 'octocat', status: 'running' })
 
@@ -57,31 +57,28 @@ describe('DepscanAuthGate', () => {
     expect(screen.getByText(/スキャン中です/)).toBeInTheDocument()
   })
 
-  it('consumes OAuth callback params from the URL, stores them, and strips the URL', async () => {
-    setUrl('?depscan_token=new-token&depscan_user=newuser&other=1')
+  it('consumes the OAuth callback username from the URL, stores it, and strips the URL', async () => {
+    // セッションJWT自体はHttpOnly Cookieで渡されるため、URLにはユーザー名のみ載る
+    setUrl('?depscan_user=newuser&other=1')
     mockedFetchScanStatus.mockResolvedValue({ username: 'newuser', status: 'done' })
 
     render(<DepscanAuthGate />)
 
     await waitFor(() => expect(screen.getByTestId('depscan-panel')).toBeInTheDocument())
-    expect(localStorage.getItem('depscan_session_token')).toBe('new-token')
     expect(localStorage.getItem('depscan_session_user')).toBe('newuser')
-    expect(window.location.search).not.toContain('depscan_token')
+    expect(window.location.search).not.toContain('depscan_user')
     expect(window.location.search).toContain('other=1')
   })
 
   it('shows the DepscanPanel once the scan is done', async () => {
-    localStorage.setItem('depscan_session_token', 'tok-abc')
     localStorage.setItem('depscan_session_user', 'octocat')
     mockedFetchScanStatus.mockResolvedValue({ username: 'octocat', status: 'done' })
 
     render(<DepscanAuthGate />)
     await waitFor(() => expect(screen.getByTestId('depscan-panel')).toBeInTheDocument())
-    expect(screen.getByTestId('depscan-panel')).toHaveTextContent('panel for tok-abc')
   })
 
   it('shows an error banner but still renders the panel when the scan errored', async () => {
-    localStorage.setItem('depscan_session_token', 'tok-abc')
     localStorage.setItem('depscan_session_user', 'octocat')
     mockedFetchScanStatus.mockResolvedValue({
       username: 'octocat', status: 'error', error_message: 'GitHub API down',
@@ -93,19 +90,20 @@ describe('DepscanAuthGate', () => {
   })
 
   it('logs out automatically on UnauthorizedError without a confirm dialog', async () => {
-    localStorage.setItem('depscan_session_token', 'expired-token')
     localStorage.setItem('depscan_session_user', 'octocat')
     mockedFetchScanStatus.mockRejectedValue(new UnauthorizedError('expired'))
     const confirmSpy = vi.spyOn(window, 'confirm')
 
     render(<DepscanAuthGate />)
     await waitFor(() => expect(screen.getByText('GitHubでログイン')).toBeInTheDocument())
-    expect(localStorage.getItem('depscan_session_token')).toBeNull()
+    expect(localStorage.getItem('depscan_session_user')).toBeNull()
     expect(confirmSpy).not.toHaveBeenCalled()
+    // 自動ログアウトはサーバーへのlogout呼び出しを伴わない（Cookie自体はまだ有効期限内の
+    // 可能性があるため。明示的なログアウトボタンでのみサーバー側Cookieを削除する）
+    expect(mockedLogout).not.toHaveBeenCalled()
   })
 
   it('does not log out on a transient network error and retries polling', async () => {
-    localStorage.setItem('depscan_session_token', 'tok-abc')
     localStorage.setItem('depscan_session_user', 'octocat')
     mockedFetchScanStatus
       .mockRejectedValueOnce(new Error('network blip'))
@@ -113,15 +111,14 @@ describe('DepscanAuthGate', () => {
 
     render(<DepscanAuthGate />)
     await waitFor(() => expect(mockedFetchScanStatus).toHaveBeenCalledTimes(1))
-    expect(localStorage.getItem('depscan_session_token')).toBe('tok-abc')
+    expect(localStorage.getItem('depscan_session_user')).toBe('octocat')
 
     await vi.advanceTimersByTimeAsync(4000)
     await waitFor(() => expect(screen.getByTestId('depscan-panel')).toBeInTheDocument())
   })
 
-  it('logs out only after confirming when the logout button is clicked', async () => {
+  it('logs out only after confirming when the logout button is clicked, and clears the server cookie', async () => {
     vi.useRealTimers()
-    localStorage.setItem('depscan_session_token', 'tok-abc')
     localStorage.setItem('depscan_session_user', 'octocat')
     mockedFetchScanStatus.mockResolvedValue({ username: 'octocat', status: 'done' })
     const user = userEvent.setup()
@@ -133,10 +130,12 @@ describe('DepscanAuthGate', () => {
     await user.click(screen.getByText('ログアウト'))
     expect(confirmSpy).toHaveBeenCalled()
     expect(screen.getByText('ログアウト')).toBeInTheDocument() // still logged in
+    expect(mockedLogout).not.toHaveBeenCalled()
 
     confirmSpy.mockReturnValueOnce(true)
     await user.click(screen.getByText('ログアウト'))
     await waitFor(() => expect(screen.getByText('GitHubでログイン')).toBeInTheDocument())
-    expect(localStorage.getItem('depscan_session_token')).toBeNull()
+    expect(localStorage.getItem('depscan_session_user')).toBeNull()
+    expect(mockedLogout).toHaveBeenCalledTimes(1)
   })
 })

@@ -403,7 +403,7 @@ curl -H "X-API-KEY: your-key" \
 https://cyberattack-info-api.onrender.com/auth/github/login
 ```
 
-GitHub の認可画面へリダイレクトする。認可後は `/auth/github/callback` へ戻り、セッショントークン（JWT）を発行してダッシュボード（`FRONTEND_URL`）へ `?depscan_token=...&depscan_user=...` としてリダイレクトする。ログインの都度、そのアカウントが所有するリポジトリをオンデマンドでスキャンする（直近 24 時間以内にスキャン済みならスキップして DB の結果をそのまま使う）。
+GitHub の認可画面へリダイレクトする。認可後は `/auth/github/callback` へ戻り、セッショントークン（JWT）を HttpOnly・Secure・SameSite=None の Cookie（`depscan_session`）として発行し、ダッシュボード（`FRONTEND_URL`）へ `?depscan_user=...`（ユーザー名のみ）としてリダイレクトする（RFC 9700 に基づき、アクセストークン相当の値を URL クエリには載せない）。ログインの都度、そのアカウントが所有するリポジトリをオンデマンドでスキャンする（直近 24 時間以内にスキャン済みならスキップして DB の結果をそのまま使う）。
 
 `GITHUB_OAUTH_CLIENT_ID`・`GITHUB_OAUTH_CLIENT_SECRET` が未設定の場合は `503 Service Unavailable` を返す。
 
@@ -426,9 +426,19 @@ curl -H "Authorization: Bearer $DEPSCAN_SESSION_TOKEN" \
 }
 ```
 
-`status` は `not_started` / `running` / `done` / `error` のいずれか。`Authorization: Bearer <セッショントークン>` が無効・期限切れの場合は `401 Unauthorized` を返す。
+`status` は `not_started` / `running` / `done` / `error` のいずれか。ブラウザからは `depscan_session` Cookie が自動送信される（`curl` で確認する場合は上記のように `Authorization: Bearer` ヘッダーでも代替可能）。無効・期限切れの場合は `401 Unauthorized` を返す。
 
-> **Note:** `GET /api/depscan`・`GET /api/depscan/stats` は、既存の `X-API-KEY`（フルアクセス）に加えて `Authorization: Bearer <セッショントークン>` でも呼び出せる。セッショントークン使用時はログイン中のユーザー本人が所有するリポジトリのみに自動的に絞り込まれる（`owner` パラメータは無視され、`repo` パラメータで他人のリポジトリを指定すると `403 Forbidden` になる）。
+### POST /auth/logout — ログアウト（セッションCookieの削除）
+
+```bash
+curl -X POST -b "depscan_session=$DEPSCAN_SESSION_TOKEN" \
+  "https://cyberattack-info-api.onrender.com/auth/logout"
+# → 200 OK: {"logged_out": true}
+```
+
+HttpOnly Cookie は JavaScript から直接削除できないため、ダッシュボードのログアウトボタンはこのエンドポイントを呼び出してサーバー側で Cookie を削除する。
+
+> **Note:** `GET /api/depscan`・`GET /api/depscan/stats` は、既存の `X-API-KEY`（フルアクセス）に加えて、セッショントークン（`depscan_session` Cookie または `Authorization: Bearer <セッショントークン>`）でも呼び出せる。セッショントークン使用時はログイン中のユーザー本人が所有するリポジトリのみに自動的に絞り込まれる（`owner` パラメータは無視され、`repo` パラメータで他人のリポジトリを指定すると `403 Forbidden` になる）。
 
 ### GET /api/crawler-logs — クローラー実行ログ一覧
 

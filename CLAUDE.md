@@ -520,17 +520,33 @@ DEPSCAN タブは誰でも閲覧できてしまう状態だったため、任意
 `state` を httpOnly Cookie に保持）→ `/auth/github/callback` で `code` を `access_token` に
 交換し、`GET /user` でログインユーザー名（`login`）を取得 → セッション JWT（PyJWT、
 `SESSION_SECRET_KEY` で HS256 署名、24時間有効）を発行し、フロントエンド
-（`FRONTEND_URL`）へ `?depscan_token=...&depscan_user=...` としてリダイレクトする。
+（`FRONTEND_URL`）へ `?depscan_user=...`（ユーザー名のみ）としてリダイレクトする。
 OAuth スコープは `repo`（GitHub OAuth App は fine-grained PAT のような読み取り専用スコープ
 を持たないため、本人所有の公開・非公開リポジトリへの読み取りアクセスに必要）。
+
+**セッションJWTの受け渡し方式（Issue #128・RFC 9700対応）:**
+当初はセッションJWTをフロントエンドURLのクエリ文字列（`?depscan_token=...`）に付与して
+渡していたが、RFC 9700（OAuth 2.0 Security BCP）がアクセストークン相当の値をURIクエリ
+パラメータで渡すことを明示的に禁止しているため（ブラウザ履歴・Referer・プロキシ/サーバー
+ログ等への漏えいリスク）、HttpOnly・Secure・SameSite=None の Cookie（`depscan_session`。
+`app/auth/router.py` の `SESSION_COOKIE` 定数）に変更した。バックエンド（Render）と
+フロントエンド（Vercel）はドメインが異なるクロスサイト関係のため、`SameSite=Lax/Strict`
+だとダッシュボードの `fetch` でCookieが送信されない点に注意（`SameSite=None; Secure`
+が必須）。これに伴い `app/main.py` の CORS 設定に `allow_credentials=True` を追加し
+（`allow_origins` はワイルドカードでなく明示オリジンのみなので安全に併用可）、フロント
+エンドの全 `fetch` 呼び出し（DEPSCAN関連のみ）に `credentials: 'include'` を付与している。
+ログアウトはブラウザJSからHttpOnly Cookieを直接削除できないため、`POST /auth/logout`
+（サーバー側で `delete_cookie`）を新設し経由させる。
 
 **`/api/depscan`・`/api/depscan/stats` の二重認証:**
 `app/depscan/router.py` の `_resolve_access` が `X-API-KEY`（既存の共有鍵、絞り込みなしの
 フルアクセス。Claude Code 等の既存クライアント向け・SKILL.md の運用を壊さないため維持）
-または `Authorization: Bearer <セッションJWT>` を受け付ける。セッション認証の場合は
-`owner` クエリパラメータをログインユーザー名で強制上書きし、`repo` パラメータで
-`{username}/` 以外のリポジトリを直接指定しようとした場合は 403 で拒否する
-（owner 制限の迂回防止）。
+またはセッショントークン（`depscan_session` Cookie か `Authorization: Bearer <セッション
+JWT>`。ブラウザ以外の将来のクライアント向けに後方互換で両方受け付ける）を検証する。
+セッション認証の場合は `owner` クエリパラメータをログインユーザー名で強制上書きし、
+`repo` パラメータで `{username}/` 以外のリポジトリを直接指定しようとした場合は 403 で
+拒否する（owner 制限の迂回防止）。`app/auth/router.py` の `get_current_username`
+（`/auth/scan-status` 用）も同様に Cookie/Bearer の両方を受け付ける。
 
 **オンデマンドスキャン（`run_depscan_for_user`）:**
 DEPSCAN の毎日クロール（`fetch_and_scan_dependencies`）は `GITHUB_USERNAME`
@@ -565,16 +581,21 @@ naive で返すため、比較前に `tzinfo=UTC` を補完している（Postgr
 
 **フロントエンド（`DepscanAuthGate.tsx`）:**
 未ログイン時は「GitHubでログイン」ボタンを表示。OAuthコールバックからの復帰
-（`/?depscan_token=...&depscan_user=...`）を検出して `localStorage` にセッションを保存し、
-URLからは `history.replaceState` で即座に取り除く（リロード時の再送信・共有URLへの
-トークン漏洩防止）。ログイン後は `/auth/scan-status` を4秒間隔でポーリングし、スキャン
-完了まで（既にキャッシュがあれば実質即座に）ローディング表示。**ネットワーク瞬断等の
-一時的なエラーではログアウトさせず、セッショントークンが実際に無効（401）な場合のみ
-ログアウト扱いにする**（`client.ts` の `UnauthorizedError` で区別。ローカル動作確認中に
-「fetch失敗のたびに毎回ログアウトしてしまう」不具合を発見し修正済み）。ログアウトボタンは
-`window.confirm` による確認ダイアログを挟んでから `localStorage` をクリアする（誤クリック
-防止。トークン失効時の自動ログアウトなど内部処理からの呼び出しでは確認しない）。
-`App.tsx` は URL に `depscan_token` があれば DEPSCAN タブを自動選択する。
+（`/?depscan_user=...`。セッションJWT自体はHttpOnly Cookieで渡るためURLには載らない）
+を検出し、UI即時表示用にユーザー名（非機微情報）だけを `localStorage` に保存して
+URLからは `history.replaceState` で即座に取り除く。**ログイン状態の正はサーバー側**
+（Cookieの有効性）であり、`localStorage` の値はあくまで表示上のヒントに過ぎない。
+ログイン後は `/auth/scan-status`（`credentials: 'include'` でCookieを自動送信）を
+4秒間隔でポーリングし、スキャン完了まで（既にキャッシュがあれば実質即座に）ローディング
+表示。**ネットワーク瞬断等の一時的なエラーではログアウトさせず、セッションが実際に
+無効（401）な場合のみログアウト扱いにする**（`client.ts` の `UnauthorizedError` で
+区別。ローカル動作確認中に「fetch失敗のたびに毎回ログアウトしてしまう」不具合を発見し
+修正済み）。ログアウトボタンは `window.confirm` による確認ダイアログを挟んでから
+`POST /auth/logout`（サーバー側Cookie削除）を呼び、`localStorage` をクリアする
+（誤クリック防止。セッション失効時の自動ログアウトなど内部処理からの呼び出しでは
+確認ダイアログを出さず、`/auth/logout` の呼び出しも省略する＝Cookie自体はまだ有効
+期限内の可能性があるため、明示的なログアウト操作でのみサーバー側Cookieを削除する）。
+`App.tsx` は URL に `depscan_user` があれば DEPSCAN タブを自動選択する。
 
 ### index.css の CSS カスケードレイヤーに関する注意
 `*, *::before, *::after` の余白リセットは必ず `@layer base` の中に書くこと。

@@ -326,8 +326,9 @@ React ダッシュボードの DEPSCAN タブ向けの GitHub OAuth ログイン
 | エンドポイント | 用途 |
 |---------------|------|
 | `GET /auth/github/login` | GitHub 認可画面へリダイレクト（`<a href>` で開く） |
-| `GET /auth/github/callback` | OAuth コールバック（内部利用のみ） |
-| `GET /auth/scan-status` | ログイン中ユーザーのオンデマンドスキャン進捗を取得（`Authorization: Bearer <セッショントークン>` 必須） |
+| `GET /auth/github/callback` | OAuth コールバック（内部利用のみ）。セッションJWTはHttpOnly Cookie（`depscan_session`）として発行し、URLクエリには載せない（RFC 9700対応） |
+| `GET /auth/scan-status` | ログイン中ユーザーのオンデマンドスキャン進捗を取得（`depscan_session` Cookie または `Authorization: Bearer <セッショントークン>` 必須） |
+| `POST /auth/logout` | セッションCookieを削除（HttpOnly のため JS から直接削除できず、このエンドポイント経由で行う） |
 
 ログインすると、その GitHub アカウント自身が所有するリポジトリを対象にオンデマンドで
 DEPSCAN スキャンが実行され（直近24時間以内にスキャン済みならスキップ）、`/api/depscan`・

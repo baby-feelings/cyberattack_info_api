@@ -6,13 +6,19 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://cyberattack-info-
 // 通用しない PUBLIC_API_KEY を埋め込む（バックエンド側は require_public_api_key で受理）。
 const API_KEY = import.meta.env.VITE_PUBLIC_API_KEY || ''
 
-// authToken 指定時は X-API-KEY の代わりに GitHub ログインのセッショントークンを送る
-// （DEPSCAN のログインユーザー向けエンドポイント用。サーバー側で本人所有リポジトリに強制的に絞り込まれる）
-async function apiFetch<T>(path: string, authToken?: string): Promise<T> {
-  const headers: Record<string, string> = authToken
-    ? { Authorization: `Bearer ${authToken}` }
-    : { 'X-API-KEY': API_KEY }
-  const res = await fetch(`${BASE_URL}${path}`, { headers })
+// useSessionCookie 指定時は X-API-KEY の代わりに、GitHub ログインの HttpOnly セッション
+// Cookie（depscan_session）を送る（DEPSCAN のログインユーザー向けエンドポイント用。
+// サーバー側で本人所有リポジトリに強制的に絞り込まれる）。Cookie自体はJSから読めない
+// （HttpOnly）ため、fetch の credentials: 'include' でブラウザに自動送信させる。
+async function apiFetch<T>(path: string, useSessionCookie = false): Promise<T> {
+  const headers: Record<string, string> = useSessionCookie ? {} : { 'X-API-KEY': API_KEY }
+  const res = await fetch(`${BASE_URL}${path}`, {
+    headers,
+    credentials: useSessionCookie ? 'include' : 'same-origin',
+  })
+  if (useSessionCookie && res.status === 401) {
+    throw new UnauthorizedError('Session cookie is invalid or expired')
+  }
   if (!res.ok) throw new Error(`API error ${res.status}: ${path}`)
   return res.json() as Promise<T>
 }
@@ -262,7 +268,6 @@ export async function fetchDepscanList(params: {
   owner?: string | null
   severity?: string | null
   resolved?: boolean | null
-  authToken?: string
 }): Promise<DepscanListResponse> {
   const p = new URLSearchParams()
   p.set('page', String(params.page ?? 1))
@@ -272,11 +277,11 @@ export async function fetchDepscanList(params: {
   if (params.resolved !== null && params.resolved !== undefined) {
     p.set('resolved', String(params.resolved))
   }
-  return apiFetch<DepscanListResponse>(`/api/depscan?${p}`, params.authToken)
+  return apiFetch<DepscanListResponse>(`/api/depscan?${p}`, true)
 }
 
-export async function fetchDepscanStats(authToken?: string): Promise<DepscanStatsResponse> {
-  return apiFetch<DepscanStatsResponse>('/api/depscan/stats', authToken)
+export async function fetchDepscanStats(): Promise<DepscanStatsResponse> {
+  return apiFetch<DepscanStatsResponse>('/api/depscan/stats', true)
 }
 
 // サーバー側は「パッケージ×CVE」単位で1件として返すため、パッケージ単位に
@@ -288,7 +293,6 @@ export async function fetchAllDepscanFindings(params: {
   owner?: string | null
   severity?: string | null
   resolved?: boolean | null
-  authToken?: string
 }): Promise<DependencyFindingOut[]> {
   const first = await fetchDepscanList({ ...params, page: 1, perPage: MAX_PER_PAGE })
   const all = [...first.data]
@@ -343,18 +347,23 @@ export function githubLoginUrl(): string {
   return `${BASE_URL}/auth/github/login`
 }
 
-// セッショントークンが無効・期限切れの場合（401）を、それ以外のエラー
+// セッションCookieが無効・期限切れの場合（401）を、それ以外のエラー
 // （ネットワーク瞬断・サーバー一時エラー等）と区別するための専用エラー型。
 // 呼び出し側は Unauthorized のみをログアウトのトリガーとして扱うべきで、
 // それ以外の一時的なエラーでユーザーを毎回ログアウトさせてはならない。
 export class UnauthorizedError extends Error {}
 
 // ログイン中ユーザーのオンデマンドスキャン進捗を取得する
-export async function fetchScanStatus(authToken: string): Promise<ScanStatusResponse> {
-  const res = await fetch(`${BASE_URL}/auth/scan-status`, {
-    headers: { Authorization: `Bearer ${authToken}` },
-  })
-  if (res.status === 401) throw new UnauthorizedError('Session token is invalid or expired')
+// （HttpOnly セッション Cookie は JS から読めないため、この呼び出し自体が
+// 「ログイン済みかどうか」の判定を兼ねる）
+export async function fetchScanStatus(): Promise<ScanStatusResponse> {
+  const res = await fetch(`${BASE_URL}/auth/scan-status`, { credentials: 'include' })
+  if (res.status === 401) throw new UnauthorizedError('Session cookie is invalid or expired')
   if (!res.ok) throw new Error(`Scan status error ${res.status}`)
   return res.json()
+}
+
+// ログアウト（サーバー側でHttpOnlyセッションCookieを削除する）
+export async function logout(): Promise<void> {
+  await fetch(`${BASE_URL}/auth/logout`, { method: 'POST', credentials: 'include' })
 }

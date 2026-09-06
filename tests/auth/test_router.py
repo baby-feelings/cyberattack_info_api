@@ -70,7 +70,16 @@ class TestGithubCallback:
         location = res.headers["location"]
         assert location.startswith("https://dashboard.example.com/?")
         assert "depscan_user=octocat" in location
-        assert "depscan_token=" in location
+        # RFC 9700対策: セッショントークンをURLクエリに載せない（HttpOnly Cookieのみ）
+        assert "depscan_token=" not in location
+        assert "depscan_session" in res.cookies
+        set_cookie_headers = res.headers.get_list("set-cookie")
+        session_cookie_header = next(
+            h for h in set_cookie_headers if h.startswith("depscan_session=")
+        )
+        assert "HttpOnly" in session_cookie_header
+        assert "samesite=none" in session_cookie_header.lower()
+        assert "secure" in session_cookie_header.lower()
         mock_thread.start.assert_called_once()
         # バックグラウンドスキャンがログインユーザー本人のトークンで起動されること
         assert mock_thread_cls.call_args.kwargs["args"] == ("octocat", "gho_abc")
@@ -122,3 +131,31 @@ class TestScanStatus:
             )
         assert res.status_code == 200
         assert res.json() == {"username": "octocat", "status": "not_started"}
+
+    def test_accepts_session_cookie_instead_of_bearer_header(self, client):
+        """ブラウザからは Authorization ヘッダーではなく HttpOnly Cookie で送られる。"""
+        with patch("app.auth.router.settings.SESSION_SECRET_KEY", "test-secret"):
+            token = create_session_token("octocat")
+            client.cookies.set("depscan_session", token)
+            res = client.get("/auth/scan-status")
+            client.cookies.delete("depscan_session")
+        assert res.status_code == 200
+        assert res.json() == {"username": "octocat", "status": "not_started"}
+
+    def test_rejects_invalid_session_cookie(self, client):
+        client.cookies.set("depscan_session", "not-a-real-token")
+        res = client.get("/auth/scan-status")
+        client.cookies.delete("depscan_session")
+        assert res.status_code == 401
+
+
+class TestLogout:
+    def test_deletes_session_cookie(self, client):
+        client.cookies.set("depscan_session", "some-token")
+        res = client.post("/auth/logout")
+        assert res.status_code == 200
+        assert res.json() == {"logged_out": True}
+        set_cookie_headers = res.headers.get_list("set-cookie")
+        deletion_header = next(h for h in set_cookie_headers if h.startswith("depscan_session="))
+        # 削除は max-age=0 相当（空値 + 過去日時）で表現される
+        assert 'depscan_session=""' in deletion_header or "depscan_session=;" in deletion_header
