@@ -1,7 +1,7 @@
 """KEV（CISA Known Exploited Vulnerabilities）ドメインの Pydantic スキーマ定義。
 APIリクエスト・レスポンスの型定義とバリデーションを担う。
 """
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
@@ -18,6 +18,15 @@ class VulnerabilityOut(BaseModel):
     description: str = Field(description="脆弱性の詳細説明")
     required_action: str | None = Field(None, description="推奨される対策・アクション")
     date_added: date = Field(description="CISA KEV に追加された日")
+    epss_score: float | None = Field(
+        None, description="EPSS スコア（今後30日以内に悪用される確率、0.0〜1.0）",
+    )
+    epss_percentile: float | None = Field(
+        None, description="EPSS パーセンタイル（全 CVE 中での相対順位、0.0〜1.0）",
+    )
+    epss_updated_at: datetime | None = Field(
+        None, description="EPSS スコアの取得日時",
+    )
 
     model_config = {"from_attributes": True}
 

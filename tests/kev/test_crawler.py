@@ -9,7 +9,9 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.kev.crawler import (
+    _apply_epss_scores,
     _fetch_cisa_kev,
+    _fetch_epss_scores,
     _parse_date,
     _upsert_vulnerabilities,
     fetch_and_store_kev,
@@ -152,6 +154,7 @@ def test_fetch_and_store_kev_integration():
     with (
         patch("app.kev.crawler._fetch_cisa_kev", return_value=SAMPLE_ENTRIES),
         patch("app.kev.crawler._upsert_vulnerabilities", return_value=(2, 0)),
+        patch("app.kev.crawler._apply_epss_scores", return_value=0),
         patch("app.kev.crawler._delete_old_kev_records", return_value=0),
         patch("app.kev.crawler.SessionLocal") as mock_session_cls,
     ):
@@ -228,6 +231,7 @@ class TestDeleteOldKevRecords:
         with (
             patch("app.kev.crawler._fetch_cisa_kev", return_value=SAMPLE_ENTRIES),
             patch("app.kev.crawler._upsert_vulnerabilities", return_value=(2, 0)),
+            patch("app.kev.crawler._apply_epss_scores", return_value=0),
             patch(
                 "app.kev.crawler._delete_old_kev_records",
                 side_effect=Exception("delete failed"),
@@ -240,6 +244,118 @@ class TestDeleteOldKevRecords:
             inserted, updated, deleted = fetch_and_store_kev()
 
         assert (inserted, updated, deleted) == (2, 0, 0)
+
+    def test_epss_failure_does_not_fail_crawler(self):
+        """_apply_epss_scores が失敗してもクローラー全体はエラーにならないこと。"""
+        with (
+            patch("app.kev.crawler._fetch_cisa_kev", return_value=SAMPLE_ENTRIES),
+            patch("app.kev.crawler._upsert_vulnerabilities", return_value=(2, 0)),
+            patch(
+                "app.kev.crawler._apply_epss_scores",
+                side_effect=Exception("EPSS API down"),
+            ),
+            patch("app.kev.crawler._delete_old_kev_records", return_value=0),
+            patch("app.kev.crawler.SessionLocal") as mock_session_cls,
+        ):
+            mock_db = MagicMock()
+            mock_session_cls.return_value = mock_db
+
+            inserted, updated, deleted = fetch_and_store_kev()
+
+        assert (inserted, updated, deleted) == (2, 0, 0)
+
+
+class TestEpssScores:
+    def _make_vuln(self, cve_id: str) -> Vulnerability:
+        return Vulnerability(
+            cve_id=cve_id,
+            vendor_project="TestVendor",
+            product="TestProduct",
+            vulnerability_name="Test vuln",
+            description="desc",
+            required_action=None,
+            date_added=date.today(),
+        )
+
+    def test_fetch_epss_scores_parses_response(self):
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "status": "OK",
+            "data": [
+                {"cve": "CVE-2021-44228", "epss": "0.94572", "percentile": "0.99745"},
+                {"cve": "CVE-2026-00001", "epss": "0.01", "percentile": "0.2"},
+            ],
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        with patch("app.kev.crawler.httpx.Client") as mock_client_cls:
+            mock_client_cls.return_value.__enter__.return_value.get.return_value = mock_response
+            scores = _fetch_epss_scores(["CVE-2021-44228", "CVE-2026-00001"])
+
+        assert scores == {
+            "CVE-2021-44228": (0.94572, 0.99745),
+            "CVE-2026-00001": (0.01, 0.2),
+        }
+
+    def test_fetch_epss_scores_skips_malformed_entries(self):
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "status": "OK",
+            "data": [{"cve": "CVE-2026-00001", "epss": "not-a-number", "percentile": "0.2"}],
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        with patch("app.kev.crawler.httpx.Client") as mock_client_cls:
+            mock_client_cls.return_value.__enter__.return_value.get.return_value = mock_response
+            scores = _fetch_epss_scores(["CVE-2026-00001"])
+
+        assert scores == {}
+
+    def test_fetch_epss_scores_batches_large_cve_lists(self):
+        """_EPSS_BATCH_SIZE を超えるCVE数の場合、複数回に分けてリクエストすること。"""
+        cve_ids = [f"CVE-2026-{i:05d}" for i in range(250)]
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"status": "OK", "data": []}
+        mock_response.raise_for_status = MagicMock()
+
+        with patch("app.kev.crawler.httpx.Client") as mock_client_cls:
+            mock_get = mock_client_cls.return_value.__enter__.return_value.get
+            mock_get.return_value = mock_response
+            _fetch_epss_scores(cve_ids)
+
+        assert mock_get.call_count == 3  # 100 + 100 + 50
+
+    def test_apply_epss_scores_updates_matching_records(self, db_session: Session):
+        vuln = self._make_vuln("CVE-2021-44228")
+        db_session.add(vuln)
+        db_session.commit()
+
+        with patch(
+            "app.kev.crawler._fetch_epss_scores",
+            return_value={"CVE-2021-44228": (0.94572, 0.99745)},
+        ):
+            updated = _apply_epss_scores(db_session)
+
+        db_session.refresh(vuln)
+        assert updated == 1
+        assert vuln.epss_score == 0.94572
+        assert vuln.epss_percentile == 0.99745
+        assert vuln.epss_updated_at is not None
+
+    def test_apply_epss_scores_ignores_unmatched_records(self, db_session: Session):
+        vuln = self._make_vuln("CVE-2021-44228")
+        db_session.add(vuln)
+        db_session.commit()
+
+        with patch("app.kev.crawler._fetch_epss_scores", return_value={}):
+            updated = _apply_epss_scores(db_session)
+
+        db_session.refresh(vuln)
+        assert updated == 0
+        assert vuln.epss_score is None
+
+    def test_apply_epss_scores_empty_db_returns_zero(self, db_session: Session):
+        assert _apply_epss_scores(db_session) == 0
 
 
 def test_fetch_and_store_kev_raises_unexpected_error():

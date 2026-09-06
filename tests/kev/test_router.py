@@ -18,6 +18,7 @@ def _make_vuln(
     vendor: str = "TestVendor",
     product: str = "TestProduct",
     days_ago: int = 5,
+    epss_score: float | None = None,
 ) -> Vulnerability:
     """テスト用脆弱性レコードを作成するヘルパー。"""
     vuln = Vulnerability(
@@ -28,6 +29,7 @@ def _make_vuln(
         description="A test vulnerability",
         required_action="Apply patch",
         date_added=date.today() - timedelta(days=days_ago),
+        epss_score=epss_score,
     )
     db.add(vuln)
     db.commit()
@@ -114,6 +116,24 @@ def test_list_vendor_filter(client: TestClient, db_session: Session, monkeypatch
     data = response.json()["data"]
     assert len(data) == 1
     assert data[0]["vendor_project"] == "AlphaVendor"
+
+
+def test_list_min_epss_filter(client: TestClient, db_session: Session, monkeypatch):
+    """min_epss パラメータで EPSS スコアの下限フィルタが機能することを確認する。"""
+    monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+    _make_vuln(db_session, cve_id="CVE-2026-10006", epss_score=0.9)
+    _make_vuln(db_session, cve_id="CVE-2026-10007", epss_score=0.1)
+    _make_vuln(db_session, cve_id="CVE-2026-10008", epss_score=None)
+
+    response = client.get(
+        "/api/vulnerabilities?min_epss=0.5",
+        headers={"X-API-KEY": TEST_API_KEY},
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert len(data) == 1
+    assert data[0]["cve_id"] == "CVE-2026-10006"
+    assert data[0]["epss_score"] == 0.9
 
 
 def test_list_product_filter(client: TestClient, db_session: Session, monkeypatch):

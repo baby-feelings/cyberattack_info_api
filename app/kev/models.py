@@ -3,7 +3,7 @@ SQLAlchemy 2.x の Mapped + mapped_column スタイルを採用し、mypy との
 """
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Index, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Date, DateTime, Float, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -37,6 +37,16 @@ class Vulnerability(Base):
 
     # CISA KEV に追加された日
     date_added: Mapped[date] = mapped_column(Date, nullable=False)
+
+    # EPSS（Exploit Prediction Scoring System）スコア。FIRST が日次算出する
+    # 「今後30日以内に悪用される確率」（0.0〜1.0）。未取得時は None
+    epss_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # EPSS パーセンタイル（全CVE中での相対順位、0.0〜1.0）。未取得時は None
+    epss_percentile: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # EPSS スコアの取得日時（FIRST側の更新日ではなく、自システムが取得した日時）
+    epss_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # DB 登録日時（自動セット）
     created_at: Mapped[datetime] = mapped_column(

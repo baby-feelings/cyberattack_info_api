@@ -81,6 +81,10 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 # 製品名部分一致
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
   "https://cyberattack-info-api.onrender.com/api/vulnerabilities?product=Exchange"
+
+# EPSS スコア（悪用確率）0.5 以上のみに絞り込み
+curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
+  "https://cyberattack-info-api.onrender.com/api/vulnerabilities?min_epss=0.5"
 ```
 
 | パラメータ | 型 | 説明 |
@@ -90,6 +94,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | `search` | string | ベンダー名・製品名の部分一致 |
 | `vendor` | string | ベンダー名の完全一致 |
 | `product` | string | 製品名の部分一致 |
+| `min_epss` | float | EPSS スコアの下限（0.0〜1.0）。KEV 掲載に加え悪用確率でも絞り込みたい場合に使用 |
 
 ---
 
@@ -494,6 +499,9 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | `description` | string | 脆弱性の概要説明 |
 | `required_action` | string \| null | CISA が推奨する対処アクション |
 | `date_added` | string (date) | KEV カタログに追加された日付（`YYYY-MM-DD`） |
+| `epss_score` | float \| null | EPSS スコア（今後30日以内に悪用される確率、0.0〜1.0。FIRST が日次算出） |
+| `epss_percentile` | float \| null | EPSS パーセンタイル（全 CVE 中での相対順位、0.0〜1.0） |
+| `epss_updated_at` | string (ISO 8601) \| null | EPSS スコアの取得日時 |
 
 ### OsvVulnerabilityOut（OSV 脆弱性情報）
 
@@ -593,6 +601,10 @@ Upsert ロジック:
 - **新規 CVE** → INSERT → Slack 通知（`SLACK_WEBHOOK_URL` 設定時）
 - **既存 CVE で内容変更あり** → UPDATE → Slack 通知
 - **既存 CVE で変更なし** → スキップ
+- **EPSS スコア**: 毎回のクロールで全 KEV レコードに対し FIRST の EPSS API から
+  スコア・パーセンタイルを再取得・上書きする（CVE 自体の内容が変わらなくても
+  悪用確率は日次で変動するため）。EPSS API 呼び出しが失敗しても KEV クロール
+  自体は成功扱いとする
 
 **OSV:**
 - **新規レコード** → INSERT

@@ -42,12 +42,17 @@ def list_vulnerabilities(
     search: str | None = Query(None, description="ベンダー名・製品名の部分一致検索"),
     vendor: str | None = Query(None, description="ベンダー名での絞り込み（完全一致）"),
     product: str | None = Query(None, description="製品名での絞り込み（部分一致）"),
+    min_epss: float | None = Query(
+        None, ge=0.0, le=1.0,
+        description="EPSS スコアの下限（0.0〜1.0）。指定値以上のもののみ返す",
+    ),
 ) -> VulnerabilityListResponse:
     """脆弱性一覧を取得する。
 
     - `search`: vendor_project または product の部分一致フィルタ
     - `vendor`: vendor_project の完全一致フィルタ
     - `product`: product の部分一致フィルタ
+    - `min_epss`: EPSS スコアによる絞り込み（KEV 単独では拾えない悪用確率シグナル）
     - 最新の date_added 順でソート
     """
     query = db.query(Vulnerability)
@@ -69,6 +74,10 @@ def list_vulnerabilities(
     # 製品名の部分一致フィルタ
     if product:
         query = query.filter(Vulnerability.product.ilike(f"%{product}%"))
+
+    # EPSS スコアの下限フィルタ
+    if min_epss is not None:
+        query = query.filter(Vulnerability.epss_score >= min_epss)
 
     # 総件数をカウント（ページネーション用）
     total = query.count()
