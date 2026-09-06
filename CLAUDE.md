@@ -65,6 +65,12 @@ code-review-graph watch
 ## キーコマンド
 
 ```bash
+# DBマイグレーション適用（初回セットアップ・pull後に新しいマイグレーションがある場合）
+alembic upgrade head
+
+# 新しいモデル変更からマイグレーションを生成
+alembic revision --autogenerate -m "説明"
+
 # 開発サーバー起動
 uvicorn app.main:app --reload --env-file .env.development
 
@@ -159,6 +165,10 @@ dashboard/               # Vercel デプロイの React ダッシュボード
                          # DEPSCAN（GitHub ログイン必須。本人所有リポジトリのみ表示）を
                          # 画面下部固定タブで切り替え表示
 
+alembic/                 # DBスキーマのマイグレーション管理
+├── env.py               # Base.metadata・全モデル import・DATABASE_URL 設定
+└── versions/            # マイグレーションスクリプト（Git管理下。app.core.migrate から適用）
+
 .github/
 ├── dependabot.yml   # Dependabot（pip: / ・npm: /dashboard、週次で依存更新PRを自動作成）
 └── workflows/
@@ -240,6 +250,44 @@ finally:
 ### SQLite / PostgreSQL 切り替え
 `DATABASE_URL` が `sqlite://` で始まる場合は `check_same_thread=False` と PRAGMA 設定を自動適用。  
 PostgreSQL の場合は `pool_pre_ping=True` で接続断を自動検出。
+
+### DBマイグレーションは Alembic で管理する（`Base.metadata.create_all` 単独運用からの移行）
+EPSS スコア用カラム追加（Issue #127）を機に、これまで未初期化のまま `requirements.txt` に
+入っているだけだった Alembic を正式導入した。`app/main.py` の lifespan が呼ぶ
+`Base.metadata.create_all()` は新規テーブルの作成のみ行い、既存テーブルへの列追加はしない
+ため、本番 Neon DB のような**既に稼働中のDBへのスキーマ変更**は create_all だけでは反映
+されない。今後カラム追加・変更を伴う機能は、モデル変更後に
+`alembic revision --autogenerate -m "..."` でマイグレーションを生成し、`alembic/versions/`
+配下にコミットすること（`.gitignore` から除外済み・Git管理下）。
+
+`app/core/migrate.py` の `run_migrations()`（`python -m app.core.migrate` で実行）が
+実際のマイグレーション適用を担う。**FastAPI の lifespan には組み込まない**
+（`tests/conftest.py` が `Base.metadata.create_all` で直接テーブルを作る既存のテストDBに
+対し、意図せず alembic の管理外操作が走ってテストが壊れるのを避けるため）。Render の
+Start Command で `python -m app.core.migrate && uvicorn ...` として、アプリ起動前に
+明示的に呼び出す運用とする。
+
+**既存DB（alembic導入前）への一度きりの移行を自動化する自己修復ロジック**: `vulnerabilities`
+テーブルは存在するが `alembic_version` テーブルが無い場合（＝create_allだけで運用してきた
+既存DB）、現在のスキーマに一致するベースラインリビジョン（`_BASELINE_REVISION`、
+EPSS カラム追加前の状態）へ自動的に `stamp`（DDLを実行せず「そこまで適用済み」と記録する
+だけ）してから `upgrade head` する。これにより、本番DBのシェルに直接入って手動で
+`alembic stamp` する必要がなく、Render の Start Command 変更だけで安全に移行できる。
+真に空の新規DB（`vulnerabilities` テーブル自体が無い）の場合は stamp をスキップし、
+先頭のリビジョンから全て適用する。
+
+### KEV クローラーの EPSS スコア連携（Issue #127）
+FIRST が提供する EPSS（Exploit Prediction Scoring System）API（認証不要、
+`https://api.first.org/data/v1/epss`）から、KEV に登録済みの全 CVE の悪用確率
+スコア・パーセンタイルを取得し `Vulnerability.epss_score`/`epss_percentile`/
+`epss_updated_at` に格納する。1リクエストあたり `_EPSS_BATCH_SIZE`（100件）ずつ
+`cve=CVE-1,CVE-2,...` とカンマ区切りで問い合わせる（KEVは1600件超あるため）。
+EPSS スコアはCVEの内容が変わらなくても日次で変動するモデル値のため、
+**毎回のKEVクロールで全件を再取得・上書き**する（差分検知はしない）。
+EPSS API 呼び出し失敗は他の保持期間削除処理と同様 try/except で握りつぶし、
+KEVクロール自体の成功可否には影響させない。`GET /api/vulnerabilities` に
+`min_epss` クエリパラメータを追加し、KEV単独では拾えない悪用確率シグナルでの
+絞り込みを可能にした。
 
 ### OSV クローラーの 2 ステップ取得
 OSV REST API の `/v1/querybatch` は `{id, modified}` しか返さないため、完全情報の取得は 2 ステップ:
@@ -606,7 +654,8 @@ GitHub Actions 無料プランでは複数 cron の発火が不安定なため�
 
 ### Render の設定
 - **Build Command:** `pip install -r requirements.txt`
-- **Start Command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+- **Start Command:** `sh -c "python -m app.core.migrate && uvicorn app.main:app --host 0.0.0.0 --port $PORT"`
+  （DBマイグレーション適用の詳細は上記「DBマイグレーションは Alembic で管理する」節を参照）
 - **Environment Variables:** `DATABASE_URL`, `API_KEY`, `ENVIRONMENT=production`, `GITHUB_USERNAME`
   （DEPSCAN スキャン対象アカウント。コード側にデフォルト値なし、**未設定だとアプリが起動しない**）、
   `SLACK_WEBHOOK_URL`（任意）、`GITHUB_TOKEN`（任意、DEPSCAN/DEPSOPS 共用の PAT。

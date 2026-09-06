@@ -72,7 +72,17 @@ ENVIRONMENT=production
 SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...  # 任意
 ```
 
-### 4. 開発サーバーの起動
+### 4. DBマイグレーションの適用
+
+```bash
+DATABASE_URL=sqlite:///./cyberattack_dev.db API_KEY=your-secret-key-here \
+ENVIRONMENT=development GITHUB_USERNAME=your-github-username \
+alembic upgrade head
+```
+
+新規に `alembic/versions/` へマイグレーションが追加された場合、`git pull` 後は毎回これを実行する。
+
+### 5. 開発サーバーの起動
 
 ```bash
 uvicorn app.main:app --reload --env-file .env.development
@@ -585,7 +595,7 @@ pytest
 start htmlcov/index.html  # Mac/Linux: open htmlcov/index.html
 ```
 
-**テスト結果（最新）:** 323 テスト / カバレッジ 98%
+**テスト結果（最新）:** 359 テスト / カバレッジ 98%
 
 ---
 
@@ -625,6 +635,8 @@ cyberattack_info_api/
 │   ├── core/ kev/ osv/ jvn/ depscan/ depsops/ crawler_logs/
 ├── dashboard/               # Vercel デプロイの React ダッシュボード（KEV・OSV（Pub 含む 10 エコシステム）・JVN・
 │                           # DEPSCAN〈GitHub ログイン必須〉）
+├── alembic/                 # DBスキーマのマイグレーション管理（app.core.migrate から呼び出す）
+│   └── versions/            # マイグレーションスクリプト（Gitで追跡）
 ├── .github/
 │   ├── dependabot.yml       # Dependabot（pip: / ・npm: /dashboard、週次で依存更新PRを自動作成）
 │   └── workflows/
@@ -657,7 +669,10 @@ cyberattack_info_api/
 3. 以下を設定:
    - **Runtime:** Python 3
    - **Build Command:** `pip install -r requirements.txt`
-   - **Start Command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+   - **Start Command:** `sh -c "python -m app.core.migrate && uvicorn app.main:app --host 0.0.0.0 --port $PORT"`
+     （`alembic upgrade head` 相当の DB マイグレーションをアプリ起動前に必ず実行する。
+     初回実行時は既存テーブルの有無を見て自動的にベースラインへ `stamp` してから
+     適用するため、既存の Neon DB に対しても安全に一度だけ実行すればよい）
 4. 環境変数を設定:
 
    | 変数名 | 値 |

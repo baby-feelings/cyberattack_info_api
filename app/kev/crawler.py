@@ -17,6 +17,11 @@ from app.kev.models import Vulnerability
 
 logger = logging.getLogger(__name__)
 
+# FIRST の EPSS（Exploit Prediction Scoring System）API。認証不要・日次更新
+_EPSS_API_URL = "https://api.first.org/data/v1/epss"
+# 1リクエストあたりのCVE件数（URL長・応答サイズを抑えるための分割単位）
+_EPSS_BATCH_SIZE = 100
+
 
 def _parse_date(raw: str) -> date:
     """CISA の日付文字列 (YYYY-MM-DD) を date オブジェクトに変換する。"""
@@ -95,6 +100,64 @@ def _upsert_vulnerabilities(db: Session, entries: list[dict[str, Any]]) -> tuple
     return inserted, updated
 
 
+def _fetch_epss_scores(cve_ids: list[str]) -> dict[str, tuple[float, float]]:
+    """FIRST EPSS API から指定 CVE 群のスコア・パーセンタイルを取得する。
+
+    Args:
+        cve_ids: 問い合わせ対象の CVE ID リスト
+
+    Returns:
+        {cve_id: (epss_score, epss_percentile)} の辞書（該当なしの CVE は含まれない）
+
+    Raises:
+        httpx.HTTPError: ネットワークエラーまたは HTTP エラー時
+    """
+    scores: dict[str, tuple[float, float]] = {}
+    with httpx.Client(timeout=30.0) as client:
+        for i in range(0, len(cve_ids), _EPSS_BATCH_SIZE):
+            batch = cve_ids[i : i + _EPSS_BATCH_SIZE]
+            response = client.get(_EPSS_API_URL, params={"cve": ",".join(batch)})
+            response.raise_for_status()
+            for item in response.json().get("data", []):
+                cve = item.get("cve")
+                if not cve:
+                    continue
+                try:
+                    scores[cve] = (float(item["epss"]), float(item["percentile"]))
+                except (KeyError, TypeError, ValueError):
+                    logger.warning("Skipping malformed EPSS entry for %s: %r", cve, item)
+    return scores
+
+
+def _apply_epss_scores(db: Session) -> int:
+    """DB内の全 KEV レコードに EPSS スコアを付与する（日次更新）。
+
+    EPSS スコアは悪用確率の予測モデルであり、CVE の内容自体が変わらなくても
+    日次で更新されるため、KEV クロールのたびに全件へ再取得・上書きする。
+
+    Returns:
+        スコアを更新した件数
+    """
+    vulnerabilities = db.query(Vulnerability).all()
+    if not vulnerabilities:
+        return 0
+
+    scores = _fetch_epss_scores([v.cve_id for v in vulnerabilities])
+    now = now_utc()
+    updated = 0
+    for vuln in vulnerabilities:
+        hit = scores.get(vuln.cve_id)
+        if hit is None:
+            continue
+        vuln.epss_score, vuln.epss_percentile = hit
+        vuln.epss_updated_at = now
+        updated += 1
+
+    db.commit()
+    logger.info("EPSS scores updated: %d/%d KEV records", updated, len(vulnerabilities))
+    return updated
+
+
 def _delete_old_kev_records(db: Session) -> int:
     """保持期間（KEV_RETENTION_DAYS）を超えた KEV レコードを削除する。
 
@@ -128,6 +191,12 @@ def fetch_and_store_kev() -> tuple[int, int, int]:
     try:
         entries = _fetch_cisa_kev()
         inserted, updated = _upsert_vulnerabilities(db, entries)
+
+        # EPSS スコアの更新。失敗してもKEVクロール自体は成功扱いとする
+        try:
+            _apply_epss_scores(db)
+        except Exception as exc:
+            logger.error("Failed to update EPSS scores: %s", exc, exc_info=True)
 
         # 保持期間を超えた古いレコードを削除（DB 容量管理）。失敗してもクロール自体は成功扱いとする
         deleted = 0

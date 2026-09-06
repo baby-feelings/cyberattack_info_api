@@ -1,6 +1,8 @@
 [tool.ruff]
 target-version = "py310"
 line-length = 100
+# alembic の自動生成マイグレーションはツール生成コードのため lint 対象外
+extend-exclude = ["alembic/versions"]
 
 [tool.ruff.lint]
 select = [
