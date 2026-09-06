@@ -1,16 +1,19 @@
 """GitHub ログイン（DEPSCAN ダッシュボードのアクセス制御）API ルーター。
 
-GET /auth/github/login     – GitHub の認可画面へリダイレクト
-GET /auth/github/callback  – 認可コードを受け取り、セッショントークンを発行して
-                              フロントエンドへリダイレクト（オンデマンドスキャンも開始）
-GET /auth/scan-status      – ログイン中ユーザーのオンデマンドスキャン進捗を返す
+GET  /auth/github/login     – GitHub の認可画面へリダイレクト
+GET  /auth/github/callback  – 認可コードを受け取り、セッションJWTをHttpOnly Cookie
+                               として発行してフロントエンドへリダイレクト
+                               （オンデマンドスキャンも開始。RFC 9700対応のためJWT
+                               自体はURLクエリに載せない）
+GET  /auth/scan-status      – ログイン中ユーザーのオンデマンドスキャン進捗を返す
+POST /auth/logout           – セッションCookieを削除する
 """
 import logging
 import secrets
 import threading
 from typing import Annotated
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Response, status
 from fastapi.responses import RedirectResponse
 from fastapi.security import APIKeyHeader
 from sqlalchemy.orm import Session
@@ -31,22 +34,37 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 _CALLBACK_PATH = "/auth/github/callback"
 _STATE_COOKIE = "gh_oauth_state"
+# セッションJWTを保持するHttpOnly Cookie（RFC 9700対策：URLクエリでの受け渡しを廃止）。
+# session.py の _EXPIRES_HOURS（24時間）と一致させる
+SESSION_COOKIE = "depscan_session"
+_SESSION_COOKIE_MAX_AGE = 24 * 60 * 60
 
 _bearer_header = APIKeyHeader(name="Authorization", auto_error=False)
 
 
-def get_current_username(authorization: str | None = Depends(_bearer_header)) -> str:
-    """`Authorization: Bearer <token>` を検証し、ログイン中の GitHub ユーザー名を返す。
+def get_current_username(
+    authorization: str | None = Depends(_bearer_header),
+    depscan_session: str | None = Cookie(None),
+) -> str:
+    """セッショントークンを検証し、ログイン中の GitHub ユーザー名を返す。
 
+    ブラウザ（ダッシュボード）からは HttpOnly Cookie（`depscan_session`）で送られる。
+    `Authorization: Bearer <token>` も後方互換のため引き続き受け付ける
+    （ブラウザ以外のクライアントが将来使う可能性を考慮）。
     DEPSCAN の他エンドポイント（`app.depscan.router`）から、X-API-KEY 認証の
     代わりに使う依存関数。
     """
-    if not authorization or not authorization.lower().startswith("bearer "):
+    token: str | None = None
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization[len("bearer "):].strip()
+    elif depscan_session:
+        token = depscan_session
+
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing or invalid Authorization header. Expected 'Bearer <token>'.",
+            detail="Missing session credentials. Log in via /auth/github/login.",
         )
-    token = authorization[len("bearer "):].strip()
     username = decode_session_token(token)
     if username is None:
         raise HTTPException(
@@ -113,12 +131,32 @@ def github_callback(
         logger.info("DEPSCAN on-demand scan skipped for %s (recently scanned)", username)
 
     session_token = create_session_token(username)
-    redirect_url = (
-        f"{settings.FRONTEND_URL.rstrip('/')}/?depscan_token={session_token}&depscan_user={username}"
-    )
+    # RFC 9700: アクセストークン相当の資格情報をURIクエリパラメータで渡さない。
+    # セッションJWTはHttpOnly Cookieで発行し、URLにはユーザー名（非機微情報）のみ載せる
+    redirect_url = f"{settings.FRONTEND_URL.rstrip('/')}/?depscan_user={username}"
     resp = RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
     resp.delete_cookie(_STATE_COOKIE)
+    resp.set_cookie(
+        SESSION_COOKIE,
+        session_token,
+        max_age=_SESSION_COOKIE_MAX_AGE,
+        httponly=True,
+        secure=True,
+        # バックエンド（Render）とフロントエンド（Vercel）がドメインが異なるクロスサイト
+        # リクエストのため、SameSite=None が必須（Lax/Strictだとfetch時に送信されない）
+        samesite="none",
+    )
     return resp
+
+
+@router.post("/logout", summary="ログアウト（セッションCookieの削除）")
+def logout(response: Response) -> dict:
+    """セッションCookieを削除する。JS からは HttpOnly Cookie を直接削除できないため、
+    ログアウトはこのエンドポイント経由で行う（フロントエンドから fetch で呼ぶことを
+    想定し、ページ遷移を伴わない JSON レスポンスを返す）。
+    """
+    response.delete_cookie(SESSION_COOKIE)
+    return {"logged_out": True}
 
 
 @router.get("/scan-status", summary="ログイン中ユーザーのオンデマンドスキャン進捗を取得")

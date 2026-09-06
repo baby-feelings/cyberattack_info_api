@@ -188,6 +188,19 @@ class TestListDepscan:
         )
         assert res.status_code == 403
 
+    def test_session_cookie_forces_owner_scope(self, client, db_session):
+        """ブラウザからはAuthorizationヘッダーではなくHttpOnly Cookieで送られる。"""
+        _make_finding(db_session, repo_full_name="octocat/repo-a", osv_id="GHSA-mine")
+        _make_finding(db_session, repo_full_name="baby-feelings/baby_grow", osv_id="GHSA-others")
+        with patch("app.depscan.router.settings.SESSION_SECRET_KEY", "test-secret"):
+            token = create_session_token("octocat")
+            client.cookies.set("depscan_session", token)
+            res = client.get("/api/depscan?owner=baby-feelings")
+            client.cookies.delete("depscan_session")
+        body = res.json()
+        assert body["total"] == 1
+        assert body["data"][0]["repo_full_name"] == "octocat/repo-a"
+
 
 class TestDepscanStats:
     def test_empty(self, client):

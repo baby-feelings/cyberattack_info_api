@@ -1,100 +1,98 @@
 import { useCallback, useEffect, useState } from 'react'
 import { LogIn, LogOut, Loader2, AlertTriangle } from 'lucide-react'
-import { githubLoginUrl, fetchScanStatus, UnauthorizedError, type ScanStatusResponse } from '../api/client'
+import {
+  githubLoginUrl, fetchScanStatus, logout as apiLogout, UnauthorizedError,
+  type ScanStatusResponse,
+} from '../api/client'
 import { DepscanPanel } from './DepscanPanel'
 
-const STORAGE_TOKEN_KEY = 'depscan_session_token'
+// セッション本体（JWT）は HttpOnly Cookie で保持されブラウザJSからは読めないため、
+// ここではUI即時表示用にユーザー名（非機微情報）だけをlocalStorageに保持する。
+// ログイン状態の正とするのは常にサーバー側（fetchScanStatusが401を返すか否か）
 const STORAGE_USER_KEY = 'depscan_session_user'
 const POLL_INTERVAL_MS = 4000
 
-interface Session {
-  token: string
-  username: string
-}
-
-function readStoredSession(): Session | null {
+function readStoredUsername(): string | null {
   try {
-    const token = localStorage.getItem(STORAGE_TOKEN_KEY)
-    const username = localStorage.getItem(STORAGE_USER_KEY)
-    return token && username ? { token, username } : null
+    return localStorage.getItem(STORAGE_USER_KEY)
   } catch {
     return null
   }
 }
 
-function storeSession(session: Session): void {
+function storeUsername(username: string): void {
   try {
-    localStorage.setItem(STORAGE_TOKEN_KEY, session.token)
-    localStorage.setItem(STORAGE_USER_KEY, session.username)
+    localStorage.setItem(STORAGE_USER_KEY, username)
   } catch {
-    // localStorageが使えない環境（プライベートモード等）ではセッションを保持しないだけで動作は継続する
+    // localStorageが使えない環境（プライベートモード等）では保持しないだけで動作は継続する
   }
 }
 
-function clearStoredSession(): void {
+function clearStoredUsername(): void {
   try {
-    localStorage.removeItem(STORAGE_TOKEN_KEY)
     localStorage.removeItem(STORAGE_USER_KEY)
   } catch {
     // 上記と同様、失敗しても無視してよい
   }
 }
 
-// OAuthコールバックのリダイレクト先（/?depscan_token=...&depscan_user=...）からセッション情報を読み取り、
-// URLからは取り除く（リロード時の再送信・共有URLへのトークン漏洩を防ぐ）
-function consumeCallbackParams(): Session | null {
+// OAuthコールバックのリダイレクト先（/?depscan_user=...）からユーザー名を読み取り、
+// URLからは取り除く（リロード時の再送信を防ぐ。セッションJWT自体はURLに載らない）
+function consumeCallbackUsername(): string | null {
   const params = new URLSearchParams(window.location.search)
-  const token = params.get('depscan_token')
   const username = params.get('depscan_user')
-  if (!token || !username) return null
+  if (!username) return null
 
-  params.delete('depscan_token')
   params.delete('depscan_user')
   const newSearch = params.toString()
   const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : '') + window.location.hash
   window.history.replaceState({}, '', newUrl)
 
-  return { token, username }
+  return username
 }
 
 export function DepscanAuthGate() {
-  const [session, setSession] = useState<Session | null>(null)
+  const [username, setUsername] = useState<string | null>(null)
   const [checked, setChecked] = useState(false)
   const [scanStatus, setScanStatus] = useState<ScanStatusResponse | null>(null)
 
-  // 初回マウント時のみ: OAuthコールバックからの復帰、または localStorage の既存セッションを読み込む
+  // 初回マウント時のみ: OAuthコールバックからの復帰、または localStorage の既存表示名を読み込む
+  // （実際のログイン有効性はポーリング側の fetchScanStatus が判定する）
   useEffect(() => {
-    const restored = consumeCallbackParams() ?? readStoredSession()
+    const restored = consumeCallbackUsername() ?? readStoredUsername()
     if (restored) {
-      storeSession(restored)
-      setSession(restored)
+      storeUsername(restored)
+      setUsername(restored)
     }
     setChecked(true)
   }, [])
 
-  // トークン失効時の自動ログアウト等、内部的な処理から呼ぶ（確認ダイアログなし）
+  // セッション失効時の自動ログアウト等、内部的な処理から呼ぶ（確認ダイアログなし）
   const handleLogout = useCallback(() => {
-    clearStoredSession()
-    setSession(null)
+    clearStoredUsername()
+    setUsername(null)
     setScanStatus(null)
   }, [])
 
   // ログアウトボタン押下時のみ呼ぶ（誤クリック防止の確認ダイアログを挟む）
   function handleLogoutClick() {
     if (window.confirm('ログアウトしますか？')) {
+      void apiLogout().catch(() => {
+        // サーバー側の削除に失敗してもローカルの表示はログアウト状態にする
+      })
       handleLogout()
     }
   }
 
   // ログイン中は、オンデマンドスキャンが完了する（またはエラーになる）まで進捗をポーリングする
   useEffect(() => {
-    if (!session) return
+    if (!username) return
     let cancelled = false
     let timer: ReturnType<typeof setTimeout>
 
     async function tick() {
       try {
-        const status = await fetchScanStatus(session!.token)
+        const status = await fetchScanStatus()
         if (cancelled) return
         setScanStatus(status)
         if (status.status === 'not_started' || status.status === 'running') {
@@ -103,7 +101,7 @@ export function DepscanAuthGate() {
       } catch (e) {
         if (cancelled) return
         if (e instanceof UnauthorizedError) {
-          // セッショントークン失効時のみログアウト扱いにする
+          // セッションCookie失効時のみログアウト扱いにする
           handleLogout()
           return
         }
@@ -117,11 +115,11 @@ export function DepscanAuthGate() {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [session, handleLogout])
+  }, [username, handleLogout])
 
   if (!checked) return null
 
-  if (!session) {
+  if (!username) {
     return (
       <div className="rounded-2xl border border-slate-800 bg-slate-900 p-10 shadow-lg flex flex-col items-center gap-4 text-center">
         <LogIn size={32} className="text-slate-400" />
@@ -150,7 +148,7 @@ export function DepscanAuthGate() {
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between text-xs text-slate-500">
         <span>
-          ログイン中: <span className="text-slate-300 font-medium">{session.username}</span>
+          ログイン中: <span className="text-slate-300 font-medium">{username}</span>
         </span>
         <button
           onClick={handleLogoutClick}
@@ -172,11 +170,11 @@ export function DepscanAuthGate() {
         <div className="rounded-2xl border border-slate-800 bg-slate-900 p-10 shadow-lg flex flex-col items-center gap-3 text-center">
           <Loader2 size={24} className="text-violet-400 animate-spin" />
           <p className="text-sm text-slate-400">
-            {session.username} のリポジトリをスキャン中です…しばらくお待ちください
+            {username} のリポジトリをスキャン中です…しばらくお待ちください
           </p>
         </div>
       ) : (
-        <DepscanPanel authToken={session.token} />
+        <DepscanPanel />
       )}
     </div>
   )
