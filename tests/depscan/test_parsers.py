@@ -158,6 +158,27 @@ PLATFORMS
         assert DependencyRef("RubyGems", "rails", "7.0.4") in refs
         assert len(refs) == 2
 
+    def test_strips_native_extension_platform_suffix(self):
+        """nokogiri等のネイティブ拡張gemは「バージョン-プラットフォーム」表記になるため、
+        プラットフォーム部分を除いたバージョンのみを抽出すること（OSV照合の偽陽性防止）。
+        """
+        content = """GEM
+  remote: https://rubygems.org/
+  specs:
+    nokogiri (1.19.4-aarch64-linux-gnu)
+    nokogiri (1.19.4-x86_64-linux-gnu)
+    nokogiri (1.19.4-arm64-darwin)
+
+PLATFORMS
+  ruby
+"""
+        refs = parse_gemfile_lock(content)
+        assert refs == [
+            DependencyRef("RubyGems", "nokogiri", "1.19.4"),
+            DependencyRef("RubyGems", "nokogiri", "1.19.4"),
+            DependencyRef("RubyGems", "nokogiri", "1.19.4"),
+        ]
+
 
 class TestPackagesLockJson:
     def test_parses_resolved_versions(self):
