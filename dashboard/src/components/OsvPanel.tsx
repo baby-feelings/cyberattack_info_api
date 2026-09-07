@@ -1,18 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
-import {
-  Shield, ExternalLink, ChevronDown, ChevronUp,
-  RefreshCw, Search, X, BarChart2,
-} from 'lucide-react'
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip as ReTooltip, XAxis, YAxis } from 'recharts'
+import { Shield, RefreshCw, Search, X, BarChart2 } from 'lucide-react'
 import {
   fetchOsvList, fetchOsvStats,
-  type OsvVulnerabilityOut, type OsvListResponse, type OsvStatsResponse,
+  type OsvListResponse, type OsvStatsResponse,
 } from '../api/client'
 import {
-  SeverityBadge, ChartCard, SeverityPieChart, MonthlyBarChart,
+  SeverityPieChart, MonthlyBarChart,
   TableLoadingSkeleton, EmptyState, Pagination,
   SeverityFilterButtons, SearchBox, SortSelector,
 } from './shared/VulnPanelParts'
+import { OsvRow } from './osv/OsvRow'
+import { EcosystemBarChart } from './osv/EcosystemBarChart'
 
 // 深刻度バッジのスタイル
 const SEVERITY_CLS: Record<string, string> = {
@@ -31,206 +29,9 @@ const SEVERITY_COLORS: Record<string, string> = {
   'N/A':    '#475569',
 }
 
-// エコシステムバッジの色
-const ECO_COLOR: Record<string, string> = {
-  PyPI:       'bg-sky-500/15 text-sky-400',
-  npm:        'bg-red-500/15 text-red-400',
-  Go:         'bg-cyan-500/15 text-cyan-400',
-  Maven:      'bg-amber-500/15 text-amber-400',
-  RubyGems:   'bg-rose-500/15 text-rose-400',
-  NuGet:      'bg-violet-500/15 text-violet-400',
-  'crates.io': 'bg-orange-500/15 text-orange-400',
-  Packagist:  'bg-indigo-500/15 text-indigo-400',
-  Hex:        'bg-emerald-500/15 text-emerald-400',
-  Pub:        'bg-teal-500/15 text-teal-400',
-}
-
-// エコシステム別グラフの色（順番で割り当て）
-const ECO_CHART_COLORS = [
-  '#7c3aed', '#0ea5e9', '#22d3ee', '#f59e0b',
-  '#f43f5e', '#8b5cf6', '#f97316', '#6366f1', '#10b981', '#14b8a6',
-]
-
 const ECOSYSTEMS = ['ALL', 'PyPI', 'npm', 'Go', 'Maven', 'RubyGems', 'NuGet', 'crates.io', 'Packagist', 'Hex', 'Pub']
 const SEVERITIES = ['ALL', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
 const PER_PAGE = 30
-
-function EcoBadge({ eco }: { eco: string }) {
-  const cls = ECO_COLOR[eco] ?? 'bg-slate-700 text-slate-400'
-  return (
-    <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium whitespace-nowrap ${cls}`}>
-      {eco}
-    </span>
-  )
-}
-
-function OsvRow({ item }: { item: OsvVulnerabilityOut }) {
-  const [open, setOpen] = useState(false)
-  const cveAliases = item.aliases.filter(a => a.startsWith('CVE-'))
-  const modifiedDate = new Date(item.modified).toLocaleDateString('ja-JP', {
-    year: 'numeric', month: 'short', day: 'numeric',
-  })
-
-  return (
-    <>
-      <tr
-        className="hover:bg-slate-800/40 transition-colors cursor-pointer"
-        onClick={() => setOpen(o => !o)}
-      >
-        <td className="py-2.5 pr-3">
-          <SeverityBadge severity={item.severity} classMap={SEVERITY_CLS} />
-          {item.cvss_score != null && (
-            <span className="block text-[10px] text-slate-600 mt-0.5 tabular-nums">
-              {item.cvss_score.toFixed(1)}
-            </span>
-          )}
-        </td>
-        <td className="py-2.5 pr-3">
-          {/* OSV ID */}
-          <a
-            href={`https://osv.dev/vulnerability/${item.osv_id}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 font-mono text-violet-400 hover:text-violet-300 text-xs transition-colors"
-            onClick={e => e.stopPropagation()}
-          >
-            {item.osv_id}
-            <ExternalLink size={9} />
-          </a>
-          {/* CVE エイリアス */}
-          {cveAliases.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-0.5">
-              {cveAliases.slice(0, 2).map(cve => (
-                <a
-                  key={cve}
-                  href={`https://nvd.nist.gov/vuln/detail/${cve}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[10px] font-mono text-slate-500 hover:text-slate-300"
-                  onClick={e => e.stopPropagation()}
-                >
-                  {cve}
-                </a>
-              ))}
-            </div>
-          )}
-        </td>
-        <td className="py-2.5 pr-3">
-          <EcoBadge eco={item.ecosystem} />
-        </td>
-        <td className="py-2.5 pr-3">
-          <p className="text-slate-300 font-mono text-xs">{item.package_name}</p>
-          {item.fixed_versions.length > 0 && (
-            <p className="text-emerald-500 text-[10px] mt-0.5">
-              fix: {item.fixed_versions[0]}
-            </p>
-          )}
-        </td>
-        <td className="py-2.5 pr-3">
-          <p className="text-slate-400 text-xs truncate max-w-[240px]">{item.summary}</p>
-        </td>
-        <td className="py-2.5 text-xs text-slate-600 tabular-nums whitespace-nowrap">
-          {modifiedDate}
-        </td>
-        <td className="py-2.5 pl-2 text-right">
-          {open
-            ? <ChevronUp size={12} className="text-slate-500 ml-auto" />
-            : <ChevronDown size={12} className="text-slate-500 ml-auto" />}
-        </td>
-      </tr>
-
-      {/* 展開: 詳細・修正バージョン・参考リンク */}
-      {open && (
-        <tr className="bg-slate-800/30">
-          <td colSpan={7} className="px-4 py-3 text-xs text-slate-400 space-y-2">
-            {item.details && (
-              <p className="leading-relaxed whitespace-pre-wrap">{item.details}</p>
-            )}
-            {item.fixed_versions.length > 0 && (
-              <p className="flex flex-wrap items-center gap-1.5">
-                <span className="text-slate-500">修正済みバージョン:</span>
-                {item.fixed_versions.map(v => (
-                  <span key={v} className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[10px] font-mono">
-                    {v}
-                  </span>
-                ))}
-              </p>
-            )}
-            {item.aliases.length > 0 && (
-              <p className="flex flex-wrap items-center gap-1.5">
-                <span className="text-slate-500">エイリアス:</span>
-                {item.aliases.map(a => (
-                  <span key={a} className="text-[10px] font-mono text-slate-500">{a}</span>
-                ))}
-              </p>
-            )}
-            {item.references.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {item.references.map(url => (
-                  <a
-                    key={url}
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-violet-400 hover:text-violet-300 underline underline-offset-2 text-[10px] break-all"
-                  >
-                    {url}
-                  </a>
-                ))}
-              </div>
-            )}
-          </td>
-        </tr>
-      )}
-    </>
-  )
-}
-
-// エコシステム別棒グラフ（エコシステムごとに色分け。汎用 MonthlyBarChart とは形が異なるため専用実装）
-function EcosystemBarChart({ stats, loading }: { stats: OsvStatsResponse | null; loading: boolean }) {
-  // 上位 8 エコシステムのみ表示
-  const data = (stats?.ecosystems ?? []).slice(0, 8)
-
-  return (
-    <ChartCard
-      icon={<BarChart2 size={13} className="text-slate-400" />}
-      title="エコシステム別件数"
-      loading={loading}
-      isEmpty={data.length === 0}
-      height={160}
-    >
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-          <XAxis
-            dataKey="ecosystem"
-            tick={{ fill: '#475569', fontSize: 10 }}
-            tickLine={false}
-            axisLine={false}
-          />
-          <YAxis
-            tick={{ fill: '#475569', fontSize: 10 }}
-            tickLine={false}
-            axisLine={false}
-            allowDecimals={false}
-          />
-          <ReTooltip
-            contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }}
-            formatter={(value) => [String(value) + ' 件', '件数']}
-          />
-          <Bar dataKey="count" radius={[3, 3, 0, 0]}>
-            {data.map((_entry, index) => (
-              <Cell
-                key={`cell-${index}`}
-                fill={ECO_CHART_COLORS[index % ECO_CHART_COLORS.length]}
-              />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </ChartCard>
-  )
-}
 
 export function OsvPanel() {
   const [ecosystem, setEcosystem] = useState<string | null>(null)
@@ -421,7 +222,11 @@ export function OsvPanel() {
               </thead>
               <tbody className="divide-y divide-slate-800/60">
                 {result.data.map((item, i) => (
-                  <OsvRow key={`${item.osv_id}-${item.ecosystem}-${item.package_name}-${i}`} item={item} />
+                  <OsvRow
+                    key={`${item.osv_id}-${item.ecosystem}-${item.package_name}-${i}`}
+                    item={item}
+                    severityClassMap={SEVERITY_CLS}
+                  />
                 ))}
               </tbody>
             </table>

@@ -1,164 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
-import {
-  Shield, ExternalLink, ChevronDown, ChevronUp,
-  RefreshCw, Search, X, BarChart2, Trophy,
-} from 'lucide-react'
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip as ReTooltip, XAxis, YAxis } from 'recharts'
+import { Shield, RefreshCw, Search, X, BarChart2 } from 'lucide-react'
 import {
   fetchVulnerabilities, fetchStats, fetchRecent,
-  type VulnerabilityOut, type VulnerabilityListResponse, type StatsResponse,
+  type VulnerabilityListResponse, type StatsResponse,
 } from '../api/client'
 import {
-  ChartCard, MonthlyBarChart,
+  MonthlyBarChart,
   TableLoadingSkeleton, EmptyState, Pagination, SearchBox,
 } from './shared/VulnPanelParts'
+import { KevRow } from './kev/KevRow'
+import { VendorBarChart } from './kev/VendorBarChart'
 
 const PER_PAGE = 30
-
-// EPSSスコア（0.0〜1.0）の高さに応じた色分け（重要度バッジに準じた配色）
-function epssColorClass(score: number): string {
-  if (score >= 0.5) return 'text-red-400'
-  if (score >= 0.1) return 'text-orange-400'
-  if (score >= 0.01) return 'text-amber-400'
-  return 'text-slate-500'
-}
-
-// ベンダー別棒グラフの色（順番で割り当て。OSV の EcosystemBarChart と同じパレット）
-const VENDOR_CHART_COLORS = [
-  '#7c3aed', '#0ea5e9', '#22d3ee', '#f59e0b',
-  '#f43f5e', '#8b5cf6', '#f97316', '#6366f1',
-]
-
-function KevRow({ item }: { item: VulnerabilityOut }) {
-  const [open, setOpen] = useState(false)
-  const dateAdded = new Date(item.date_added).toLocaleDateString('ja-JP', {
-    year: 'numeric', month: 'short', day: 'numeric',
-  })
-
-  return (
-    <>
-      <tr
-        className="hover:bg-slate-800/40 transition-colors cursor-pointer"
-        onClick={() => setOpen(o => !o)}
-      >
-        <td className="py-2.5 pr-3">
-          <a
-            href={`https://nvd.nist.gov/vuln/detail/${item.cve_id}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 font-mono text-violet-400 hover:text-violet-300 text-xs transition-colors"
-            onClick={e => e.stopPropagation()}
-          >
-            {item.cve_id}
-            <ExternalLink size={9} />
-          </a>
-        </td>
-        <td className="py-2.5 pr-3 text-xs tabular-nums whitespace-nowrap">
-          {item.epss_score !== null ? (
-            <span className={epssColorClass(item.epss_score)}>
-              {(item.epss_score * 100).toFixed(1)}%
-            </span>
-          ) : (
-            <span className="text-slate-700">—</span>
-          )}
-        </td>
-        <td className="py-2.5 pr-3">
-          <p className="text-slate-300 text-xs truncate max-w-[160px]">{item.vendor_project}</p>
-        </td>
-        <td className="py-2.5 pr-3">
-          <p className="text-slate-300 text-xs truncate max-w-[160px]">{item.product}</p>
-        </td>
-        <td className="py-2.5 pr-3">
-          <p className="text-slate-400 text-xs truncate max-w-[280px]">{item.vulnerability_name}</p>
-        </td>
-        <td className="py-2.5 text-xs text-slate-600 tabular-nums whitespace-nowrap">
-          {dateAdded}
-        </td>
-        <td className="py-2.5 pl-2 text-right">
-          {open
-            ? <ChevronUp size={12} className="text-slate-500 ml-auto" />
-            : <ChevronDown size={12} className="text-slate-500 ml-auto" />}
-        </td>
-      </tr>
-
-      {/* 展開: 詳細説明・推奨対処・EPSS詳細 */}
-      {open && (
-        <tr className="bg-slate-800/30">
-          <td colSpan={7} className="px-4 py-3 text-xs text-slate-400 space-y-2">
-            <p className="leading-relaxed whitespace-pre-wrap">{item.description}</p>
-            {item.required_action && (
-              <p>
-                <span className="text-slate-500">推奨対処:</span> {item.required_action}
-              </p>
-            )}
-            {item.epss_score !== null && (
-              <p>
-                <span className="text-slate-500">EPSS（悪用確率）:</span>{' '}
-                <span className={epssColorClass(item.epss_score)}>
-                  {(item.epss_score * 100).toFixed(2)}%
-                </span>
-                {item.epss_percentile !== null && (
-                  <> （パーセンタイル {(item.epss_percentile * 100).toFixed(1)}%）</>
-                )}
-                {item.epss_updated_at && (
-                  <span className="text-slate-600">
-                    {' '}· 更新: {new Date(item.epss_updated_at).toLocaleDateString('ja-JP')}
-                  </span>
-                )}
-              </p>
-            )}
-          </td>
-        </tr>
-      )}
-    </>
-  )
-}
-
-// ベンダー別棒グラフ（上位8件。OSV の EcosystemBarChart と同じくベンダーごとに色分け）
-function VendorBarChart({ stats, loading }: { stats: StatsResponse | null; loading: boolean }) {
-  const data = (stats?.top_vendors ?? []).slice(0, 8)
-
-  return (
-    <ChartCard
-      icon={<Trophy size={13} className="text-slate-400" />}
-      title="ベンダー別件数 TOP8"
-      loading={loading}
-      isEmpty={data.length === 0}
-      height={160}
-    >
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-          <XAxis
-            dataKey="vendor_project"
-            tick={{ fill: '#475569', fontSize: 9 }}
-            tickLine={false}
-            axisLine={false}
-            interval={0}
-            angle={-30}
-            textAnchor="end"
-            height={40}
-          />
-          <YAxis
-            tick={{ fill: '#475569', fontSize: 10 }}
-            tickLine={false}
-            axisLine={false}
-            allowDecimals={false}
-          />
-          <ReTooltip
-            contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }}
-            formatter={(value) => [String(value) + ' 件', '件数']}
-          />
-          <Bar dataKey="count" radius={[3, 3, 0, 0]}>
-            {data.map((_entry, index) => (
-              <Cell key={`cell-${index}`} fill={VENDOR_CHART_COLORS[index % VENDOR_CHART_COLORS.length]} />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </ChartCard>
-  )
-}
 
 export function KevPanel() {
   const [search, setSearch] = useState('')
