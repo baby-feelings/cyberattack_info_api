@@ -14,9 +14,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.database import SessionLocal
-from app.core.notifications import notify_error, notify_success
-from app.crawler_logs.writer import now_utc, write_crawler_log
+from app.core.crawler_runner import CrawlCounters, run_crawler
+from app.crawler_logs.writer import now_utc
 from app.jvn.models import JvnVulnerability
 from app.jvn.parser import NS as _NS
 from app.jvn.parser import parse_item as _parse_item
@@ -214,54 +213,19 @@ def fetch_and_store_jvn(days: int | None = None) -> tuple[int, int, int]:
         (inserted, updated, deleted) のタプル
     """
     effective_days = days if days is not None else settings.JVN_DAYS
-    started_at = now_utc()
     logger.info("JVN crawler started (days=%d)", effective_days)
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=effective_days)
     cutoff_date = cutoff.strftime("%Y-%m-%d")
 
-    db = SessionLocal()
-    try:
+    def _body(db: Session, counters: CrawlCounters) -> None:
         entries = _fetch_all_entries(cutoff_date)
-        inserted, updated = _upsert_jvn(db, entries)
+        counters.inserted, counters.updated = _upsert_jvn(db, entries)
 
         # 保持期間を超えた古いレコードを削除（DB 容量管理）。失敗してもクロール自体は成功扱いとする
-        deleted = 0
         try:
-            deleted = _delete_old_jvn_records(db)
+            counters.deleted = _delete_old_jvn_records(db)
         except Exception as exc:
             logger.error("Failed to delete old JVN records: %s", exc, exc_info=True)
 
-        finished_at = now_utc()
-        duration = (finished_at - started_at).total_seconds()
-        logger.info(
-            "JVN crawler done: inserted=%d, updated=%d, deleted=%d, duration=%.1fs",
-            inserted, updated, deleted, duration,
-        )
-
-        write_crawler_log(
-            crawler_type="JVN",
-            status="success",
-            started_at=started_at,
-            finished_at=finished_at,
-            inserted=inserted,
-            updated=updated,
-            deleted=deleted,
-        )
-        notify_success("JVN", inserted, updated, deleted)
-        return inserted, updated, deleted
-
-    except Exception as exc:
-        finished_at = now_utc()
-        logger.error("JVN crawler failed: %s", exc, exc_info=True)
-        write_crawler_log(
-            crawler_type="JVN",
-            status="error",
-            started_at=started_at,
-            finished_at=finished_at,
-            error_message=str(exc),
-        )
-        notify_error("JVN", str(exc))
-        raise
-    finally:
-        db.close()
+    return run_crawler("JVN", _body)
