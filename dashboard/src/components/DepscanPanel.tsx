@@ -13,6 +13,7 @@ import {
 } from './shared/VulnPanelParts'
 import { DepscanGroupRow } from './depscan/DepscanGroupRow'
 import { RepoBarChart } from './depscan/RepoBarChart'
+import { DependabotOpsSection } from './depscan/DependabotOpsSection'
 import {
   SEVERITY_CLS, SEVERITY_COLORS, ownerOf,
   groupFindings, groupBestSeverityRank, groupLatestDetectedAt,
@@ -275,6 +276,9 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
           <Pagination page={page} totalPages={totalPages} total={groups.length} onPageChange={setPage} />
         </>
       )}
+
+      {/* Dependabot PR 自動運用（DEPSOPS）の判定履歴。専用タブは作らずここに統合する */}
+      <DependabotOpsSection />
     </div>
   )
 }

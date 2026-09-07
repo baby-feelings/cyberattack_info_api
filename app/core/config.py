@@ -63,6 +63,8 @@ class Settings(BaseSettings):
     # Dependabot PR 自動運用（DEPSOPS）設定
     # JST 8:00 = UTC 23:00（DEPSCAN の後段。Dependabot が新規検知に反応する時間を確保）
     DEPSOPS_CRON_HOUR_UTC: int = 23
+    # DEPSOPS データの保持期間（日数）: この日数より古い processed_at レコードを定期削除する
+    DEPSOPS_RETENTION_DAYS: int = 180
 
     # GitHub ログイン（DEPSCAN ダッシュボードのアクセス制御）設定
     # OAuth App の Client ID / Secret（未設定時は /auth/github/* がエラーを返すのみで

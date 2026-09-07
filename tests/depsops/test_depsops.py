@@ -5,6 +5,7 @@ app.depsops.runner・app.core.notifications.notify_dependabot_ops のテスト�
 外部HTTP通信（GitHub API）は全てモックする。
 """
 import os
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
@@ -22,7 +23,13 @@ from app.depsops.github_client import (  # noqa: E402
     merge_pull_request,
     request_rebase,
 )
-from app.depsops.runner import _process_pr, run_dependabot_ops  # noqa: E402
+from app.depsops.models import DependabotPrLog  # noqa: E402
+from app.depsops.runner import (  # noqa: E402
+    _delete_old_depsops_records,
+    _process_pr,
+    _record_pr_logs,
+    run_dependabot_ops,
+)
 
 TEST_API_KEY = "test-api-key-for-pytest"
 HEADERS = {"X-API-KEY": TEST_API_KEY}
@@ -313,6 +320,138 @@ class TestRunDependabotOps:
                 run_dependabot_ops()
         mock_notify_error.assert_called_once()
 
+    def test_persists_merged_and_flagged_prs_to_db(self, db_session):
+        """マージ済み・要確認いずれの PR も DependabotPrLog に記録されること。"""
+        repos = [{"full_name": "u/r1"}]
+        prs = [
+            {"number": 1, "title": "Bump x from 1.0.0 to 1.0.1"},  # minor → merged
+            {"number": 2, "title": "Bump y from 1.0.0 to 2.0.0"},  # major → flagged
+        ]
+
+        def _get_pr(owner, repo, number, token):
+            return {"mergeable_state": "clean"}
+
+        with patch("app.depsops.runner.list_target_repos", return_value=repos), \
+             patch("app.depsops.runner.list_open_dependabot_prs", return_value=prs), \
+             patch("app.depsops.runner.has_ci_workflows", return_value=True), \
+             patch("app.depsops.runner.get_pull_request", side_effect=_get_pr), \
+             patch("app.depsops.runner.merge_pull_request"), \
+             patch("app.depsops.runner.notify_dependabot_ops"):
+            run_dependabot_ops()
+
+        rows = db_session.query(DependabotPrLog).order_by(DependabotPrLog.pr_number).all()
+        assert [(r.pr_number, r.action) for r in rows] == [(1, "merged"), (2, "flagged")]
+        assert rows[0].reason is None
+        assert "メジャー" in rows[1].reason
+
+
+class TestRecordPrLogs:
+    def test_writes_one_row_per_pr_with_correct_action_and_reason(self, db_session):
+        merged = [{"repo_full_name": "u/r", "pr_number": 1, "title": "bump x"}]
+        flagged = [
+            {"repo_full_name": "u/r", "pr_number": 2, "title": "bump y", "reason": "メジャー"},
+        ]
+        processed_at = datetime(2026, 6, 1, tzinfo=timezone.utc)
+
+        _record_pr_logs(db_session, merged, flagged, processed_at)
+
+        rows = db_session.query(DependabotPrLog).order_by(DependabotPrLog.pr_number).all()
+        assert len(rows) == 2
+        assert rows[0].action == "merged" and rows[0].reason is None
+        assert rows[1].action == "flagged" and rows[1].reason == "メジャー"
+
+
+class TestDeleteOldDepsopsRecords:
+    def test_deletes_only_records_older_than_retention_period(self, db_session):
+        old = DependabotPrLog(
+            repo_full_name="u/r", pr_number=1, title="old", action="merged",
+            processed_at=datetime.now(timezone.utc) - timedelta(days=200),
+        )
+        recent = DependabotPrLog(
+            repo_full_name="u/r", pr_number=2, title="recent", action="merged",
+            processed_at=datetime.now(timezone.utc) - timedelta(days=1),
+        )
+        db_session.add_all([old, recent])
+        db_session.commit()
+
+        deleted = _delete_old_depsops_records(db_session)
+
+        assert deleted == 1
+        remaining = db_session.query(DependabotPrLog).all()
+        assert [r.pr_number for r in remaining] == [2]
+
+
+# ──────────────────────────────────────────────────────────────
+# GET /api/depsops
+# ──────────────────────────────────────────────────────────────
+
+
+class TestListDepsops:
+    def test_requires_auth(self, client):
+        res = client.get("/api/depsops")
+        assert res.status_code == 403
+
+    def test_returns_recent_prs_sorted_desc(self, client, db_session):
+        db_session.add_all([
+            DependabotPrLog(
+                repo_full_name="u/r1", pr_number=1, title="bump a", action="merged",
+                processed_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+            ),
+            DependabotPrLog(
+                repo_full_name="u/r2", pr_number=2, title="bump b", action="flagged",
+                reason="メジャー", processed_at=datetime(2026, 6, 2, tzinfo=timezone.utc),
+            ),
+        ])
+        db_session.commit()
+
+        res = client.get("/api/depsops", headers=HEADERS)
+
+        assert res.status_code == 200
+        body = res.json()
+        assert body["total"] == 2
+        assert [item["pr_number"] for item in body["data"]] == [2, 1]
+        assert body["data"][0]["reason"] == "メジャー"
+
+    def test_filters_by_action(self, client, db_session):
+        db_session.add_all([
+            DependabotPrLog(
+                repo_full_name="u/r1", pr_number=1, title="bump a", action="merged",
+                processed_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+            ),
+            DependabotPrLog(
+                repo_full_name="u/r1", pr_number=2, title="bump b", action="flagged",
+                reason="メジャー", processed_at=datetime(2026, 6, 2, tzinfo=timezone.utc),
+            ),
+        ])
+        db_session.commit()
+
+        res = client.get("/api/depsops?action=flagged", headers=HEADERS)
+
+        assert res.status_code == 200
+        body = res.json()
+        assert body["total"] == 1
+        assert body["data"][0]["action"] == "flagged"
+
+    def test_filters_by_repo(self, client, db_session):
+        db_session.add_all([
+            DependabotPrLog(
+                repo_full_name="u/r1", pr_number=1, title="bump a", action="merged",
+                processed_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+            ),
+            DependabotPrLog(
+                repo_full_name="u/r2", pr_number=1, title="bump a", action="merged",
+                processed_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+            ),
+        ])
+        db_session.commit()
+
+        res = client.get("/api/depsops?repo=u/r2", headers=HEADERS)
+
+        assert res.status_code == 200
+        body = res.json()
+        assert body["total"] == 1
+        assert body["data"][0]["repo_full_name"] == "u/r2"
+
 
 # ──────────────────────────────────────────────────────────────
 # app.core.notifications.notify_dependabot_ops
@@ -357,7 +496,7 @@ class TestAdminDependabotOps:
         assert res.status_code == 403
 
     def test_trigger_returns_202(self, client):
-        with patch("app.main.run_dependabot_ops", return_value=(0, 0, 0)):
+        with patch("app.depsops.router.run_dependabot_ops", return_value=(0, 0, 0)):
             res = client.post("/admin/dependabot-ops", headers=HEADERS)
         assert res.status_code == 202
         assert "background" in res.json()["message"].lower()

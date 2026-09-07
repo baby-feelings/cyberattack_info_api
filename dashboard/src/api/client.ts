@@ -314,6 +314,38 @@ export async function fetchAllDepscanFindings(params: {
   return all
 }
 
+// ── DEPSOPS（Dependabot PR 自動運用の判定履歴） ────────────────────
+
+export interface DependabotPrLogOut {
+  repo_full_name: string
+  pr_number: number
+  title: string
+  action: 'merged' | 'flagged'
+  reason: string | null
+  processed_at: string
+}
+
+export interface DepsOpsListResponse {
+  total: number
+  page: number
+  per_page: number
+  data: DependabotPrLogOut[]
+}
+
+export async function fetchDepsOpsList(params: {
+  page?: number
+  perPage?: number
+  repo?: string | null
+  action?: 'merged' | 'flagged' | null
+}): Promise<DepsOpsListResponse> {
+  const p = new URLSearchParams()
+  p.set('page', String(params.page ?? 1))
+  p.set('per_page', String(params.perPage ?? 50))
+  if (params.repo) p.set('repo', params.repo)
+  if (params.action) p.set('action', params.action)
+  return apiFetch<DepsOpsListResponse>(`/api/depsops?${p}`)
+}
+
 // ── クローラー実行ログ（DEPSCAN 画面の新着データ検知に利用） ──────────
 
 export interface CrawlerLogOut {
