@@ -20,6 +20,7 @@ from app.core.auth import require_api_key
 from app.core.background import run_in_background
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.pagination import paginate
 from app.core.schemas import SeverityStat
 from app.depscan.crawler import fetch_and_scan_dependencies
 from app.depscan.models import DependencyFinding
@@ -130,15 +131,7 @@ def list_depscan(
         else:
             query = query.filter(DependencyFinding.resolved_at.is_(None))
 
-    total = query.count()
-    offset = (page - 1) * per_page
-
-    items = (
-        query.order_by(DependencyFinding.detected_at.desc())
-        .offset(offset)
-        .limit(per_page)
-        .all()
-    )
+    total, items = paginate(query, page, per_page, DependencyFinding.detected_at.desc())
 
     logger.info(
         "list_depscan: total=%d, page=%d, repo=%r, owner=%r, ecosystem=%r, "

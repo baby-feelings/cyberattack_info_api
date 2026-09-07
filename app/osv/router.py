@@ -15,6 +15,7 @@ from app.core.auth import require_api_key, require_public_api_key
 from app.core.background import run_in_background
 from app.core.database import get_db
 from app.core.db_utils import year_month_expr
+from app.core.pagination import paginate
 from app.core.schemas import MonthlyStat
 from app.osv.crawler import fetch_and_store_osv
 from app.osv.models import OsvVulnerability
@@ -112,21 +113,13 @@ def list_osv(
             )
         )
 
-    total = query.count()
-    offset = (page - 1) * per_page
-
     # ソート順の適用（cvss 指定時は CVSS スコア降順、NULL は末尾）
     if sort_by == "cvss":
         order = OsvVulnerability.cvss_score.desc().nulls_last()  # type: ignore[union-attr,assignment]
     else:
         order = OsvVulnerability.modified.desc()  # type: ignore[assignment]
 
-    items = (
-        query.order_by(order)
-        .offset(offset)
-        .limit(per_page)
-        .all()
-    )
+    total, items = paginate(query, page, per_page, order)
 
     logger.info(
         "list_osv: total=%d, page=%d, ecosystem=%r, severity=%r, search=%r, sort_by=%r",

@@ -16,6 +16,7 @@ from app.core.auth import require_api_key, require_public_api_key
 from app.core.background import run_in_background
 from app.core.database import get_db
 from app.core.db_utils import year_month_expr
+from app.core.pagination import paginate
 from app.core.schemas import MonthlyStat
 from app.kev.crawler import fetch_and_store_kev
 from app.kev.models import Vulnerability
@@ -108,17 +109,8 @@ def list_vulnerabilities(
     if updated_since is not None:
         query = query.filter(Vulnerability.updated_at >= updated_since)
 
-    # 総件数をカウント（ページネーション用）
-    total = query.count()
-
     # 最新の追加日順でソートし、ページネーションを適用
-    offset = (page - 1) * per_page
-    items = (
-        query.order_by(Vulnerability.date_added.desc())
-        .offset(offset)
-        .limit(per_page)
-        .all()
-    )
+    total, items = paginate(query, page, per_page, Vulnerability.date_added.desc())
 
     logger.info(
         "list_vulnerabilities: total=%d, page=%d, per_page=%d, search=%r",
