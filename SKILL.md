@@ -95,6 +95,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | `vendor` | string | ベンダー名の完全一致 |
 | `product` | string | 製品名の部分一致 |
 | `min_epss` | float | EPSS スコアの下限（0.0〜1.0）。KEV 掲載に加え悪用確率でも絞り込みたい場合に使用 |
+| `updated_since` | string (ISO 8601) | この日時以降に内容が更新されたレコードのみ返す（差分取得・増分同期用） |
 
 ---
 
@@ -164,6 +165,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | `severity` | string | 重要度（`CRITICAL` / `HIGH` / `MEDIUM` / `LOW`） |
 | `search` | string | パッケージ名の部分一致 |
 | `sort_by` | string | ソート基準（`modified`（デフォルト） / `cvss`） |
+| `updated_since` | string (ISO 8601) | この日時以降に内容が更新されたレコードのみ返す（差分取得・増分同期用） |
 
 ---
 
@@ -223,6 +225,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | `search` | string | JVNDB ID・タイトル・概要の部分一致 |
 | `sort_by` | string | ソート基準（`modified`（デフォルト） / `cvss`） |
 | `days` | int | 取得対象の直近日数（デフォルト: 30） |
+| `updated_since` | string (ISO 8601) | この日時以降に内容が更新されたレコードのみ返す（差分取得・増分同期用） |
 
 ---
 
@@ -503,6 +506,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | `epss_score` | float \| null | EPSS スコア（今後30日以内に悪用される確率、0.0〜1.0。FIRST が日次算出） |
 | `epss_percentile` | float \| null | EPSS パーセンタイル（全 CVE 中での相対順位、0.0〜1.0） |
 | `epss_updated_at` | string (ISO 8601) \| null | EPSS スコアの取得日時 |
+| `fetched_at` | string (ISO 8601) \| null | このレコードを最後に CISA KEV フィードで存在確認した日時（内容変更が無くても毎回のクロールで更新される） |
 
 ### OsvVulnerabilityOut（OSV 脆弱性情報）
 
@@ -521,6 +525,8 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | `references` | string[] | 参考リンク（最大 5 件） |
 | `published` | string (ISO 8601) | 公開日時 |
 | `modified` | string (ISO 8601) | 最終更新日時 |
+| `withdrawn_at` | string (ISO 8601) \| null | 撤回日時。設定されていればソース側（OSV）で撤回済み |
+| `fetched_at` | string (ISO 8601) \| null | このレコードを最後に OSV API で存在確認した日時（内容変更が無くても毎回のクロールで更新される） |
 
 ### JvnVulnerabilityOut（JVN 脆弱性情報）
 
@@ -538,6 +544,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | `jvn_url` | string | JVN 詳細ページ URL |
 | `date_published` | string (ISO 8601) | 公開日時 |
 | `date_last_modified` | string (ISO 8601) | 最終更新日時 |
+| `fetched_at` | string (ISO 8601) \| null | このレコードを最後に MyJVN API で存在確認した日時（内容変更が無くても毎回のクロールで更新される） |
 
 ### DependencyFindingOut（DEPSCAN 検知結果）
 

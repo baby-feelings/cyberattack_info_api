@@ -57,10 +57,17 @@ def list_osv(
     sort_by: Literal["modified", "cvss"] = Query(
         "modified", description="ソートキー（modified: 更新日時降順 / cvss: CVSSスコア降順）"
     ),
+    updated_since: datetime | None = Query(
+        None, description="この日時以降に内容が更新されたレコードのみ返す（差分取得用、ISO 8601）",
+    ),
 ) -> OsvListResponse:
     """直近 N 日以内に更新された OSV 脆弱性を取得する。"""
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     query = db.query(OsvVulnerability).filter(OsvVulnerability.modified >= cutoff)
+
+    # 差分取得（増分同期）: 新規追加または内容変更があったレコードのみに絞り込む
+    if updated_since is not None:
+        query = query.filter(OsvVulnerability.updated_at >= updated_since)
 
     # エコシステムフィルタ（完全一致）
     if ecosystem:

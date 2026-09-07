@@ -5,7 +5,7 @@ GET /api/vulnerabilities/stats   – 統計情報取得
 GET /api/vulnerabilities/{cve_id} – CVE 個別取得
 """
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -46,6 +46,9 @@ def list_vulnerabilities(
         None, ge=0.0, le=1.0,
         description="EPSS スコアの下限（0.0〜1.0）。指定値以上のもののみ返す",
     ),
+    updated_since: datetime | None = Query(
+        None, description="この日時以降に内容が更新されたレコードのみ返す（差分取得用、ISO 8601）",
+    ),
 ) -> VulnerabilityListResponse:
     """脆弱性一覧を取得する。
 
@@ -53,6 +56,7 @@ def list_vulnerabilities(
     - `vendor`: vendor_project の完全一致フィルタ
     - `product`: product の部分一致フィルタ
     - `min_epss`: EPSS スコアによる絞り込み（KEV 単独では拾えない悪用確率シグナル）
+    - `updated_since`: 差分取得（増分同期）用。新規追加または内容変更があったレコードのみ返す
     - 最新の date_added 順でソート
     """
     query = db.query(Vulnerability)
@@ -78,6 +82,10 @@ def list_vulnerabilities(
     # EPSS スコアの下限フィルタ
     if min_epss is not None:
         query = query.filter(Vulnerability.epss_score >= min_epss)
+
+    # 差分取得（増分同期）: 新規追加または内容変更があったレコードのみに絞り込む
+    if updated_since is not None:
+        query = query.filter(Vulnerability.updated_at >= updated_since)
 
     # 総件数をカウント（ページネーション用）
     total = query.count()

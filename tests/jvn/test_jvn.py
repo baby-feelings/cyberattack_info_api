@@ -2,7 +2,7 @@
 
 外部 MyJVN API への HTTP 通信はモックし、ロジックのみを検証する。
 """
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -78,6 +78,40 @@ def test_list_jvn_severity_filter(client, db_session):
     body = resp.json()
     assert body["total"] == 1
     assert body["data"][0]["severity"] == "High"
+
+
+def test_list_jvn_updated_since_filter(client, db_session):
+    """updated_since パラメータで差分取得（増分同期）が機能することを確認する。
+
+    SQLite（テストDB）は naive・秒精度で保存・比較するため、insert時刻に依存せず
+    両レコードの updated_at を明示的に固定する（本番の PostgreSQL は tz-aware・
+    マイクロ秒精度で正しく比較できる）。
+    """
+    cutoff = datetime(2026, 6, 15, 12, 0, 0)
+    old = _make_jvn(jvndb_id="JVNDB-2026-000010")
+    db_session.add(old)
+    db_session.commit()
+    new = _make_jvn(jvndb_id="JVNDB-2026-000011")
+    db_session.add(new)
+    db_session.commit()
+
+    db_session.query(JvnVulnerability).filter_by(id=old.id).update(
+        {"updated_at": cutoff - timedelta(days=1)}
+    )
+    db_session.query(JvnVulnerability).filter_by(id=new.id).update(
+        {"updated_at": cutoff + timedelta(days=1)}
+    )
+    db_session.commit()
+
+    resp = client.get(
+        "/api/jvn",
+        params={"updated_since": cutoff.isoformat()},
+        headers={"X-API-KEY": TEST_API_KEY},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 1
+    assert body["data"][0]["jvndb_id"] == "JVNDB-2026-000011"
 
 
 def test_list_jvn_search_filter(client, db_session):
@@ -204,6 +238,41 @@ def test_upsert_jvn_insert(db_session):
     record = db_session.query(JvnVulnerability).filter_by(jvndb_id="JVNDB-2026-999001").first()
     assert record is not None
     assert record.severity == "High"
+    assert record.fetched_at is not None
+
+
+def test_upsert_jvn_refreshes_fetched_at_even_when_unchanged(db_session):
+    """内容に変更が無くても、fetched_atは毎回のクロールで更新されることを確認する。"""
+    import time
+
+    from app.jvn.crawler import _upsert_jvn
+
+    db_session.add(_make_jvn(jvndb_id="JVNDB-2026-999009"))
+    db_session.commit()
+    record = db_session.query(JvnVulnerability).filter_by(jvndb_id="JVNDB-2026-999009").first()
+    first_fetched_at = record.fetched_at
+
+    time.sleep(0.01)
+    entries = [{
+        "jvndb_id": "JVNDB-2026-999009",
+        "title": record.title,
+        "overview": record.overview,
+        "cve_ids": record.cve_ids,
+        "severity": record.severity,
+        "cvss_score": record.cvss_score,
+        "cvss_vector": record.cvss_vector,
+        "affected_products": record.affected_products,
+        "references": record.references,
+        "jvn_url": record.jvn_url,
+        "date_published": record.date_published,
+        "date_last_modified": record.date_last_modified,
+    }]
+    inserted, updated = _upsert_jvn(db_session, entries)
+    db_session.refresh(record)
+
+    assert inserted == 0
+    assert updated == 0
+    assert first_fetched_at is None or record.fetched_at > first_fetched_at
 
 
 def test_upsert_jvn_update(db_session):

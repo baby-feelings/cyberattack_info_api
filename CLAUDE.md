@@ -289,6 +289,36 @@ KEVクロール自体の成功可否には影響させない。`GET /api/vulnera
 `min_epss` クエリパラメータを追加し、KEV単独では拾えない悪用確率シグナルでの
 絞り込みを可能にした。
 
+### 来歴・鮮度・差分API（Issue #129・KEV/OSV/JVN共通）
+文献調査（サイバー攻撃情報API_機能要件調査論文）の指摘「source_modified_at と
+fetched_at を区別し、差分取得（updated_since）を提供する」に対応。KEV/OSV/JVN の
+3ドメインすべてに以下を追加した:
+
+- **`fetched_at`**: このレコードを最後にクローラーが取得元で存在確認した日時。
+  既存の `updated_at`（`onupdate=func.now()`。**内容が実際に変わった時だけ**更新される）
+  とは異なり、`fetched_at` は**内容に変更が無かった回のクロールでも毎回更新**する
+  （鮮度の可視化用。「このデータは今日も取得元に存在することを確認した」という証跡）。
+  KEV は `_upsert_vulnerabilities` の `existing.fetched_at = now` を `changed` 判定と
+  無関係に必ず実行、OSV は `_upsert_osv_records`、JVN は `_apply_update` で同様。
+  `record_data`/`rec` の等値比較（`changed` 判定）には `fetched_at` を含めない
+  （含めると値が毎回異なるため常に「変更あり」と誤判定してしまう）。
+- **`updated_since` クエリパラメータ**: 差分取得（増分同期）用に、各一覧APIへ追加。
+  `fetched_at` ではなく既存の **`updated_at`** を条件に使う（`fetched_at` は毎回の
+  クロールで更新されてしまうため、フィルタに使うと実質「直近クロールで見えた全件」を
+  返すだけになり差分取得として機能しない。「内容が実際に変わったレコードだけを返す」
+  という要件には `updated_at` が正しい）。
+- **OSV の `withdrawn_at`**: OSVスキーマの `withdrawn`（撤回日時、ISO8601文字列）
+  フィールドをパースして保存する（`_build_records`）。KEV・JVNには撤回の概念が
+  無いため対象外。
+
+テストでのSQLite特有の注意点: SQLiteは`DateTime(timezone=True)`でもtz情報を保持
+せず、かつ`CURRENT_TIMESTAMP`（`server_default=func.now()`）は**秒精度**（マイクロ秒
+を持たない）で返す。そのため `updated_since` のテストで「insert直後のレコードは
+cutoffより新しいはず」という前提を置くと、同一秒内のinsertでcutoffのマイクロ秒部分
+に負けて意図せず古い扱いになるレースコンディションが発生する。対策として、両レコード
+の `updated_at` を明示的な固定値へ強制更新してからフィルタを検証する
+（`tests/{kev,osv,jvn}/test_*.py` の `test_*_updated_since_filter` 参照）。
+
 ### OSV クローラーの 2 ステップ取得
 OSV REST API の `/v1/querybatch` は `{id, modified}` しか返さないため、完全情報の取得は 2 ステップ:
 1. `POST /v1/querybatch` → 脆弱性 ID と最終更新日時の一覧を取得

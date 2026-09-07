@@ -136,6 +136,40 @@ def test_list_min_epss_filter(client: TestClient, db_session: Session, monkeypat
     assert data[0]["epss_score"] == 0.9
 
 
+def test_list_updated_since_filter(client: TestClient, db_session: Session, monkeypatch):
+    """updated_since パラメータで差分取得（増分同期）が機能することを確認する。
+
+    SQLite（テストDB）は DateTime(timezone=True) でも tz 情報を保持せず naive・秒精度
+    （CURRENT_TIMESTAMPはミリ秒未満を持たない）で保存・比較するため、このテストでは
+    insert時刻に依存せず、両レコードの updated_at を明示的に固定する
+    （本番の PostgreSQL は tz-aware・マイクロ秒精度で正しく比較できる）。
+    """
+    from datetime import datetime
+
+    monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+    cutoff = datetime(2026, 6, 15, 12, 0, 0)
+    old = _make_vuln(db_session, cve_id="CVE-2026-20001")
+    new = _make_vuln(db_session, cve_id="CVE-2026-20002")
+
+    db_session.query(Vulnerability).filter_by(id=old.id).update(
+        {"updated_at": cutoff - timedelta(days=1)}
+    )
+    db_session.query(Vulnerability).filter_by(id=new.id).update(
+        {"updated_at": cutoff + timedelta(days=1)}
+    )
+    db_session.commit()
+
+    response = client.get(
+        "/api/vulnerabilities",
+        params={"updated_since": cutoff.isoformat()},
+        headers={"X-API-KEY": TEST_API_KEY},
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert len(data) == 1
+    assert data[0]["cve_id"] == "CVE-2026-20002"
+
+
 def test_list_product_filter(client: TestClient, db_session: Session, monkeypatch):
     """product パラメータによる部分一致フィルタが機能することを確認する。"""
     monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)

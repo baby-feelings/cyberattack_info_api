@@ -24,6 +24,12 @@ class OsvVulnerabilityOut(BaseModel):
     references: list[str] = Field(default_factory=list, description="参考リンク（最大 5 件）")
     published: str = Field(description="公開日時（ISO 8601）")
     modified: str = Field(description="最終更新日時（ISO 8601）")
+    withdrawn_at: str | None = Field(
+        None, description="撤回日時（ISO 8601）。設定されていればソース側で撤回済み",
+    )
+    fetched_at: str | None = Field(
+        None, description="このレコードを最後にOSV APIで存在確認した日時",
+    )
 
     model_config = {"from_attributes": True}
 
@@ -31,6 +37,11 @@ class OsvVulnerabilityOut(BaseModel):
     def _serialize_datetime(self, value: Any) -> str:
         """datetime を ISO 文字列に変換する。"""
         return value.isoformat() if hasattr(value, "isoformat") else str(value)
+
+    @field_serializer("withdrawn_at", "fetched_at")
+    def _serialize_optional_datetime(self, value: Any) -> str | None:
+        """null許容の datetime を ISO 文字列（またはNone）に変換する。"""
+        return value.isoformat() if hasattr(value, "isoformat") else None
 
     @classmethod
     def model_validate(cls, obj: Any, **kwargs: Any) -> "OsvVulnerabilityOut":

@@ -57,6 +57,15 @@ class OsvVulnerability(Base):
     # OSV 最終更新日時（クローラーの取得対象日時フィルタのキー）
     modified: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
+    # 撤回日時（OSVスキーマの withdrawn フィールド）。設定されていれば、この脆弱性
+    # エントリはソース側で撤回済み（誤登録の取り消し等）であることを示す
+    withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # このレコードを最後にクローラーが取得元（OSV API）で存在確認した日時。
+    # updated_at と異なり、内容に変更が無かった回のクロールでも毎回更新される
+    # （鮮度・来歴の可視化用。差分取得は updated_since で updated_at を見る）
+    fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     # DB 登録日時
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
