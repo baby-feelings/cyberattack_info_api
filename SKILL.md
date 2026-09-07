@@ -320,6 +320,53 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 ---
 
+### スキル 11: Dependabot PR 自動運用（DEPSOPS）の判定履歴を確認する
+
+**用途:** `POST /admin/dependabot-ops` が判定した Dependabot PR の履歴（自動マージ済み・
+要確認いずれも）を確認する。Slack 通知は実行時点のスナップショットのみで履歴を持たないため、
+「要確認」PR がどのリポジトリ・どんな理由で自動マージされなかったかを後から振り返るのに使う。
+
+```bash
+# 要確認（自動マージされなかった）PR のみ取得
+curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
+  "https://cyberattack-info-api.onrender.com/api/depsops?action=flagged"
+
+# 特定リポジトリのみ絞り込み
+curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
+  "https://cyberattack-info-api.onrender.com/api/depsops?repo=baby-feelings/baby_grow"
+```
+
+| パラメータ | 型 | 説明 |
+|-----------|-----|------|
+| `page` | int | ページ番号（デフォルト: 1） |
+| `per_page` | int | 件数（デフォルト: 50、最大: 200） |
+| `repo` | string | リポジトリ名で絞り込み（完全一致。例: `owner/repo`） |
+| `action` | string | 判定結果で絞り込み（`merged` / `flagged`） |
+
+**レスポンス例:**
+```json
+{
+  "total": 1,
+  "page": 1,
+  "per_page": 50,
+  "data": [
+    {
+      "repo_full_name": "baby-feelings/baby_grow",
+      "pr_number": 55,
+      "title": "chore(deps-dev): Bump typescript from 6.0.3 to 7.0.2",
+      "action": "flagged",
+      "reason": "メジャーバージョンアップ",
+      "processed_at": "2026-09-07T12:05:21+00:00"
+    }
+  ]
+}
+```
+
+> React ダッシュボードでは、DEPSOPS 専用タブは無く DEPSCAN タブ内の「Dependabot 運用状況」
+> 折りたたみセクションからこの一覧を閲覧できる。
+
+---
+
 ## 参考: GitHub ログイン API（DEPSCAN ダッシュボード用・ブラウザ専用）
 
 React ダッシュボードの DEPSCAN タブ向けの GitHub OAuth ログイン機能。ブラウザでの
@@ -340,7 +387,7 @@ DEPSCAN スキャンが実行され（直近24時間以内にスキャン済み�
 
 ---
 
-### スキル 11: クローラーの実行ログを確認する
+### スキル 12: クローラーの実行ログを確認する
 
 **用途:** KEV / OSV / JVN / DEPSCAN クローラーが正常に動作しているか、最新の実行結果（件数・所要時間・エラー）を確認する。
 
@@ -384,7 +431,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 ---
 
-### スキル 12: サービス状態を確認する
+### スキル 13: サービス状態を確認する
 
 **用途:** API サーバーと DB が正常稼働しているか確認する。
 
@@ -485,8 +532,8 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 > **上記のマージ判断は `POST /admin/dependabot-ops`（DEPSOPS）が毎日 JST 08:00 に自動実行する。**
 > マイナー/パッチ・CIあり・コンフリクトなしの PR だけを自動マージし、それ以外
 > （メジャーバージョンアップ等）は Slack 通知のみで人の判断に委ねる。即時実行したい場合は
-> このエンドポイントを手動で呼ぶことも可能（スキル 11 の `crawler_type=DEPSOPS` で
-> 実行結果を確認できる）。
+> このエンドポイントを手動で呼ぶことも可能（スキル 12 の `crawler_type=DEPSOPS` で
+> サマリーを、スキル 11（`GET /api/depsops`）で PR 単位の判定結果・理由を確認できる）。
 
 ---
 
@@ -562,6 +609,17 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | `manifest_path` | string | 検知元のロックファイルパス（例: `dashboard/package-lock.json`） |
 | `detected_at` | string (ISO 8601) | 初回検知日時 |
 | `resolved_at` | string \| null (ISO 8601) | 解決日時（未解決なら `null`） |
+
+### DependabotPrLogOut（DEPSOPS の PR 判定履歴）
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| `repo_full_name` | string | 対象リポジトリ（例: `baby-feelings/baby_grow`） |
+| `pr_number` | int | Dependabot PR 番号 |
+| `title` | string | PR タイトル |
+| `action` | string | 判定結果（`merged`: 自動マージ済み / `flagged`: 要確認） |
+| `reason` | string \| null | `action=flagged` の場合の理由（メジャーバージョンアップ等）。`merged` の場合は `null` |
+| `processed_at` | string (ISO 8601) | 判定を行った DEPSOPS 実行日時 |
 
 ### CrawlerLogOut（クローラー実行ログ）
 
@@ -664,7 +722,9 @@ Upsert ロジック:
   `@dependabot rebase` を自動コメント
 - 自動マージ・flagged いずれも毎回 Slack 通知（監査目的、0件同士の場合のみスキップ）
 - `inserted`=自動マージ件数、`updated`=flagged件数として `crawler_logs` に記録
-  （`deleted` は未使用）
+  （`deleted` は未使用）。判定した PR 1件1行の詳細（理由含む）は `dependabot_pr_logs`
+  テーブルへ永続化し、`GET /api/depsops` で参照できる（スキル 11 参照。保持期間
+  `DEPSOPS_RETENTION_DAYS` を超えた古いレコードは自動削除）
 - 毎日 JST 08:00（DEPSCAN の後段）に自動実行される他、`POST /admin/dependabot-ops`
   で手動実行も可能。コンフリクトで自動マージできなかった PR は、翌日以降の実行時に
   リベースが完了していれば自動的にマージされる（複数日にまたがる自己修復）

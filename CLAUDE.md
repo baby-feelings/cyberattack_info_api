@@ -95,9 +95,9 @@ pip install -r requirements-dev.txt
 
 ```
 app/
-├── main.py                 # FastAPI アプリ・lifespan・スケジューラ登録・ルーター include
-│                           # /admin/crawl・/admin/osv-crawl・/admin/jvn-crawl・/admin/depscan-crawl
-│                           # /admin/dependabot-ops
+├── main.py                 # FastAPI アプリ・lifespan・スケジューラ登録・ルーター include のみに専念する。
+│                           # /admin/* トリガーエンドポイントは持たない（各ドメインの router.py の
+│                           # admin_router に定義する。詳細は「/admin/*-crawl はバックグラウンド実行」節）
 ├── auth/                   # GitHub ログイン（DEPSCAN ダッシュボードのアクセス制御）ドメイン。models 無し
 │   ├── router.py           # /auth/github/login・/auth/github/callback・/auth/scan-status
 │   ├── github_oauth.py     # GitHub OAuth（Web Application Flow）クライアント
@@ -106,40 +106,61 @@ app/
 │   ├── config.py           # Settings（pydantic-settings）・環境変数管理
 │   ├── database.py         # SQLAlchemy エンジン（SQLite/PG 切り替え）・get_db
 │   ├── auth.py             # X-API-KEY 認証（APIKeyHeader・hmac.compare_digest）
+│   ├── background.py       # run_in_background（daemon スレッドでの非同期実行の共通ヘルパー。
+│   │                       # KEV/OSV/JVN/DEPSCAN/DEPSOPS の各 /admin/*-crawl から利用）
+│   ├── crawler_runner.py   # run_crawler（started_at計測→DBセッション生成→本体処理→crawler_logs記録
+│   │                       # →Slack通知→セッションクローズ、という定型処理を一元化する Template Method。
+│   │                       # KEV/OSV/JVN の fetch_and_store_* から利用。CrawlCounters で進捗件数を受け渡す）
 │   ├── db_utils.py         # DB ユーティリティ（year_month_expr: SQLite/PG 両対応の日付フォーマット）
 │   ├── notifications.py    # Slack Webhook 通知（notify_success/notify_error 共通化・エラーサニタイズ）
 │   ├── osv_client.py       # OSV API 汎用クライアント（query_versions_batch・fetch_vuln_by_id・
 │   │                       # parse_severity 等。app.osv.crawler と app.depscan.crawler の両方が利用）
+│   ├── pagination.py       # paginate()（件数カウント・並び替え・offset/limit の定型処理を一元化。
+│   │                       # KEV/OSV/JVN/DEPSCAN/DEPSOPS の各一覧APIから利用。フィルタ構築自体は
+│   │                       # ドメインごとに異なるため対象外）
 │   ├── types.py            # CrawlerType（"KEV"/"OSV"/"JVN"/"DEPSCAN"/"DEPSOPS" の Literal 型）
-│   └── schemas.py          # 横断スキーマ（HealthResponse・MonthlyStat・SeverityStat）
+│   └── schemas.py          # 横断スキーマ（HealthResponse・MonthlyStat・SeverityStat・
+│                           # OrmDatetimeModel: ORM オブジェクトの datetime 属性をフィールド列挙なしで
+│                           # 自動的に ISO 文字列変換する共通基底クラス。JVN/OSV/DEPSOPS の *Out
+│                           # スキーマが継承する）
 ├── kev/                    # CISA KEV ドメイン
 │   ├── models.py           # Vulnerability
 │   ├── schemas.py          # VulnerabilityOut 等
-│   ├── crawler.py          # CISA KEV クローラー・Upsert ロジック
-│   └── router.py           # /api/vulnerabilities エンドポイント（一覧・個別・統計）
+│   ├── crawler.py          # CISA KEV クローラー・Upsert ロジック（fetch_and_store_kev は
+│   │                       # app.core.crawler_runner.run_crawler 経由で実行される）
+│   └── router.py           # router: /api/vulnerabilities エンドポイント（一覧・個別・統計）
+│                           # admin_router: POST /admin/crawl（手動トリガー）
 ├── osv/                    # OSV ドメイン
 │   ├── models.py           # OsvVulnerability
 │   ├── schemas.py          # OsvVulnerabilityOut 等
 │   ├── crawler.py          # OSV クローラー（REST API 方式・10 エコシステム対応、Upsert ロジック）
 │   ├── packages.py         # POPULAR_PACKAGES（監視対象パッケージ一覧、ロジックから分離したデータ）
-│   └── router.py           # /api/osv エンドポイント（一覧・統計）
+│   └── router.py           # router: /api/osv エンドポイント（一覧・統計）
+│                           # admin_router: POST /admin/osv-crawl（手動トリガー）
 ├── jvn/                    # JVN ドメイン
 │   ├── models.py           # JvnVulnerability
 │   ├── schemas.py          # JvnVulnerabilityOut 等
 │   ├── crawler.py          # JVN クローラー（MyJVN API / RDF-RSS）
-│   └── router.py           # /api/jvn エンドポイント（一覧・統計）
+│   └── router.py           # router: /api/jvn エンドポイント（一覧・統計）
+│                           # admin_router: POST /admin/jvn-crawl（手動トリガー）
 ├── depscan/                # 依存ライブラリ脆弱性スキャン（DEPSCAN）ドメイン
 │   ├── models.py           # DependencyFinding・UserScan（GitHub ログイン経由のオンデマンドスキャン状況）
 │   ├── schemas.py          # DependencyFindingOut 等
-│   ├── crawler.py          # GitHub 全リポジトリのロックファイルを OSV API とリアルタイム照合。
-│   │                       # run_depscan_for_user/get_user_scan_status/should_rescan_for_user
-│   │                       # （GitHub ログイン経由のオンデマンドスキャン）も含む
-│   ├── router.py           # /api/depscan エンドポイント（一覧・統計。X-API-KEY またはセッション
+│   ├── crawler.py          # GitHub 全リポジトリのロックファイルを OSV API とリアルタイム照合
+│   ├── user_scan.py        # run_depscan_for_user/get_user_scan_status/should_rescan_for_user
+│   │                       # （GitHub ログイン経由のオンデマンドスキャン）
+│   ├── router.py           # router: /api/depscan エンドポイント（一覧・統計。X-API-KEY またはセッション
 │   │                       # トークンの二重認証）
+│   │                       # admin_router: POST /admin/depscan-crawl（手動トリガー）
 │   ├── github_client.py    # GitHub API クライアント（リポジトリ一覧・ツリー・ファイル取得）
 │   └── parsers/            # 10 エコシステム分のロックファイルパーサー
-├── depsops/                # Dependabot PR 自動運用（DEPSOPS）ドメイン。models/router 無し
-│   ├── runner.py           # crawler.py 相当。run_dependabot_ops（判定・マージ・Slack通知）
+├── depsops/                # Dependabot PR 自動運用（DEPSOPS）ドメイン
+│   ├── models.py           # DependabotPrLog（判定した PR 1件1行の履歴。action=merged/flagged・reason）
+│   ├── schemas.py          # DependabotPrLogOut 等
+│   ├── runner.py           # crawler.py 相当。run_dependabot_ops（判定・マージ・Slack通知・
+│   │                       # DependabotPrLog への永続化・保持期間超過分の削除）
+│   ├── router.py           # router: GET /api/depsops（判定履歴一覧。リポジトリ・action でフィルタ可能）
+│   │                       # admin_router: POST /admin/dependabot-ops（手動トリガー）
 │   ├── github_client.py    # GitHub API クライアント（PR一覧・詳細・マージ・rebase依頼・CI有無判定）
 │   └── classify.py         # PRタイトルからのバージョンアップ種別判定（classify_bump）
 └── crawler_logs/           # クローラー実行ログドメイン
@@ -152,21 +173,30 @@ tests/                      # app/ と同じドメイン構成でミラーリン
 ├── conftest.py             # テスト DB・client・db_session フィクスチャ（全サブフォルダに自動継承）
 ├── test_main.py            # app.main（health/root）テスト
 ├── auth/                   # GitHub OAuth クライアント・セッショントークン・ログインAPIテスト
-├── core/                   # DB エンジン・Slack 通知テスト
+├── core/                   # DB エンジン・Slack 通知・run_in_background・run_crawler・
+│                           # paginate・migrate・OrmDatetimeModel テスト
 ├── kev/                    # KEV クローラー・API テスト
 ├── osv/                    # OSV クローラー・API テスト
 ├── jvn/                    # JVN クローラー・API テスト
 ├── depscan/                # DEPSCAN クローラー・API・パーサーテスト
-├── depsops/                # DEPSOPS 判定ロジック・GitHub操作・Slack通知テスト
+├── depsops/                # DEPSOPS 判定ロジック・DependabotPrLog永続化・API・
+│                           # GitHub操作・Slack通知テスト
 └── crawler_logs/           # クローラーログ API テスト
 
 dashboard/               # Vercel デプロイの React ダッシュボード
                          # CISA KEV・OSV（Pub 含む 10 エコシステム・180 日表示）・JVN・
-                         # DEPSCAN（GitHub ログイン必須。本人所有リポジトリのみ表示）を
-                         # 画面下部固定タブで切り替え表示
+                         # DEPSCAN（GitHub ログイン必須。本人所有リポジトリのみ表示。
+                         # Dependabot 運用状況＝DEPSOPS の判定履歴も折りたたみセクションとして統合）を
+                         # 画面下部固定タブ（4つ。DEPSOPS 専用タブは作らない）で切り替え表示
+                         #
+                         # src/components/{kev,osv,jvn,depscan}/ 配下に、各 Panel から切り出した
+                         # 行コンポーネント（KevRow/OsvRow/JvnRow/DepscanGroupRow）・グラフコンポーネント
+                         # （VendorBarChart/EcosystemBarChart/RepoBarChart）・DependabotOpsSection
+                         # （DEPSOPS 判定履歴。折りたたみ式、開いたときのみ GET /api/depsops を取得）を配置
 
 alembic/                 # DBスキーマのマイグレーション管理
-├── env.py               # Base.metadata・全モデル import・DATABASE_URL 設定
+├── env.py               # Base.metadata・全モデル import（新規ドメイン追加時はここに追記必須）・
+│                       # DATABASE_URL 設定
 └── versions/            # マイグレーションスクリプト（Git管理下。app.core.migrate から適用）
 
 .github/
@@ -190,8 +220,8 @@ Vite の `VITE_` 接頭辞の環境変数はビルド時に JS バンドルへ�
 インシデントあり）。これを防ぐため、読み取り専用エンドポイント（KEV/OSV/JVN/crawler-logs
 の各 router）だけは `app.core.auth.require_public_api_key`（`API_KEY` または
 `PUBLIC_API_KEY` のいずれかを許可）で保護し、ダッシュボードの `VITE_PUBLIC_API_KEY` には
-`PUBLIC_API_KEY` の値のみを設定する。`/admin/*`（`app/main.py`）は従来通り
-`require_api_key`（`API_KEY` のみ許可）のままで、`PUBLIC_API_KEY` では通らない。
+`PUBLIC_API_KEY` の値のみを設定する。`/admin/*`（各ドメインの `router.py` の `admin_router`）は
+従来通り `require_api_key`（`API_KEY` のみ許可）のままで、`PUBLIC_API_KEY` では通らない。
 DEPSCAN（`app/depscan/router.py`）はダッシュボードから `X-API-KEY` を一切送らず GitHub
 ログインのセッショントークンのみを使うため、この分離の対象外（`_resolve_access` は
 引き続き `API_KEY` のみを直接比較する）。Claude Code 等の既存クライアントは引き続き
@@ -219,6 +249,36 @@ if not hmac.compare_digest(api_key, settings.API_KEY):
 ### DB ユーティリティの共通化（db_utils.py）
 `year_month_expr(column)` は SQLite / PostgreSQL 両対応の YYYY-MM フォーマット式を返す共通関数。
 3 つのルーター（vulnerabilities.py / osv.py / jvn.py）から共通利用する。
+
+### クローラー実行の共通オーケストレーション（crawler_runner.py）
+KEV/OSV/JVN の `fetch_and_store_*` が個別に持っていた「started_at計測 → DBセッション生成 →
+本体処理 → crawler_logs記録 → Slack通知 → DBセッションクローズ」という定型処理を
+`app.core.crawler_runner.run_crawler`（Template Method）に一元化している。各クローラーは
+取得・Upsert・保持期間削除といったドメイン固有の処理のみを `body(db, counters)` 関数として
+`run_crawler` に渡す。進捗件数は `CrawlCounters`（dataclass）で受け渡し、`body` が処理の進行に
+応じて `counters.inserted`/`updated`/`deleted` を加算する。**エラー発生時もその時点までの
+counters の値を crawler_logs に反映する**（OSV はエコシステム単位で処理を継続する既存挙動が
+あり、途中で例外が発生してもそれまでに成功した件数を記録する。KEV/JVN はエラー時点で
+件数がまだ確定していないため、従来通り 0/0/0 で記録される）。
+
+### ORM オブジェクトの datetime 自動変換（OrmDatetimeModel、core/schemas.py）
+素の `from_attributes=True` では、フィールド型を `str` と宣言した属性に ORM 側の datetime 値を
+そのまま渡すとバリデーションエラーになる。これを避けるため、JVN/OSV/DEPSOPS の出力スキーマは
+かつて「ORM オブジェクトから手動で dict を構築し、日時だけ isoformat() してから
+super().model_validate() へ委譲する」実装を個別に持っていたが、フィールドを手動列挙する方式は
+新フィールド追加時に列挙し忘れるとサイレントに None へフォールバックしてしまう（実際に
+fetched_at 追加時にこの事故が発生し、本番で常に null を返す不具合になった）。
+`OrmDatetimeModel`（`app.core.schemas`）は列挙をやめ、Pydantic が認識している宣言済み
+フィールド一覧（`cls.model_fields`）を動的に読んで ORM オブジェクトから値を取り出し、
+datetime 型の属性だけ自動変換する。`JvnVulnerabilityOut`/`OsvVulnerabilityOut`/
+`DependabotPrLogOut` はこれを継承しており、新フィールドを追加するだけで自動的に対応する。
+
+### 一覧APIのページネーション共通化（pagination.py）
+`list_vulnerabilities`/`list_osv`/`list_jvn`/`list_depscan`/`list_depsops` がそれぞれ持っていた
+「`query.count()` → offset算出 → `order_by`/`offset`/`limit` を適用して取得」という定型処理を
+`app.core.pagination.paginate(query, page, per_page, order_by)` に一元化している。フィルタ条件
+の構築（検索キーワード・重要度・エコシステム等の絞り込み）はドメインごとに大きく異なるため
+対象外とし、真に共通していたページネーション部分のみを抽出した。
 
 ### SQLAlchemy 2.x スタイルの使用（mypy 互換）
 ```python
@@ -434,8 +494,9 @@ DEPSCAN 対象の他リポジトリ（`baby-feelings` アカウント配下）�
 
 ### DEPSOPS（`app/depsops/`）: Dependabot PR の安全な自動マージ運用層
 DEPSCAN（検知）・Dependabot（修正PR作成）に続く3層目として、Dependabot PR のうち
-**安全性が高いものだけを自動マージする**運用層。`POST /admin/dependabot-ops` から
-`app.depsops.runner.run_dependabot_ops` を呼ぶ。当初は安全性確認のため
+**安全性が高いものだけを自動マージする**運用層。`POST /admin/dependabot-ops`
+（`app/depsops/router.py` の `admin_router`）から `app.depsops.runner.run_dependabot_ops`
+を呼ぶ。当初は安全性確認のため
 APScheduler/GitHub Actions への登録なし・手動トリガーのみで運用していたが、
 半日ほど手動運用して問題ないことを確認した上で、他クローラーと同様に
 `DEPSOPS_CRON_HOUR_UTC`（デフォルト UTC 23:00 = JST 8:00、DEPSCAN の後段）で
@@ -473,6 +534,23 @@ APScheduler/GitHub Actions への登録なし・手動トリガーのみで運�
 （対象リポジトリ一覧取得）は DEPSCAN 側のものをそのまま import して再利用している
 （DRY。リポジトリ一覧取得ロジック自体はドメイン非依存のため）。
 
+**判定履歴の永続化（`DependabotPrLog`）とダッシュボード表示:**
+Slack 通知は実行時点のスナップショットのみで履歴を持たないため、「要確認」PR が
+どのリポジトリ・どんな理由で自動マージされなかったかを後から確認できるよう、
+`run_dependabot_ops` は成功時に判定結果（merged/flagged 双方）を `DependabotPrLog`
+テーブルへ1 PR 1 行で永続化する（`_record_pr_logs`）。あわせて保持期間
+（`DEPSOPS_RETENTION_DAYS`、既定180日）を超えた古いレコードを削除する
+（`_delete_old_depsops_records`）。永続化・削除の失敗はクロール自体を失敗させない
+（KEV/OSV/JVN の保持期間削除処理と同じベストエフォート方針）。`GET /api/depsops`
+（`app/depsops/router.py`、リポジトリ・action でフィルタ可能なページネーション付き一覧）
+で参照する。
+
+ダッシュボードには DEPSOPS 専用タブは作らず、DEPSCAN タブ内の折りたたみセクション
+（`dashboard/src/components/depscan/DependabotOpsSection.tsx`）として統合している
+（KEV/OSV/JVN/DEPSCAN は脆弱性データソースという同列の性質だが、DEPSOPS は
+「PR運用状況の確認」という別の性質のため、5つ目のタブは過剰と判断した）。開いたときのみ
+`GET /api/depsops` を取得する。
+
 ### DEPSCAN のロックファイル検出は Git Tree API で1リポジトリ1回のみ
 `app.depscan.github_client.get_repo_tree` で `git/trees/{branch}?recursive=1` を使い、
 サブディレクトリ（monorepo）も含めて全ファイルパスを1回のAPI呼び出しで取得する。
@@ -489,12 +567,20 @@ APScheduler/GitHub Actions への登録なし・手動トリガーのみで運�
 旧スキャン機能廃止に伴い、起動時に `DROP TABLE IF EXISTS scan_results` を実行しているが、  
 DDL 競合や権限不足で失敗してもサービスを止めないよう `try/except SQLAlchemyError` で囲んである。
 
-### /admin/*-crawl はバックグラウンド実行（202 即時返却）
-`/admin/crawl`・`/admin/osv-crawl`・`/admin/jvn-crawl` は即座に 202 Accepted を返し、
-`threading.Thread(daemon=True)` でバックグラウンド実行する。
-Render Free プランのリクエストタイムアウト（~30s）で OSV クロール（~150s）が
-502 になる問題を回避するための設計。結果は `/api/crawler-logs` で確認する。
+### /admin/*-crawl はバックグラウンド実行（202 即時返却）・各ドメインの router.py に定義する
+`/admin/crawl`（KEV）・`/admin/osv-crawl`・`/admin/jvn-crawl`・`/admin/depscan-crawl`・
+`/admin/dependabot-ops` は即座に 202 Accepted を返し、`app.core.background.run_in_background`
+（daemon スレッドで実行し、例外はログに記録するだけで呼び出し元へは伝播させない共通ヘルパー）で
+バックグラウンド実行する。Render Free プランのリクエストタイムアウト（~30s）で OSV クロール
+（~150s）が 502 になる問題を回避するための設計。結果は `/api/crawler-logs` で確認する。
 OSV・JVN は `?days=N` クエリパラメータで取得対象日数を指定可能（初回バックフィル用）。
+
+各エンドポイントは対応するドメインの `app/{kev,osv,jvn,depscan,depsops}/router.py` に、
+`/api/xxx` prefix 付きの通常 `router` とは別に **prefix なし・`Security(require_api_key)`
+で保護する `admin_router`** として定義する（`/api/vulnerabilities` 等の prefix に
+`/admin/crawl` が巻き込まれてしまうのを避けるため）。`app/main.py` はこれらの router と
+admin_router をすべて `include_router` するだけで、エンドポイント定義自体は持たない
+（include_router 呼び出しと lifespan・スケジューラ配線に専念する）。
 
 ### Render Free プランのスリープ対策
 Render Free プランはアクセスがないと 15 分でスリープし APScheduler が発火しない。  
@@ -502,18 +588,29 @@ Render Free プランはアクセスがないと 15 分でスリープし APSche
 APScheduler と GitHub Actions の二重クロールは発生しない（Render がスリープ中は APScheduler が動かない）。
 
 ### ダッシュボードのタブ切り替え UI（App.tsx）
-KEV / OSV / JVN の 3 データソースは、画面下部固定のタブバーで切り替え表示する構成（縦並び表示ではない）。
+KEV / OSV / JVN / DEPSCAN の 4 データソースは、画面下部固定のタブバーで切り替え表示する構成
+（縦並び表示ではない）。DEPSOPS（Dependabot 運用状況）に専用タブは作らず、DEPSCAN タブ内の
+折りたたみセクションとして統合している（詳細は「DEPSOPS」節参照）。
 `TabKey` / `TABS` 定数と `activeTab` state で選択中セクションのみを条件レンダリングし、
 サーバー稼働状況（`HealthStatus`）とエラーバナーは全タブ共通で常に表示する。
 タブには `role="tablist"/"tab"/"tabpanel"` と `aria-selected`/`aria-controls`/`aria-labelledby` を付与済み。
 
-### OsvPanel/JvnPanel の共通パーツ（VulnPanelParts.tsx）
-`dashboard/src/components/shared/VulnPanelParts.tsx` に、両パネルで共通の
+### KevPanel/OsvPanel/JvnPanel の共通パーツ（VulnPanelParts.tsx）とドメイン別サブコンポーネント
+`dashboard/src/components/shared/VulnPanelParts.tsx` に、各パネルで共通の
 `SeverityBadge`・`ChartCard`・`SeverityPieChart`・`MonthlyBarChart`・`TableLoadingSkeleton`・
 `EmptyState`・`Pagination`・`SeverityFilterButtons`・`SearchBox`・`SortSelector` を切り出し済み。
 深刻度の値・配色（OSV: CRITICAL/HIGH/MEDIUM/LOW、JVN: High/Medium/Low）はドメイン固有のため
-`classMap`/`colorMap` として呼び出し側から渡す。エコシステム別棒グラフ（OSV固有）や行コンポーネント
-（OsvRow/JvnRow）はドメイン固有のため各パネル側に残している。
+`classMap`/`colorMap` として呼び出し側から渡す。
+
+行コンポーネント（`KevRow`/`OsvRow`/`JvnRow`）とグラフコンポーネント
+（`VendorBarChart`/`EcosystemBarChart`）はドメイン固有のため、`DepscanGroupRow`/`RepoBarChart`
+（`components/depscan/`）に倣い `components/{kev,osv,jvn}/` 配下に切り出している。深刻度バッジの
+配色（`SEVERITY_CLS`）は各 Panel の重要度フィルターボタンでも使うため Panel 側に残し、Row
+コンポーネントには `severityClassMap` として props で渡す（`SeverityBadge`/`SeverityFilterButtons`
+と同じ「呼び出し側が classMap を渡す」パターン）。Recharts の Tooltip `formatter` は jsdom 上で
+ホバーをシミュレートしてもテストから呼び出されないため、`formatVendorTooltipValue` のように
+名前付き関数として切り出しテストから直接呼び出す（表示内容は不変）。
+
 `ChartCard` の `footer` スロットは高さ固定領域の**外側**に描画されるため、円グラフの凡例のように
 高さ制約に含めたくないコンテンツはここに渡すこと。
 
