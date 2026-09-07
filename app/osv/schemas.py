@@ -1,13 +1,15 @@
 """OSV（Open Source Vulnerabilities）ドメインの Pydantic スキーマ定義。"""
-from typing import Any
+from pydantic import BaseModel, Field
 
-from pydantic import BaseModel, Field, field_serializer
-
-from app.core.schemas import MonthlyStat, SeverityStat
+from app.core.schemas import MonthlyStat, OrmDatetimeModel, SeverityStat
 
 
-class OsvVulnerabilityOut(BaseModel):
-    """OSV 脆弱性情報の出力スキーマ。"""
+class OsvVulnerabilityOut(OrmDatetimeModel):
+    """OSV 脆弱性情報の出力スキーマ。
+
+    datetime → ISO 文字列変換は OrmDatetimeModel（app.core.schemas）が
+    フィールド列挙なしで自動的に行う。
+    """
 
     osv_id: str = Field(description="OSV ID（例: GHSA-xxxx / OSV-2024-xxxx）")
     ecosystem: str = Field(description="エコシステム（例: PyPI / npm）")
@@ -32,47 +34,6 @@ class OsvVulnerabilityOut(BaseModel):
     )
 
     model_config = {"from_attributes": True}
-
-    @field_serializer("published", "modified")
-    def _serialize_datetime(self, value: Any) -> str:
-        """datetime を ISO 文字列に変換する。"""
-        return value.isoformat() if hasattr(value, "isoformat") else str(value)
-
-    @field_serializer("withdrawn_at", "fetched_at")
-    def _serialize_optional_datetime(self, value: Any) -> str | None:
-        """null許容の datetime を ISO 文字列（またはNone）に変換する。
-
-        model_validate の時点で既に ISO 文字列へ変換済みのため、通常はここで
-        str型の値を受け取る（そのまま返す）。datetime のまま渡された場合の
-        フォールバックも保持する。
-        """
-        if value is None:
-            return None
-        return value.isoformat() if hasattr(value, "isoformat") else str(value)
-
-    @classmethod
-    def model_validate(cls, obj: Any, **kwargs: Any) -> "OsvVulnerabilityOut":
-        """ORM オブジェクトを dict に変換し、Pydantic 検証経路へ委譲する。"""
-        if hasattr(obj, "__dict__"):
-            data = {
-                "osv_id": obj.osv_id,
-                "ecosystem": obj.ecosystem,
-                "package_name": obj.package_name,
-                "aliases": obj.aliases or [],
-                "summary": obj.summary,
-                "details": obj.details,
-                "severity": obj.severity,
-                "cvss_score": obj.cvss_score,
-                "affected_versions": obj.affected_versions or [],
-                "fixed_versions": obj.fixed_versions or [],
-                "references": obj.references or [],
-                "published": obj.published.isoformat(),
-                "modified": obj.modified.isoformat(),
-                "withdrawn_at": obj.withdrawn_at.isoformat() if obj.withdrawn_at else None,
-                "fetched_at": obj.fetched_at.isoformat() if obj.fetched_at else None,
-            }
-            return super().model_validate(data, **kwargs)
-        return super().model_validate(obj, **kwargs)
 
 
 class OsvListResponse(BaseModel):

@@ -1,13 +1,15 @@
 """JVN（Japan Vulnerability Notes）ドメインの Pydantic スキーマ定義。"""
-from typing import Any
+from pydantic import BaseModel, Field
 
-from pydantic import BaseModel, Field, field_serializer
-
-from app.core.schemas import MonthlyStat, SeverityStat
+from app.core.schemas import MonthlyStat, OrmDatetimeModel, SeverityStat
 
 
-class JvnVulnerabilityOut(BaseModel):
-    """JVN 脆弱性情報の出力スキーマ。"""
+class JvnVulnerabilityOut(OrmDatetimeModel):
+    """JVN 脆弱性情報の出力スキーマ。
+
+    datetime → ISO 文字列変換は OrmDatetimeModel（app.core.schemas）が
+    フィールド列挙なしで自動的に行う。
+    """
 
     jvndb_id: str = Field(description="JVNDB ID（例: JVNDB-2026-020171）")
     title: str = Field(description="脆弱性タイトル")
@@ -28,45 +30,6 @@ class JvnVulnerabilityOut(BaseModel):
     )
 
     model_config = {"from_attributes": True}
-
-    @field_serializer("date_published", "date_last_modified")
-    def _serialize_datetime(self, value: Any) -> str:
-        """datetime を ISO 文字列に変換する。"""
-        return value.isoformat() if hasattr(value, "isoformat") else str(value)
-
-    @field_serializer("fetched_at")
-    def _serialize_optional_datetime(self, value: Any) -> str | None:
-        """null許容の datetime を ISO 文字列（またはNone）に変換する。
-
-        model_validate の時点で既に ISO 文字列へ変換済みのため、通常はここで
-        str型の値を受け取る（そのまま返す）。datetime のまま渡された場合の
-        フォールバックも保持する。
-        """
-        if value is None:
-            return None
-        return value.isoformat() if hasattr(value, "isoformat") else str(value)
-
-    @classmethod
-    def model_validate(cls, obj: Any, **kwargs: Any) -> "JvnVulnerabilityOut":
-        """ORM オブジェクトを dict に変換し、Pydantic 検証経路へ委譲する。"""
-        if hasattr(obj, "__dict__"):
-            data = {
-                "jvndb_id": obj.jvndb_id,
-                "title": obj.title,
-                "overview": obj.overview,
-                "cve_ids": obj.cve_ids or [],
-                "severity": obj.severity,
-                "cvss_score": obj.cvss_score,
-                "cvss_vector": obj.cvss_vector,
-                "affected_products": obj.affected_products or [],
-                "references": obj.references or [],
-                "jvn_url": obj.jvn_url,
-                "date_published": obj.date_published.isoformat(),
-                "date_last_modified": obj.date_last_modified.isoformat(),
-                "fetched_at": obj.fetched_at.isoformat() if obj.fetched_at else None,
-            }
-            return super().model_validate(data, **kwargs)
-        return super().model_validate(obj, **kwargs)
 
 
 class JvnListResponse(BaseModel):
