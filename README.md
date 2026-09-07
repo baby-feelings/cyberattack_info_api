@@ -25,11 +25,12 @@ Claude Code や CI/CD ツールから「今まさに悪用されているサイ�
 | **CVE 個別取得** | CVE ID を指定して脆弱性詳細を 1 件取得（KEV） |
 | **統計 API** | ベンダー別ランキング・月別トレンド・重要度別集計（KEV / OSV / JVN / DEPSCAN） |
 | **クローラー実行ログ API** | KEV / OSV / JVN / DEPSCAN クローラーの実行履歴（成否・件数・所要時間）を取得 |
-| **Slack 通知** | 新規追加・更新時・エラー時に Slack へ自動通知（KEV / OSV / JVN / DEPSCAN） |
-| **手動クロール** | `POST /admin/crawl` / `POST /admin/osv-crawl` / `POST /admin/jvn-crawl` / `POST /admin/depscan-crawl`（バックグラウンド 202 即時返却・`?days=N` 対応） |
+| **Dependabot PR 自動運用（DEPSOPS）** | 安全性の高い Dependabot PR（マイナー/パッチ更新・CI あり・コンフリクトなし）のみ自動マージ。判定履歴（自動マージ・要確認いずれも）は `GET /api/depsops` で後から確認可能 |
+| **Slack 通知** | 新規追加・更新時・エラー時に Slack へ自動通知（KEV / OSV / JVN / DEPSCAN / DEPSOPS） |
+| **手動クロール** | `POST /admin/crawl` / `POST /admin/osv-crawl` / `POST /admin/jvn-crawl` / `POST /admin/depscan-crawl` / `POST /admin/dependabot-ops`（バックグラウンド 202 即時返却・`?days=N` 対応） |
 | **API キー認証** | `X-API-KEY` ヘッダーによるシンプルな固定キー認証 |
 | **ヘルスチェック** | DB 接続確認付きの死活監視エンドポイント |
-| **React ダッシュボード** | CISA KEV・OSV（Pub 含む 10 エコシステム・180 日表示）・JVN・DEPSCAN（GitHub ログイン必須、本人所有リポジトリのみ表示）を画面下部固定タブで切り替え表示（Vercel デプロイ） |
+| **React ダッシュボード** | CISA KEV・OSV（Pub 含む 10 エコシステム・180 日表示）・JVN・DEPSCAN（GitHub ログイン必須、本人所有リポジトリのみ表示。Dependabot 運用状況＝DEPSOPS の判定履歴も折りたたみセクションとして統合）を画面下部固定タブ（4つ）で切り替え表示（Vercel デプロイ） |
 
 ---
 
@@ -456,6 +457,43 @@ curl -H "Authorization: Bearer $DEPSCAN_SESSION_TOKEN" \
 
 > **Note:** `GET /api/depscan`・`GET /api/depscan/stats` は、既存の `X-API-KEY`（フルアクセス）に加えて `Authorization: Bearer <セッショントークン>` でも呼び出せる。セッショントークン使用時はログイン中のユーザー本人が所有するリポジトリのみに自動的に絞り込まれる（`owner` パラメータは無視され、`repo` パラメータで他人のリポジトリを指定すると `403 Forbidden` になる）。
 
+### GET /api/depsops — Dependabot PR 自動運用（DEPSOPS）の判定履歴一覧
+
+`POST /admin/dependabot-ops` が判定した Dependabot PR（自動マージ・要確認いずれも）の履歴を取得します。Slack 通知は実行時点のスナップショットのみで履歴を持たないため、「要確認」PR がどのリポジトリ・どんな理由で自動マージされなかったかを後から確認する用途に使います。
+
+```bash
+curl -H "X-API-KEY: your-key" \
+  "http://localhost:8000/api/depsops?action=flagged"
+```
+
+| パラメータ | 型 | デフォルト | 説明 |
+|-----------|-----|-----------|------|
+| `page` | int | 1 | ページ番号 |
+| `per_page` | int | 50 | 1ページあたりの件数（最大 200） |
+| `repo` | string | - | リポジトリ名で絞り込み（完全一致。例: `owner/repo`） |
+| `action` | string | - | 判定結果で絞り込み（`merged` / `flagged`） |
+
+**レスポンス例:**
+```json
+{
+  "total": 1,
+  "page": 1,
+  "per_page": 50,
+  "data": [
+    {
+      "repo_full_name": "baby-feelings/baby_grow",
+      "pr_number": 55,
+      "title": "chore(deps-dev): Bump typescript from 6.0.3 to 7.0.2",
+      "action": "flagged",
+      "reason": "メジャーバージョンアップ",
+      "processed_at": "2026-09-07T12:05:21+00:00"
+    }
+  ]
+}
+```
+
+> **Note:** ダッシュボード（Vercel）では、DEPSOPS 専用タブは無く DEPSCAN タブ内の「Dependabot 運用状況」折りたたみセクションからこの一覧を閲覧できる。
+
 ### GET /api/crawler-logs — クローラー実行ログ一覧
 
 KEV / OSV / JVN / DEPSCAN クローラーの実行履歴（成否・件数・所要時間）を新しい順に返します。
@@ -475,7 +513,7 @@ curl -H "X-API-KEY: your-key" \
 
 | パラメータ | 型 | デフォルト | 説明 |
 |-----------|-----|-----------|------|
-| `crawler_type` | string | - | `KEV` / `OSV` / `JVN` / `DEPSCAN` / `DEPSOPS`（省略時は全種別） |
+| `crawler_type` | string | - | `KEV` / `OSV` / `JVN` / `DEPSCAN` / `DEPSOPS`（省略時は全種別）。DEPSOPS の判定結果の詳細（PR単位）は `GET /api/depsops` を参照 |
 | `status` | string | - | `success` / `error`（省略時は両方） |
 | `limit` | int | 30 | 取得件数（最大 100） |
 
@@ -583,8 +621,10 @@ DEPSCAN が検知した脆弱性は、対象リポジトリで有効化した De
   自動的にマージされる（複数日にまたがる自己修復）
 - 毎日 JST 08:00（UTC 23:00、DEPSCAN の後段）に自動実行される他、このエンドポイントを
   手動で呼んで即時実行することも可能
-- 実行結果は `GET /api/crawler-logs?crawler_type=DEPSOPS` で確認可能
-  （`inserted`=自動マージ件数、`updated`=要確認件数）
+- 実行結果のサマリーは `GET /api/crawler-logs?crawler_type=DEPSOPS` で確認可能
+  （`inserted`=自動マージ件数、`updated`=要確認件数）。個々の PR の判定結果・理由は
+  `GET /api/depsops` で確認できる（Slack 通知は実行時点のスナップショットのみのため、
+  後から振り返るにはこちらを使う）
 
 ### GET /health — ヘルスチェック（認証不要）
 
@@ -621,7 +661,7 @@ pytest
 start htmlcov/index.html  # Mac/Linux: open htmlcov/index.html
 ```
 
-**テスト結果（最新）:** 359 テスト / カバレッジ 98%
+**テスト結果（最新）:** 390 テスト / カバレッジ 98%
 
 ---
 
@@ -644,23 +684,26 @@ mypy app/ --ignore-missing-imports
 ```
 cyberattack_info_api/
 ├── app/
-│   ├── main.py                 # FastAPI アプリ本体・APScheduler 設定・ルーター include
+│   ├── main.py                 # FastAPI アプリ本体・APScheduler 設定・ルーター include のみに専念
+│   │                           # （/admin/* は持たない。各ドメインの router.py の admin_router に定義）
 │   ├── auth/                   # GitHub ログイン（DEPSCAN ダッシュボードのアクセス制御）ドメイン
-│   ├── core/                   # 横断的インフラ（config・database・auth・db_utils・notifications・共通 schemas）
-│   ├── kev/                    # CISA KEV ドメイン（models・schemas・crawler・router）
-│   ├── osv/                    # OSV ドメイン（models・schemas・crawler・router）
-│   ├── jvn/                    # JVN ドメイン（models・schemas・crawler・router）
+│   ├── core/                   # 横断的インフラ（config・database・auth・background・crawler_runner・
+│   │                           # db_utils・notifications・pagination・共通 schemas）
+│   ├── kev/                    # CISA KEV ドメイン（models・schemas・crawler・router〈router + admin_router〉）
+│   ├── osv/                    # OSV ドメイン（models・schemas・crawler・router〈router + admin_router〉）
+│   ├── jvn/                    # JVN ドメイン（models・schemas・crawler・router〈router + admin_router〉）
 │   ├── depscan/                # 依存ライブラリ脆弱性スキャン（DEPSCAN）ドメイン
 │   │   └── parsers/            # 10 エコシステム分のロックファイルパーサー
-│   ├── depsops/                # Dependabot PR 自動運用（DEPSOPS）ドメイン（models 無し。
-│   │                           # crawler.py 相当は runner.py、router 無し・main.py で直接 include）
+│   ├── depsops/                # Dependabot PR 自動運用（DEPSOPS）ドメイン（models・schemas・router
+│   │                           # 〈router + admin_router〉。crawler.py 相当は runner.py）
 │   └── crawler_logs/           # クローラー実行ログドメイン（models・schemas・writer・router）
 ├── tests/                      # app/ と同じドメイン構成
 │   ├── conftest.py             # テスト用フィクスチャ (SQLite テスト DB、全サブフォルダに自動継承)
 │   ├── test_main.py            # app.main（health/root）テスト
 │   ├── core/ kev/ osv/ jvn/ depscan/ depsops/ crawler_logs/
 ├── dashboard/               # Vercel デプロイの React ダッシュボード（KEV・OSV（Pub 含む 10 エコシステム）・JVN・
-│                           # DEPSCAN〈GitHub ログイン必須〉）
+│                           # DEPSCAN〈GitHub ログイン必須。Dependabot運用状況＝DEPSOPS の判定履歴も統合〉を
+│                           # 4つの固定タブで切り替え表示）
 ├── alembic/                 # DBスキーマのマイグレーション管理（app.core.migrate から呼び出す）
 │   └── versions/            # マイグレーションスクリプト（Gitで追跡）
 ├── .github/
