@@ -15,6 +15,14 @@ import {
 
 const PER_PAGE = 30
 
+// EPSSスコア（0.0〜1.0）の高さに応じた色分け（重要度バッジに準じた配色）
+function epssColorClass(score: number): string {
+  if (score >= 0.5) return 'text-red-400'
+  if (score >= 0.1) return 'text-orange-400'
+  if (score >= 0.01) return 'text-amber-400'
+  return 'text-slate-500'
+}
+
 // ベンダー別棒グラフの色（順番で割り当て。OSV の EcosystemBarChart と同じパレット）
 const VENDOR_CHART_COLORS = [
   '#7c3aed', '#0ea5e9', '#22d3ee', '#f59e0b',
@@ -54,6 +62,15 @@ function KevRow({ item }: { item: VulnerabilityOut }) {
         <td className="py-2.5 pr-3">
           <p className="text-slate-400 text-xs truncate max-w-[280px]">{item.vulnerability_name}</p>
         </td>
+        <td className="py-2.5 pr-3 text-xs tabular-nums whitespace-nowrap">
+          {item.epss_score !== null ? (
+            <span className={epssColorClass(item.epss_score)}>
+              {(item.epss_score * 100).toFixed(1)}%
+            </span>
+          ) : (
+            <span className="text-slate-700">—</span>
+          )}
+        </td>
         <td className="py-2.5 text-xs text-slate-600 tabular-nums whitespace-nowrap">
           {dateAdded}
         </td>
@@ -64,14 +81,30 @@ function KevRow({ item }: { item: VulnerabilityOut }) {
         </td>
       </tr>
 
-      {/* 展開: 詳細説明・推奨対処 */}
+      {/* 展開: 詳細説明・推奨対処・EPSS詳細 */}
       {open && (
         <tr className="bg-slate-800/30">
-          <td colSpan={6} className="px-4 py-3 text-xs text-slate-400 space-y-2">
+          <td colSpan={7} className="px-4 py-3 text-xs text-slate-400 space-y-2">
             <p className="leading-relaxed whitespace-pre-wrap">{item.description}</p>
             {item.required_action && (
               <p>
                 <span className="text-slate-500">推奨対処:</span> {item.required_action}
+              </p>
+            )}
+            {item.epss_score !== null && (
+              <p>
+                <span className="text-slate-500">EPSS（悪用確率）:</span>{' '}
+                <span className={epssColorClass(item.epss_score)}>
+                  {(item.epss_score * 100).toFixed(2)}%
+                </span>
+                {item.epss_percentile !== null && (
+                  <> （パーセンタイル {(item.epss_percentile * 100).toFixed(1)}%）</>
+                )}
+                {item.epss_updated_at && (
+                  <span className="text-slate-600">
+                    {' '}· 更新: {new Date(item.epss_updated_at).toLocaleDateString('ja-JP')}
+                  </span>
+                )}
               </p>
             )}
           </td>
@@ -241,6 +274,7 @@ export function KevPanel() {
                   <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-40">ベンダー</th>
                   <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-40">製品</th>
                   <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3">脆弱性名</th>
+                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-16">EPSS</th>
                   <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-24">追加日</th>
                   <th className="w-5" />
                 </tr>
