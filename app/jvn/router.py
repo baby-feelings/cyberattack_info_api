@@ -7,14 +7,16 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Security
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from app.core.auth import require_public_api_key
+from app.core.auth import require_api_key, require_public_api_key
+from app.core.background import run_in_background
 from app.core.database import get_db
 from app.core.db_utils import year_month_expr
 from app.core.schemas import MonthlyStat
+from app.jvn.crawler import fetch_and_store_jvn
 from app.jvn.models import JvnVulnerability
 from app.jvn.schemas import JvnListResponse, JvnSeverityStat, JvnStatsResponse, JvnVulnerabilityOut
 
@@ -25,6 +27,28 @@ router = APIRouter(
     tags=["jvn"],
     dependencies=[Depends(require_public_api_key)],
 )
+
+# 管理者用エンドポイント（/admin/jvn-crawl）。prefix なし・require_api_key で保護する。
+admin_router = APIRouter(tags=["admin"])
+
+
+@admin_router.post(
+    "/admin/jvn-crawl",
+    dependencies=[Security(require_api_key)],
+    summary="JVN クローラー手動実行（バックグラウンド）",
+    description="MyJVN API からの脆弱性取得をバックグラウンドで開始する（X-API-KEY 必須）。"
+    "結果は /api/crawler-logs で確認。",
+    status_code=202,
+)
+def trigger_jvn_crawl(
+    days: int | None = Query(
+        None, ge=1, le=365, description="取得対象の直近日数（省略時は JVN_DAYS）"
+    ),
+) -> dict:
+    """JVN クローラーをバックグラウンドで実行する。"""
+    logger.info("Manual JVN crawl triggered via /admin/jvn-crawl (days=%s)", days)
+    run_in_background("JVN", lambda: fetch_and_store_jvn(days=days))
+    return {"message": f"JVN crawl started in background (days={days or 'default'})"}
 
 
 @router.get(

@@ -1,31 +1,39 @@
 """FastAPI アプリケーション本体。
 アプリ起動時にDBテーブルを作成し、APScheduler でクローラーを定期実行する。
+
+/admin/* の手動トリガーエンドポイントは、DEPSOPS（router.py を持たないドメイン）
+用の /admin/dependabot-ops を除き、各ドメインの router.py（admin_router）に定義する。
+本ファイルは include_router 呼び出しと lifespan・スケジューラ配線に専念する。
 """
 import logging
 import logging.config
-import threading
 from contextlib import asynccontextmanager
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from fastapi import FastAPI, Query, Security
+from fastapi import FastAPI, Security
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.auth.router import router as auth_router
 from app.core.auth import require_api_key
+from app.core.background import run_in_background
 from app.core.config import settings
 from app.core.database import Base, engine, get_db
 from app.core.schemas import HealthResponse
 from app.crawler_logs.router import router as crawler_logs_router
 from app.depscan.crawler import fetch_and_scan_dependencies
+from app.depscan.router import admin_router as depscan_admin_router
 from app.depscan.router import router as depscan_router
 from app.depsops.runner import run_dependabot_ops
 from app.jvn.crawler import fetch_and_store_jvn
+from app.jvn.router import admin_router as jvn_admin_router
 from app.jvn.router import router as jvn_router
 from app.kev.crawler import fetch_and_store_kev
+from app.kev.router import admin_router as kev_admin_router
 from app.kev.router import router as kev_router
 from app.osv.crawler import fetch_and_store_osv
+from app.osv.router import admin_router as osv_admin_router
 from app.osv.router import router as osv_router
 
 # ──────────────────────────────────────────────
@@ -161,6 +169,10 @@ app.include_router(osv_router)
 app.include_router(jvn_router)
 app.include_router(crawler_logs_router)
 app.include_router(depscan_router)
+app.include_router(kev_admin_router)
+app.include_router(osv_admin_router)
+app.include_router(jvn_admin_router)
+app.include_router(depscan_admin_router)
 
 
 # ──────────────────────────────────────────────
@@ -195,90 +207,8 @@ def health_check() -> HealthResponse:
     )
 
 
-def _run_in_background(name: str, fn) -> None:  # type: ignore[no-untyped-def]
-    """クローラーをバックグラウンドスレッドで実行する。"""
-    def _wrapper() -> None:
-        try:
-            fn()
-        except Exception as exc:
-            logger.error("Background %s failed: %s", name, exc, exc_info=True)
-    thread = threading.Thread(target=_wrapper, name=f"crawl-{name}", daemon=True)
-    thread.start()
-    logger.info("Background %s started (thread=%s)", name, thread.name)
-
-
-@app.post(
-    "/admin/crawl",
-    tags=["admin"],
-    dependencies=[Security(require_api_key)],
-    summary="KEV クローラー手動実行（バックグラウンド）",
-    description="CISA KEV フィードの取得をバックグラウンドで開始する（X-API-KEY 必須）。"
-    "結果は /api/crawler-logs で確認。",
-    status_code=202,
-)
-def trigger_crawl() -> dict:
-    """CISA KEV クローラーをバックグラウンドで実行する。"""
-    logger.info("Manual crawl triggered via /admin/crawl")
-    _run_in_background("KEV", fetch_and_store_kev)
-    return {"message": "KEV crawl started in background"}
-
-
-@app.post(
-    "/admin/osv-crawl",
-    tags=["admin"],
-    dependencies=[Security(require_api_key)],
-    summary="OSV クローラー手動実行（バックグラウンド）",
-    description="OSV API からの脆弱性取得をバックグラウンドで開始する（X-API-KEY 必須）。"
-    "結果は /api/crawler-logs で確認。",
-    status_code=202,
-)
-def trigger_osv_crawl(
-    days: int | None = Query(
-        None, ge=1, le=365, description="取得対象の直近日数（省略時は OSV_DAYS）"
-    ),
-) -> dict:
-    """OSV クローラーをバックグラウンドで実行する。"""
-    logger.info("Manual OSV crawl triggered via /admin/osv-crawl (days=%s)", days)
-    _run_in_background("OSV", lambda: fetch_and_store_osv(days=days))
-    return {"message": f"OSV crawl started in background (days={days or 'default'})"}
-
-
-@app.post(
-    "/admin/jvn-crawl",
-    tags=["admin"],
-    dependencies=[Security(require_api_key)],
-    summary="JVN クローラー手動実行（バックグラウンド）",
-    description="MyJVN API からの脆弱性取得をバックグラウンドで開始する（X-API-KEY 必須）。"
-    "結果は /api/crawler-logs で確認。",
-    status_code=202,
-)
-def trigger_jvn_crawl(
-    days: int | None = Query(
-        None, ge=1, le=365, description="取得対象の直近日数（省略時は JVN_DAYS）"
-    ),
-) -> dict:
-    """JVN クローラーをバックグラウンドで実行する。"""
-    logger.info("Manual JVN crawl triggered via /admin/jvn-crawl (days=%s)", days)
-    _run_in_background("JVN", lambda: fetch_and_store_jvn(days=days))
-    return {"message": f"JVN crawl started in background (days={days or 'default'})"}
-
-
-@app.post(
-    "/admin/depscan-crawl",
-    tags=["admin"],
-    dependencies=[Security(require_api_key)],
-    summary="依存ライブラリ脆弱性スキャン手動実行（バックグラウンド）",
-    description="GitHub 上の対象リポジトリのロックファイルを OSV API と照合する処理を"
-    "バックグラウンドで開始する（X-API-KEY 必須）。結果は /api/crawler-logs で確認。",
-    status_code=202,
-)
-def trigger_depscan_crawl() -> dict:
-    """依存ライブラリ脆弱性スキャナーをバックグラウンドで実行する。"""
-    logger.info("Manual DEPSCAN triggered via /admin/depscan-crawl")
-    _run_in_background("DEPSCAN", fetch_and_scan_dependencies)
-    return {"message": "Dependency vulnerability scan started in background"}
-
-
+# DEPSOPS は models/router を持たないドメインのため、他の /admin/*-crawl と異なり
+# 専用の router.py を新設せず、このエンドポイントのみ main.py に残す。
 @app.post(
     "/admin/dependabot-ops",
     tags=["admin"],
@@ -294,7 +224,7 @@ def trigger_depscan_crawl() -> dict:
 def trigger_dependabot_ops() -> dict:
     """Dependabot PR 自動運用（DEPSOPS）をバックグラウンドで実行する。"""
     logger.info("Manual DEPSOPS triggered via /admin/dependabot-ops")
-    _run_in_background("DEPSOPS", run_dependabot_ops)
+    run_in_background("DEPSOPS", run_dependabot_ops)
     return {"message": "Dependabot PR operations started in background"}
 
 

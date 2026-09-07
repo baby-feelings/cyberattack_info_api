@@ -8,14 +8,16 @@ import logging
 from datetime import date, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Security
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from app.core.auth import require_public_api_key
+from app.core.auth import require_api_key, require_public_api_key
+from app.core.background import run_in_background
 from app.core.database import get_db
 from app.core.db_utils import year_month_expr
 from app.core.schemas import MonthlyStat
+from app.kev.crawler import fetch_and_store_kev
 from app.kev.models import Vulnerability
 from app.kev.schemas import StatsResponse, VendorStat, VulnerabilityListResponse, VulnerabilityOut
 
@@ -27,6 +29,25 @@ router = APIRouter(
     # 全エンドポイントに X-API-KEY 認証を適用
     dependencies=[Depends(require_public_api_key)],
 )
+
+# 管理者用エンドポイント（/admin/crawl）。/api/vulnerabilities とは別に、
+# prefix なし・require_api_key（管理者専用キー）で保護する router を分離する。
+admin_router = APIRouter(tags=["admin"])
+
+
+@admin_router.post(
+    "/admin/crawl",
+    dependencies=[Security(require_api_key)],
+    summary="KEV クローラー手動実行（バックグラウンド）",
+    description="CISA KEV フィードの取得をバックグラウンドで開始する（X-API-KEY 必須）。"
+    "結果は /api/crawler-logs で確認。",
+    status_code=202,
+)
+def trigger_crawl() -> dict:
+    """CISA KEV クローラーをバックグラウンドで実行する。"""
+    logger.info("Manual crawl triggered via /admin/crawl")
+    run_in_background("KEV", fetch_and_store_kev)
+    return {"message": "KEV crawl started in background"}
 
 
 @router.get(

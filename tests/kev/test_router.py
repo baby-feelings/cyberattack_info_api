@@ -361,7 +361,7 @@ def test_admin_crawl_requires_auth(client: TestClient):
 def test_admin_crawl_success(client: TestClient, monkeypatch):
     """POST /admin/crawl が 202 を返しバックグラウンドでクローラーを起動すること。"""
     monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
-    with patch("app.main.fetch_and_store_kev", return_value=(3, 1)):
+    with patch("app.kev.router.fetch_and_store_kev", return_value=(3, 1)):
         response = client.post(
             "/admin/crawl",
             headers={"X-API-KEY": TEST_API_KEY},
