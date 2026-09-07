@@ -9,6 +9,11 @@ const ECO_CHART_COLORS = [
   '#f43f5e', '#8b5cf6', '#f97316', '#6366f1', '#10b981', '#14b8a6',
 ]
 
+// ツールチップの表示値フォーマッタ（テストで直接検証できるよう名前付き関数として切り出す）
+export function formatEcosystemTooltipValue(value: unknown): [string, string] {
+  return [String(value) + ' 件', '件数']
+}
+
 // エコシステム別棒グラフ（エコシステムごとに色分け。汎用 MonthlyBarChart とは形が異なるため専用実装）
 export function EcosystemBarChart({ stats, loading }: { stats: OsvStatsResponse | null; loading: boolean }) {
   // 上位 8 エコシステムのみ表示
@@ -39,7 +44,7 @@ export function EcosystemBarChart({ stats, loading }: { stats: OsvStatsResponse 
           />
           <ReTooltip
             contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }}
-            formatter={(value) => [String(value) + ' 件', '件数']}
+            formatter={formatEcosystemTooltipValue}
           />
           <Bar dataKey="count" radius={[3, 3, 0, 0]}>
             {data.map((_entry, index) => (

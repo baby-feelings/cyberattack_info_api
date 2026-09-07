@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { RepoBarChart } from './RepoBarChart'
+import { RepoBarChart, formatRepoTooltipValue } from './RepoBarChart'
 import type { DepscanStatsResponse } from '../../api/client'
 
 const STATS: DepscanStatsResponse = {
@@ -27,5 +27,11 @@ describe('RepoBarChart', () => {
     render(<RepoBarChart stats={STATS} loading={false} />)
     expect(screen.getByText('リポジトリ別件数（未解決）')).toBeInTheDocument()
     expect(screen.queryByText('データなし')).not.toBeInTheDocument()
+  })
+})
+
+describe('formatRepoTooltipValue', () => {
+  it('appends the unit and label to the raw count', () => {
+    expect(formatRepoTooltipValue(4)).toEqual(['4 件', '件数'])
   })
 })

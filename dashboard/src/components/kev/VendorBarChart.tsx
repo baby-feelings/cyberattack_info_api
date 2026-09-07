@@ -9,6 +9,11 @@ const VENDOR_CHART_COLORS = [
   '#f43f5e', '#8b5cf6', '#f97316', '#6366f1',
 ]
 
+// ツールチップの表示値フォーマッタ（テストで直接検証できるよう名前付き関数として切り出す）
+export function formatVendorTooltipValue(value: unknown): [string, string] {
+  return [String(value) + ' 件', '件数']
+}
+
 // ベンダー別棒グラフ（上位8件。OSV の EcosystemBarChart と同じくベンダーごとに色分け）
 export function VendorBarChart({ stats, loading }: { stats: StatsResponse | null; loading: boolean }) {
   const data = (stats?.top_vendors ?? []).slice(0, 8)
@@ -42,7 +47,7 @@ export function VendorBarChart({ stats, loading }: { stats: StatsResponse | null
           />
           <ReTooltip
             contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }}
-            formatter={(value) => [String(value) + ' 件', '件数']}
+            formatter={formatVendorTooltipValue}
           />
           <Bar dataKey="count" radius={[3, 3, 0, 0]}>
             {data.map((_entry, index) => (
