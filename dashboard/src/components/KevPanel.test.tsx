@@ -30,6 +30,9 @@ function item(overrides: Partial<VulnerabilityOut> = {}): VulnerabilityOut {
     description: 'Apache Log4j2 <=2.14.1 JNDI features...',
     required_action: 'Apply the vendor patch immediately.',
     date_added: '2021-12-10',
+    epss_score: null,
+    epss_percentile: null,
+    epss_updated_at: null,
     ...overrides,
   }
 }
@@ -68,6 +71,32 @@ describe('KevPanel', () => {
     await user.click(screen.getByText('Apache'))
     expect(screen.getByText(/JNDI features/)).toBeInTheDocument()
     expect(screen.getByText(/Apply the vendor patch/)).toBeInTheDocument()
+  })
+
+  it('shows the EPSS score in the row and expanded detail when present', async () => {
+    mockedList.mockResolvedValue({
+      total: 1, page: 1, per_page: 30,
+      data: [item({ epss_score: 0.123, epss_percentile: 0.456, epss_updated_at: '2026-06-20T00:00:00Z' })],
+    })
+    mockedStats.mockResolvedValue(EMPTY_STATS)
+    mockedRecent.mockResolvedValue([])
+    const user = userEvent.setup()
+
+    render(<KevPanel />)
+    await waitFor(() => expect(screen.getByText('12.3%')).toBeInTheDocument())
+
+    await user.click(screen.getByText('Apache'))
+    expect(screen.getByText(/12.30%/)).toBeInTheDocument()
+    expect(screen.getByText(/パーセンタイル 45.6%/)).toBeInTheDocument()
+  })
+
+  it('shows a placeholder dash when the EPSS score is not yet available', async () => {
+    mockedList.mockResolvedValue({ total: 1, page: 1, per_page: 30, data: [item()] })
+    mockedStats.mockResolvedValue(EMPTY_STATS)
+    mockedRecent.mockResolvedValue([])
+
+    render(<KevPanel />)
+    await waitFor(() => expect(screen.getByText('—')).toBeInTheDocument())
   })
 
   it('does not show a required-action line when none is provided', async () => {

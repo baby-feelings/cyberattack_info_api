@@ -68,6 +68,11 @@ export interface VulnerabilityOut {
   description: string
   required_action: string | null
   date_added: string
+  // EPSS（Exploit Prediction Scoring System）: FIRSTが日次算出する
+  // 「今後30日以内に悪用される確率」（0.0〜1.0）。未取得時はnull
+  epss_score: number | null
+  epss_percentile: number | null
+  epss_updated_at: string | null
 }
 
 export interface VendorStat {
