@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.core.database import Base
 from app.crawler_logs import models as _crawler_logs_models  # noqa: F401
 from app.depscan import models as _depscan_models  # noqa: F401
+from app.depsops import models as _depsops_models  # noqa: F401
 from app.jvn import models as _jvn_models  # noqa: F401
 from app.kev import models as _kev_models  # noqa: F401
 from app.osv import models as _osv_models  # noqa: F401

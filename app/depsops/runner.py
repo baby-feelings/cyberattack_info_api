@@ -7,13 +7,20 @@ DEPSCAN 対象の全リポジトリを走査し、Dependabot が作成した Ope
 コンフリクトで自動マージできない PR には `@dependabot rebase` を依頼する。
 
 `/admin/dependabot-ops`（手動トリガーのみ・スケジューラ登録なし）から呼び出す。
+
+判定結果（自動マージ・要確認）は Slack 通知に加え、`DependabotPrLog` テーブルにも
+1 PR 1 行で永続化する。Slack 通知は実行時点のスナップショットのみで履歴を持たない
+（ダッシュボードに表示する「要確認」PR の理由・件数は、この履歴 DB を参照する）。
 """
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import httpx
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.database import SessionLocal
 from app.core.notifications import notify_dependabot_ops, notify_error
 from app.crawler_logs.writer import now_utc, write_crawler_log
 from app.depscan.github_client import list_target_repos
@@ -25,6 +32,7 @@ from app.depsops.github_client import (
     merge_pull_request,
     request_rebase,
 )
+from app.depsops.models import DependabotPrLog
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +83,57 @@ def _process_pr(
 
     merge_pull_request(owner, repo, number, token)
     return "merged", _pr_summary(full_name, pr)
+
+
+def _record_pr_logs(
+    db: Session,
+    merged: list[dict[str, Any]],
+    flagged: list[dict[str, Any]],
+    processed_at: datetime,
+) -> None:
+    """判定した PR を1件1行で DependabotPrLog に記録する。
+
+    ダッシュボードで「要確認」PR の一覧・理由を後から確認できるようにするための
+    履歴テーブル。Slack 通知（実行時点のスナップショットのみ）とは別に保持する。
+    """
+    for item in merged:
+        db.add(DependabotPrLog(
+            repo_full_name=item["repo_full_name"],
+            pr_number=item["pr_number"],
+            title=item["title"],
+            action="merged",
+            reason=None,
+            processed_at=processed_at,
+        ))
+    for item in flagged:
+        db.add(DependabotPrLog(
+            repo_full_name=item["repo_full_name"],
+            pr_number=item["pr_number"],
+            title=item["title"],
+            action="flagged",
+            reason=item.get("reason"),
+            processed_at=processed_at,
+        ))
+    db.commit()
+
+
+def _delete_old_depsops_records(db: Session) -> int:
+    """保持期間（DEPSOPS_RETENTION_DAYS）を超えた PR 履歴レコードを削除する。
+
+    Returns:
+        削除件数
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(days=settings.DEPSOPS_RETENTION_DAYS)
+    deleted = (
+        db.query(DependabotPrLog)
+        .filter(DependabotPrLog.processed_at < cutoff)
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    logger.info(
+        "DEPSOPS old PR log records deleted: %d (processed_at < %s)", deleted, cutoff.date(),
+    )
+    return deleted
 
 
 def run_dependabot_ops() -> tuple[int, int, int]:
@@ -142,6 +201,17 @@ def run_dependabot_ops() -> tuple[int, int, int]:
         )
         notify_error("DEPSOPS", str(exc))
         raise
+
+    # 判定履歴を DB に記録（ダッシュボードでの一覧表示用）。失敗してもクロール自体は成功扱いとする
+    try:
+        db: Session = SessionLocal()
+        try:
+            _record_pr_logs(db, merged, flagged, started_at)
+            _delete_old_depsops_records(db)
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.error("Failed to record DEPSOPS PR logs: %s", exc, exc_info=True)
 
     logger.info(
         "=== DEPSOPS completed: merged=%d, flagged=%d, errors=%d ===",

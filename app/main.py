@@ -1,8 +1,7 @@
 """FastAPI アプリケーション本体。
 アプリ起動時にDBテーブルを作成し、APScheduler でクローラーを定期実行する。
 
-/admin/* の手動トリガーエンドポイントは、DEPSOPS（router.py を持たないドメイン）
-用の /admin/dependabot-ops を除き、各ドメインの router.py（admin_router）に定義する。
+/admin/* の手動トリガーエンドポイントは各ドメインの router.py（admin_router）に定義する。
 本ファイルは include_router 呼び出しと lifespan・スケジューラ配線に専念する。
 """
 import logging
@@ -10,14 +9,12 @@ import logging.config
 from contextlib import asynccontextmanager
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from fastapi import FastAPI, Security
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.auth.router import router as auth_router
-from app.core.auth import require_api_key
-from app.core.background import run_in_background
 from app.core.config import settings
 from app.core.database import Base, engine, get_db
 from app.core.schemas import HealthResponse
@@ -25,6 +22,8 @@ from app.crawler_logs.router import router as crawler_logs_router
 from app.depscan.crawler import fetch_and_scan_dependencies
 from app.depscan.router import admin_router as depscan_admin_router
 from app.depscan.router import router as depscan_router
+from app.depsops.router import admin_router as depsops_admin_router
+from app.depsops.router import router as depsops_router
 from app.depsops.runner import run_dependabot_ops
 from app.jvn.crawler import fetch_and_store_jvn
 from app.jvn.router import admin_router as jvn_admin_router
@@ -169,10 +168,12 @@ app.include_router(osv_router)
 app.include_router(jvn_router)
 app.include_router(crawler_logs_router)
 app.include_router(depscan_router)
+app.include_router(depsops_router)
 app.include_router(kev_admin_router)
 app.include_router(osv_admin_router)
 app.include_router(jvn_admin_router)
 app.include_router(depscan_admin_router)
+app.include_router(depsops_admin_router)
 
 
 # ──────────────────────────────────────────────
@@ -205,27 +206,6 @@ def health_check() -> HealthResponse:
         environment=settings.ENVIRONMENT,
         db_connected=db_ok,
     )
-
-
-# DEPSOPS は models/router を持たないドメインのため、他の /admin/*-crawl と異なり
-# 専用の router.py を新設せず、このエンドポイントのみ main.py に残す。
-@app.post(
-    "/admin/dependabot-ops",
-    tags=["admin"],
-    dependencies=[Security(require_api_key)],
-    summary="Dependabot PR 自動運用（手動トリガーのみ・バックグラウンド）",
-    description="DEPSCAN 対象の全リポジトリの Open な Dependabot PR を判定し、"
-    "マイナー/パッチ更新かつ CI 設定ありでコンフリクトが無いものだけ自動マージする"
-    "（X-API-KEY 必須）。それ以外は Slack に通知するのみで自動マージしない。"
-    "スケジューラには登録されておらず、このエンドポイントを叩いた時のみ実行される。"
-    "結果は /api/crawler-logs（crawler_type=DEPSOPS）で確認。",
-    status_code=202,
-)
-def trigger_dependabot_ops() -> dict:
-    """Dependabot PR 自動運用（DEPSOPS）をバックグラウンドで実行する。"""
-    logger.info("Manual DEPSOPS triggered via /admin/dependabot-ops")
-    run_in_background("DEPSOPS", run_dependabot_ops)
-    return {"message": "Dependabot PR operations started in background"}
 
 
 @app.get("/", tags=["system"])

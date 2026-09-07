@@ -55,6 +55,7 @@ def clean_db():
         conn.execute(text("DELETE FROM vulnerabilities"))
         conn.execute(text("DELETE FROM dependency_findings"))
         conn.execute(text("DELETE FROM depscan_user_scans"))
+        conn.execute(text("DELETE FROM dependabot_pr_logs"))
         conn.commit()
 
 

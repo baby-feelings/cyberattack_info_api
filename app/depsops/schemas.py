@@ -1,0 +1,32 @@
+"""DEPSOPS（Dependabot PR 自動運用）ドメインの Pydantic スキーマ定義。"""
+from pydantic import BaseModel, Field
+
+from app.core.schemas import OrmDatetimeModel
+
+
+class DependabotPrLogOut(OrmDatetimeModel):
+    """DEPSOPS が判定した Dependabot PR 1件分の出力スキーマ。
+
+    datetime → ISO 文字列変換は OrmDatetimeModel（app.core.schemas）が
+    フィールド列挙なしで自動的に行う。
+    """
+
+    repo_full_name: str = Field(description="対象リポジトリ（例: baby-feelings/baby_grow）")
+    pr_number: int = Field(description="Dependabot PR 番号")
+    title: str = Field(description="PR タイトル")
+    action: str = Field(description="判定結果（merged: 自動マージ済み / flagged: 要確認）")
+    reason: str | None = Field(
+        None, description="action=flagged の場合の理由（メジャーバージョンアップ等）"
+    )
+    processed_at: str = Field(description="判定を行った DEPSOPS 実行日時（ISO 8601）")
+
+    model_config = {"from_attributes": True}
+
+
+class DependabotPrLogListResponse(BaseModel):
+    """DEPSOPS PR 履歴一覧取得レスポンス（ページネーション付き）。"""
+
+    total: int = Field(description="総件数")
+    page: int = Field(description="現在のページ番号")
+    per_page: int = Field(description="1ページあたりの件数")
+    data: list[DependabotPrLogOut] = Field(description="PR 履歴一覧")

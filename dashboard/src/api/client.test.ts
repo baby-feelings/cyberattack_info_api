@@ -3,6 +3,7 @@ import {
   fetchHealth, fetchRecent, fetchStats, fetchVulnerabilities,
   fetchOsvList, fetchOsvStats, fetchJvnList, fetchJvnStats,
   fetchDepscanList, fetchDepscanStats, fetchAllDepscanFindings,
+  fetchDepsOpsList,
   fetchCrawlerLogs, githubLoginUrl, fetchScanStatus, exchangeAuthCode, UnauthorizedError,
   type DepscanListResponse,
 } from './client'
@@ -148,6 +149,34 @@ describe('api/client', () => {
       await fetchDepscanList({ resolved: false })
       const [url] = fetchMock.mock.calls[0]
       expect(url).toContain('resolved=false')
+    })
+  })
+
+  describe('fetchDepsOpsList', () => {
+    it('sends the X-API-KEY header and default pagination', async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ total: 0, page: 1, per_page: 50, data: [] }))
+      await fetchDepsOpsList({})
+      const [url, opts] = fetchMock.mock.calls[0]
+      expect(url).toContain('/api/depsops?')
+      expect(url).toContain('page=1')
+      expect(url).toContain('per_page=50')
+      expect(opts.headers).toHaveProperty('X-API-KEY')
+    })
+
+    it('omits repo/action when not set', async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ total: 0, page: 1, per_page: 50, data: [] }))
+      await fetchDepsOpsList({})
+      const [url] = fetchMock.mock.calls[0]
+      expect(url).not.toContain('repo=')
+      expect(url).not.toContain('action=')
+    })
+
+    it('includes repo and action filters when provided', async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ total: 0, page: 1, per_page: 50, data: [] }))
+      await fetchDepsOpsList({ repo: 'baby-feelings/baby_grow', action: 'flagged' })
+      const [url] = fetchMock.mock.calls[0]
+      expect(url).toContain('repo=baby-feelings%2Fbaby_grow')
+      expect(url).toContain('action=flagged')
     })
   })
 
