@@ -36,7 +36,7 @@ describe('App', () => {
   })
 
   it('auto-selects the DEPSCAN tab when returning from an OAuth callback', () => {
-    setUrl('?depscan_user=octocat')
+    setUrl('?depscan_code=abc123')
     render(<App />)
     expect(screen.getByTestId('depscan-auth-gate')).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /DEPSCAN/ })).toHaveAttribute('aria-selected', 'true')

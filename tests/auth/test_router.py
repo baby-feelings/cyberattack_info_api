@@ -69,17 +69,11 @@ class TestGithubCallback:
         assert res.status_code == 302
         location = res.headers["location"]
         assert location.startswith("https://dashboard.example.com/?")
-        assert "depscan_user=octocat" in location
-        # RFC 9700対策: セッショントークンをURLクエリに載せない（HttpOnly Cookieのみ）
+        # RFC 9700対策: セッショントークンそのものをURLクエリに載せない。
+        # 数十秒で失効し一度しか使えない交換コードのみを載せる
         assert "depscan_token=" not in location
-        assert "depscan_session" in res.cookies
-        set_cookie_headers = res.headers.get_list("set-cookie")
-        session_cookie_header = next(
-            h for h in set_cookie_headers if h.startswith("depscan_session=")
-        )
-        assert "HttpOnly" in session_cookie_header
-        assert "samesite=none" in session_cookie_header.lower()
-        assert "secure" in session_cookie_header.lower()
+        assert "depscan_user=" not in location
+        assert "depscan_code=" in location
         mock_thread.start.assert_called_once()
         # バックグラウンドスキャンがログインユーザー本人のトークンで起動されること
         assert mock_thread_cls.call_args.kwargs["args"] == ("octocat", "gho_abc")
@@ -132,30 +126,44 @@ class TestScanStatus:
         assert res.status_code == 200
         assert res.json() == {"username": "octocat", "status": "not_started"}
 
-    def test_accepts_session_cookie_instead_of_bearer_header(self, client):
-        """ブラウザからは Authorization ヘッダーではなく HttpOnly Cookie で送られる。"""
+class TestExchange:
+    def test_exchanges_valid_code_for_token(self, client):
         with patch("app.auth.router.settings.SESSION_SECRET_KEY", "test-secret"):
             token = create_session_token("octocat")
-            client.cookies.set("depscan_session", token)
-            res = client.get("/auth/scan-status")
-            client.cookies.delete("depscan_session")
+            from app.auth.router import _store_exchange_code
+
+            code = _store_exchange_code(token)
+            res = client.post("/auth/exchange", json={"code": code})
+
         assert res.status_code == 200
-        assert res.json() == {"username": "octocat", "status": "not_started"}
+        body = res.json()
+        assert body["username"] == "octocat"
+        assert body["token"] == token
 
-    def test_rejects_invalid_session_cookie(self, client):
-        client.cookies.set("depscan_session", "not-a-real-token")
-        res = client.get("/auth/scan-status")
-        client.cookies.delete("depscan_session")
-        assert res.status_code == 401
+    def test_code_is_single_use(self, client):
+        with patch("app.auth.router.settings.SESSION_SECRET_KEY", "test-secret"):
+            token = create_session_token("octocat")
+            from app.auth.router import _store_exchange_code
 
+            code = _store_exchange_code(token)
+            first = client.post("/auth/exchange", json={"code": code})
+            second = client.post("/auth/exchange", json={"code": code})
 
-class TestLogout:
-    def test_deletes_session_cookie(self, client):
-        client.cookies.set("depscan_session", "some-token")
-        res = client.post("/auth/logout")
-        assert res.status_code == 200
-        assert res.json() == {"logged_out": True}
-        set_cookie_headers = res.headers.get_list("set-cookie")
-        deletion_header = next(h for h in set_cookie_headers if h.startswith("depscan_session="))
-        # 削除は max-age=0 相当（空値 + 過去日時）で表現される
-        assert 'depscan_session=""' in deletion_header or "depscan_session=;" in deletion_header
+        assert first.status_code == 200
+        assert second.status_code == 400
+
+    def test_rejects_unknown_code(self, client):
+        res = client.post("/auth/exchange", json={"code": "not-a-real-code"})
+        assert res.status_code == 400
+
+    def test_rejects_expired_code(self, client):
+        with patch("app.auth.router.settings.SESSION_SECRET_KEY", "test-secret"):
+            token = create_session_token("octocat")
+            from app.auth.router import _pending_exchange_codes, _store_exchange_code
+
+            code = _store_exchange_code(token)
+            # 発行済みコードの有効期限を過去に書き換えて期限切れを再現する
+            _pending_exchange_codes[code] = (token, 0.0)
+            res = client.post("/auth/exchange", json={"code": code})
+
+        assert res.status_code == 400

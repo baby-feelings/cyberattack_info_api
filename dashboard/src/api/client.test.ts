@@ -3,7 +3,7 @@ import {
   fetchHealth, fetchRecent, fetchStats, fetchVulnerabilities,
   fetchOsvList, fetchOsvStats, fetchJvnList, fetchJvnStats,
   fetchDepscanList, fetchDepscanStats, fetchAllDepscanFindings,
-  fetchCrawlerLogs, githubLoginUrl, fetchScanStatus, logout, UnauthorizedError,
+  fetchCrawlerLogs, githubLoginUrl, fetchScanStatus, exchangeAuthCode, UnauthorizedError,
   type DepscanListResponse,
 } from './client'
 
@@ -127,12 +127,11 @@ describe('api/client', () => {
   })
 
   describe('fetchDepscanList', () => {
-    it('sends the request with credentials included (HttpOnly session cookie), no headers', async () => {
+    it('sends the session token as Authorization when authToken is given', async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse({ total: 0, page: 1, per_page: 50, data: [] }))
-      await fetchDepscanList({})
+      await fetchDepscanList({ authToken: 'session-token-abc' })
       const [, opts] = fetchMock.mock.calls[0]
-      expect(opts.credentials).toBe('include')
-      expect(opts.headers).toEqual({})
+      expect(opts.headers).toEqual({ Authorization: 'Bearer session-token-abc' })
     })
 
     it('omits owner/severity/resolved when not set', async () => {
@@ -153,11 +152,11 @@ describe('api/client', () => {
   })
 
   describe('fetchDepscanStats', () => {
-    it('sends the request with credentials included (HttpOnly session cookie)', async () => {
+    it('uses X-API-KEY when no authToken is provided', async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse({ total: 0, repos: [], severities: [] }))
       await fetchDepscanStats()
       const [, opts] = fetchMock.mock.calls[0]
-      expect(opts.credentials).toBe('include')
+      expect(opts.headers).toHaveProperty('X-API-KEY')
     })
   })
 
@@ -211,36 +210,42 @@ describe('api/client', () => {
   })
 
   describe('fetchScanStatus', () => {
-    it('sends the request with credentials included and returns the parsed status', async () => {
+    it('sends the Bearer token and returns the parsed status', async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse({ username: 'octocat', status: 'done' }))
-      const result = await fetchScanStatus()
+      const result = await fetchScanStatus('tok-123')
       expect(result.status).toBe('done')
       const [url, opts] = fetchMock.mock.calls[0]
       expect(url).toBe(`${BASE_URL}/auth/scan-status`)
-      expect(opts.credentials).toBe('include')
+      expect(opts.headers).toEqual({ Authorization: 'Bearer tok-123' })
     })
 
     it('throws UnauthorizedError specifically on 401', async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse({}, { ok: false, status: 401 }))
-      await expect(fetchScanStatus()).rejects.toBeInstanceOf(UnauthorizedError)
+      await expect(fetchScanStatus('bad-token')).rejects.toBeInstanceOf(UnauthorizedError)
     })
 
     it('throws a generic Error on other failures (not UnauthorizedError)', async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse({}, { ok: false, status: 500 }))
-      await expect(fetchScanStatus()).rejects.toThrow('Scan status error 500')
+      await expect(fetchScanStatus('tok')).rejects.toThrow('Scan status error 500')
       fetchMock.mockResolvedValueOnce(jsonResponse({}, { ok: false, status: 500 }))
-      await expect(fetchScanStatus()).rejects.not.toBeInstanceOf(UnauthorizedError)
+      await expect(fetchScanStatus('tok')).rejects.not.toBeInstanceOf(UnauthorizedError)
     })
   })
 
-  describe('logout', () => {
-    it('POSTs to /auth/logout with credentials included', async () => {
-      fetchMock.mockResolvedValueOnce(jsonResponse({ logged_out: true }))
-      await logout()
+  describe('exchangeAuthCode', () => {
+    it('POSTs the code as JSON and returns the token/username', async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ token: 'tok-abc', username: 'octocat' }))
+      const result = await exchangeAuthCode('code-123')
+      expect(result).toEqual({ token: 'tok-abc', username: 'octocat' })
       const [url, opts] = fetchMock.mock.calls[0]
-      expect(url).toBe(`${BASE_URL}/auth/logout`)
+      expect(url).toBe(`${BASE_URL}/auth/exchange`)
       expect(opts.method).toBe('POST')
-      expect(opts.credentials).toBe('include')
+      expect(JSON.parse(opts.body)).toEqual({ code: 'code-123' })
+    })
+
+    it('throws when the code is invalid, expired, or already used', async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({}, { ok: false, status: 400 }))
+      await expect(exchangeAuthCode('bad-code')).rejects.toThrow('Exchange error 400')
     })
   })
 })

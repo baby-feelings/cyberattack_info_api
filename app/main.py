@@ -152,10 +152,6 @@ app.add_middleware(
     allow_origins=_cors_origins,
     allow_methods=["GET", "POST"],
     allow_headers=["X-API-KEY", "Authorization"],
-    # depscan_session（HttpOnly Cookie）をクロスサイトの fetch で送受信するために必要。
-    # allow_origins はワイルドカードではなく明示的なオリジンのみのため、
-    # allow_credentials=True と組み合わせても安全（CORS仕様上ワイルドカードと併用不可）
-    allow_credentials=True,
 )
 
 # ルーター登録
