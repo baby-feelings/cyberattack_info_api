@@ -10,9 +10,8 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.database import SessionLocal
-from app.core.notifications import notify_error, notify_success
-from app.crawler_logs.writer import now_utc, write_crawler_log
+from app.core.crawler_runner import CrawlCounters, run_crawler
+from app.crawler_logs.writer import now_utc
 from app.kev.models import Vulnerability
 
 logger = logging.getLogger(__name__)
@@ -190,11 +189,10 @@ def fetch_and_store_kev() -> tuple[int, int, int]:
         (inserted, updated, deleted) のタプル
     """
     logger.info("=== CISA KEV crawler started ===")
-    started_at = now_utc()
-    db: Session = SessionLocal()
-    try:
+
+    def _body(db: Session, counters: CrawlCounters) -> None:
         entries = _fetch_cisa_kev()
-        inserted, updated = _upsert_vulnerabilities(db, entries)
+        counters.inserted, counters.updated = _upsert_vulnerabilities(db, entries)
 
         # EPSS スコアの更新。失敗してもKEVクロール自体は成功扱いとする
         try:
@@ -203,39 +201,9 @@ def fetch_and_store_kev() -> tuple[int, int, int]:
             logger.error("Failed to update EPSS scores: %s", exc, exc_info=True)
 
         # 保持期間を超えた古いレコードを削除（DB 容量管理）。失敗してもクロール自体は成功扱いとする
-        deleted = 0
         try:
-            deleted = _delete_old_kev_records(db)
+            counters.deleted = _delete_old_kev_records(db)
         except Exception as exc:
             logger.error("Failed to delete old KEV records: %s", exc, exc_info=True)
 
-        logger.info(
-            "=== CISA KEV crawler completed: inserted=%d, updated=%d, deleted=%d ===",
-            inserted, updated, deleted,
-        )
-        # 実行ログを記録
-        write_crawler_log(
-            crawler_type="KEV",
-            status="success",
-            started_at=started_at,
-            finished_at=now_utc(),
-            inserted=inserted,
-            updated=updated,
-            deleted=deleted,
-        )
-        # 新規 CVE があれば Slack に通知
-        notify_success("KEV", inserted, updated, deleted)
-        return inserted, updated, deleted
-    except Exception as exc:
-        logger.error("CISA KEV crawler failed: %s", exc, exc_info=True)
-        write_crawler_log(
-            crawler_type="KEV",
-            status="error",
-            started_at=started_at,
-            finished_at=now_utc(),
-            error_message=str(exc),
-        )
-        notify_error("KEV", str(exc))
-        raise
-    finally:
-        db.close()
+    return run_crawler("KEV", _body)

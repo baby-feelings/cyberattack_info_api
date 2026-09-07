@@ -248,9 +248,9 @@ class TestCrawlerLogIntegration:
         with patch("app.kev.crawler._fetch_cisa_kev", return_value=mock_entries), \
              patch("app.kev.crawler._upsert_vulnerabilities", return_value=(1, 0)), \
              patch("app.kev.crawler._delete_old_kev_records", return_value=0), \
-             patch("app.kev.crawler.notify_success"), \
-             patch("app.kev.crawler.write_crawler_log") as mock_log, \
-             patch("app.kev.crawler.SessionLocal"):
+             patch("app.core.crawler_runner.notify_success"), \
+             patch("app.core.crawler_runner.write_crawler_log") as mock_log, \
+             patch("app.core.crawler_runner.SessionLocal"):
             from app.kev.crawler import fetch_and_store_kev
             fetch_and_store_kev()
 
@@ -267,9 +267,9 @@ class TestCrawlerLogIntegration:
         import httpx
 
         with patch("app.kev.crawler._fetch_cisa_kev", side_effect=httpx.ConnectError("timeout")), \
-             patch("app.kev.crawler.notify_error"), \
-             patch("app.kev.crawler.write_crawler_log") as mock_log, \
-             patch("app.kev.crawler.SessionLocal"):
+             patch("app.core.crawler_runner.notify_error"), \
+             patch("app.core.crawler_runner.write_crawler_log") as mock_log, \
+             patch("app.core.crawler_runner.SessionLocal"):
             from app.kev.crawler import fetch_and_store_kev
             try:
                 fetch_and_store_kev()
@@ -288,9 +288,9 @@ class TestCrawlerLogIntegration:
 
         with patch("app.osv.crawler.query_packages_batch", return_value=[]), \
              patch("app.osv.crawler._delete_old_osv_records", return_value=5), \
-             patch("app.osv.crawler.notify_success"), \
-             patch("app.osv.crawler.write_crawler_log") as mock_log, \
-             patch("app.osv.crawler.SessionLocal"):
+             patch("app.core.crawler_runner.notify_success"), \
+             patch("app.core.crawler_runner.write_crawler_log") as mock_log, \
+             patch("app.core.crawler_runner.SessionLocal"):
             from app.osv.crawler import fetch_and_store_osv
             fetch_and_store_osv()
 

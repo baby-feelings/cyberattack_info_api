@@ -182,7 +182,7 @@ def test_fetch_and_store_kev_integration():
         patch("app.kev.crawler._upsert_vulnerabilities", return_value=(2, 0)),
         patch("app.kev.crawler._apply_epss_scores", return_value=0),
         patch("app.kev.crawler._delete_old_kev_records", return_value=0),
-        patch("app.kev.crawler.SessionLocal") as mock_session_cls,
+        patch("app.core.crawler_runner.SessionLocal") as mock_session_cls,
     ):
         mock_db = MagicMock()
         mock_session_cls.return_value = mock_db
@@ -196,7 +196,7 @@ def test_fetch_and_store_kev_raises_http_error():
 
     with (
         patch("app.kev.crawler._fetch_cisa_kev", side_effect=http_err),
-        patch("app.kev.crawler.SessionLocal") as mock_session_cls,
+        patch("app.core.crawler_runner.SessionLocal") as mock_session_cls,
     ):
         mock_db = MagicMock()
         mock_session_cls.return_value = mock_db
@@ -262,7 +262,7 @@ class TestDeleteOldKevRecords:
                 "app.kev.crawler._delete_old_kev_records",
                 side_effect=Exception("delete failed"),
             ),
-            patch("app.kev.crawler.SessionLocal") as mock_session_cls,
+            patch("app.core.crawler_runner.SessionLocal") as mock_session_cls,
         ):
             mock_db = MagicMock()
             mock_session_cls.return_value = mock_db
@@ -281,7 +281,7 @@ class TestDeleteOldKevRecords:
                 side_effect=Exception("EPSS API down"),
             ),
             patch("app.kev.crawler._delete_old_kev_records", return_value=0),
-            patch("app.kev.crawler.SessionLocal") as mock_session_cls,
+            patch("app.core.crawler_runner.SessionLocal") as mock_session_cls,
         ):
             mock_db = MagicMock()
             mock_session_cls.return_value = mock_db
@@ -388,7 +388,7 @@ def test_fetch_and_store_kev_raises_unexpected_error():
     """fetch_and_store_kev が予期しない例外時にログを記録して再送出することを確認する。"""
     with (
         patch("app.kev.crawler._fetch_cisa_kev", side_effect=RuntimeError("unexpected")),
-        patch("app.kev.crawler.SessionLocal") as mock_session_cls,
+        patch("app.core.crawler_runner.SessionLocal") as mock_session_cls,
     ):
         mock_db = MagicMock()
         mock_session_cls.return_value = mock_db

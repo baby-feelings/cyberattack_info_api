@@ -336,9 +336,9 @@ def test_upsert_jvn_deduplicates(db_session):
 def test_fetch_and_store_jvn_success(monkeypatch):
     """クローラーが正常終了し (inserted, updated, deleted) を返すこと。"""
     monkeypatch.setattr("app.jvn.crawler._fetch_all_entries", lambda cutoff_date: [])
-    monkeypatch.setattr("app.jvn.crawler.write_crawler_log", lambda *a, **kw: None)
+    monkeypatch.setattr("app.core.crawler_runner.write_crawler_log", lambda *a, **kw: None)
     monkeypatch.setattr(
-        "app.jvn.crawler.notify_success", lambda *a, **kw: None
+        "app.core.crawler_runner.notify_success", lambda *a, **kw: None
     )
 
     from app.jvn.crawler import fetch_and_store_jvn
@@ -355,8 +355,8 @@ def test_fetch_and_store_jvn_error(monkeypatch):
         "app.jvn.crawler._fetch_all_entries",
         lambda cutoff_date: (_ for _ in ()).throw(RuntimeError("API down")),  # type: ignore[arg-type]
     )
-    monkeypatch.setattr("app.jvn.crawler.write_crawler_log", lambda *a, **kw: None)
-    monkeypatch.setattr("app.jvn.crawler.notify_error", lambda *a, **kw: None)
+    monkeypatch.setattr("app.core.crawler_runner.write_crawler_log", lambda *a, **kw: None)
+    monkeypatch.setattr("app.core.crawler_runner.notify_error", lambda *a, **kw: None)
 
     from app.jvn.crawler import fetch_and_store_jvn
 
@@ -401,9 +401,9 @@ class TestDeleteOldJvnRecords:
     def test_delete_failure_does_not_fail_crawler(self, monkeypatch):
         """_delete_old_jvn_records が失敗してもクローラー全体はエラーにならないこと。"""
         monkeypatch.setattr("app.jvn.crawler._fetch_all_entries", lambda cutoff_date: [])
-        monkeypatch.setattr("app.jvn.crawler.write_crawler_log", lambda *a, **kw: None)
+        monkeypatch.setattr("app.core.crawler_runner.write_crawler_log", lambda *a, **kw: None)
         monkeypatch.setattr(
-            "app.jvn.crawler.notify_success", lambda *a, **kw: None
+            "app.core.crawler_runner.notify_success", lambda *a, **kw: None
         )
         monkeypatch.setattr(
             "app.jvn.crawler._delete_old_jvn_records",

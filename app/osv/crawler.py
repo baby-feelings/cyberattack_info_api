@@ -12,8 +12,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.database import SessionLocal
-from app.core.notifications import notify_error, notify_success
+from app.core.crawler_runner import CrawlCounters, run_crawler
 from app.core.osv_client import (
     BATCH_SIZE,
     extract_fixed_versions,
@@ -21,7 +20,7 @@ from app.core.osv_client import (
     parse_severity,
     query_packages_batch,
 )
-from app.crawler_logs.writer import now_utc, write_crawler_log
+from app.crawler_logs.writer import now_utc
 from app.osv.models import OsvVulnerability
 from app.osv.packages import POPULAR_PACKAGES
 
@@ -206,14 +205,9 @@ def fetch_and_store_osv(days: int | None = None) -> tuple[int, int, int]:
     """
     effective_days = days if days is not None else settings.OSV_DAYS
     logger.info("=== OSV crawler started (API mode, days=%d) ===", effective_days)
-    started_at = now_utc()
     cutoff = datetime.now(timezone.utc) - timedelta(days=effective_days)
-    total_inserted = 0
-    total_updated = 0
-    total_deleted = 0
 
-    db: Session = SessionLocal()
-    try:
+    def _body(db: Session, counters: CrawlCounters) -> None:
         for ecosystem, packages in POPULAR_PACKAGES.items():
             try:
                 # Step 1: パッケージを BATCH_SIZE ずつ分割して {id, modified} を一括取得
@@ -258,8 +252,8 @@ def fetch_and_store_osv(days: int | None = None) -> tuple[int, int, int]:
                         logger.warning("Failed to fetch %s: %s", osv_id, exc)
 
                 ins, upd = _upsert_osv_records(db, records)
-                total_inserted += ins
-                total_updated += upd
+                counters.inserted += ins
+                counters.updated += upd
                 logger.info(
                     "OSV [%s] done: recent=%d records=%d inserted=%d updated=%d",
                     ecosystem, len(recent_refs), len(records), ins, upd,
@@ -275,40 +269,8 @@ def fetch_and_store_osv(days: int | None = None) -> tuple[int, int, int]:
 
         # Step 4: 保持期間を超えた古いレコードを削除（DB 容量管理）
         try:
-            total_deleted = _delete_old_osv_records(db)
+            counters.deleted = _delete_old_osv_records(db)
         except Exception as exc:
             logger.error("Failed to delete old OSV records: %s", exc, exc_info=True)
 
-    except Exception as exc:
-        write_crawler_log(
-            crawler_type="OSV",
-            status="error",
-            started_at=started_at,
-            finished_at=now_utc(),
-            inserted=total_inserted,
-            updated=total_updated,
-            deleted=total_deleted,
-            error_message=str(exc),
-        )
-        notify_error("OSV", str(exc))
-        raise
-    finally:
-        db.close()
-
-    logger.info(
-        "=== OSV crawler completed: inserted=%d, updated=%d, deleted=%d ===",
-        total_inserted, total_updated, total_deleted,
-    )
-    # 実行ログを記録
-    write_crawler_log(
-        crawler_type="OSV",
-        status="success",
-        started_at=started_at,
-        finished_at=now_utc(),
-        inserted=total_inserted,
-        updated=total_updated,
-        deleted=total_deleted,
-    )
-    # 新規・更新があった場合のみ Slack 通知
-    notify_success("OSV", total_inserted, total_updated, total_deleted)
-    return total_inserted, total_updated, total_deleted
+    return run_crawler("OSV", _body)
