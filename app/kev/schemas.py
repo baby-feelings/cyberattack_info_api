@@ -27,6 +27,9 @@ class VulnerabilityOut(BaseModel):
     epss_updated_at: datetime | None = Field(
         None, description="EPSS スコアの取得日時",
     )
+    fetched_at: datetime | None = Field(
+        None, description="このレコードを最後にCISA KEVフィードで存在確認した日時",
+    )
 
     model_config = {"from_attributes": True}
 

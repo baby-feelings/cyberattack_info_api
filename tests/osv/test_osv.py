@@ -189,6 +189,32 @@ class TestListOsv:
         res = client.get("/api/osv?days=90", headers=HEADERS)
         assert res.json()["total"] == 0
 
+    def test_updated_since_filter(self, client, db_session):
+        """updated_since パラメータで差分取得（増分同期）が機能することを確認する。
+
+        SQLite（テストDB）は naive・秒精度で保存・比較するため、insert時刻に依存せず
+        両レコードの updated_at を明示的に固定する（本番の PostgreSQL は tz-aware・
+        マイクロ秒精度で正しく比較できる）。
+        """
+        cutoff = datetime(2026, 6, 15, 12, 0, 0)
+        old = _make_osv(db_session, osv_id="GHSA-old-updated", package_name="pkg-old")
+        new = _make_osv(db_session, osv_id="GHSA-new-updated", package_name="pkg-new")
+
+        db_session.query(OsvVulnerability).filter_by(id=old.id).update(
+            {"updated_at": cutoff - timedelta(days=1)}
+        )
+        db_session.query(OsvVulnerability).filter_by(id=new.id).update(
+            {"updated_at": cutoff + timedelta(days=1)}
+        )
+        db_session.commit()
+
+        res = client.get(
+            "/api/osv", params={"updated_since": cutoff.isoformat()}, headers=HEADERS,
+        )
+        body = res.json()
+        assert body["total"] == 1
+        assert body["data"][0]["osv_id"] == "GHSA-new-updated"
+
     def test_sort_by_cvss(self, client, db_session):
         """sort_by=cvss 指定時に CVSS スコア降順でソートされること。"""
         _make_osv(db_session, osv_id="GHSA-cvss-low", package_name="pkg-low", cvss_score=4.0)
@@ -308,6 +334,22 @@ class TestBuildRecords:
         assert r["fixed_versions"] == ["2.2.0"]
         assert r["affected_versions"] == ["2.0.0", "2.1.0"]
         assert len(r["references"]) == 2
+        assert r["withdrawn_at"] is None
+        assert r["fetched_at"] is not None
+
+    def test_withdrawn_field_is_parsed(self):
+        """OSVスキーマのwithdrawnフィールド（撤回日時）がパースされること。"""
+        vuln = self._vuln(withdrawn="2026-07-15T00:00:00Z")
+        modified = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        records = _build_records(vuln, modified)
+        assert records[0]["withdrawn_at"] == datetime(2026, 7, 15, tzinfo=timezone.utc)
+
+    def test_malformed_withdrawn_field_is_ignored(self):
+        """withdrawnが不正な形式の場合はNoneとして扱う。"""
+        vuln = self._vuln(withdrawn="not-a-date")
+        modified = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        records = _build_records(vuln, modified)
+        assert records[0]["withdrawn_at"] is None
 
     def test_multiple_packages(self):
         """1エントリで複数パッケージに影響する場合は複数レコードを生成する。"""
@@ -426,6 +468,8 @@ class TestUpsertOsvRecords:
             "references": [],
             "published": dt,
             "modified": dt,
+            "withdrawn_at": None,
+            "fetched_at": dt,
         }
         base.update(kwargs)
         return base
@@ -452,6 +496,28 @@ class TestUpsertOsvRecords:
         ins, upd = _upsert_osv_records(db_session, [rec])
         assert ins == 0
         assert upd == 1
+
+    def test_fetched_at_refreshed_even_when_unchanged(self, db_session):
+        """modified が変化していなくても、fetched_atは毎回のクロールで更新されることを確認する。"""
+        old_dt = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        record = _make_osv(
+            db_session, osv_id="GHSA-fetched-refresh", package_name="testpkg",
+            modified=old_dt, published=old_dt, fetched_at=old_dt,
+        )
+
+        new_fetched_at = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        # SQLite はタイムゾーン情報を保持せず naive で返すため、DBから読み戻した
+        # modified をそのまま使い、tzinfo有無の差で不等号判定されないようにする
+        rec = self._make_rec(
+            osv_id="GHSA-fetched-refresh", modified=record.modified, fetched_at=new_fetched_at,
+        )
+        ins, upd = _upsert_osv_records(db_session, [rec])
+        db_session.refresh(record)
+
+        assert ins == 0
+        assert upd == 0  # modified は変化していないので updated 扱いにはならない
+        # SQLite はタイムゾーン情報を保持せず naive で返すため、tzinfoを外して比較する
+        assert record.fetched_at == new_fetched_at.replace(tzinfo=None)
 
     def test_no_double_insert(self, db_session):
         """同じキーのレコードを 2 回 upsert しても 2 回 insert されないこと。"""
@@ -670,6 +736,8 @@ class TestUpsertOsvRecordsCommitFailure:
             "references": [],
             "published": dt,
             "modified": dt,
+            "withdrawn_at": None,
+            "fetched_at": dt,
         }
         base.update(kwargs)
         return base

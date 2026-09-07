@@ -137,6 +137,32 @@ def test_upsert_skips_unchanged_record(db_session: Session):
     assert updated == 0
 
 
+def test_upsert_sets_fetched_at_on_insert(db_session: Session):
+    """新規INSERT時にfetched_atが設定されることを確認する。"""
+    _upsert_vulnerabilities(db_session, [SAMPLE_ENTRIES[0]])
+
+    record = db_session.query(Vulnerability).filter_by(cve_id="CVE-2026-99001").first()
+    assert record.fetched_at is not None
+
+
+def test_upsert_refreshes_fetched_at_even_when_unchanged(db_session: Session):
+    """内容に変更が無くても、fetched_atは毎回のクロールで更新されることを確認する。"""
+    import time
+
+    _upsert_vulnerabilities(db_session, [SAMPLE_ENTRIES[0]])
+    record = db_session.query(Vulnerability).filter_by(cve_id="CVE-2026-99001").first()
+    first_fetched_at = record.fetched_at
+
+    time.sleep(0.01)
+    # 同じ内容で再 Upsert（update とはカウントされないはず）
+    inserted, updated = _upsert_vulnerabilities(db_session, [SAMPLE_ENTRIES[0]])
+    db_session.refresh(record)
+
+    assert inserted == 0
+    assert updated == 0
+    assert record.fetched_at > first_fetched_at
+
+
 def test_upsert_skips_entry_without_cve_id(db_session: Session):
     """cveID が空のエントリはスキップされることを確認する。"""
     bad_entry = {**SAMPLE_ENTRIES[0], "cveID": ""}

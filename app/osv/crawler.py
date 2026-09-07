@@ -56,6 +56,18 @@ def _build_records(
     summary = (vuln.get("summary") or "").strip()
     details = (vuln.get("details") or None)
 
+    # OSVスキーマの withdrawn フィールド（ISO8601日時文字列）。設定されていれば
+    # ソース側で撤回済みのエントリであることを示す
+    withdrawn_str = vuln.get("withdrawn")
+    withdrawn_at: datetime | None = None
+    if withdrawn_str:
+        try:
+            withdrawn_at = datetime.fromisoformat(withdrawn_str.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            withdrawn_at = None
+
+    fetched_at = now_utc()
+
     records: list[dict[str, Any]] = []
 
     for affected in vuln.get("affected", []):
@@ -84,6 +96,8 @@ def _build_records(
                 "references": refs,
                 "published": published,
                 "modified": modified,
+                "withdrawn_at": withdrawn_at,
+                "fetched_at": fetched_at,
             }
         )
 
@@ -150,11 +164,15 @@ def _upsert_osv_records(
         if existing is None:
             db.add(OsvVulnerability(**rec))
             inserted += 1
-        elif existing.modified != rec["modified"]:
-            # modified が更新されている場合のみ上書き
-            for field, value in rec.items():
-                setattr(existing, field, value)
-            updated += 1
+        else:
+            # fetched_at は内容の変更有無に関わらず、今回のクロールで存在確認できた事実
+            # として常に更新する（updated_at は内容変更時のみ更新される鮮度指標のため使い分け）
+            existing.fetched_at = rec["fetched_at"]
+            if existing.modified != rec["modified"]:
+                # modified が更新されている場合のみ上書き
+                for field, value in rec.items():
+                    setattr(existing, field, value)
+                updated += 1
 
         # 定期コミットで接続タイムアウトを防ぐ
         if (i + 1) % _COMMIT_EVERY == 0:

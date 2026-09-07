@@ -23,6 +23,9 @@ class JvnVulnerabilityOut(BaseModel):
     jvn_url: str = Field(description="JVNDB エントリの URL")
     date_published: str = Field(description="公開日時（ISO 8601）")
     date_last_modified: str = Field(description="最終更新日時（ISO 8601）")
+    fetched_at: str | None = Field(
+        None, description="このレコードを最後にMyJVN APIで存在確認した日時",
+    )
 
     model_config = {"from_attributes": True}
 
@@ -30,6 +33,11 @@ class JvnVulnerabilityOut(BaseModel):
     def _serialize_datetime(self, value: Any) -> str:
         """datetime を ISO 文字列に変換する。"""
         return value.isoformat() if hasattr(value, "isoformat") else str(value)
+
+    @field_serializer("fetched_at")
+    def _serialize_optional_datetime(self, value: Any) -> str | None:
+        """null許容の datetime を ISO 文字列（またはNone）に変換する。"""
+        return value.isoformat() if hasattr(value, "isoformat") else None
 
     @classmethod
     def model_validate(cls, obj: Any, **kwargs: Any) -> "JvnVulnerabilityOut":

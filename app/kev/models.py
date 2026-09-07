@@ -48,6 +48,11 @@ class Vulnerability(Base):
     # EPSS スコアの取得日時（FIRST側の更新日ではなく、自システムが取得した日時）
     epss_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # このレコードを最後にクローラーが取得元（CISA KEV フィード）で存在確認した日時。
+    # updated_at と異なり、内容に変更が無かった回のクロールでも毎回更新される
+    # （鮮度・来歴の可視化用。差分取得は updated_since で updated_at を見る）
+    fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     # DB 登録日時（自動セット）
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

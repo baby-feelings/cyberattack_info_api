@@ -53,15 +53,6 @@ function KevRow({ item }: { item: VulnerabilityOut }) {
             <ExternalLink size={9} />
           </a>
         </td>
-        <td className="py-2.5 pr-3">
-          <p className="text-slate-300 text-xs truncate max-w-[160px]">{item.vendor_project}</p>
-        </td>
-        <td className="py-2.5 pr-3">
-          <p className="text-slate-300 text-xs truncate max-w-[160px]">{item.product}</p>
-        </td>
-        <td className="py-2.5 pr-3">
-          <p className="text-slate-400 text-xs truncate max-w-[280px]">{item.vulnerability_name}</p>
-        </td>
         <td className="py-2.5 pr-3 text-xs tabular-nums whitespace-nowrap">
           {item.epss_score !== null ? (
             <span className={epssColorClass(item.epss_score)}>
@@ -70,6 +61,15 @@ function KevRow({ item }: { item: VulnerabilityOut }) {
           ) : (
             <span className="text-slate-700">—</span>
           )}
+        </td>
+        <td className="py-2.5 pr-3">
+          <p className="text-slate-300 text-xs truncate max-w-[160px]">{item.vendor_project}</p>
+        </td>
+        <td className="py-2.5 pr-3">
+          <p className="text-slate-300 text-xs truncate max-w-[160px]">{item.product}</p>
+        </td>
+        <td className="py-2.5 pr-3">
+          <p className="text-slate-400 text-xs truncate max-w-[280px]">{item.vulnerability_name}</p>
         </td>
         <td className="py-2.5 text-xs text-slate-600 tabular-nums whitespace-nowrap">
           {dateAdded}
@@ -271,10 +271,10 @@ export function KevPanel() {
               <thead>
                 <tr className="border-b border-slate-800">
                   <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-36">CVE ID</th>
+                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-16">EPSS</th>
                   <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-40">ベンダー</th>
                   <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-40">製品</th>
                   <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3">脆弱性名</th>
-                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-16">EPSS</th>
                   <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-24">追加日</th>
                   <th className="w-5" />
                 </tr>

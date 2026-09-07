@@ -61,6 +61,7 @@ def _upsert_vulnerabilities(db: Session, entries: list[dict[str, Any]]) -> tuple
     """
     inserted = 0
     updated = 0
+    now = now_utc()
 
     for entry in entries:
         cve_id = entry.get("cveID", "")
@@ -82,9 +83,12 @@ def _upsert_vulnerabilities(db: Session, entries: list[dict[str, Any]]) -> tuple
 
         if existing is None:
             # 新規 INSERT
-            db.add(Vulnerability(**record_data))
+            db.add(Vulnerability(**record_data, fetched_at=now))
             inserted += 1
         else:
+            # fetched_at は内容の変更有無に関わらず、今回のクロールで存在確認できた事実
+            # として常に更新する（updated_at は内容変更時のみ更新される鮮度指標のため使い分け）
+            existing.fetched_at = now
             # 内容に変更があれば UPDATE
             changed = any(
                 getattr(existing, key) != value

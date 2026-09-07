@@ -52,6 +52,11 @@ class JvnVulnerability(Base):
     # 最終更新日時（クローラーのフィルタキー）
     date_last_modified: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
+    # このレコードを最後にクローラーが取得元（MyJVN API）で存在確認した日時。
+    # updated_at と異なり、内容に変更が無かった回のクロールでも毎回更新される
+    # （鮮度・来歴の可視化用。差分取得は updated_since で updated_at を見る）
+    fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     # DB 登録日時
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

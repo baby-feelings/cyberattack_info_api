@@ -113,6 +113,9 @@ def _fetch_all_entries(cutoff_date: str) -> list[dict]:
 def _apply_update(existing: JvnVulnerability, data: dict) -> bool:
     """既存レコードに新しいデータを適用し、変更があれば True を返す。"""
     changed = existing.date_last_modified != data["date_last_modified"]
+    # fetched_at は内容の変更有無に関わらず、今回のクロールで存在確認できた事実として
+    # 常に更新する（updated_at は内容変更時のみ更新される鮮度指標のため使い分ける）
+    existing.fetched_at = data["fetched_at"]
     existing.title = data["title"]
     existing.overview = data["overview"]
     existing.cve_ids = data["cve_ids"]
@@ -140,10 +143,12 @@ def _upsert_jvn(db: Session, entries: list[dict]) -> tuple[int, int]:
     inserted = 0
     updated = 0
     count = 0
+    now = now_utc()
 
     # リスト内の jvndb_id 重複を除去（最後の要素を優先）
     deduped: dict[str, dict] = {}
     for entry in entries:
+        entry["fetched_at"] = now
         deduped[entry["jvndb_id"]] = entry
 
     for jvndb_id, data in deduped.items():

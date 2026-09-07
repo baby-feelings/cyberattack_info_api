@@ -113,6 +113,8 @@ curl -H "X-API-KEY: your-key" \
 | `search` | string | - | ベンダー名・製品名の部分一致検索 |
 | `vendor` | string | - | ベンダー名の完全一致フィルタ |
 | `product` | string | - | 製品名の部分一致フィルタ |
+| `min_epss` | float | - | EPSS スコアの下限（0.0〜1.0）。指定値以上のもののみ返す |
+| `updated_since` | string (ISO 8601) | - | この日時以降に内容が更新されたレコードのみ返す（差分取得・増分同期用） |
 
 ### GET /api/vulnerabilities/{cve_id} — CVE 個別取得
 
@@ -130,7 +132,11 @@ curl -H "X-API-KEY: your-key" \
   "vulnerability_name": "Apache Log4j2 Remote Code Execution Vulnerability",
   "description": "Apache Log4j2 <=2.14.1 JNDI features...",
   "required_action": "For all affected software assets...",
-  "date_added": "2021-12-10"
+  "date_added": "2021-12-10",
+  "epss_score": 0.01162,
+  "epss_percentile": 0.65148,
+  "epss_updated_at": "2026-09-06T20:38:28.802007+00:00",
+  "fetched_at": "2026-09-06T20:38:28.802007+00:00"
 }
 ```
 
@@ -185,6 +191,7 @@ curl -H "X-API-KEY: your-key" \
 | `severity` | string | - | 重要度でフィルタ（`CRITICAL` / `HIGH` / `MEDIUM` / `LOW`） |
 | `search` | string | - | パッケージ名の部分一致検索 |
 | `sort_by` | string | `modified` | ソート基準（`modified` / `cvss`） |
+| `updated_since` | string (ISO 8601) | - | この日時以降に内容が更新されたレコードのみ返す（差分取得・増分同期用） |
 
 **レスポンス例:**
 ```json
@@ -206,7 +213,9 @@ curl -H "X-API-KEY: your-key" \
       "fixed_versions": ["46.0.6"],
       "references": ["https://github.com/..."],
       "published": "2026-06-01T00:00:00+00:00",
-      "modified": "2026-06-15T00:00:00+00:00"
+      "modified": "2026-06-15T00:00:00+00:00",
+      "withdrawn_at": null,
+      "fetched_at": "2026-06-15T04:05:12+00:00"
     }
   ]
 }
@@ -260,6 +269,7 @@ curl -H "X-API-KEY: your-key" \
 | `search` | string | - | JVNDB ID・タイトル・概要の部分一致検索 |
 | `sort_by` | string | `modified` | ソート基準（`modified` / `cvss`） |
 | `days` | int | 30 | 取得対象の直近日数 |
+| `updated_since` | string (ISO 8601) | - | この日時以降に内容が更新されたレコードのみ返す（差分取得・増分同期用） |
 
 **レスポンス例:**
 ```json
@@ -282,7 +292,8 @@ curl -H "X-API-KEY: your-key" \
       "references": [],
       "jvn_url": "https://jvndb.jvn.jp/ja/contents/2026/JVNDB-2026-020172.html",
       "date_published": "2026-06-18T11:35:05+09:00",
-      "date_last_modified": "2026-06-18T11:35:05+09:00"
+      "date_last_modified": "2026-06-18T11:35:05+09:00",
+      "fetched_at": "2026-06-18T21:05:03+00:00"
     }
   ]
 }
