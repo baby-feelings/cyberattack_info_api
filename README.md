@@ -403,9 +403,24 @@ curl -H "X-API-KEY: your-key" \
 https://cyberattack-info-api.onrender.com/auth/github/login
 ```
 
-GitHub の認可画面へリダイレクトする。認可後は `/auth/github/callback` へ戻り、セッショントークン（JWT）を HttpOnly・Secure・SameSite=None の Cookie（`depscan_session`）として発行し、ダッシュボード（`FRONTEND_URL`）へ `?depscan_user=...`（ユーザー名のみ）としてリダイレクトする（RFC 9700 に基づき、アクセストークン相当の値を URL クエリには載せない）。ログインの都度、そのアカウントが所有するリポジトリをオンデマンドでスキャンする（直近 24 時間以内にスキャン済みならスキップして DB の結果をそのまま使う）。
+GitHub の認可画面へリダイレクトする。認可後は `/auth/github/callback` へ戻り、数十秒で失効し一度しか使えない**交換コード**を発行して、ダッシュボード（`FRONTEND_URL`）へ `?depscan_code=...` としてリダイレクトする。フロントエンドはこのコードを `POST /auth/exchange` に渡してセッションJWTと交換し、以降は `Authorization: Bearer <JWT>` で API を呼び出す。
+
+セッションJWT自体をURLクエリに載せると、RFC 9700（OAuth 2.0 Security BCP）が禁止する「アクセストークンのURIクエリパラメータでの受け渡し」に該当するため、使い捨ての交換コードのみを載せる方式にしている。バックエンド（Render）とフロントエンド（Vercel）はドメインが異なるため、セッションをCookieで保持する方式も検討したが、Safari の ITP（Intelligent Tracking Prevention）がクロスサイトCookieを既定でブロックし、iOS の PWA を含む Safari 系ブラウザでログインできなくなる不具合が実際に発生したため、Bearerトークン方式を採用している。
+
+ログインの都度、そのアカウントが所有するリポジトリをオンデマンドでスキャンする（直近 24 時間以内にスキャン済みならスキップして DB の結果をそのまま使う）。
 
 `GITHUB_OAUTH_CLIENT_ID`・`GITHUB_OAUTH_CLIENT_SECRET` が未設定の場合は `503 Service Unavailable` を返す。
+
+### POST /auth/exchange — 交換コードをセッションJWTに交換する
+
+```bash
+curl -X POST "https://cyberattack-info-api.onrender.com/auth/exchange" \
+  -H "Content-Type: application/json" \
+  -d '{"code": "（/auth/github/callbackのリダイレクト先URLに付与されたコード）"}'
+# → 200 OK: {"token": "<セッションJWT>", "username": "octocat"}
+```
+
+コードは一度使うと失効し、発行から数十秒で期限切れになる。無効・期限切れ・二重使用の場合は `400 Bad Request` を返す。
 
 ### GET /auth/scan-status — オンデマンドスキャンの進捗確認
 
@@ -426,19 +441,9 @@ curl -H "Authorization: Bearer $DEPSCAN_SESSION_TOKEN" \
 }
 ```
 
-`status` は `not_started` / `running` / `done` / `error` のいずれか。ブラウザからは `depscan_session` Cookie が自動送信される（`curl` で確認する場合は上記のように `Authorization: Bearer` ヘッダーでも代替可能）。無効・期限切れの場合は `401 Unauthorized` を返す。
+`status` は `not_started` / `running` / `done` / `error` のいずれか。`Authorization: Bearer <セッショントークン>` が無効・期限切れの場合は `401 Unauthorized` を返す。
 
-### POST /auth/logout — ログアウト（セッションCookieの削除）
-
-```bash
-curl -X POST -b "depscan_session=$DEPSCAN_SESSION_TOKEN" \
-  "https://cyberattack-info-api.onrender.com/auth/logout"
-# → 200 OK: {"logged_out": true}
-```
-
-HttpOnly Cookie は JavaScript から直接削除できないため、ダッシュボードのログアウトボタンはこのエンドポイントを呼び出してサーバー側で Cookie を削除する。
-
-> **Note:** `GET /api/depscan`・`GET /api/depscan/stats` は、既存の `X-API-KEY`（フルアクセス）に加えて、セッショントークン（`depscan_session` Cookie または `Authorization: Bearer <セッショントークン>`）でも呼び出せる。セッショントークン使用時はログイン中のユーザー本人が所有するリポジトリのみに自動的に絞り込まれる（`owner` パラメータは無視され、`repo` パラメータで他人のリポジトリを指定すると `403 Forbidden` になる）。
+> **Note:** `GET /api/depscan`・`GET /api/depscan/stats` は、既存の `X-API-KEY`（フルアクセス）に加えて `Authorization: Bearer <セッショントークン>` でも呼び出せる。セッショントークン使用時はログイン中のユーザー本人が所有するリポジトリのみに自動的に絞り込まれる（`owner` パラメータは無視され、`repo` パラメータで他人のリポジトリを指定すると `403 Forbidden` になる）。
 
 ### GET /api/crawler-logs — クローラー実行ログ一覧
 

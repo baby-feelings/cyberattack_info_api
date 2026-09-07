@@ -40,10 +40,9 @@ const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
 ]
 
 export default function App() {
-  // GitHub OAuth コールバックからの復帰（?depscan_user=...）時は DEPSCAN タブを自動選択する
-  // （セッションJWT自体はHttpOnly Cookieで渡されるためURLには載らない）
+  // GitHub OAuth コールバックからの復帰（?depscan_code=...）時は DEPSCAN タブを自動選択する
   const [activeTab, setActiveTab] = useState<TabKey>(() => (
-    new URLSearchParams(window.location.search).has('depscan_user') ? 'depscan' : 'kev'
+    new URLSearchParams(window.location.search).has('depscan_code') ? 'depscan' : 'kev'
   ))
 
   return (

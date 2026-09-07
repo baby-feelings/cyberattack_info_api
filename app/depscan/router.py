@@ -3,15 +3,14 @@
 GET /api/depscan        – 検知結果一覧（リポジトリ・エコシステム・重要度・解決状態でフィルタ）
 GET /api/depscan/stats  – リポジトリ別・重要度別の統計情報（未解決分のみ集計）
 
-認証は `X-API-KEY`（フルアクセス）またはセッショントークン（GitHub ログイン経由。
-HttpOnly Cookie `depscan_session` か `Authorization: Bearer <token>`。
-本人所有リポジトリのみに強制的に絞り込む）のいずれかを受け付ける。
+認証は `X-API-KEY`（フルアクセス）または `Authorization: Bearer <セッショントークン>`
+（GitHub ログイン経由。本人所有リポジトリのみに強制的に絞り込む）のいずれかを受け付ける。
 """
 import hmac
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.security import APIKeyHeader
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -39,10 +38,8 @@ _bearer_header = APIKeyHeader(name="Authorization", auto_error=False)
 def _resolve_access(
     api_key: str | None = Depends(_api_key_header),
     authorization: str | None = Depends(_bearer_header),
-    depscan_session: str | None = Cookie(None),
 ) -> str | None:
-    """`X-API-KEY` または セッショントークン（HttpOnly Cookie か
-    `Authorization: Bearer` ヘッダー）を検証する。
+    """`X-API-KEY` または `Authorization: Bearer <session token>` を検証する。
 
     Returns:
         セッショントークン認証の場合はログイン中の GitHub ユーザー名
@@ -51,13 +48,8 @@ def _resolve_access(
     """
     if api_key and hmac.compare_digest(api_key, settings.API_KEY):
         return None
-    session_token = None
     if authorization and authorization.lower().startswith("bearer "):
-        session_token = authorization[len("bearer "):].strip()
-    elif depscan_session:
-        session_token = depscan_session
-    if session_token:
-        username = decode_session_token(session_token)
+        username = decode_session_token(authorization[len("bearer "):].strip())
         if username is not None:
             return username
     raise HTTPException(

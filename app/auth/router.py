@@ -1,21 +1,33 @@
 """GitHub ログイン（DEPSCAN ダッシュボードのアクセス制御）API ルーター。
 
 GET  /auth/github/login     – GitHub の認可画面へリダイレクト
-GET  /auth/github/callback  – 認可コードを受け取り、セッションJWTをHttpOnly Cookie
-                               として発行してフロントエンドへリダイレクト
-                               （オンデマンドスキャンも開始。RFC 9700対応のためJWT
-                               自体はURLクエリに載せない）
+GET  /auth/github/callback  – 認可コードを受け取り、短命・使い捨ての交換コードを
+                               発行してフロントエンドへリダイレクト
+                               （オンデマンドスキャンも開始。RFC 9700対応のため
+                               セッションJWT自体はURLクエリに載せない）
+POST /auth/exchange         – 交換コードをセッションJWTに交換する（使い捨て）
 GET  /auth/scan-status      – ログイン中ユーザーのオンデマンドスキャン進捗を返す
-POST /auth/logout           – セッションCookieを削除する
+
+セッションJWTは `Authorization: Bearer <token>` ヘッダーで送る。バックエンド
+（Render）とフロントエンド（Vercel）はドメインが異なるクロスサイト構成のため、
+Cookie方式（SameSite=None）は Safari の ITP（Intelligent Tracking Prevention）に
+より既定でブロックされ、iOS の PWA を含む Safari 系ブラウザでログインが機能しない
+問題があった。この経緯から、セッション本体はCookieではなくBearerトークンとして
+クライアント側（localStorage）で保持する方式に変更している（Issue報告により判明）。
+URLクエリには実際のセッションJWTではなく、数十秒で失効し一度しか使えない
+「交換コード」のみを載せることで、RFC 9700が禁止する「アクセストークンの
+URLクエリでの受け渡し」を回避しつつ、ブラウザ間の互換性を確保する。
 """
 import logging
 import secrets
 import threading
+import time
 from typing import Annotated
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, status
 from fastapi.responses import RedirectResponse
 from fastapi.security import APIKeyHeader
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.auth.github_oauth import (
@@ -34,37 +46,55 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 _CALLBACK_PATH = "/auth/github/callback"
 _STATE_COOKIE = "gh_oauth_state"
-# セッションJWTを保持するHttpOnly Cookie（RFC 9700対策：URLクエリでの受け渡しを廃止）。
-# session.py の _EXPIRES_HOURS（24時間）と一致させる
-SESSION_COOKIE = "depscan_session"
-_SESSION_COOKIE_MAX_AGE = 24 * 60 * 60
+
+# 交換コード（使い捨て・短命）のインメモリストア: {code: (session_token, expires_at)}。
+# Render は WEB_CONCURRENCY=1（単一プロセス）で運用しているため、インメモリで問題ない。
+_EXCHANGE_CODE_TTL_SECONDS = 60
+_pending_exchange_codes: dict[str, tuple[str, float]] = {}
 
 _bearer_header = APIKeyHeader(name="Authorization", auto_error=False)
 
 
-def get_current_username(
-    authorization: str | None = Depends(_bearer_header),
-    depscan_session: str | None = Cookie(None),
-) -> str:
-    """セッショントークンを検証し、ログイン中の GitHub ユーザー名を返す。
+def _store_exchange_code(session_token: str) -> str:
+    """セッションJWTと交換可能な、使い捨ての交換コードを発行する。"""
+    now = time.monotonic()
+    # ついでに期限切れの古いコードを掃除する
+    expired = [c for c, (_, exp) in _pending_exchange_codes.items() if exp < now]
+    for c in expired:
+        del _pending_exchange_codes[c]
 
-    ブラウザ（ダッシュボード）からは HttpOnly Cookie（`depscan_session`）で送られる。
-    `Authorization: Bearer <token>` も後方互換のため引き続き受け付ける
-    （ブラウザ以外のクライアントが将来使う可能性を考慮）。
+    code = secrets.token_urlsafe(32)
+    _pending_exchange_codes[code] = (session_token, now + _EXCHANGE_CODE_TTL_SECONDS)
+    return code
+
+
+def _consume_exchange_code(code: str) -> str | None:
+    """交換コードを検証し、対応するセッションJWTを返す（一度使うと失効する）。"""
+    entry = _pending_exchange_codes.pop(code, None)
+    if entry is None:
+        return None
+    session_token, expires_at = entry
+    if time.monotonic() > expires_at:
+        return None
+    return session_token
+
+
+class ExchangeRequest(BaseModel):
+    code: str
+
+
+def get_current_username(authorization: str | None = Depends(_bearer_header)) -> str:
+    """`Authorization: Bearer <token>` を検証し、ログイン中の GitHub ユーザー名を返す。
+
     DEPSCAN の他エンドポイント（`app.depscan.router`）から、X-API-KEY 認証の
     代わりに使う依存関数。
     """
-    token: str | None = None
-    if authorization and authorization.lower().startswith("bearer "):
-        token = authorization[len("bearer "):].strip()
-    elif depscan_session:
-        token = depscan_session
-
-    if not token:
+    if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing session credentials. Log in via /auth/github/login.",
+            detail="Missing or invalid Authorization header. Expected 'Bearer <token>'.",
         )
+    token = authorization[len("bearer "):].strip()
     username = decode_session_token(token)
     if username is None:
         raise HTTPException(
@@ -131,32 +161,34 @@ def github_callback(
         logger.info("DEPSCAN on-demand scan skipped for %s (recently scanned)", username)
 
     session_token = create_session_token(username)
-    # RFC 9700: アクセストークン相当の資格情報をURIクエリパラメータで渡さない。
-    # セッションJWTはHttpOnly Cookieで発行し、URLにはユーザー名（非機微情報）のみ載せる
-    redirect_url = f"{settings.FRONTEND_URL.rstrip('/')}/?depscan_user={username}"
+    # RFC 9700: アクセストークン（セッションJWT）相当の資格情報をURIクエリパラメータで
+    # 渡さない。代わりに数十秒で失効する使い捨ての交換コードのみをURLに載せ、
+    # フロントエンドは POST /auth/exchange でこれをJWTと交換する
+    exchange_code = _store_exchange_code(session_token)
+    redirect_url = f"{settings.FRONTEND_URL.rstrip('/')}/?depscan_code={exchange_code}"
     resp = RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
     resp.delete_cookie(_STATE_COOKIE)
-    resp.set_cookie(
-        SESSION_COOKIE,
-        session_token,
-        max_age=_SESSION_COOKIE_MAX_AGE,
-        httponly=True,
-        secure=True,
-        # バックエンド（Render）とフロントエンド（Vercel）がドメインが異なるクロスサイト
-        # リクエストのため、SameSite=None が必須（Lax/Strictだとfetch時に送信されない）
-        samesite="none",
-    )
     return resp
 
 
-@router.post("/logout", summary="ログアウト（セッションCookieの削除）")
-def logout(response: Response) -> dict:
-    """セッションCookieを削除する。JS からは HttpOnly Cookie を直接削除できないため、
-    ログアウトはこのエンドポイント経由で行う（フロントエンドから fetch で呼ぶことを
-    想定し、ページ遷移を伴わない JSON レスポンスを返す）。
+@router.post("/exchange", summary="交換コードをセッションJWTに交換する（使い捨て）")
+def exchange(body: ExchangeRequest) -> dict:
+    """`/auth/github/callback` が発行した交換コードを検証し、セッションJWTと
+    ログインユーザー名を返す。コードは一度使うと失効する。
     """
-    response.delete_cookie(SESSION_COOKIE)
-    return {"logged_out": True}
+    session_token = _consume_exchange_code(body.code)
+    if session_token is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid, expired, or already-used exchange code.",
+        )
+    username = decode_session_token(session_token)
+    if username is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid session token.",
+        )
+    return {"token": session_token, "username": username}
 
 
 @router.get("/scan-status", summary="ログイン中ユーザーのオンデマンドスキャン進捗を取得")

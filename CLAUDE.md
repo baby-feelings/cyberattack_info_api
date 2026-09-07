@@ -519,34 +519,45 @@ DEPSCAN タブは誰でも閲覧できてしまう状態だったため、任意
 `app/auth/router.py` の `/auth/github/login` → GitHub 認可画面へリダイレクト（CSRF対策の
 `state` を httpOnly Cookie に保持）→ `/auth/github/callback` で `code` を `access_token` に
 交換し、`GET /user` でログインユーザー名（`login`）を取得 → セッション JWT（PyJWT、
-`SESSION_SECRET_KEY` で HS256 署名、24時間有効）を発行し、フロントエンド
-（`FRONTEND_URL`）へ `?depscan_user=...`（ユーザー名のみ）としてリダイレクトする。
-OAuth スコープは `repo`（GitHub OAuth App は fine-grained PAT のような読み取り専用スコープ
-を持たないため、本人所有の公開・非公開リポジトリへの読み取りアクセスに必要）。
+`SESSION_SECRET_KEY` で HS256 署名、24時間有効）を発行する。OAuth スコープは `repo`
+（GitHub OAuth App は fine-grained PAT のような読み取り専用スコープを持たないため、
+本人所有の公開・非公開リポジトリへの読み取りアクセスに必要）。
 
-**セッションJWTの受け渡し方式（Issue #128・RFC 9700対応）:**
+**セッションJWTの受け渡し方式（Issue #128 → Safari/iOS PWA不具合により再変更）:**
 当初はセッションJWTをフロントエンドURLのクエリ文字列（`?depscan_token=...`）に付与して
 渡していたが、RFC 9700（OAuth 2.0 Security BCP）がアクセストークン相当の値をURIクエリ
 パラメータで渡すことを明示的に禁止しているため（ブラウザ履歴・Referer・プロキシ/サーバー
-ログ等への漏えいリスク）、HttpOnly・Secure・SameSite=None の Cookie（`depscan_session`。
-`app/auth/router.py` の `SESSION_COOKIE` 定数）に変更した。バックエンド（Render）と
-フロントエンド（Vercel）はドメインが異なるクロスサイト関係のため、`SameSite=Lax/Strict`
-だとダッシュボードの `fetch` でCookieが送信されない点に注意（`SameSite=None; Secure`
-が必須）。これに伴い `app/main.py` の CORS 設定に `allow_credentials=True` を追加し
-（`allow_origins` はワイルドカードでなく明示オリジンのみなので安全に併用可）、フロント
-エンドの全 `fetch` 呼び出し（DEPSCAN関連のみ）に `credentials: 'include'` を付与している。
-ログアウトはブラウザJSからHttpOnly Cookieを直接削除できないため、`POST /auth/logout`
-（サーバー側で `delete_cookie`）を新設し経由させる。
+ログ等への漏えいリスク）、いったん HttpOnly・Secure・SameSite=None の Cookie に変更した
+（PR #137）。しかしバックエンド（Render）とフロントエンド（Vercel）はドメインが異なる
+クロスサイト構成のため、**Safari の ITP（Intelligent Tracking Prevention）がこの
+クロスサイトCookieを既定でブロックし、iOS の PWA（ホーム画面追加アプリ）を含む Safari
+系ブラウザでログイン後にセッションが確立されない不具合が実際に発生した**（Chromeは
+`SameSite=None; Secure` のクロスサイトCookieを許可するため気づきにくい）。この経緯から、
+Cookie方式を撤回し、**使い捨ての交換コード＋Bearerトークン方式**へ変更した:
 
-**`/api/depscan`・`/api/depscan/stats` の二重認証:**
+1. `/auth/github/callback` はセッションJWT本体ではなく、`app/auth/router.py` の
+   `_pending_exchange_codes`（インメモリの `{code: (session_token, expires_at)}` 辞書。
+   Render は `WEB_CONCURRENCY=1` の単一プロセス運用のためインメモリで問題ない）に
+   数十秒（`_EXCHANGE_CODE_TTL_SECONDS`）だけ有効な使い捨てコードを発行し、
+   `?depscan_code=...` としてフロントエンドへリダイレクトする
+2. フロントエンドは即座に `POST /auth/exchange`（`ExchangeRequest` ボディ `{code}`）へ
+   そのコードを渡し、レスポンスJSONボディで `{token, username}` を受け取る
+   （`_consume_exchange_code` が pop するため一度しか使えない）
+3. 以降はこの `token` を `localStorage` に保存し、`Authorization: Bearer <token>`
+   ヘッダーで各エンドポイントを呼ぶ（Cookie不要・ブラウザ非依存）
+
+この方式は、RFC 9700が問題視する「長命なアクセストークンをURLクエリに載せ続ける」
+リスクは回避しつつ（コードは数十秒・一度きりしか使えない）、Safari のクロスサイト
+Cookie制限の影響を受けない。`app/main.py` の CORS 設定から `allow_credentials=True`
+は撤去済み（Cookieに依存しなくなったため不要）。
+
+**`/api/depscan`・`/api/depscan/stats` の認証:**
 `app/depscan/router.py` の `_resolve_access` が `X-API-KEY`（既存の共有鍵、絞り込みなしの
 フルアクセス。Claude Code 等の既存クライアント向け・SKILL.md の運用を壊さないため維持）
-またはセッショントークン（`depscan_session` Cookie か `Authorization: Bearer <セッション
-JWT>`。ブラウザ以外の将来のクライアント向けに後方互換で両方受け付ける）を検証する。
-セッション認証の場合は `owner` クエリパラメータをログインユーザー名で強制上書きし、
-`repo` パラメータで `{username}/` 以外のリポジトリを直接指定しようとした場合は 403 で
-拒否する（owner 制限の迂回防止）。`app/auth/router.py` の `get_current_username`
-（`/auth/scan-status` 用）も同様に Cookie/Bearer の両方を受け付ける。
+または `Authorization: Bearer <セッションJWT>` を検証する。セッション認証の場合は
+`owner` クエリパラメータをログインユーザー名で強制上書きし、`repo` パラメータで
+`{username}/` 以外のリポジトリを直接指定しようとした場合は 403 で拒否する
+（owner 制限の迂回防止）。
 
 **オンデマンドスキャン（`run_depscan_for_user`）:**
 DEPSCAN の毎日クロール（`fetch_and_scan_dependencies`）は `GITHUB_USERNAME`
@@ -581,21 +592,18 @@ naive で返すため、比較前に `tzinfo=UTC` を補完している（Postgr
 
 **フロントエンド（`DepscanAuthGate.tsx`）:**
 未ログイン時は「GitHubでログイン」ボタンを表示。OAuthコールバックからの復帰
-（`/?depscan_user=...`。セッションJWT自体はHttpOnly Cookieで渡るためURLには載らない）
-を検出し、UI即時表示用にユーザー名（非機微情報）だけを `localStorage` に保存して
-URLからは `history.replaceState` で即座に取り除く。**ログイン状態の正はサーバー側**
-（Cookieの有効性）であり、`localStorage` の値はあくまで表示上のヒントに過ぎない。
-ログイン後は `/auth/scan-status`（`credentials: 'include'` でCookieを自動送信）を
-4秒間隔でポーリングし、スキャン完了まで（既にキャッシュがあれば実質即座に）ローディング
-表示。**ネットワーク瞬断等の一時的なエラーではログアウトさせず、セッションが実際に
-無効（401）な場合のみログアウト扱いにする**（`client.ts` の `UnauthorizedError` で
-区別。ローカル動作確認中に「fetch失敗のたびに毎回ログアウトしてしまう」不具合を発見し
-修正済み）。ログアウトボタンは `window.confirm` による確認ダイアログを挟んでから
-`POST /auth/logout`（サーバー側Cookie削除）を呼び、`localStorage` をクリアする
-（誤クリック防止。セッション失効時の自動ログアウトなど内部処理からの呼び出しでは
-確認ダイアログを出さず、`/auth/logout` の呼び出しも省略する＝Cookie自体はまだ有効
-期限内の可能性があるため、明示的なログアウト操作でのみサーバー側Cookieを削除する）。
-`App.tsx` は URL に `depscan_user` があれば DEPSCAN タブを自動選択する。
+（`/?depscan_code=...`）を検出すると、`exchangeAuthCode()` でそのコードをセッション
+JWT・ユーザー名と交換し、両方を `localStorage` に保存してURLからは
+`history.replaceState` で即座に取り除く（交換失敗＝コード期限切れ・二重使用等の場合は
+未ログイン状態のままログイン画面を再表示する）。ログイン後は `/auth/scan-status`
+（`Authorization: Bearer <token>`）を4秒間隔でポーリングし、スキャン完了まで
+（既にキャッシュがあれば実質即座に）ローディング表示。**ネットワーク瞬断等の
+一時的なエラーではログアウトさせず、セッションが実際に無効（401）な場合のみ
+ログアウト扱いにする**（`client.ts` の `UnauthorizedError` で区別。ローカル動作確認中に
+「fetch失敗のたびに毎回ログアウトしてしまう」不具合を発見し修正済み）。ログアウトは
+サーバー側に何も保持していない（JWTはステートレス）ため、`window.confirm` の確認
+ダイアログを挟んで `localStorage` をクリアするだけのクライアント側のみの操作。
+`App.tsx` は URL に `depscan_code` があれば DEPSCAN タブを自動選択する。
 
 ### index.css の CSS カスケードレイヤーに関する注意
 `*, *::before, *::after` の余白リセットは必ず `@layer base` の中に書くこと。

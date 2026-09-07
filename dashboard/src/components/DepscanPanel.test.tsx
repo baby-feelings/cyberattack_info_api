@@ -163,6 +163,16 @@ describe('DepscanPanel', () => {
     )
   })
 
+  it('passes the authToken through to the API calls when provided', async () => {
+    mockedFindings.mockResolvedValue([])
+    mockedStats.mockResolvedValue(EMPTY_STATS)
+
+    render(<DepscanPanel authToken="session-tok" />)
+    await waitFor(() => expect(mockedFindings).toHaveBeenCalledTimes(1))
+    expect(mockedFindings).toHaveBeenCalledWith(expect.objectContaining({ authToken: 'session-tok' }))
+    expect(mockedStats).toHaveBeenCalledWith('session-tok')
+  })
+
   it('shows a "new data available" banner once the crawl log id changes, and clears it on refresh', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     mockedFindings.mockResolvedValue([])

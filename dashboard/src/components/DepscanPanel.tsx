@@ -23,10 +23,9 @@ const PER_PAGE = 30
 // 新しいDEPSCANクロールが完了していないかを確認する間隔（ミリ秒）
 const UPDATE_CHECK_INTERVAL_MS = 120000
 
-// このパネルは常に GitHub ログイン済み状態（DepscanAuthGate配下）でのみ描画される。
-// 認証は HttpOnly セッション Cookie 経由のため、サーバー側でログインユーザー本人が
+// authToken 指定時（GitHubログイン経由）は、サーバー側でログインユーザー本人が
 // 所有するリポジトリのみに強制的に絞り込まれる（オーナーフィルターは実質不要になる）
-export function DepscanPanel() {
+export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
   const [owner, setOwner] = useState<string | null>(null)
   const [severity, setSeverity] = useState<string | null>(null)
   const [showResolved, setShowResolved] = useState(false)
@@ -56,9 +55,9 @@ export function DepscanPanel() {
     try {
       const [all, st] = await Promise.all([
         fetchAllDepscanFindings({
-          owner: own, severity: sev, resolved: resolved ? null : false,
+          owner: own, severity: sev, resolved: resolved ? null : false, authToken,
         }),
-        fetchDepscanStats(),
+        fetchDepscanStats(authToken),
       ])
       setFindings(all)
       setStats(st)
@@ -70,7 +69,7 @@ export function DepscanPanel() {
     // 表示したデータの基準として、この時点の最新クロールログIDを記録する
     lastSeenLogIdRef.current = await fetchLatestLogId()
     setNewDataAvailable(false)
-  }, [fetchLatestLogId])
+  }, [authToken, fetchLatestLogId])
 
   useEffect(() => {
     load(owner, severity, showResolved)
