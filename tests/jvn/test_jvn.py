@@ -25,6 +25,7 @@ def _make_jvn(
     cvss_score: float | None = 9.8,
     date_last_modified: datetime = _NOW,
     date_published: datetime = _NOW,
+    fetched_at: datetime | None = None,
 ) -> JvnVulnerability:
     """テスト用 JvnVulnerability インスタンスを生成する。"""
     return JvnVulnerability(
@@ -40,6 +41,7 @@ def _make_jvn(
         jvn_url=f"https://jvndb.jvn.jp/ja/contents/2026/{jvndb_id}.html",
         date_published=date_published,
         date_last_modified=date_last_modified,
+        fetched_at=fetched_at,
     )
 
 
@@ -834,3 +836,40 @@ def test_upsert_jvn_periodic_commit(db_session):
 
     assert inserted == 3
     assert updated == 0
+
+
+# ──────────────────────────────────────────────────────────────
+# schemas.py — JvnVulnerabilityOut.model_validate ORMオブジェクト経路
+# ──────────────────────────────────────────────────────────────
+
+
+class TestJvnVulnerabilityOutModelValidate:
+    def test_validate_from_orm_object_includes_fetched_at(self, db_session):
+        """ORMオブジェクト（__dict__あり）経路でも fetched_at が欠落しないこと。
+
+        model_validate をORM用にオーバーライドした際、明示的にキーを列挙していない
+        フィールドはデフォルト値（None）にフォールバックしてしまう回帰バグの再発防止。
+        """
+        from app.jvn.schemas import JvnVulnerabilityOut
+
+        record = _make_jvn(
+            jvndb_id="JVNDB-2026-999099",
+            fetched_at=datetime(2026, 9, 7, 9, 32, 44, tzinfo=timezone.utc),
+        )
+        db_session.add(record)
+        db_session.commit()
+
+        # SQLiteはtz情報を保持せず返すため、日時部分のみ比較する
+        result = JvnVulnerabilityOut.model_validate(record)
+        assert result.model_dump()["fetched_at"].startswith("2026-09-07T09:32:44")
+
+    def test_validate_from_orm_object_with_null_fetched_at(self, db_session):
+        """fetched_at が未取得（None）の場合はnullのまま返ること。"""
+        from app.jvn.schemas import JvnVulnerabilityOut
+
+        record = _make_jvn(jvndb_id="JVNDB-2026-999098")
+        db_session.add(record)
+        db_session.commit()
+
+        result = JvnVulnerabilityOut.model_validate(record)
+        assert result.model_dump()["fetched_at"] is None

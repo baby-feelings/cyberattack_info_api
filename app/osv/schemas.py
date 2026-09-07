@@ -40,8 +40,15 @@ class OsvVulnerabilityOut(BaseModel):
 
     @field_serializer("withdrawn_at", "fetched_at")
     def _serialize_optional_datetime(self, value: Any) -> str | None:
-        """null許容の datetime を ISO 文字列（またはNone）に変換する。"""
-        return value.isoformat() if hasattr(value, "isoformat") else None
+        """null許容の datetime を ISO 文字列（またはNone）に変換する。
+
+        model_validate の時点で既に ISO 文字列へ変換済みのため、通常はここで
+        str型の値を受け取る（そのまま返す）。datetime のまま渡された場合の
+        フォールバックも保持する。
+        """
+        if value is None:
+            return None
+        return value.isoformat() if hasattr(value, "isoformat") else str(value)
 
     @classmethod
     def model_validate(cls, obj: Any, **kwargs: Any) -> "OsvVulnerabilityOut":
@@ -61,6 +68,8 @@ class OsvVulnerabilityOut(BaseModel):
                 "references": obj.references or [],
                 "published": obj.published.isoformat(),
                 "modified": obj.modified.isoformat(),
+                "withdrawn_at": obj.withdrawn_at.isoformat() if obj.withdrawn_at else None,
+                "fetched_at": obj.fetched_at.isoformat() if obj.fetched_at else None,
             }
             return super().model_validate(data, **kwargs)
         return super().model_validate(obj, **kwargs)
