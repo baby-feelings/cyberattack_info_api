@@ -46,6 +46,8 @@ def run_migrations() -> None:
     logger.info("Database migrations applied (head)")
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
+    # `python -m app.core.migrate` として直接実行された場合のみ通るエントリポイント。
+    # pytest 実行時はモジュールの import のみで、ここには到達しない。
     logging.basicConfig(level=logging.INFO)
     run_migrations()
