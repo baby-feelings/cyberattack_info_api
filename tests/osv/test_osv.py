@@ -700,7 +700,7 @@ class TestDeleteOldOsvRecords:
 class TestAdminOsvCrawl:
     def test_trigger_osv_crawl(self, client):
         """POST /admin/osv-crawl が 202 を返しバックグラウンドで起動すること。"""
-        with patch("app.main.fetch_and_store_osv", return_value=(0, 0, 0)):
+        with patch("app.osv.router.fetch_and_store_osv", return_value=(0, 0, 0)):
             res = client.post("/admin/osv-crawl", headers=HEADERS)
         assert res.status_code == 202
         body = res.json()

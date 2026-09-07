@@ -231,7 +231,7 @@ class TestDepscanStats:
 
 class TestAdminDepscanCrawl:
     def test_trigger_depscan_crawl(self, client):
-        with patch("app.main.fetch_and_scan_dependencies", return_value=(0, 0, 0)):
+        with patch("app.depscan.router.fetch_and_scan_dependencies", return_value=(0, 0, 0)):
             res = client.post("/admin/depscan-crawl", headers=HEADERS)
         assert res.status_code == 202
         assert "background" in res.json()["message"].lower()

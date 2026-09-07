@@ -7,14 +7,16 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Security
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from app.core.auth import require_public_api_key
+from app.core.auth import require_api_key, require_public_api_key
+from app.core.background import run_in_background
 from app.core.database import get_db
 from app.core.db_utils import year_month_expr
 from app.core.schemas import MonthlyStat
+from app.osv.crawler import fetch_and_store_osv
 from app.osv.models import OsvVulnerability
 from app.osv.schemas import (
     OsvEcosystemStat,
@@ -31,6 +33,28 @@ router = APIRouter(
     tags=["osv"],
     dependencies=[Depends(require_public_api_key)],
 )
+
+# 管理者用エンドポイント（/admin/osv-crawl）。prefix なし・require_api_key で保護する。
+admin_router = APIRouter(tags=["admin"])
+
+
+@admin_router.post(
+    "/admin/osv-crawl",
+    dependencies=[Security(require_api_key)],
+    summary="OSV クローラー手動実行（バックグラウンド）",
+    description="OSV API からの脆弱性取得をバックグラウンドで開始する（X-API-KEY 必須）。"
+    "結果は /api/crawler-logs で確認。",
+    status_code=202,
+)
+def trigger_osv_crawl(
+    days: int | None = Query(
+        None, ge=1, le=365, description="取得対象の直近日数（省略時は OSV_DAYS）"
+    ),
+) -> dict:
+    """OSV クローラーをバックグラウンドで実行する。"""
+    logger.info("Manual OSV crawl triggered via /admin/osv-crawl (days=%s)", days)
+    run_in_background("OSV", lambda: fetch_and_store_osv(days=days))
+    return {"message": f"OSV crawl started in background (days={days or 'default'})"}
 
 
 @router.get(

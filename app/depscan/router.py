@@ -10,15 +10,18 @@ import hmac
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Security, status
 from fastapi.security import APIKeyHeader
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.auth.session import decode_session_token
+from app.core.auth import require_api_key
+from app.core.background import run_in_background
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.schemas import SeverityStat
+from app.depscan.crawler import fetch_and_scan_dependencies
 from app.depscan.models import DependencyFinding
 from app.depscan.schemas import (
     DependencyFindingListResponse,
@@ -30,6 +33,24 @@ from app.depscan.schemas import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/depscan", tags=["depscan"])
+
+# 管理者用エンドポイント（/admin/depscan-crawl）。prefix なし・require_api_key で保護する。
+admin_router = APIRouter(tags=["admin"])
+
+
+@admin_router.post(
+    "/admin/depscan-crawl",
+    dependencies=[Security(require_api_key)],
+    summary="依存ライブラリ脆弱性スキャン手動実行（バックグラウンド）",
+    description="GitHub 上の対象リポジトリのロックファイルを OSV API と照合する処理を"
+    "バックグラウンドで開始する（X-API-KEY 必須）。結果は /api/crawler-logs で確認。",
+    status_code=202,
+)
+def trigger_depscan_crawl() -> dict:
+    """依存ライブラリ脆弱性スキャナーをバックグラウンドで実行する。"""
+    logger.info("Manual DEPSCAN triggered via /admin/depscan-crawl")
+    run_in_background("DEPSCAN", fetch_and_scan_dependencies)
+    return {"message": "Dependency vulnerability scan started in background"}
 
 _api_key_header = APIKeyHeader(name="X-API-KEY", auto_error=False)
 _bearer_header = APIKeyHeader(name="Authorization", auto_error=False)
