@@ -908,3 +908,33 @@ class TestOsvVulnerabilityOutModelValidate:
         assert result.osv_id == "GHSA-schema-001"
         assert result.ecosystem == "PyPI"
         assert result.published == "2026-01-01T00:00:00+00:00"
+
+    def test_validate_from_orm_object_includes_fetched_at_and_withdrawn_at(self, db_session):
+        """ORMオブジェクト（__dict__あり）経路でも fetched_at/withdrawn_at が欠落しないこと。
+
+        model_validate をORM用にオーバーライドした際、明示的にキーを列挙していない
+        フィールドはデフォルト値（None）にフォールバックしてしまう回帰バグの再発防止。
+        """
+        from app.osv.schemas import OsvVulnerabilityOut
+
+        record = _make_osv(
+            db_session,
+            osv_id="GHSA-fetched-serialize",
+            withdrawn_at=datetime(2026, 2, 1, tzinfo=timezone.utc),
+            fetched_at=datetime(2026, 9, 7, 9, 32, 44, tzinfo=timezone.utc),
+        )
+        # SQLiteはtz情報を保持せず返すため、日時部分のみ比較する
+        result = OsvVulnerabilityOut.model_validate(record)
+        dumped = result.model_dump()
+        assert dumped["withdrawn_at"].startswith("2026-02-01T00:00:00")
+        assert dumped["fetched_at"].startswith("2026-09-07T09:32:44")
+
+    def test_validate_from_orm_object_with_null_fetched_at(self, db_session):
+        """fetched_at/withdrawn_at が未取得（None）の場合はnullのまま返ること。"""
+        from app.osv.schemas import OsvVulnerabilityOut
+
+        record = _make_osv(db_session, osv_id="GHSA-fetched-null")
+        result = OsvVulnerabilityOut.model_validate(record)
+        dumped = result.model_dump()
+        assert dumped["withdrawn_at"] is None
+        assert dumped["fetched_at"] is None

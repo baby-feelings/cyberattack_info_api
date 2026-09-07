@@ -36,8 +36,15 @@ class JvnVulnerabilityOut(BaseModel):
 
     @field_serializer("fetched_at")
     def _serialize_optional_datetime(self, value: Any) -> str | None:
-        """null許容の datetime を ISO 文字列（またはNone）に変換する。"""
-        return value.isoformat() if hasattr(value, "isoformat") else None
+        """null許容の datetime を ISO 文字列（またはNone）に変換する。
+
+        model_validate の時点で既に ISO 文字列へ変換済みのため、通常はここで
+        str型の値を受け取る（そのまま返す）。datetime のまま渡された場合の
+        フォールバックも保持する。
+        """
+        if value is None:
+            return None
+        return value.isoformat() if hasattr(value, "isoformat") else str(value)
 
     @classmethod
     def model_validate(cls, obj: Any, **kwargs: Any) -> "JvnVulnerabilityOut":
@@ -56,6 +63,7 @@ class JvnVulnerabilityOut(BaseModel):
                 "jvn_url": obj.jvn_url,
                 "date_published": obj.date_published.isoformat(),
                 "date_last_modified": obj.date_last_modified.isoformat(),
+                "fetched_at": obj.fetched_at.isoformat() if obj.fetched_at else None,
             }
             return super().model_validate(data, **kwargs)
         return super().model_validate(obj, **kwargs)
