@@ -10,6 +10,7 @@ function entry(overrides: Partial<DependabotPrLogOut> = {}): DependabotPrLogOut 
     action: 'flagged',
     reason: 'メジャーバージョンアップ',
     is_security_update: null,
+    compatibility_badge_url: null,
     processed_at: '2026-06-01T00:00:00Z',
     ...overrides,
   }

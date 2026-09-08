@@ -64,14 +64,33 @@ def _matches_security_alert(title: str, alert_package_names: set[str] | None) ->
     )
 
 
+_COMPATIBILITY_BADGE_PATTERN = re.compile(
+    r"!\[Dependabot compatibility score\]\((https://dependabot-badges\.githubapp\.com/[^)\s]+)\)",
+)
+
+
+def _extract_compatibility_badge_url(body: str | None) -> str | None:
+    """PR本文から Dependabot の Compatibility score バッジ画像URLを抽出する。
+
+    exact version bump のPR（"Bump X from A to B"）にのみ Dependabot が
+    埋め込む（範囲指定の requirement 更新PR等には存在しない）。
+    """
+    if not body:
+        return None
+    match = _COMPATIBILITY_BADGE_PATTERN.search(body)
+    return match.group(1) if match else None
+
+
 def _pr_summary(
     full_name: str, pr: dict[str, Any], is_security_update: bool | None,
+    compatibility_badge_url: str | None = None,
 ) -> dict[str, Any]:
     return {
         "repo_full_name": full_name,
         "pr_number": pr["number"],
         "title": pr["title"],
         "is_security_update": is_security_update,
+        "compatibility_badge_url": compatibility_badge_url,
     }
 
 
@@ -96,10 +115,11 @@ def _process_pr(
 
     detail = get_pull_request(owner, repo, number, token)
     mergeable_state = detail.get("mergeable_state")
+    compatibility_badge_url = _extract_compatibility_badge_url(detail.get("body"))
 
     if mergeable_state == "dirty":
         request_rebase(owner, repo, number, token)
-        item = _pr_summary(full_name, pr, is_security_update)
+        item = _pr_summary(full_name, pr, is_security_update, compatibility_badge_url)
         item["reason"] = "コンフリクトのためリベースを依頼"
         return "flagged", item
 
@@ -114,12 +134,12 @@ def _process_pr(
         reason = f"マージ可否が不明確（mergeable_state={mergeable_state}）"
 
     if reason is not None:
-        item = _pr_summary(full_name, pr, is_security_update)
+        item = _pr_summary(full_name, pr, is_security_update, compatibility_badge_url)
         item["reason"] = reason
         return "flagged", item
 
     merge_pull_request(owner, repo, number, token)
-    return "merged", _pr_summary(full_name, pr, is_security_update)
+    return "merged", _pr_summary(full_name, pr, is_security_update, compatibility_badge_url)
 
 
 def _record_pr_logs(
@@ -141,6 +161,7 @@ def _record_pr_logs(
             action="merged",
             reason=None,
             is_security_update=item.get("is_security_update"),
+            compatibility_badge_url=item.get("compatibility_badge_url"),
             processed_at=processed_at,
         ))
     for item in flagged:
@@ -151,6 +172,7 @@ def _record_pr_logs(
             action="flagged",
             reason=item.get("reason"),
             is_security_update=item.get("is_security_update"),
+            compatibility_badge_url=item.get("compatibility_badge_url"),
             processed_at=processed_at,
         ))
     db.commit()

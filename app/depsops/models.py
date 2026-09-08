@@ -43,6 +43,11 @@ class DependabotPrLog(Base):
     # None=判定不能（GITHUB_TOKENにDependabot alerts: Read-only権限が無い等でalert取得に失敗）
     is_security_update: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
+    # Dependabot が PR 本文に埋め込む「Compatibility score」バッジ画像の URL。
+    # exact version bump のPR（"Bump X from A to B"）にのみ付与され、範囲指定の
+    # requirement 更新PR等には存在しない（その場合 None）
+    compatibility_badge_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # 判定を行った DEPSOPS 実行日時
     processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 

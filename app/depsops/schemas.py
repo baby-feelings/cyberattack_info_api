@@ -24,6 +24,11 @@ class DependabotPrLogOut(OrmDatetimeModel):
         "ヒューリスティック判定。true=セキュリティ更新の可能性が高い / "
         "false=通常のバージョン更新 / null=判定不能",
     )
+    compatibility_badge_url: str | None = Field(
+        None,
+        description="Dependabot が PR 本文に埋め込む Compatibility score バッジ画像のURL。"
+        "exact version bump のPRにのみ存在し、範囲指定の requirement 更新PR等は null",
+    )
     processed_at: str = Field(description="判定を行った DEPSOPS 実行日時（ISO 8601）")
 
     model_config = {"from_attributes": True}

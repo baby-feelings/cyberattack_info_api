@@ -551,6 +551,18 @@ Slack 通知は実行時点のスナップショットのみで履歴を持た�
 「PR運用状況の確認」という別の性質のため、5つ目のタブは過剰と判断した）。開いたときのみ
 `GET /api/depsops` を取得する。
 
+**Compatibility score バッジ（`compatibility_badge_url`）:**
+Dependabot は exact version bump のPR（`Bump X from A to B`形式）の本文に、GitHub が
+提供する「Compatibility score」バッジ画像（`![Dependabot compatibility score](https://
+dependabot-badges.githubapp.com/badges/compatibility_score?...)` 形式のMarkdown画像
+リンク）を埋め込む。範囲指定の requirement 更新PR（`Update X requirement from >=A to
+>=B`形式）等には存在しない。GitHub側にこのスコアを取得する構造化APIは無く、画像として
+のみ提供されるため、`app.depsops.runner._extract_compatibility_badge_url` が
+`get_pull_request` で取得済みのPR本文（`detail["body"]`）から正規表現でバッジ画像URLを
+抽出し、`DependabotPrLog.compatibility_badge_url` にそのまま永続化する。ダッシュボードは
+数値化・独自判定は一切行わず、URLがあればそのまま `<img>` として表示するのみ（バッジ画像
+自体がGitHub側で動的にレンダリングされるスコアの視覚表現のため）。
+
 ### DEPSCAN のロックファイル検出は Git Tree API で1リポジトリ1回のみ
 `app.depscan.github_client.get_repo_tree` で `git/trees/{branch}?recursive=1` を使い、
 サブディレクトリ（monorepo）も含めて全ファイルパスを1回のAPI呼び出しで取得する。

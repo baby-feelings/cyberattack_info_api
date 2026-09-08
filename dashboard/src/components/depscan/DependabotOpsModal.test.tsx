@@ -23,6 +23,7 @@ function item(overrides: Partial<DependabotPrLogOut> = {}): DependabotPrLogOut {
     action: 'merged',
     reason: null,
     is_security_update: null,
+    compatibility_badge_url: null,
     processed_at: '2026-06-01T00:00:00Z',
     ...overrides,
   }
@@ -96,6 +97,32 @@ describe('DependabotOpsModal', () => {
     await waitFor(() => expect(screen.getByText('セキュリティ更新')).toBeInTheDocument())
     expect(screen.getByText('バージョン更新')).toBeInTheDocument()
     expect(screen.getByText('不明')).toBeInTheDocument()
+  })
+
+  it('renders the compatibility score badge image when a URL is present', async () => {
+    mockedList.mockResolvedValue(listResponse([
+      item({
+        pr_number: 1,
+        compatibility_badge_url: 'https://dependabot-badges.githubapp.com/badges/x',
+      }),
+    ]))
+    mockedAll.mockResolvedValue([])
+    render(<DependabotOpsModal open onClose={vi.fn()} />)
+
+    await waitFor(() => {
+      expect(screen.getByAltText('Dependabot compatibility score')).toHaveAttribute(
+        'src', 'https://dependabot-badges.githubapp.com/badges/x',
+      )
+    })
+  })
+
+  it('shows a placeholder when no compatibility score badge is available', async () => {
+    mockedList.mockResolvedValue(listResponse([item({ pr_number: 1 })]))
+    mockedAll.mockResolvedValue([])
+    render(<DependabotOpsModal open onClose={vi.fn()} />)
+
+    await waitFor(() => expect(screen.getByText(/Bump lucide-react/)).toBeInTheDocument())
+    expect(screen.queryByAltText('Dependabot compatibility score')).not.toBeInTheDocument()
   })
 
   it('calls onClose when the close button is clicked', async () => {

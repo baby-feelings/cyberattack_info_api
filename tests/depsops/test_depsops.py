@@ -27,6 +27,7 @@ from app.depsops.github_client import (  # noqa: E402
 from app.depsops.models import DependabotPrLog  # noqa: E402
 from app.depsops.runner import (  # noqa: E402
     _delete_old_depsops_records,
+    _extract_compatibility_badge_url,
     _matches_security_alert,
     _process_pr,
     _record_pr_logs,
@@ -230,6 +231,34 @@ class TestMatchesSecurityAlert:
         assert result is False
 
 
+class TestExtractCompatibilityBadgeUrl:
+    def test_extracts_badge_url_from_pr_body(self):
+        body = (
+            "Bumps google-genai from 2.19.0 to 2.20.0.\n\n"
+            "[![Dependabot compatibility score]"
+            "(https://dependabot-badges.githubapp.com/badges/compatibility_score"
+            "?dependency-name=google-genai&package-manager=pip"
+            "&previous-version=2.19.0&new-version=2.20.0)]"
+            "(https://docs.github.com/en/github/managing-security-vulnerabilities/"
+            "about-dependabot-security-updates#about-compatibility-scores)"
+        )
+        url = _extract_compatibility_badge_url(body)
+        assert url == (
+            "https://dependabot-badges.githubapp.com/badges/compatibility_score"
+            "?dependency-name=google-genai&package-manager=pip"
+            "&previous-version=2.19.0&new-version=2.20.0"
+        )
+
+    def test_returns_none_when_badge_absent(self):
+        """範囲指定の requirement 更新PR等、バッジが埋め込まれないケース。"""
+        body = "Updates the requirements on foo to permit the latest version."
+        assert _extract_compatibility_badge_url(body) is None
+
+    def test_returns_none_for_empty_body(self):
+        assert _extract_compatibility_badge_url(None) is None
+        assert _extract_compatibility_badge_url("") is None
+
+
 class TestProcessPr:
     def _pr(self, title="Bump x from 1.0.0 to 1.0.1", number=1):
         return {"number": number, "title": title}
@@ -313,6 +342,36 @@ class TestProcessPr:
             )
         assert action == "merged"
         assert item["is_security_update"] is False
+
+    def test_extracts_compatibility_badge_url_from_pr_detail_body(self):
+        pr = self._pr(title="Bump requests from 1.0.0 to 1.0.1")
+        detail = {
+            "mergeable_state": "clean",
+            "body": (
+                "[![Dependabot compatibility score]"
+                "(https://dependabot-badges.githubapp.com/badges/compatibility_score"
+                "?dependency-name=requests&package-manager=pip"
+                "&previous-version=1.0.0&new-version=1.0.1)](https://docs.github.com/x)"
+            ),
+        }
+        with patch("app.depsops.runner.get_pull_request", return_value=detail), \
+             patch("app.depsops.runner.merge_pull_request"):
+            action, item = _process_pr("u/r", "u", "r", pr, True, "token")
+        assert action == "merged"
+        assert item["compatibility_badge_url"] == (
+            "https://dependabot-badges.githubapp.com/badges/compatibility_score"
+            "?dependency-name=requests&package-manager=pip"
+            "&previous-version=1.0.0&new-version=1.0.1"
+        )
+
+    def test_compatibility_badge_url_is_none_when_absent_from_body(self):
+        with patch(
+            "app.depsops.runner.get_pull_request",
+            return_value={"mergeable_state": "clean", "body": "no badge here"},
+        ), patch("app.depsops.runner.merge_pull_request"):
+            action, item = _process_pr("u/r", "u", "r", self._pr(), True, "token")
+        assert action == "merged"
+        assert item["compatibility_badge_url"] is None
 
 
 class TestRunDependabotOps:
@@ -469,6 +528,18 @@ class TestRecordPrLogs:
 
         row = db_session.query(DependabotPrLog).filter_by(pr_number=1).first()
         assert row.is_security_update is None
+
+    def test_persists_compatibility_badge_url(self, db_session):
+        merged = [{
+            "repo_full_name": "u/r", "pr_number": 1, "title": "bump x",
+            "compatibility_badge_url": "https://dependabot-badges.githubapp.com/badges/x",
+        }]
+        processed_at = datetime(2026, 6, 1, tzinfo=timezone.utc)
+
+        _record_pr_logs(db_session, merged, [], processed_at)
+
+        row = db_session.query(DependabotPrLog).filter_by(pr_number=1).first()
+        assert row.compatibility_badge_url == "https://dependabot-badges.githubapp.com/badges/x"
 
 
 class TestDeleteOldDepsopsRecords:
