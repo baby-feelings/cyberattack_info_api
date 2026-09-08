@@ -27,6 +27,21 @@ function ActionBadge({ action }: { action: 'merged' | 'flagged' }) {
   )
 }
 
+// GitHub Dependabot alert のパッケージ名とPRタイトルのヒューリスティックな
+// 照合結果（バックエンド側判定。あくまで参考情報）
+function SecurityUpdateBadge({ isSecurityUpdate }: { isSecurityUpdate: boolean | null }) {
+  if (isSecurityUpdate === null) {
+    return <span className="text-[10px] text-slate-600">不明</span>
+  }
+  return isSecurityUpdate ? (
+    <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-500/15 text-red-400 border border-red-500/30 whitespace-nowrap">
+      セキュリティ更新
+    </span>
+  ) : (
+    <span className="text-[10px] text-slate-600 whitespace-nowrap">バージョン更新</span>
+  )
+}
+
 // Dependabot PR 自動運用（DEPSOPS）の判定履歴を表示する全画面モーダル。
 // DEPSCAN タブ内のボタンから開く（5つ目の固定タブにはしない設計判断。詳細はCLAUDE.md参照）。
 export function DependabotOpsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -144,12 +159,13 @@ export function DependabotOpsModal({ open, onClose }: { open: boolean; onClose: 
           ) : (
             <>
               <div className="overflow-x-auto -mx-1 px-1">
-                <table className="w-full text-sm min-w-[640px]">
+                <table className="w-full text-sm min-w-[720px]">
                   <thead>
                     <tr className="border-b border-slate-800">
                       <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-48">リポジトリ</th>
                       <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3">PR</th>
                       <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-28">判定</th>
+                      <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-28">種別</th>
                       <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-24">日時</th>
                     </tr>
                   </thead>
@@ -175,6 +191,9 @@ export function DependabotOpsModal({ open, onClose }: { open: boolean; onClose: 
                         </td>
                         <td className="py-2.5 pr-3">
                           <ActionBadge action={item.action} />
+                        </td>
+                        <td className="py-2.5 pr-3">
+                          <SecurityUpdateBadge isSecurityUpdate={item.is_security_update} />
                         </td>
                         <td className="py-2.5 text-xs text-slate-600 tabular-nums whitespace-nowrap">
                           {new Date(item.processed_at).toLocaleDateString('ja-JP', {

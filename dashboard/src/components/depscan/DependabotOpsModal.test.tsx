@@ -22,6 +22,7 @@ function item(overrides: Partial<DependabotPrLogOut> = {}): DependabotPrLogOut {
     title: 'Bump lucide-react from 1.18.0 to 1.37.0',
     action: 'merged',
     reason: null,
+    is_security_update: null,
     processed_at: '2026-06-01T00:00:00Z',
     ...overrides,
   }
@@ -81,6 +82,20 @@ describe('DependabotOpsModal', () => {
         expect.objectContaining({ action: 'flagged', page: 1 }),
       )
     })
+  })
+
+  it('shows a badge for the security-update classification of each PR', async () => {
+    mockedList.mockResolvedValue(listResponse([
+      item({ pr_number: 1, is_security_update: true }),
+      item({ pr_number: 2, is_security_update: false }),
+      item({ pr_number: 3, is_security_update: null }),
+    ]))
+    mockedAll.mockResolvedValue([])
+    render(<DependabotOpsModal open onClose={vi.fn()} />)
+
+    await waitFor(() => expect(screen.getByText('セキュリティ更新')).toBeInTheDocument())
+    expect(screen.getByText('バージョン更新')).toBeInTheDocument()
+    expect(screen.getByText('不明')).toBeInTheDocument()
   })
 
   it('calls onClose when the close button is clicked', async () => {

@@ -323,6 +323,7 @@ export interface DependabotPrLogOut {
   title: string
   action: 'merged' | 'flagged'
   reason: string | null
+  is_security_update: boolean | null
   processed_at: string
 }
 

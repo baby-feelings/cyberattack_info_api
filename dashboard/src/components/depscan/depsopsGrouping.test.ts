@@ -9,6 +9,7 @@ function entry(overrides: Partial<DependabotPrLogOut> = {}): DependabotPrLogOut 
     title: 'Bump lucide-react from 1.18.0 to 1.37.0',
     action: 'flagged',
     reason: 'メジャーバージョンアップ',
+    is_security_update: null,
     processed_at: '2026-06-01T00:00:00Z',
     ...overrides,
   }
