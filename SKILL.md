@@ -261,7 +261,9 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 fork・archived 除く）が依存するライブラリに脆弱性がないか確認する。OSV API とリアルタイム照合
 するため、`POPULAR_PACKAGES` に含まれない任意のパッケージも検知対象になる。対応ロックファイル
 （`requirements.txt` / `package-lock.json` / `pubspec.lock` 等 10 エコシステム）が存在しない
-リポジトリはスキャン対象外。
+リポジトリはスキャン対象外。新規検知はリポジトリ自身に GitHub Issue も自動起票し、その後の
+再スキャンで当該リポジトリの未解決 finding が0件になったことを確認できると自動でクローズする。
+各検知結果には `reachability`（到達可能性のヒューリスティック判定）フィールドも含まれる。
 
 ```bash
 # 未解決の HIGH 以上の検知結果を取得
@@ -356,14 +358,20 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
       "title": "chore(deps-dev): Bump typescript from 6.0.3 to 7.0.2",
       "action": "flagged",
       "reason": "メジャーバージョンアップ",
+      "is_security_update": false,
+      "compatibility_badge_url": null,
       "processed_at": "2026-09-07T12:05:21+00:00"
     }
   ]
 }
 ```
 
-> React ダッシュボードでは、DEPSOPS 専用タブは無く DEPSCAN タブ内の「Dependabot 運用状況」
-> 折りたたみセクションからこの一覧を閲覧できる。
+> React ダッシュボードでは、DEPSOPS 専用タブは無く DEPSCAN タブ内のボタンから開く
+> 「Dependabot 運用状況」全画面モーダルからこの一覧を閲覧できる。
+> `is_security_update` が常に `null` の場合、`GITHUB_TOKEN` に Dependabot alerts の
+> 読み取り権限（classic PAT: `security_events` スコープ / fine-grained PAT: 「Dependabot
+> alerts: Read-only」）が付与されていない可能性がある。付与後に実行された分から反映される
+> （過去に記録済みの履歴行は遡って再判定されない）。
 
 ---
 
@@ -607,6 +615,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | `summary` | string | 脆弱性の概要 |
 | `fixed_versions` | string[] | 修正済みバージョン |
 | `manifest_path` | string | 検知元のロックファイルパス（例: `dashboard/package-lock.json`） |
+| `reachability` | string \| null | 到達可能性のヒューリスティック判定（`reachable` / `unreachable` / `unknown`）。脆弱なパッケージがソースコード内で import/require/use されているかを判定（関数呼び出しレベルの解析は行わない best-effort） |
 | `detected_at` | string (ISO 8601) | 初回検知日時 |
 | `resolved_at` | string \| null (ISO 8601) | 解決日時（未解決なら `null`） |
 
@@ -619,6 +628,8 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | `title` | string | PR タイトル |
 | `action` | string | 判定結果（`merged`: 自動マージ済み / `flagged`: 要確認） |
 | `reason` | string \| null | `action=flagged` の場合の理由（メジャーバージョンアップ等）。`merged` の場合は `null` |
+| `is_security_update` | bool \| null | セキュリティ更新（GitHub Dependabot alertの対象パッケージと一致）のヒューリスティック判定。`true`=セキュリティ更新の可能性が高い / `false`=通常のバージョン更新 / `null`=判定不能（`GITHUB_TOKEN` に Dependabot alerts の読み取り権限が無い等） |
+| `compatibility_badge_url` | string \| null | Dependabot が PR 本文に埋め込む Compatibility score バッジ画像のURL。exact version bump のPRにのみ存在し、範囲指定の requirement 更新PR等は `null` |
 | `processed_at` | string (ISO 8601) | 判定を行った DEPSOPS 実行日時 |
 
 ### CrawlerLogOut（クローラー実行ログ）
