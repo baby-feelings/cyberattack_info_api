@@ -48,6 +48,11 @@ class DependencyFinding(Base):
     # 検知元のロックファイルパス（例: dashboard/package-lock.json）
     manifest_path: Mapped[str] = mapped_column(String(500), nullable=False)
 
+    # 到達可能性（import レベルのヒューリスティック判定）:
+    # "reachable"（ソース内でimport/use確認）/ "unreachable"（該当拡張子のソースはあるが
+    # importが見つからない）/ "unknown"（判定不能。該当拡張子のソースが無い・取得失敗等）
+    reachability: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
     # 初回検知日時
     detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 

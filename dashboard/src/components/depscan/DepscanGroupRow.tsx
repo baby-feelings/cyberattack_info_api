@@ -4,8 +4,24 @@ import { SeverityBadge } from '../shared/VulnPanelParts'
 import {
   SEVERITY_CLS, severityRank,
   groupFixedVersions, groupSeverityCounts, groupIsResolved, groupLatestDetectedAt,
+  groupReachability,
   type FindingGroup,
 } from './grouping'
+
+const REACHABILITY_LABELS: Record<string, { label: string; cls: string }> = {
+  reachable: { label: '到達可能', cls: 'bg-red-500/15 text-red-400 border-red-500/30' },
+  unreachable: { label: '未使用の可能性', cls: 'bg-slate-700/40 text-slate-400 border-slate-600' },
+  unknown: { label: '不明', cls: 'bg-slate-800 text-slate-500 border-slate-700' },
+}
+
+function ReachabilityBadge({ reachability }: { reachability: string | null }) {
+  const info = REACHABILITY_LABELS[reachability ?? 'unknown'] ?? REACHABILITY_LABELS.unknown
+  return (
+    <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium border whitespace-nowrap ${info.cls}`}>
+      {info.label}
+    </span>
+  )
+}
 
 export function DepscanGroupRow({ group }: { group: FindingGroup }) {
   const [open, setOpen] = useState(false)
@@ -13,6 +29,7 @@ export function DepscanGroupRow({ group }: { group: FindingGroup }) {
     .slice()
     .sort((a, b) => severityRank(a.severity) - severityRank(b.severity))[0].severity
   const fixedVersions = groupFixedVersions(group)
+  const reachability = groupReachability(group)
   const severityCounts = groupSeverityCounts(group)
   const latestDate = new Date(groupLatestDetectedAt(group)).toLocaleDateString('ja-JP', {
     year: 'numeric', month: 'short', day: 'numeric',
@@ -68,6 +85,11 @@ export function DepscanGroupRow({ group }: { group: FindingGroup }) {
           )}
         </td>
 
+        {/* 到達可能性 */}
+        <td className="py-2.5 pr-3 w-24">
+          <ReachabilityBadge reachability={reachability} />
+        </td>
+
         {/* 重大度内訳 */}
         <td className="py-2.5 pr-3">
           <div className="flex flex-wrap gap-1">
@@ -98,7 +120,7 @@ export function DepscanGroupRow({ group }: { group: FindingGroup }) {
       {/* 展開: 個々のCVE一覧 */}
       {open && (
         <tr className="bg-slate-800/30">
-          <td colSpan={7} className="px-4 py-3 text-xs text-slate-400">
+          <td colSpan={8} className="px-4 py-3 text-xs text-slate-400">
             <p className="text-slate-500 mb-2">
               ロックファイル: <span className="font-mono text-slate-400">{group.findings[0].manifest_path}</span>
             </p>

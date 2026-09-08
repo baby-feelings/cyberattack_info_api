@@ -117,6 +117,56 @@ def get_file_content(owner: str, repo: str, path: str, token: str) -> str:
     return base64.b64decode(content).decode("utf-8", errors="replace")
 
 
+# 到達可能性解析でソース走査から除外するディレクトリ（ベンダー化・生成物・依存物）
+_EXCLUDED_DIR_SEGMENTS = frozenset({
+    "node_modules", "vendor", ".git", "dist", "build", "venv", ".venv",
+    "__pycache__", "target", "deps", "_build", "packages",
+})
+
+# 到達可能性解析で1リポジトリあたり取得するソースファイル数の上限
+# （巨大リポジトリでの過剰な API 呼び出し・処理時間を防ぐための安全弁）
+_MAX_SOURCE_FILES = 200
+# 1ファイルあたりの取得上限サイズ（バイト。生成物・データファイル等の除外用）
+_MAX_SOURCE_FILE_SIZE = 300_000
+
+
+def get_source_files(
+    owner: str, repo: str, default_branch: str, token: str, extensions: tuple[str, ...],
+) -> dict[str, str]:
+    """指定拡張子に一致するソースファイルの内容を取得する（到達可能性解析用）。
+
+    ベンダー化・生成物ディレクトリ（node_modules 等）は除外する。
+    1リポジトリあたりのファイル数・サイズには安全弁として上限を設ける。
+
+    Args:
+        owner: リポジトリオーナー
+        repo: リポジトリ名
+        default_branch: デフォルトブランチ名
+        token: GitHub PAT
+        extensions: 取得対象の拡張子（例: (".py",)）
+
+    Returns:
+        {ファイルパス: 内容} の辞書（取得失敗したファイルは含まれない）
+    """
+    all_paths = get_repo_tree(owner, repo, default_branch, token)
+    matched_paths = [
+        path for path in all_paths
+        if path.endswith(extensions)
+        and not any(f"/{seg}/" in f"/{path}" for seg in _EXCLUDED_DIR_SEGMENTS)
+    ][:_MAX_SOURCE_FILES]
+
+    files: dict[str, str] = {}
+    for path in matched_paths:
+        try:
+            content = get_file_content(owner, repo, path, token)
+        except httpx.HTTPError as exc:
+            logger.warning("Failed to fetch source file %s in %s/%s: %s", path, owner, repo, exc)
+            continue
+        if len(content) <= _MAX_SOURCE_FILE_SIZE:
+            files[path] = content
+    return files
+
+
 def find_open_issue(owner: str, repo: str, title: str, token: str) -> int | None:
     """指定タイトルと完全一致する Open な Issue を検索する（Pull Request は除外）。
 
@@ -160,6 +210,17 @@ def add_issue_comment(
         resp = client.post(
             f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/issues/{issue_number}/comments",
             json={"body": body},
+        )
+        resp.raise_for_status()
+    return dict(resp.json())
+
+
+def close_issue(owner: str, repo: str, issue_number: int, token: str) -> dict[str, Any]:
+    """Issue をクローズする（state を "closed" に更新）。"""
+    with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
+        resp = client.patch(
+            f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/issues/{issue_number}",
+            json={"state": "closed"},
         )
         resp.raise_for_status()
     return dict(resp.json())

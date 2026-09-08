@@ -18,6 +18,7 @@ function makeFinding(overrides: Partial<DependencyFindingOut> = {}): DependencyF
     manifest_path: 'requirements.txt',
     detected_at: '2026-06-01T00:00:00Z',
     resolved_at: null,
+    reachability: null,
     ...overrides,
   }
 }
@@ -91,6 +92,28 @@ describe('DepscanGroupRow', () => {
     fireEvent.click(screen.getByText('cryptography'))
     const ids = screen.getAllByText(/^GHSA-(low|critical)$/).map(el => el.textContent)
     expect(ids).toEqual(['GHSA-critical', 'GHSA-low'])
+  })
+
+  it('shows a reachability badge reflecting the group\'s status', () => {
+    const reachable = makeGroup([makeFinding({ reachability: 'reachable' })])
+    const { rerender } = renderRow(reachable)
+    expect(screen.getByText('到達可能')).toBeInTheDocument()
+
+    const unreachable = makeGroup([makeFinding({ reachability: 'unreachable' })])
+    rerender(
+      <table>
+        <tbody>
+          <DepscanGroupRow group={unreachable} />
+        </tbody>
+      </table>,
+    )
+    expect(screen.getByText('未使用の可能性')).toBeInTheDocument()
+  })
+
+  it('falls back to "不明" when reachability is null', () => {
+    const group = makeGroup([makeFinding({ reachability: null })])
+    renderRow(group)
+    expect(screen.getByText('不明')).toBeInTheDocument()
   })
 
   it('does not toggle the row when clicking the repo link itself', () => {

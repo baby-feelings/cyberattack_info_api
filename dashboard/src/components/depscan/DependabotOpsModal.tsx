@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
-import { GitPullRequest, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
+import { X, GitPullRequest, ExternalLink } from 'lucide-react'
 import {
-  fetchDepsOpsList, type DependabotPrLogOut,
+  fetchDepsOpsList, fetchAllDepsOpsEntries, type DependabotPrLogOut,
 } from '../../api/client'
 import { TableLoadingSkeleton, EmptyState, Pagination } from '../shared/VulnPanelParts'
+import { DepsOpsRepoBarChart } from './DepsOpsRepoBarChart'
+import { computeUnresolvedRepoStats, type RepoOpsStat } from './depsopsGrouping'
 
 const PER_PAGE = 20
 
@@ -25,19 +27,18 @@ function ActionBadge({ action }: { action: 'merged' | 'flagged' }) {
   )
 }
 
-// DEPSCAN タブ内に統合した Dependabot PR 自動運用（DEPSOPS）の判定履歴セクション。
-// Slack 通知は実行時点のスナップショットのみで履歴を持たないため、
-// 「要確認」PR がどのリポジトリ・どんな理由で自動マージされなかったかを
-// 後から確認できるようにする（初期状態は折りたたみ。開いたときのみ取得する）。
-export function DependabotOpsSection() {
-  const [open, setOpen] = useState(false)
+// Dependabot PR 自動運用（DEPSOPS）の判定履歴を表示する全画面モーダル。
+// DEPSCAN タブ内のボタンから開く（5つ目の固定タブにはしない設計判断。詳細はCLAUDE.md参照）。
+export function DependabotOpsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [action, setAction] = useState<'ALL' | 'merged' | 'flagged'>('ALL')
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [items, setItems] = useState<DependabotPrLogOut[]>([])
   const [loading, setLoading] = useState(false)
+  const [repoStats, setRepoStats] = useState<RepoOpsStat[]>([])
+  const [statsLoading, setStatsLoading] = useState(false)
 
-  const load = useCallback(async (act: typeof action, p: number) => {
+  const loadTable = useCallback(async (act: typeof action, p: number) => {
     setLoading(true)
     try {
       const res = await fetchDepsOpsList({
@@ -52,37 +53,74 @@ export function DependabotOpsSection() {
     }
   }, [])
 
-  // 折りたたまれている間は取得しない（開いたとき・フィルタ/ページ変更時のみ取得する）
+  const loadStats = useCallback(async () => {
+    setStatsLoading(true)
+    try {
+      const all = await fetchAllDepsOpsEntries()
+      setRepoStats(computeUnresolvedRepoStats(all))
+    } catch {
+      // エラーは握りつぶし（データなし状態として扱う）
+    } finally {
+      setStatsLoading(false)
+    }
+  }, [])
+
+  // 開いたときのみ取得する（閉じている間は取得しない）
   useEffect(() => {
     if (open) {
-      load(action, page)
+      loadTable(action, page)
     }
-  }, [open, load, action, page])
+  }, [open, loadTable, action, page])
+
+  useEffect(() => {
+    if (open) {
+      loadStats()
+    }
+  }, [open, loadStats])
+
+  useEffect(() => {
+    if (!open) return
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [open, onClose])
 
   function handleAction(act: typeof action) {
     setAction(act)
     setPage(1)
   }
 
+  if (!open) return null
+
   const totalPages = Math.ceil(total / PER_PAGE)
 
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left hover:bg-slate-800/40 transition-colors"
-      >
-        <span className="flex items-center gap-2 text-sm font-semibold text-slate-400 uppercase tracking-wider">
-          <GitPullRequest size={14} className="text-slate-400" />
+    <div
+      className="fixed inset-0 z-50 bg-slate-950 flex flex-col"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Dependabot 運用状況"
+    >
+      <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 shrink-0">
+        <span className="flex items-center gap-2 text-sm font-semibold text-slate-300 uppercase tracking-wider">
+          <GitPullRequest size={16} className="text-slate-400" />
           Dependabot 運用状況（DEPSOPS）
         </span>
-        {open
-          ? <ChevronUp size={14} className="text-slate-500" />
-          : <ChevronDown size={14} className="text-slate-500" />}
-      </button>
+        <button
+          onClick={onClose}
+          aria-label="閉じる"
+          className="text-slate-500 hover:text-slate-300 transition-colors p-1 rounded"
+        >
+          <X size={18} />
+        </button>
+      </div>
 
-      {open && (
-        <div className="px-4 pb-4 flex flex-col gap-3">
+      <div className="flex-1 overflow-y-auto px-6 py-5">
+        <div className="max-w-5xl mx-auto flex flex-col gap-5">
+          <DepsOpsRepoBarChart stats={repoStats} loading={statsLoading} />
+
           <div className="flex flex-wrap gap-1.5">
             {ACTIONS.map(a => (
               <button
@@ -117,7 +155,7 @@ export function DependabotOpsSection() {
                   </thead>
                   <tbody className="divide-y divide-slate-800/60">
                     {items.map(item => (
-                      <tr key={`${item.repo_full_name}-${item.pr_number}`}>
+                      <tr key={`${item.repo_full_name}-${item.pr_number}-${item.processed_at}`}>
                         <td className="py-2.5 pr-3">
                           <p className="text-slate-300 text-xs truncate max-w-[220px]">{item.repo_full_name}</p>
                         </td>
@@ -149,16 +187,11 @@ export function DependabotOpsSection() {
                 </table>
               </div>
 
-              <Pagination
-                page={page}
-                totalPages={totalPages}
-                total={total}
-                onPageChange={setPage}
-              />
+              <Pagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} />
             </>
           )}
         </div>
-      )}
+      </div>
     </div>
   )
 }

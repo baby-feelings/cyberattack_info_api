@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Bug, RefreshCw, CheckCircle2, Sparkles,
+  Bug, RefreshCw, CheckCircle2, Sparkles, GitPullRequest,
 } from 'lucide-react'
 import {
   fetchAllDepscanFindings, fetchDepscanStats, fetchCrawlerLogs,
@@ -13,7 +13,7 @@ import {
 } from './shared/VulnPanelParts'
 import { DepscanGroupRow } from './depscan/DepscanGroupRow'
 import { RepoBarChart } from './depscan/RepoBarChart'
-import { DependabotOpsSection } from './depscan/DependabotOpsSection'
+import { DependabotOpsModal } from './depscan/DependabotOpsModal'
 import {
   SEVERITY_CLS, SEVERITY_COLORS, ownerOf,
   groupFindings, groupBestSeverityRank, groupLatestDetectedAt,
@@ -34,6 +34,7 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
   const [findings, setFindings] = useState<DependencyFindingOut[]>([])
   const [stats, setStats] = useState<DepscanStatsResponse | null>(null)
   const [loading, setLoading] = useState(true)
+  const [depsOpsOpen, setDepsOpsOpen] = useState(false)
   const [newDataAvailable, setNewDataAvailable] = useState(false)
   // 表示中データの基準となる、最後に確認した最新クロールログID
   // （ポーリング用 effect から常に最新値を読めるよう state ではなく ref で持つ）
@@ -173,6 +174,13 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
             </div>
           )}
           <button
+            onClick={() => setDepsOpsOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
+          >
+            <GitPullRequest size={13} />
+            Dependabot運用状況
+          </button>
+          <button
             onClick={() => load(owner, severity, showResolved)}
             disabled={loading}
             className="text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40 p-1 rounded"
@@ -257,6 +265,7 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
                   <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-52">リポジトリ</th>
                   <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-40">パッケージ</th>
                   <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-32">修正版</th>
+                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-24">到達可能性</th>
                   <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3">重大度内訳</th>
                   <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-24">検知日</th>
                   <th className="w-5" />
@@ -277,8 +286,8 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
         </>
       )}
 
-      {/* Dependabot PR 自動運用（DEPSOPS）の判定履歴。専用タブは作らずここに統合する */}
-      <DependabotOpsSection />
+      {/* Dependabot PR 自動運用（DEPSOPS）の判定履歴。専用タブは作らず全画面モーダルで表示する */}
+      <DependabotOpsModal open={depsOpsOpen} onClose={() => setDepsOpsOpen(false)} />
     </div>
   )
 }
