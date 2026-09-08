@@ -1119,3 +1119,21 @@ class TestShouldRescanForUser:
         ))
         db_session.commit()
         assert should_rescan_for_user(db_session, "octocat") is True
+
+    def test_stale_running_scan_returns_true(self, db_session):
+        """デプロイ等でスレッドが強制終了され running のまま取り残されたケース
+        （実際に本番で発生）。一定時間を超えたら stale とみなし再スキャンを許可する。"""
+        from app.depscan.user_scan import STALE_RUNNING_THRESHOLD_MINUTES
+
+        stale = _NOW - timedelta(minutes=STALE_RUNNING_THRESHOLD_MINUTES + 1)
+        db_session.add(UserScan(username="octocat", status="running", started_at=stale))
+        db_session.commit()
+        assert should_rescan_for_user(db_session, "octocat") is True
+
+    def test_recently_started_running_scan_returns_false(self, db_session):
+        from app.depscan.user_scan import STALE_RUNNING_THRESHOLD_MINUTES
+
+        recent = _NOW - timedelta(minutes=STALE_RUNNING_THRESHOLD_MINUTES - 1)
+        db_session.add(UserScan(username="octocat", status="running", started_at=recent))
+        db_session.commit()
+        assert should_rescan_for_user(db_session, "octocat") is False

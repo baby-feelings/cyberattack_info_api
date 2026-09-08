@@ -30,31 +30,49 @@ logger = logging.getLogger(__name__)
 # クロールと同様、1日1回程度の頻度で十分という運用方針に合わせる）
 RESCAN_INTERVAL_HOURS = 24
 
+# "running" のまま停滞しているとみなすまでの時間。デプロイ等でアプリの
+# プロセス自体が再起動されると、run_depscan_for_user を実行中の daemon スレッドは
+# 例外を送出する間も finally が実行される間もなく強制終了される。その場合
+# UserScan.status は "running" のまま永久に残り、should_rescan_for_user が
+# 常に False を返し続けて当該ユーザーは二度と再スキャンできなくなってしまう
+# （実際に本番で発生した事故）。一定時間を超えても running のままなら、
+# スレッドが失われたとみなし stale 扱いにして再スキャンを許可する。
+STALE_RUNNING_THRESHOLD_MINUTES = 15
+
 
 def get_user_scan_status(db: Session, username: str) -> UserScan | None:
     """指定ユーザーの直近のオンデマンドスキャン状況を取得する。"""
     return db.query(UserScan).filter(UserScan.username == username).first()
 
 
+def _older_than(dt: Any, minutes: int = 0, hours: int = 0) -> bool:
+    """dt が指定した経過時間より古いかを判定する。
+
+    SQLite は DateTime(timezone=True) でもtz情報を保持せず naive で返すため、
+    PostgreSQL（本番）・SQLite（開発/テスト）どちらでも比較できるよう補完する。
+    """
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    cutoff = now_utc() - timedelta(hours=hours, minutes=minutes)
+    return dt < cutoff
+
+
 def should_rescan_for_user(db: Session, username: str) -> bool:
     """ログインしたユーザーに対し、オンデマンドスキャンを再実行すべきか判定する。
 
     - 直近のスキャン記録が無い、またはエラー終了している場合 → 再スキャンする
-    - 実行中の場合 → 重複起動を避けるため再スキャンしない
+    - 実行中かつ `STALE_RUNNING_THRESHOLD_MINUTES` 以内なら → 重複起動を避けるため
+      再スキャンしない
+    - 実行中のまま `STALE_RUNNING_THRESHOLD_MINUTES` を超えていれば → プロセス再起動等で
+      スレッドが失われた stale 状態とみなし再スキャンする
     - 完了済みで `RESCAN_INTERVAL_HOURS` 時間以内なら → 再スキャンしない（DB参照のみ）
     """
     scan = get_user_scan_status(db, username)
     if scan is None or scan.status == "error":
         return True
     if scan.status == "running":
-        return False
-    # SQLite は DateTime(timezone=True) でもtz情報を保持せず naive で返すため、
-    # PostgreSQL（本番）・SQLite（開発/テスト）どちらでも比較できるよう補完する
-    started_at = scan.started_at
-    if started_at.tzinfo is None:
-        started_at = started_at.replace(tzinfo=timezone.utc)
-    cutoff = now_utc() - timedelta(hours=RESCAN_INTERVAL_HOURS)
-    return started_at < cutoff
+        return _older_than(scan.started_at, minutes=STALE_RUNNING_THRESHOLD_MINUTES)
+    return _older_than(scan.started_at, hours=RESCAN_INTERVAL_HOURS)
 
 
 def _set_user_scan_status(
