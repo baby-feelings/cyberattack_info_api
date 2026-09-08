@@ -18,6 +18,12 @@ class DependabotPrLogOut(OrmDatetimeModel):
     reason: str | None = Field(
         None, description="action=flagged の場合の理由（メジャーバージョンアップ等）"
     )
+    is_security_update: bool | None = Field(
+        None,
+        description="セキュリティ更新（GitHub Dependabot alertの対象パッケージと一致）の"
+        "ヒューリスティック判定。true=セキュリティ更新の可能性が高い / "
+        "false=通常のバージョン更新 / null=判定不能",
+    )
     processed_at: str = Field(description="判定を行った DEPSOPS 実行日時（ISO 8601）")
 
     model_config = {"from_attributes": True}

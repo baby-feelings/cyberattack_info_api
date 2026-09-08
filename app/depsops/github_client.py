@@ -88,3 +88,20 @@ def has_ci_workflows(owner: str, repo: str, token: str) -> bool:
     resp.raise_for_status()
     data = resp.json()
     return isinstance(data, list) and len(data) > 0
+
+
+def list_open_dependabot_alerts(owner: str, repo: str, token: str) -> list[dict[str, Any]]:
+    """Open な Dependabot alert 一覧を取得する。
+
+    `GITHUB_TOKEN` に **Dependabot alerts: Read-only** 権限が必要（DEPSCAN/DEPSOPS で
+    従来使っていた Contents: Read-only・Issues: Write・Pull requests: Write には
+    含まれない別スコープのため、未設定のトークンでは 403 を送出する。呼び出し側で
+    捕捉し、判定不能として扱うこと）。
+    """
+    with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
+        resp = client.get(
+            f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/dependabot/alerts",
+            params={"state": "open", "per_page": _PER_PAGE},
+        )
+        resp.raise_for_status()
+    return list(resp.json())

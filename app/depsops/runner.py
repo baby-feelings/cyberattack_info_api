@@ -13,6 +13,7 @@ DEPSCAN 対象の全リポジトリを走査し、Dependabot が作成した Ope
 （ダッシュボードに表示する「要確認」PR の理由・件数は、この履歴 DB を参照する）。
 """
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -28,6 +29,7 @@ from app.depsops.classify import classify_bump
 from app.depsops.github_client import (
     get_pull_request,
     has_ci_workflows,
+    list_open_dependabot_alerts,
     list_open_dependabot_prs,
     merge_pull_request,
     request_rebase,
@@ -37,18 +39,52 @@ from app.depsops.models import DependabotPrLog
 logger = logging.getLogger(__name__)
 
 
-def _pr_summary(full_name: str, pr: dict[str, Any]) -> dict[str, Any]:
+def _matches_security_alert(title: str, alert_package_names: set[str] | None) -> bool | None:
+    """PRタイトルが、Open な Dependabot alert のいずれかの対象パッケージ名を
+    含んでいるかをヒューリスティックに判定する。
+
+    Returns:
+        True: 一致する alert あり（セキュリティ更新の可能性が高い）
+        False: alert 取得は成功したが一致なし（通常のバージョン更新）
+        None: alert 自体を取得できなかった（判定不能。GITHUB_TOKEN に
+            Dependabot alerts: Read-only 権限が無い場合等）
+
+    Note:
+        パッケージ名の単純な部分文字列一致（単語境界のみ考慮）のため、
+        あるパッケージ名が別のパッケージ名の接頭辞になっているケース等で
+        誤判定しうる（あくまで参考情報。判定基準は GitHub の Dependabot alert
+        そのものであり、この関数は照合のヒューリスティックに過ぎない）。
+    """
+    if alert_package_names is None:
+        return None
+    lowered_title = title.lower()
+    return any(
+        re.search(rf"\b{re.escape(pkg.lower())}\b", lowered_title)
+        for pkg in alert_package_names
+    )
+
+
+def _pr_summary(
+    full_name: str, pr: dict[str, Any], is_security_update: bool | None,
+) -> dict[str, Any]:
     return {
         "repo_full_name": full_name,
         "pr_number": pr["number"],
         "title": pr["title"],
+        "is_security_update": is_security_update,
     }
 
 
 def _process_pr(
     full_name: str, owner: str, repo: str, pr: dict[str, Any], has_ci: bool, token: str,
+    alert_package_names: set[str] | None = None,
 ) -> tuple[str, dict[str, Any] | None]:
     """1件の PR を判定・処理する。
+
+    Args:
+        alert_package_names: 対象リポジトリの Open な Dependabot alert の
+            パッケージ名集合（`_matches_security_alert` 参照）。取得できな
+            かった場合は None。
 
     Returns:
         (action, item) のタプル。action は "merged" / "flagged" / "skipped"。
@@ -56,13 +92,14 @@ def _process_pr(
     """
     number = pr["number"]
     bump = classify_bump(pr["title"])
+    is_security_update = _matches_security_alert(pr["title"], alert_package_names)
 
     detail = get_pull_request(owner, repo, number, token)
     mergeable_state = detail.get("mergeable_state")
 
     if mergeable_state == "dirty":
         request_rebase(owner, repo, number, token)
-        item = _pr_summary(full_name, pr)
+        item = _pr_summary(full_name, pr, is_security_update)
         item["reason"] = "コンフリクトのためリベースを依頼"
         return "flagged", item
 
@@ -77,12 +114,12 @@ def _process_pr(
         reason = f"マージ可否が不明確（mergeable_state={mergeable_state}）"
 
     if reason is not None:
-        item = _pr_summary(full_name, pr)
+        item = _pr_summary(full_name, pr, is_security_update)
         item["reason"] = reason
         return "flagged", item
 
     merge_pull_request(owner, repo, number, token)
-    return "merged", _pr_summary(full_name, pr)
+    return "merged", _pr_summary(full_name, pr, is_security_update)
 
 
 def _record_pr_logs(
@@ -103,6 +140,7 @@ def _record_pr_logs(
             title=item["title"],
             action="merged",
             reason=None,
+            is_security_update=item.get("is_security_update"),
             processed_at=processed_at,
         ))
     for item in flagged:
@@ -112,6 +150,7 @@ def _record_pr_logs(
             title=item["title"],
             action="flagged",
             reason=item.get("reason"),
+            is_security_update=item.get("is_security_update"),
             processed_at=processed_at,
         ))
     db.commit()
@@ -171,10 +210,24 @@ def run_dependabot_ops() -> tuple[int, int, int]:
                 "DEPSOPS: %s has %d open Dependabot PR(s), CI=%s", full_name, len(prs), has_ci,
             )
 
+            # セキュリティ更新かどうかの判定用に、リポジトリ単位で1回だけ取得し使い回す。
+            # 権限不足（GITHUB_TOKEN に Dependabot alerts: Read-only が無い）等で
+            # 失敗しても DEPSOPS 本来のマージ判定は継続する（判定不能 = None のまま）
+            alert_package_names: set[str] | None
+            try:
+                alerts = list_open_dependabot_alerts(owner, repo, settings.GITHUB_TOKEN)
+                alert_package_names = {a["dependency"]["package"]["name"] for a in alerts}
+            except httpx.HTTPError as exc:
+                logger.warning(
+                    "DEPSOPS: failed to list Dependabot alerts for %s: %s", full_name, exc,
+                )
+                alert_package_names = None
+
             for pr in prs:
                 try:
                     action, item = _process_pr(
                         full_name, owner, repo, pr, has_ci, settings.GITHUB_TOKEN,
+                        alert_package_names,
                     )
                 except httpx.HTTPError as exc:
                     logger.warning(

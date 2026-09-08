@@ -19,6 +19,7 @@ from app.depsops.classify import classify_bump  # noqa: E402
 from app.depsops.github_client import (  # noqa: E402
     get_pull_request,
     has_ci_workflows,
+    list_open_dependabot_alerts,
     list_open_dependabot_prs,
     merge_pull_request,
     request_rebase,
@@ -26,6 +27,7 @@ from app.depsops.github_client import (  # noqa: E402
 from app.depsops.models import DependabotPrLog  # noqa: E402
 from app.depsops.runner import (  # noqa: E402
     _delete_old_depsops_records,
+    _matches_security_alert,
     _process_pr,
     _record_pr_logs,
     run_dependabot_ops,
@@ -169,9 +171,63 @@ class TestHasCiWorkflows:
             assert has_ci_workflows("owner", "repo", "token") is False
 
 
+class TestListOpenDependabotAlerts:
+    def test_returns_alert_list(self):
+        alerts = [{"dependency": {"package": {"name": "requests"}}}]
+        mock_client = _mock_httpx_client(get_return=_mock_response(alerts))
+        with patch("app.depsops.github_client.httpx.Client", return_value=mock_client):
+            result = list_open_dependabot_alerts("owner", "repo", "token")
+        assert result == alerts
+        call = mock_client.get.call_args
+        assert call.args[0].endswith("/dependabot/alerts")
+        assert call.kwargs["params"]["state"] == "open"
+
+    def test_raises_on_http_error(self):
+        resp = MagicMock()
+        resp.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "403", request=MagicMock(), response=MagicMock(),
+        )
+        mock_client = _mock_httpx_client(get_return=resp)
+        import pytest
+        with patch("app.depsops.github_client.httpx.Client", return_value=mock_client):
+            with pytest.raises(httpx.HTTPStatusError):
+                list_open_dependabot_alerts("owner", "repo", "token")
+
+
 # ──────────────────────────────────────────────────────────────
 # app.depsops.runner
 # ──────────────────────────────────────────────────────────────
+
+
+class TestMatchesSecurityAlert:
+    def test_none_alert_packages_means_unknown(self):
+        assert _matches_security_alert("Bump requests from 1.0 to 2.0", None) is None
+
+    def test_matching_package_returns_true(self):
+        result = _matches_security_alert(
+            "Bump requests from 1.0 to 2.0", {"requests", "flask"},
+        )
+        assert result is True
+
+    def test_no_matching_package_returns_false(self):
+        result = _matches_security_alert(
+            "Bump requests from 1.0 to 2.0", {"flask", "django"},
+        )
+        assert result is False
+
+    def test_empty_alert_set_returns_false(self):
+        assert _matches_security_alert("Bump requests from 1.0 to 2.0", set()) is False
+
+    def test_matches_case_insensitively(self):
+        result = _matches_security_alert("Bump REQUESTS from 1.0 to 2.0", {"requests"})
+        assert result is True
+
+    def test_does_not_match_substring_of_a_different_package(self):
+        """"requests" は "requests_toolbelt" の一部として誤マッチしないこと。"""
+        result = _matches_security_alert(
+            "Bump requests_toolbelt from 1.0 to 2.0", {"requests"},
+        )
+        assert result is False
 
 
 class TestProcessPr:
@@ -233,7 +289,30 @@ class TestProcessPr:
             action, item = _process_pr("u/r", "u", "r", self._pr(), True, "token")
         assert action == "merged"
         assert item["repo_full_name"] == "u/r"
+        assert item["is_security_update"] is None  # alert_package_names未指定時
         mock_merge.assert_called_once()
+
+    def test_records_security_update_flag_when_alert_matches(self):
+        pr = self._pr(title="Bump requests from 1.0.0 to 1.0.1")
+        with patch(
+            "app.depsops.runner.get_pull_request", return_value={"mergeable_state": "clean"},
+        ), patch("app.depsops.runner.merge_pull_request"):
+            action, item = _process_pr(
+                "u/r", "u", "r", pr, True, "token", alert_package_names={"requests"},
+            )
+        assert action == "merged"
+        assert item["is_security_update"] is True
+
+    def test_records_security_update_false_when_no_alert_matches(self):
+        pr = self._pr(title="Bump requests from 1.0.0 to 1.0.1")
+        with patch(
+            "app.depsops.runner.get_pull_request", return_value={"mergeable_state": "clean"},
+        ), patch("app.depsops.runner.merge_pull_request"):
+            action, item = _process_pr(
+                "u/r", "u", "r", pr, True, "token", alert_package_names=set(),
+            )
+        assert action == "merged"
+        assert item["is_security_update"] is False
 
 
 class TestRunDependabotOps:
@@ -243,6 +322,7 @@ class TestRunDependabotOps:
         with patch("app.depsops.runner.list_target_repos", return_value=repos), \
              patch("app.depsops.runner.list_open_dependabot_prs", return_value=prs), \
              patch("app.depsops.runner.has_ci_workflows", return_value=True), \
+             patch("app.depsops.runner.list_open_dependabot_alerts", return_value=[]), \
              patch(
                  "app.depsops.runner.get_pull_request",
                  return_value={"mergeable_state": "clean"},
@@ -285,6 +365,7 @@ class TestRunDependabotOps:
         with patch("app.depsops.runner.list_target_repos", return_value=repos), \
              patch("app.depsops.runner.list_open_dependabot_prs", return_value=prs), \
              patch("app.depsops.runner.has_ci_workflows", return_value=True), \
+             patch("app.depsops.runner.list_open_dependabot_alerts", return_value=[]), \
              patch(
                  "app.depsops.runner.get_pull_request",
                  side_effect=httpx.HTTPStatusError(
@@ -301,6 +382,7 @@ class TestRunDependabotOps:
         with patch("app.depsops.runner.list_target_repos", return_value=repos), \
              patch("app.depsops.runner.list_open_dependabot_prs", return_value=prs), \
              patch("app.depsops.runner.has_ci_workflows", return_value=True), \
+             patch("app.depsops.runner.list_open_dependabot_alerts", return_value=[]), \
              patch(
                  "app.depsops.runner.get_pull_request",
                  return_value={"mergeable_state": "clean"},
@@ -334,6 +416,7 @@ class TestRunDependabotOps:
         with patch("app.depsops.runner.list_target_repos", return_value=repos), \
              patch("app.depsops.runner.list_open_dependabot_prs", return_value=prs), \
              patch("app.depsops.runner.has_ci_workflows", return_value=True), \
+             patch("app.depsops.runner.list_open_dependabot_alerts", return_value=[]), \
              patch("app.depsops.runner.get_pull_request", side_effect=_get_pr), \
              patch("app.depsops.runner.merge_pull_request"), \
              patch("app.depsops.runner.notify_dependabot_ops"):
@@ -359,6 +442,33 @@ class TestRecordPrLogs:
         assert len(rows) == 2
         assert rows[0].action == "merged" and rows[0].reason is None
         assert rows[1].action == "flagged" and rows[1].reason == "メジャー"
+
+    def test_persists_is_security_update_flag(self, db_session):
+        merged = [{
+            "repo_full_name": "u/r", "pr_number": 1, "title": "bump x",
+            "is_security_update": True,
+        }]
+        flagged = [{
+            "repo_full_name": "u/r", "pr_number": 2, "title": "bump y", "reason": "メジャー",
+            "is_security_update": False,
+        }]
+        processed_at = datetime(2026, 6, 1, tzinfo=timezone.utc)
+
+        _record_pr_logs(db_session, merged, flagged, processed_at)
+
+        rows = db_session.query(DependabotPrLog).order_by(DependabotPrLog.pr_number).all()
+        assert rows[0].is_security_update is True
+        assert rows[1].is_security_update is False
+
+    def test_missing_is_security_update_key_defaults_to_none(self, db_session):
+        """alert取得自体に失敗したケース: キーが無くても例外にならずNoneになる。"""
+        merged = [{"repo_full_name": "u/r", "pr_number": 1, "title": "bump x"}]
+        processed_at = datetime(2026, 6, 1, tzinfo=timezone.utc)
+
+        _record_pr_logs(db_session, merged, [], processed_at)
+
+        row = db_session.query(DependabotPrLog).filter_by(pr_number=1).first()
+        assert row.is_security_update is None
 
 
 class TestDeleteOldDepsopsRecords:
