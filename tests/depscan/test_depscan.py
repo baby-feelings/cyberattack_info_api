@@ -27,6 +27,7 @@ from app.depscan.crawler import (  # noqa: E402
 )
 from app.depscan.github_client import (  # noqa: E402
     add_issue_comment,
+    close_issue,
     create_issue,
     find_open_issue,
     get_file_content,
@@ -68,7 +69,7 @@ def _make_finding(db_session, **kwargs) -> DependencyFinding:
     return record
 
 
-def _mock_httpx_client(get_return=None, post_return=None) -> MagicMock:
+def _mock_httpx_client(get_return=None, post_return=None, patch_return=None) -> MagicMock:
     mock_client = MagicMock()
     mock_client.__enter__ = MagicMock(return_value=mock_client)
     mock_client.__exit__ = MagicMock(return_value=False)
@@ -76,6 +77,8 @@ def _mock_httpx_client(get_return=None, post_return=None) -> MagicMock:
         mock_client.get = MagicMock(return_value=get_return)
     if post_return is not None:
         mock_client.post = MagicMock(return_value=post_return)
+    if patch_return is not None:
+        mock_client.patch = MagicMock(return_value=patch_return)
     return mock_client
 
 
@@ -316,6 +319,57 @@ class TestGetFileContent:
                 get_file_content("owner", "repo", "path", "token")
 
 
+class TestGetSourceFiles:
+    def test_filters_by_extension_and_fetches_content(self):
+        from app.depscan.github_client import get_source_files
+
+        paths = ["app/main.py", "README.md", "app/utils.py"]
+        with patch("app.depscan.github_client.get_repo_tree", return_value=paths), \
+             patch(
+                 "app.depscan.github_client.get_file_content",
+                 side_effect=lambda owner, repo, path, token: f"# {path}",
+             ):
+            files = get_source_files("owner", "repo", "main", "token", (".py",))
+
+        assert set(files.keys()) == {"app/main.py", "app/utils.py"}
+        assert files["app/main.py"] == "# app/main.py"
+
+    def test_excludes_vendored_directories(self):
+        from app.depscan.github_client import get_source_files
+
+        paths = ["app/main.py", "node_modules/pkg/index.js"]
+        with patch("app.depscan.github_client.get_repo_tree", return_value=paths), \
+             patch("app.depscan.github_client.get_file_content", return_value="content"):
+            files = get_source_files("owner", "repo", "main", "token", (".py", ".js"))
+
+        assert list(files.keys()) == ["app/main.py"]
+
+    def test_fetch_failure_for_one_file_does_not_fail_others(self):
+        from app.depscan.github_client import get_source_files
+
+        paths = ["a.py", "b.py"]
+        with patch("app.depscan.github_client.get_repo_tree", return_value=paths), \
+             patch(
+                 "app.depscan.github_client.get_file_content",
+                 side_effect=[
+                     httpx.HTTPStatusError("404", request=MagicMock(), response=MagicMock()),
+                     "content-b",
+                 ],
+             ):
+            files = get_source_files("owner", "repo", "main", "token", (".py",))
+
+        assert files == {"b.py": "content-b"}
+
+    def test_oversized_file_is_skipped(self):
+        from app.depscan.github_client import get_source_files
+
+        with patch("app.depscan.github_client.get_repo_tree", return_value=["big.py"]), \
+             patch("app.depscan.github_client.get_file_content", return_value="x" * 400_000):
+            files = get_source_files("owner", "repo", "main", "token", (".py",))
+
+        assert files == {}
+
+
 class TestFindOpenIssue:
     def test_returns_matching_issue_number(self):
         issues = [
@@ -361,6 +415,16 @@ class TestCreateIssueAndComment:
         call = mock_client.post.call_args
         assert call.args[0].endswith("/issues/42/comments")
         assert call.kwargs["json"] == {"body": "追記内容"}
+
+    def test_close_issue_patches_state_closed(self):
+        resp = _mock_response({"number": 42, "state": "closed"})
+        mock_client = _mock_httpx_client(patch_return=resp)
+        with patch("app.depscan.github_client.httpx.Client", return_value=mock_client):
+            result = close_issue("owner", "repo", 42, "token")
+        assert result == {"number": 42, "state": "closed"}
+        call = mock_client.patch.call_args
+        assert call.args[0].endswith("/issues/42")
+        assert call.kwargs["json"] == {"state": "closed"}
 
 
 # ──────────────────────────────────────────────────────────────
@@ -450,6 +514,74 @@ class TestBuildFindings:
         ):
             assert _build_findings(dep_to_repos) == []
 
+    def test_default_reachability_is_unknown(self):
+        """_apply_reachabilityで上書きされる前のフォールバック既定値。"""
+        dep_to_repos = {("PyPI", "cryptography", "3.4.7"): [("u/repo1", "requirements.txt")]}
+        vuln = {"id": "GHSA-x", "summary": "vuln", "affected": []}
+        with patch(
+            "app.depscan.crawler.query_versions_batch",
+            return_value={("PyPI", "cryptography", "3.4.7"): ["GHSA-x"]},
+        ), patch("app.depscan.crawler.fetch_vuln_by_id", return_value=vuln):
+            records = _build_findings(dep_to_repos)
+        assert records[0]["reachability"] == "unknown"
+
+
+class TestApplyReachability:
+    def test_updates_records_using_fetched_source(self):
+        records = [
+            {"repo_full_name": "u/r", "ecosystem": "PyPI", "package_name": "requests"},
+        ]
+        repos = [{"full_name": "u/r", "default_branch": "main"}]
+        with patch("app.depscan.crawler.list_target_repos", return_value=repos), \
+             patch(
+                 "app.depscan.crawler.get_source_files",
+                 return_value={"app/main.py": "import requests\n"},
+             ):
+            from app.depscan.crawler import _apply_reachability
+            _apply_reachability(records, "user", "token")
+
+        assert records[0]["reachability"] == "reachable"
+
+    def test_shares_fetched_source_across_findings_in_same_repo_and_ecosystem(self):
+        records = [
+            {"repo_full_name": "u/r", "ecosystem": "PyPI", "package_name": "requests"},
+            {"repo_full_name": "u/r", "ecosystem": "PyPI", "package_name": "flask"},
+        ]
+        repos = [{"full_name": "u/r", "default_branch": "main"}]
+        with patch("app.depscan.crawler.list_target_repos", return_value=repos), \
+             patch(
+                 "app.depscan.crawler.get_source_files",
+                 return_value={"app/main.py": "import requests\n"},
+             ) as mock_get_source:
+            from app.depscan.crawler import _apply_reachability
+            _apply_reachability(records, "user", "token")
+
+        mock_get_source.assert_called_once()
+        assert records[0]["reachability"] == "reachable"
+        assert records[1]["reachability"] == "unreachable"
+
+    def test_source_fetch_failure_leaves_reachability_unchanged(self):
+        records = [
+            {
+                "repo_full_name": "u/r", "ecosystem": "PyPI", "package_name": "requests",
+                "reachability": "unknown",
+            },
+        ]
+        repos = [{"full_name": "u/r", "default_branch": "main"}]
+        http_error = httpx.HTTPStatusError("500", request=MagicMock(), response=MagicMock())
+        with patch("app.depscan.crawler.list_target_repos", return_value=repos), \
+             patch("app.depscan.crawler.get_source_files", side_effect=http_error):
+            from app.depscan.crawler import _apply_reachability
+            _apply_reachability(records, "user", "token")
+
+        assert records[0]["reachability"] == "unknown"
+
+    def test_empty_records_does_not_call_github(self):
+        with patch("app.depscan.crawler.list_target_repos") as mock_list:
+            from app.depscan.crawler import _apply_reachability
+            _apply_reachability([], "user", "token")
+        mock_list.assert_not_called()
+
 
 class TestUpsertFindings:
     def _rec(self, **kwargs):
@@ -493,20 +625,34 @@ class TestUpsertFindings:
         assert inserted == 0
         assert snapshots == []
 
+    def test_existing_open_finding_refreshes_reachability_only(self, db_session):
+        """既存の未解決findingは、到達可能性だけ毎回更新し他フィールドは据え置く。"""
+        _make_finding(
+            db_session, osv_id="GHSA-001", reachability="unreachable", summary="old summary",
+        )
+        _upsert_findings(
+            db_session, [self._rec(reachability="reachable", summary="new summary")],
+        )
+        finding = db_session.query(DependencyFinding).filter_by(osv_id="GHSA-001").first()
+        assert finding.reachability == "reachable"
+        assert finding.summary == "old summary"  # 到達可能性以外は更新されない
+
 
 class TestResolveStaleFindings:
     def test_marks_missing_findings_resolved(self, db_session):
         _make_finding(db_session, osv_id="GHSA-stale")
-        resolved = _resolve_stale_findings(db_session, current_keys=set())
+        resolved, affected_repos = _resolve_stale_findings(db_session, current_keys=set())
         assert resolved == 1
+        assert affected_repos == {"baby-feelings/baby_grow"}
         finding = db_session.query(DependencyFinding).filter_by(osv_id="GHSA-stale").first()
         assert finding.resolved_at is not None
 
     def test_keeps_current_findings_open(self, db_session):
         _make_finding(db_session, osv_id="GHSA-current")
         key = ("baby-feelings/baby_grow", "PyPI", "cryptography", "GHSA-current")
-        resolved = _resolve_stale_findings(db_session, current_keys={key})
+        resolved, affected_repos = _resolve_stale_findings(db_session, current_keys={key})
         assert resolved == 0
+        assert affected_repos == set()
 
     def test_repo_owner_prefix_scopes_to_matching_repos_only(self, db_session):
         """repo_owner_prefix指定時、他オーナーの未解決findingには一切影響しない。"""
@@ -515,11 +661,12 @@ class TestResolveStaleFindings:
         )
         _make_finding(db_session, repo_full_name="octocat/hello-world", osv_id="GHSA-octocat")
 
-        resolved = _resolve_stale_findings(
+        resolved, affected_repos = _resolve_stale_findings(
             db_session, current_keys=set(), repo_owner_prefix="octocat",
         )
 
         assert resolved == 1
+        assert affected_repos == {"octocat/hello-world"}
         baby_feelings_finding = (
             db_session.query(DependencyFinding).filter_by(osv_id="GHSA-baby-feelings").first()
         )
@@ -589,12 +736,14 @@ class TestFetchAndScanDependencies:
                 "manifest_path": "requirements.txt", "detected_at": _NOW,
             }],
         ), patch("app.depscan.crawler.SessionLocal", return_value=db_session), \
+           patch("app.depscan.crawler._apply_reachability") as mock_reachability, \
            patch("app.depscan.crawler.notify_dependency_findings") as mock_notify, \
            patch("app.depscan.crawler._file_github_issues") as mock_file_issues:
             new_count, resolved_count, repos_scanned = fetch_and_scan_dependencies()
 
         assert new_count == 1
         assert repos_scanned == 1
+        mock_reachability.assert_called_once()
         mock_notify.assert_called_once()
         mock_file_issues.assert_called_once()
 
@@ -605,6 +754,7 @@ class TestFetchAndScanDependencies:
         ), patch(
             "app.depscan.crawler._build_findings", return_value=[],
         ), patch("app.depscan.crawler.SessionLocal", return_value=db_session), \
+           patch("app.depscan.crawler._apply_reachability"), \
            patch(
                "app.depscan.crawler._delete_old_depscan_records",
                side_effect=Exception("delete failed"),
@@ -685,6 +835,62 @@ class TestFileGithubIssues:
             side_effect=httpx.HTTPStatusError("403", request=MagicMock(), response=MagicMock()),
         ):
             _file_github_issues([self._finding()])  # 例外を送出しないことを確認
+
+
+class TestCloseResolvedRepoIssues:
+    def test_closes_issue_when_no_unresolved_findings_remain(self, db_session):
+        """候補リポジトリに未解決findingが0件なら、Open issueを見つけてクローズする。"""
+        from app.depscan.crawler import _close_resolved_repo_issues
+
+        with patch("app.depscan.crawler.find_open_issue", return_value=7), \
+             patch("app.depscan.crawler.add_issue_comment") as mock_comment, \
+             patch("app.depscan.crawler.close_issue") as mock_close:
+            _close_resolved_repo_issues(db_session, {"baby-feelings/baby_grow"})
+
+        mock_comment.assert_called_once()
+        assert mock_comment.call_args[0][:3] == ("baby-feelings", "baby_grow", 7)
+        mock_close.assert_called_once()
+        assert mock_close.call_args[0][:3] == ("baby-feelings", "baby_grow", 7)
+
+    def test_does_not_close_when_unresolved_findings_remain(self, db_session):
+        """候補リポジトリに未解決findingが1件でも残っていればクローズしない。"""
+        from app.depscan.crawler import _close_resolved_repo_issues
+
+        _make_finding(db_session, resolved_at=None)  # 未解決のまま残っている
+
+        with patch("app.depscan.crawler.find_open_issue") as mock_find, \
+             patch("app.depscan.crawler.close_issue") as mock_close:
+            _close_resolved_repo_issues(db_session, {"baby-feelings/baby_grow"})
+
+        mock_find.assert_not_called()
+        mock_close.assert_not_called()
+
+    def test_does_nothing_when_no_open_issue_exists(self, db_session):
+        from app.depscan.crawler import _close_resolved_repo_issues
+
+        with patch("app.depscan.crawler.find_open_issue", return_value=None), \
+             patch("app.depscan.crawler.close_issue") as mock_close:
+            _close_resolved_repo_issues(db_session, {"baby-feelings/baby_grow"})
+
+        mock_close.assert_not_called()
+
+    def test_empty_candidate_repos_does_not_query_github(self, db_session):
+        from app.depscan.crawler import _close_resolved_repo_issues
+
+        with patch("app.depscan.crawler.find_open_issue") as mock_find:
+            _close_resolved_repo_issues(db_session, set())
+
+        mock_find.assert_not_called()
+
+    def test_http_error_does_not_raise(self, db_session):
+        """権限不足等でクローズが失敗しても、DEPSCAN全体を失敗させない。"""
+        from app.depscan.crawler import _close_resolved_repo_issues
+
+        with patch(
+            "app.depscan.crawler.find_open_issue",
+            side_effect=httpx.HTTPStatusError("403", request=MagicMock(), response=MagicMock()),
+        ):
+            _close_resolved_repo_issues(db_session, {"baby-feelings/baby_grow"})  # 例外を送出しない
 
 
 # ──────────────────────────────────────────────────────────────

@@ -75,6 +75,25 @@ export function groupFixedVersions(g: FindingGroup): string[] {
   return Array.from(set).sort()
 }
 
+// 到達可能性はグループ内で本来一致するはずだが（同一パッケージのため）、
+// データ不整合時に備え「より情報価値の高い」ものを優先する
+// （reachable > unreachable > unknown の順。未確認の脆弱性を見落とさないため）
+const REACHABILITY_PRIORITY: Record<string, number> = { reachable: 0, unreachable: 1, unknown: 2 }
+
+export function groupReachability(g: FindingGroup): string | null {
+  let best: string | null = null
+  let bestRank = Number.POSITIVE_INFINITY
+  for (const f of g.findings) {
+    if (!f.reachability) continue
+    const rank = REACHABILITY_PRIORITY[f.reachability] ?? 3
+    if (rank < bestRank) {
+      bestRank = rank
+      best = f.reachability
+    }
+  }
+  return best
+}
+
 export function groupSeverityCounts(g: FindingGroup): [string, number][] {
   const counts = new Map<string, number>()
   for (const f of g.findings) {

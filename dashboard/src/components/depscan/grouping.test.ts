@@ -3,6 +3,7 @@ import type { DependencyFindingOut } from '../../api/client'
 import {
   severityRank, ownerOf, groupFindings, groupBestSeverityRank,
   groupLatestDetectedAt, groupIsResolved, groupFixedVersions, groupSeverityCounts,
+  groupReachability,
   SEVERITY_CLS, SEVERITY_COLORS,
 } from './grouping'
 
@@ -20,6 +21,7 @@ function makeFinding(overrides: Partial<DependencyFindingOut> = {}): DependencyF
     manifest_path: 'requirements.txt',
     detected_at: '2026-06-01T00:00:00Z',
     resolved_at: null,
+    reachability: null,
     ...overrides,
   }
 }
@@ -131,6 +133,30 @@ describe('groupSeverityCounts', () => {
   it('treats a null severity as the "N/A" bucket', () => {
     const group = groupFindings([makeFinding({ severity: null })])[0]
     expect(groupSeverityCounts(group)).toEqual([['N/A', 1]])
+  })
+})
+
+describe('groupReachability', () => {
+  it('returns null when no finding in the group has a reachability value', () => {
+    const group = groupFindings([makeFinding({ reachability: null })])[0]
+    expect(groupReachability(group)).toBeNull()
+  })
+
+  it('returns the single reachability value when consistent across findings', () => {
+    const group = groupFindings([
+      makeFinding({ osv_id: 'GHSA-1', reachability: 'unreachable' }),
+      makeFinding({ osv_id: 'GHSA-2', reachability: 'unreachable' }),
+    ])[0]
+    expect(groupReachability(group)).toBe('unreachable')
+  })
+
+  it('prefers reachable over unreachable/unknown when inconsistent', () => {
+    const group = groupFindings([
+      makeFinding({ osv_id: 'GHSA-1', reachability: 'unknown' }),
+      makeFinding({ osv_id: 'GHSA-2', reachability: 'reachable' }),
+      makeFinding({ osv_id: 'GHSA-3', reachability: 'unreachable' }),
+    ])[0]
+    expect(groupReachability(group)).toBe('reachable')
   })
 })
 

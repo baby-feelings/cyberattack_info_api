@@ -1,13 +1,15 @@
 """DEPSCAN（依存ライブラリ脆弱性スキャン）ドメインの Pydantic スキーマ定義。"""
-from typing import Any
+from pydantic import BaseModel, Field
 
-from pydantic import BaseModel, Field, field_serializer
-
-from app.core.schemas import SeverityStat
+from app.core.schemas import OrmDatetimeModel, SeverityStat
 
 
-class DependencyFindingOut(BaseModel):
-    """依存ライブラリ脆弱性の検知結果の出力スキーマ。"""
+class DependencyFindingOut(OrmDatetimeModel):
+    """依存ライブラリ脆弱性の検知結果の出力スキーマ。
+
+    datetime → ISO 文字列変換は OrmDatetimeModel（app.core.schemas）が
+    フィールド列挙なしで自動的に行う。
+    """
 
     repo_full_name: str = Field(description="対象リポジトリ（例: baby-feelings/baby_grow）")
     ecosystem: str = Field(description="エコシステム（例: PyPI / npm / Pub）")
@@ -19,38 +21,16 @@ class DependencyFindingOut(BaseModel):
     summary: str = Field(description="脆弱性の概要")
     fixed_versions: list[str] = Field(default_factory=list, description="修正済みバージョン")
     manifest_path: str = Field(description="検知元のロックファイルパス")
+    reachability: str | None = Field(
+        None,
+        description="到達可能性（import レベルのヒューリスティック判定）: "
+        "reachable（importを確認） / unreachable（該当拡張子のソースはあるがimportなし） / "
+        "unknown（判定不能）",
+    )
     detected_at: str = Field(description="初回検知日時（ISO 8601）")
     resolved_at: str | None = Field(None, description="解決日時（未解決なら null）")
 
     model_config = {"from_attributes": True}
-
-    @field_serializer("detected_at", "resolved_at")
-    def _serialize_datetime(self, value: Any) -> str | None:
-        """datetime を ISO 文字列に変換する。"""
-        if value is None:
-            return None
-        return value.isoformat() if hasattr(value, "isoformat") else str(value)
-
-    @classmethod
-    def model_validate(cls, obj: Any, **kwargs: Any) -> "DependencyFindingOut":
-        """ORM オブジェクトを dict に変換し、Pydantic 検証経路へ委譲する。"""
-        if hasattr(obj, "__dict__"):
-            data = {
-                "repo_full_name": obj.repo_full_name,
-                "ecosystem": obj.ecosystem,
-                "package_name": obj.package_name,
-                "installed_version": obj.installed_version,
-                "osv_id": obj.osv_id,
-                "severity": obj.severity,
-                "cvss_score": obj.cvss_score,
-                "summary": obj.summary,
-                "fixed_versions": obj.fixed_versions or [],
-                "manifest_path": obj.manifest_path,
-                "detected_at": obj.detected_at.isoformat(),
-                "resolved_at": obj.resolved_at.isoformat() if obj.resolved_at else None,
-            }
-            return super().model_validate(data, **kwargs)
-        return super().model_validate(obj, **kwargs)
 
 
 class DependencyFindingListResponse(BaseModel):

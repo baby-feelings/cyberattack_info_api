@@ -24,14 +24,17 @@ from app.core.osv_client import fetch_vuln_by_id, parse_severity, query_versions
 from app.crawler_logs.writer import now_utc, write_crawler_log
 from app.depscan.github_client import (
     add_issue_comment,
+    close_issue,
     create_issue,
     find_open_issue,
     get_file_content,
     get_repo_tree,
+    get_source_files,
     list_target_repos,
 )
 from app.depscan.models import DependencyFinding
 from app.depscan.parsers import LOCKFILE_FILENAMES, parse_manifest
+from app.depscan.reachability import SOURCE_EXTENSIONS, check_reachability
 
 logger = logging.getLogger(__name__)
 
@@ -146,10 +149,61 @@ def _build_findings(
                     "summary": summary,
                     "fixed_versions": fixed_versions,
                     "manifest_path": manifest_path,
+                    # _apply_reachability が上書きする。呼び出し自体が失敗した場合の
+                    # フォールバック値として "unknown" を既定にしておく
+                    "reachability": "unknown",
                     "detected_at": now,
                 })
 
     return records
+
+
+def _apply_reachability(
+    records: list[dict[str, Any]], username: str, token: str,
+) -> None:
+    """検知レコードに到達可能性（import レベル）を付与する（records を in-place 更新）。
+
+    リポジトリ×エコシステム単位でソースファイルを1回だけ取得し、同じリポジトリの
+    複数レコードで使い回す（GitHub API 呼び出し削減）。取得失敗時は "unknown" のまま
+    据え置き、DEPSCAN 全体は失敗させない。
+    """
+    if not records:
+        return
+
+    by_repo: dict[str, set[str]] = {}
+    for rec in records:
+        by_repo.setdefault(rec["repo_full_name"], set()).add(rec["ecosystem"])
+
+    branch_map = {
+        repo_info["full_name"]: repo_info.get("default_branch") or "main"
+        for repo_info in list_target_repos(username, token)
+    }
+
+    source_cache: dict[tuple[str, str], dict[str, str]] = {}
+    for full_name, ecosystems in by_repo.items():
+        owner, repo = full_name.split("/", 1)
+        default_branch = branch_map.get(full_name, "main")
+        for ecosystem in ecosystems:
+            extensions = SOURCE_EXTENSIONS.get(ecosystem)
+            if extensions is None:
+                continue
+            try:
+                source_cache[(full_name, ecosystem)] = get_source_files(
+                    owner, repo, default_branch, token, extensions,
+                )
+            except httpx.HTTPError as exc:
+                logger.warning(
+                    "Reachability: failed to fetch source for %s (%s): %s",
+                    full_name, ecosystem, exc,
+                )
+
+    for rec in records:
+        source_files = source_cache.get((rec["repo_full_name"], rec["ecosystem"]))
+        if source_files is None:
+            continue  # 取得失敗・対象外エコシステム: "unknown" のまま据え置く
+        rec["reachability"] = check_reachability(
+            rec["ecosystem"], rec["package_name"], source_files,
+        )
 
 
 def _upsert_findings(
@@ -194,6 +248,10 @@ def _upsert_findings(
             for field, value in rec.items():
                 setattr(existing, field, value)
             existing.resolved_at = None
+        else:
+            # 既存の未解決レコード: 到達可能性はソースコードの変化を反映するため
+            # 毎回のスキャンで更新する（他のフィールドは安定しているため更新しない）
+            existing.reachability = rec.get("reachability")
 
     db.commit()
     return inserted, new_snapshots
@@ -201,15 +259,22 @@ def _upsert_findings(
 
 def _resolve_stale_findings(
     db: Session, current_keys: set[FindingKey], repo_owner_prefix: str | None = None,
-) -> int:
+) -> tuple[int, set[str]]:
     """今回のスキャンで検知されなくなった未解決 Finding を解決済みにする。
 
     Args:
         repo_owner_prefix: 指定した場合、`"{prefix}/"` から始まるリポジトリのみを
             対象にする（オンデマンドの個人スキャンが、無関係な他リポジトリの
             未解決レコードまで誤って解決済みにしてしまわないようにするため）。
+
+    Returns:
+        (解決件数, 今回1件以上解決した repo_full_name の集合)。
+        後者は _close_resolved_repo_issues が「Issue クローズ判定が必要な
+        リポジトリ」を絞り込むために使う（何も解決していないリポジトリを
+        毎回チェックする無駄を避けるため）。
     """
     resolved = 0
+    affected_repos: set[str] = set()
     now = now_utc()
     query = db.query(DependencyFinding).filter(DependencyFinding.resolved_at.is_(None))
     if repo_owner_prefix is not None:
@@ -222,8 +287,9 @@ def _resolve_stale_findings(
         if key not in current_keys:
             finding.resolved_at = now
             resolved += 1
+            affected_repos.add(finding.repo_full_name)
     db.commit()
-    return resolved
+    return resolved, affected_repos
 
 
 def _delete_old_depscan_records(db: Session) -> int:
@@ -287,6 +353,53 @@ def _file_github_issues(new_snapshots: list[dict[str, Any]]) -> None:
             logger.warning("DEPSCAN: failed to file GitHub issue for %s: %s", full_name, exc)
 
 
+def _close_resolved_repo_issues(db: Session, candidate_repos: set[str]) -> None:
+    """未解決 finding が0件になったリポジトリの Open な DEPSCAN Issue をクローズする。
+
+    Issue 本文に列挙された個々の CVE を突き合わせるのではなく、「そのリポジトリに
+    今なお未解決の finding が1件でも残っているか」で判定する（シンプルな設計判断）。
+    `candidate_repos`（今回のスキャンで1件以上 finding が解決したリポジトリ）に
+    絞ってチェックすることで、無関係なリポジトリへの無駄な API 呼び出しを避ける。
+    GitHub API 呼び出しが失敗してもリポジトリ単位で握りつぶし、DEPSCAN 全体の
+    成功可否には影響させない（Issue 起票と同じ方針）。
+    """
+    if not candidate_repos:
+        return
+
+    token = settings.GITHUB_TOKEN
+    timestamp = now_utc().strftime("%Y-%m-%d %H:%M UTC")
+
+    for full_name in candidate_repos:
+        remaining = (
+            db.query(DependencyFinding)
+            .filter(
+                DependencyFinding.repo_full_name == full_name,
+                DependencyFinding.resolved_at.is_(None),
+            )
+            .count()
+        )
+        if remaining > 0:
+            continue
+
+        owner, repo = full_name.split("/", 1)
+        try:
+            issue_number = find_open_issue(owner, repo, _ISSUE_TITLE, token)
+            if issue_number is None:
+                continue
+            add_issue_comment(
+                owner, repo, issue_number,
+                f"未解決の依存ライブラリ脆弱性が0件になったため自動的にクローズします"
+                f"（{timestamp}）。",
+                token,
+            )
+            close_issue(owner, repo, issue_number, token)
+            logger.info(
+                "DEPSCAN: closed issue #%d in %s (0 unresolved findings)", issue_number, full_name,
+            )
+        except httpx.HTTPError as exc:
+            logger.warning("DEPSCAN: failed to close GitHub issue for %s: %s", full_name, exc)
+
+
 def fetch_and_scan_dependencies() -> tuple[int, int, int]:
     """DEPSCAN のメインエントリポイント。
 
@@ -316,13 +429,26 @@ def fetch_and_scan_dependencies() -> tuple[int, int, int]:
         )
 
         records = _build_findings(dep_to_repos)
+
+        # 到達可能性の判定失敗はクロール全体を失敗させない（"unknown" のまま据え置く）
+        try:
+            _apply_reachability(records, settings.GITHUB_USERNAME, settings.GITHUB_TOKEN)
+        except Exception as exc:
+            logger.error("Failed to compute reachability: %s", exc, exc_info=True)
+
         new_count, new_snapshots = _upsert_findings(db, records)
 
         current_keys: set[FindingKey] = {
             (r["repo_full_name"], r["ecosystem"], r["package_name"], r["osv_id"])
             for r in records
         }
-        resolved_count = _resolve_stale_findings(db, current_keys)
+        resolved_count, resolved_repos = _resolve_stale_findings(db, current_keys)
+
+        # Issue クローズ失敗はクロール全体を失敗させない（Issue起票と同じ方針）
+        try:
+            _close_resolved_repo_issues(db, resolved_repos)
+        except Exception as exc:
+            logger.error("Failed to close resolved GitHub issues: %s", exc, exc_info=True)
 
         # 保持期間超過の削除失敗はクロール全体を失敗させない（KEV/OSV/JVN と同様の方針）
         try:

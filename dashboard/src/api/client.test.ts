@@ -3,9 +3,9 @@ import {
   fetchHealth, fetchRecent, fetchStats, fetchVulnerabilities,
   fetchOsvList, fetchOsvStats, fetchJvnList, fetchJvnStats,
   fetchDepscanList, fetchDepscanStats, fetchAllDepscanFindings,
-  fetchDepsOpsList,
+  fetchDepsOpsList, fetchAllDepsOpsEntries,
   fetchCrawlerLogs, githubLoginUrl, fetchScanStatus, exchangeAuthCode, UnauthorizedError,
-  type DepscanListResponse,
+  type DepscanListResponse, type DepsOpsListResponse,
 } from './client'
 
 const BASE_URL = 'https://cyberattack-info-api.onrender.com'
@@ -176,6 +176,38 @@ describe('api/client', () => {
       await fetchDepsOpsList({ repo: 'baby-feelings/baby_grow', action: 'flagged' })
       const [url] = fetchMock.mock.calls[0]
       expect(url).toContain('repo=baby-feelings%2Fbaby_grow')
+      expect(url).toContain('action=flagged')
+    })
+  })
+
+  describe('fetchAllDepsOpsEntries', () => {
+    const page = (data: DepsOpsListResponse['data'], total: number, per_page = 200) =>
+      jsonResponse({ total, page: 1, per_page, data })
+
+    it('returns all items when everything fits on one page', async () => {
+      const items = [{ pr_number: 1 }] as DepsOpsListResponse['data']
+      fetchMock.mockResolvedValueOnce(page(items, 1))
+      const all = await fetchAllDepsOpsEntries()
+      expect(all).toEqual(items)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('pages through multiple requests when total exceeds one page', async () => {
+      const firstPage = Array.from({ length: 200 }, (_, i) => ({ pr_number: i })) as DepsOpsListResponse['data']
+      const secondPage = [{ pr_number: 200 }] as DepsOpsListResponse['data']
+      fetchMock
+        .mockResolvedValueOnce(page(firstPage, 201))
+        .mockResolvedValueOnce(page(secondPage, 201))
+      const all = await fetchAllDepsOpsEntries()
+      expect(all).toHaveLength(201)
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    })
+
+    it('forwards repo/action filters to each page request', async () => {
+      fetchMock.mockResolvedValueOnce(page([], 0))
+      await fetchAllDepsOpsEntries({ repo: 'u/r', action: 'flagged' })
+      const [url] = fetchMock.mock.calls[0]
+      expect(url).toContain('repo=u%2Fr')
       expect(url).toContain('action=flagged')
     })
   })

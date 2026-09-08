@@ -243,6 +243,7 @@ export interface DependencyFindingOut {
   summary: string
   fixed_versions: string[]
   manifest_path: string
+  reachability: 'reachable' | 'unreachable' | 'unknown' | null
   detected_at: string
   resolved_at: string | null
 }
@@ -344,6 +345,24 @@ export async function fetchDepsOpsList(params: {
   if (params.repo) p.set('repo', params.repo)
   if (params.action) p.set('action', params.action)
   return apiFetch<DepsOpsListResponse>(`/api/depsops?${p}`)
+}
+
+// リポジトリ別件数の集計（未解決PRのチャート表示）には全件が必要なため、
+// DEPSCANの fetchAllDepscanFindings と同じくページングしながら全件取得する
+const DEPSOPS_MAX_PER_PAGE = 200
+
+export async function fetchAllDepsOpsEntries(params: {
+  repo?: string | null
+  action?: 'merged' | 'flagged' | null
+} = {}): Promise<DependabotPrLogOut[]> {
+  const first = await fetchDepsOpsList({ ...params, page: 1, perPage: DEPSOPS_MAX_PER_PAGE })
+  const all = [...first.data]
+  const totalPages = Math.ceil(first.total / DEPSOPS_MAX_PER_PAGE)
+  for (let page = 2; page <= totalPages; page++) {
+    const next = await fetchDepsOpsList({ ...params, page, perPage: DEPSOPS_MAX_PER_PAGE })
+    all.push(...next.data)
+  }
+  return all
 }
 
 // ── クローラー実行ログ（DEPSCAN 画面の新着データ検知に利用） ──────────

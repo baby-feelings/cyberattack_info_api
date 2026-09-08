@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { DepscanPanel } from './DepscanPanel'
 import {
   fetchAllDepscanFindings, fetchDepscanStats, fetchCrawlerLogs,
+  fetchDepsOpsList, fetchAllDepsOpsEntries,
   type DependencyFindingOut, type DepscanStatsResponse,
 } from '../api/client'
 
@@ -14,12 +15,16 @@ vi.mock('../api/client', async () => {
     fetchAllDepscanFindings: vi.fn(),
     fetchDepscanStats: vi.fn(),
     fetchCrawlerLogs: vi.fn(),
+    fetchDepsOpsList: vi.fn(),
+    fetchAllDepsOpsEntries: vi.fn(),
   }
 })
 
 const mockedFindings = vi.mocked(fetchAllDepscanFindings)
 const mockedStats = vi.mocked(fetchDepscanStats)
 const mockedLogs = vi.mocked(fetchCrawlerLogs)
+const mockedDepsOpsList = vi.mocked(fetchDepsOpsList)
+const mockedDepsOpsAll = vi.mocked(fetchAllDepsOpsEntries)
 
 function finding(overrides: Partial<DependencyFindingOut> = {}): DependencyFindingOut {
   return {
@@ -35,6 +40,7 @@ function finding(overrides: Partial<DependencyFindingOut> = {}): DependencyFindi
     manifest_path: 'requirements.txt',
     detected_at: '2026-06-01T00:00:00Z',
     resolved_at: null,
+    reachability: null,
     ...overrides,
   }
 }
@@ -48,6 +54,8 @@ describe('DepscanPanel', () => {
       started_at: '2026-06-01T00:00:00Z', finished_at: '2026-06-01T00:01:00Z',
       duration_seconds: 60, inserted: 0, updated: 0, deleted: 0, error_message: null,
     }])
+    mockedDepsOpsList.mockResolvedValue({ total: 0, page: 1, per_page: 20, data: [] })
+    mockedDepsOpsAll.mockResolvedValue([])
   })
 
   afterEach(() => {
@@ -61,6 +69,19 @@ describe('DepscanPanel', () => {
 
     render(<DepscanPanel />)
     await waitFor(() => expect(screen.getByText('該当する依存ライブラリ脆弱性はありません')).toBeInTheDocument())
+  })
+
+  it('opens the Dependabot ops modal when its button is clicked', async () => {
+    mockedFindings.mockResolvedValue([])
+    mockedStats.mockResolvedValue(EMPTY_STATS)
+
+    render(<DepscanPanel />)
+    await waitFor(() => expect(screen.getByText('該当する依存ライブラリ脆弱性はありません')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByText('Dependabot運用状況'))
+    await waitFor(() => {
+      expect(screen.getByText('Dependabot 運用状況（DEPSOPS）')).toBeInTheDocument()
+    })
   })
 
   it('groups findings by package and renders a row per group', async () => {
