@@ -185,14 +185,17 @@ tests/                      # app/ と同じドメイン構成でミラーリン
 
 dashboard/               # Vercel デプロイの React ダッシュボード
                          # CISA KEV・OSV（Pub 含む 10 エコシステム・180 日表示）・JVN・
-                         # DEPSCAN（GitHub ログイン必須。本人所有リポジトリのみ表示。
-                         # Dependabot 運用状況＝DEPSOPS の判定履歴も折りたたみセクションとして統合）を
-                         # 画面下部固定タブ（4つ。DEPSOPS 専用タブは作らない）で切り替え表示
+                         # DEPSCAN（GitHub ログイン必須。本人所有リポジトリのみ表示。到達可能性
+                         # 列を含む）を画面下部固定タブ（4つ。DEPSOPS 専用タブは作らない）で
+                         # 切り替え表示。Dependabot 運用状況＝DEPSOPS の判定履歴は DEPSCAN タブ内の
+                         # ボタンから開く全画面モーダルとして統合
                          #
                          # src/components/{kev,osv,jvn,depscan}/ 配下に、各 Panel から切り出した
                          # 行コンポーネント（KevRow/OsvRow/JvnRow/DepscanGroupRow）・グラフコンポーネント
-                         # （VendorBarChart/EcosystemBarChart/RepoBarChart）・DependabotOpsSection
-                         # （DEPSOPS 判定履歴。折りたたみ式、開いたときのみ GET /api/depsops を取得）を配置
+                         # （VendorBarChart/EcosystemBarChart/RepoBarChart/DepsOpsRepoBarChart）・
+                         # grouping.ts（DEPSCAN 集約ロジック）・depsopsGrouping.ts（DEPSOPS
+                         # リポジトリ別未解決件数集計）・DependabotOpsModal（DEPSOPS 判定履歴。
+                         # 全画面モーダル、開いたときのみ GET /api/depsops を取得）を配置
 
 alembic/                 # DBスキーマのマイグレーション管理
 ├── env.py               # Base.metadata・全モデル import（新規ドメイン追加時はここに追記必須）・
@@ -424,6 +427,44 @@ Open Issue を検索し、あれば `add_issue_comment` で追記、無ければ
 不足等）はリポジトリ単位で `except httpx.HTTPError` により握りつぶし、DEPSCAN 全体の
 成功可否には影響させない。
 
+### DEPSCAN のリポジトリ内未解決 findings が0件になったら Issue を自動クローズする
+`app.depscan.crawler._close_resolved_repo_issues` が、DEPSCAN の再スキャンで「そのリポジトリの
+未解決 finding が実際に0件になったこと」を確認できたタイミングで Open な DEPSCAN Issue を
+自動的にクローズする。トリガーを **DEPSCAN の再スキャン検証後**とし、DEPSOPS の PR マージ
+直後に即座にクローズしない設計（マージしただけでは本当に脆弱性が解消されたか未検証のため）。
+`_resolve_stale_findings` が返す `(解決件数, 今回1件以上解決した repo_full_name の集合)` の
+後者（`affected_repos`）を候補リポジトリとして受け取り、そのリポジトリに絞って「未解決
+finding が本当に0件か」を再度 DB に問い合わせてから判定する（無関係なリポジトリへの
+無駄な GitHub API 呼び出しを避けるため）。Issue 本文に列挙された個々の CVE を突き合わせる
+のではなく、「未解決 finding が0件か」というシンプルな条件のみで判定する。クローズ前に
+`add_issue_comment` で解決を報告するコメントを追加してから `close_issue`（PATCH
+`state=closed`）を呼ぶ。GitHub API 呼び出し失敗はリポジトリ単位で握りつぶし、DEPSCAN
+全体の成功可否には影響させない（Issue 起票と同じ方針）。
+
+### DEPSCAN の到達可能性（reachability）ヒューリスティック判定
+「脆弱な依存が存在すること」と「その脆弱性が当該アプリで実際に到達・悪用可能であること」は
+別問題である（依存スキャナの偽陽性の主因は到達不能コードの検知）。`app.depscan.reachability`
+が、脆弱なパッケージが検知元リポジトリのソースコード内で実際に **import/require/use されて
+いるか**（import レベル。関数呼び出しレベルの解析はスコープ外）をヒューリスティックに判定し、
+`DependencyFinding.reachability`（`"reachable"` / `"unreachable"` / `"unknown"`）へ格納する
+（DEPSCAN テーブルの「到達可能性」列に表示）。
+
+- 対応エコシステムは DEPSCAN が対応する全10エコシステム（PyPI/npm/NuGet/Pub/Go/Maven/
+  RubyGems/crates.io/Packagist/Hex）。パッケージ名からソースコード内の識別子への変換精度は
+  エコシステムによって大きく異なる（npm・Pub はほぼ厳密、PyPI・RubyGems・crates.io は
+  ハイフン→アンダースコア等のヒューリスティック正規化で概ね対応、Maven・Packagist・Hex は
+  パッケージ座標とソース内識別子の対応が慣習的なものでしかなく最も精度が低い best-effort）
+- `app.depscan.github_client.get_source_files` が対象リポジトリの git tree から拡張子で
+  ソースファイルを絞り込み取得する（vendored ディレクトリ除外、`_MAX_SOURCE_FILES=200`件・
+  `_MAX_SOURCE_FILE_SIZE=300_000`バイトの上限あり）。`app.depscan.crawler._apply_reachability`
+  がリポジトリ×エコシステムごとに1回だけソースを取得して使い回し、`check_reachability` を
+  各 finding に適用する
+- ソース取得失敗はリポジトリ・エコシステム単位で `except httpx.HTTPError` により握りつぶし
+  `"unknown"` のまま残す。DEPSCAN 全体（`fetch_and_scan_dependencies`）は `_apply_reachability`
+  自体の呼び出しも try/except で囲み、失敗してもクロール全体は成功扱いとする
+- 既存の未解決レコードについても、再スキャンのたびに `reachability` を再計算して上書きする
+  （`_upsert_findings` の既存レコード分岐）
+
 ### DEPSCAN の解決済みレコードは保持期間超過で自動削除する（未解決は対象外）
 `app.depscan.crawler._delete_old_depscan_records` が、`resolved_at` が
 `DEPSCAN_RETENTION_DAYS`（デフォルト 180 日）より古いレコードのみを削除する
@@ -545,11 +586,36 @@ Slack 通知は実行時点のスナップショットのみで履歴を持た�
 （`app/depsops/router.py`、リポジトリ・action でフィルタ可能なページネーション付き一覧）
 で参照する。
 
-ダッシュボードには DEPSOPS 専用タブは作らず、DEPSCAN タブ内の折りたたみセクション
-（`dashboard/src/components/depscan/DependabotOpsSection.tsx`）として統合している
+ダッシュボードには DEPSOPS 専用タブは作らず、DEPSCAN タブ内のボタンから開く全画面モーダル
+（`dashboard/src/components/depscan/DependabotOpsModal.tsx`）として統合している
 （KEV/OSV/JVN/DEPSCAN は脆弱性データソースという同列の性質だが、DEPSOPS は
-「PR運用状況の確認」という別の性質のため、5つ目のタブは過剰と判断した）。開いたときのみ
+「PR運用状況の確認」という別の性質のため、5つ目のタブは過剰と判断した。当初は
+折りたたみセクション〈`DependabotOpsSection.tsx`〉として実装していたが、
+「リポジトリ別件数（未解決）」の棒グラフ〈`DepsOpsRepoBarChart.tsx`〉を追加する際に
+画面が縦に間延びする問題があり、全画面モーダルへ作り直した）。開いたときのみ
 `GET /api/depsops` を取得する。
+
+**セキュリティ更新/バージョン更新のヒューリスティック判定（`is_security_update`）:**
+DEPSOPS が判定した各 Dependabot PR について、それが「セキュリティ更新」（脆弱性検知に
+即応した修正PR）なのか「単なる定期バージョン更新」なのかをヒューリスティックに判定し、
+`DependabotPrLog.is_security_update` に記録する（DEPSOPSモーダルの「種別」列に表示）。
+`app.depsops.github_client.list_open_dependabot_alerts`（`GET /repos/{owner}/{repo}/
+dependabot/alerts?state=open`）でリポジトリ単位に1回だけ Open な Dependabot alert の
+対象パッケージ名一覧を取得し、`app.depsops.runner._matches_security_alert` が PR タイトルと
+正規表現の単語境界一致で照合する（**GitHub 自身の Dependabot alerts と照合する方式**。
+DEPSCAN 自前の DB とは照合しない、という明示的な選択）。alert取得に失敗した場合（後述の
+権限不足等）は `None`（判定不能）のままとし、DEPSOPS本来のマージ判定処理は継続する。
+
+`GITHUB_TOKEN` に **Dependabot alerts の読み取り権限**が必要。この権限はトークンの種類に
+より設定箇所が異なる点に注意（実際に classic PAT を使っている場合の設定手順は下記参照）:
+- **fine-grained PAT**: Permissions の「Dependabot alerts: Read-only」
+- **classic PAT**: `security_events` スコープ（fine-grained のような個別権限名は無い）
+
+権限が無い場合は GitHub API が 403 を返し、`is_security_update` は `null`（ダッシュボードでは
+「不明」）のまま記録され続ける。**過去に記録済みの `DependabotPrLog` 行は遡って再判定
+されない**（`DependabotPrLog` は実行のたびに新しい行を積み増す履歴テーブルであり、
+既存行を書き換える処理は無いため）。権限追加後に反映されるのは、その反映後に実行された
+DEPSOPS の判定結果のみ。
 
 **Compatibility score バッジ（`compatibility_badge_url`）:**
 Dependabot は exact version bump のPR（`Bump X from A to B`形式）の本文に、GitHub が
@@ -602,7 +668,7 @@ APScheduler と GitHub Actions の二重クロールは発生しない（Render 
 ### ダッシュボードのタブ切り替え UI（App.tsx）
 KEV / OSV / JVN / DEPSCAN の 4 データソースは、画面下部固定のタブバーで切り替え表示する構成
 （縦並び表示ではない）。DEPSOPS（Dependabot 運用状況）に専用タブは作らず、DEPSCAN タブ内の
-折りたたみセクションとして統合している（詳細は「DEPSOPS」節参照）。
+ボタンから開く全画面モーダルとして統合している（詳細は「DEPSOPS」節参照）。
 `TabKey` / `TABS` 定数と `activeTab` state で選択中セクションのみを条件レンダリングし、
 サーバー稼働状況（`HealthStatus`）とエラーバナーは全タブ共通で常に表示する。
 タブには `role="tablist"/"tab"/"tabpanel"` と `aria-selected`/`aria-controls`/`aria-labelledby` を付与済み。
@@ -829,7 +895,10 @@ GitHub Actions 無料プランでは複数 cron の発火が不安定なため�
   `SLACK_WEBHOOK_URL`（任意）、`GITHUB_TOKEN`（任意、DEPSCAN/DEPSOPS 共用の PAT。
   Contents: Read-only + Issues: Write + Pull requests: Write 推奨。未設定時は DEPSCAN/DEPSOPS
   のみエラー終了。Issues: Write が無い場合は Issue自動起票のみ失敗、Pull requests: Write が
-  無い場合は DEPSOPS のPRマージ・rebase依頼コメントのみ失敗）。DEPSCAN ダッシュボードの
+  無い場合は DEPSOPS のPRマージ・rebase依頼コメントのみ失敗。DEPSOPS の `is_security_update`
+  判定には別途 Dependabot alerts の読み取り権限が必要〈classic PAT なら `security_events`
+  スコープ、fine-grained PAT なら「Dependabot alerts: Read-only」〉。無い場合は判定結果が
+  `null`〈不明〉のまま記録されるのみで DEPSOPS 本来のマージ判定には影響しない）。DEPSCAN ダッシュボードの
   GitHub ログイン用に `GITHUB_OAUTH_CLIENT_ID`・`GITHUB_OAUTH_CLIENT_SECRET`（GitHub
   OAuth App の Client ID/Secret）・`SESSION_SECRET_KEY`（セッションJWT署名鍵。
   `python -c "import secrets; print(secrets.token_urlsafe(32))"` 等で生成）も設定する

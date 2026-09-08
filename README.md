@@ -16,7 +16,7 @@ Claude Code や CI/CD ツールから「今まさに悪用されているサイ�
 | **CISA KEV 自動クローラー** | 毎日 JST 04:05 に KEV → OSV → JVN → DEPSCAN を順次実行（CISA KEV フィード取得・Upsert） |
 | **OSV 自動クローラー** | 同上（OSV API から 10 エコシステムの主要パッケージの脆弱性を取得・Upsert） |
 | **JVN 自動クローラー** | 同上（MyJVN API から国内脆弱性を取得・Upsert） |
-| **依存ライブラリ脆弱性スキャン（DEPSCAN）** | 同上（GitHub 上の自作アプリ全リポジトリ〈プライベート含む〉のロックファイルを OSV API とリアルタイム照合。新規検知はリポジトリ自身に GitHub Issue も自動起票） |
+| **依存ライブラリ脆弱性スキャン（DEPSCAN）** | 同上（GitHub 上の自作アプリ全リポジトリ〈プライベート含む〉のロックファイルを OSV API とリアルタイム照合。新規検知はリポジトリ自身に GitHub Issue も自動起票し、未解決 finding が0件になると自動クローズ。到達可能性〈import レベルのヒューリスティック〉も判定） |
 | **DEPSCAN ダッシュボードの GitHub ログイン** | 任意の GitHub アカウントで OAuth ログインし、本人が所有するリポジトリの検知結果のみ閲覧可能（サーバー側で強制するアクセス制御）。ログイン時にオンデマンドでスキャンを実行し、直近 24 時間以内にスキャン済みなら再スキャンせず結果を即座に表示 |
 | **OSV 古いデータ自動削除** | 180 日以上前のレコードをクロール時に自動削除（DB 容量管理） |
 | **Render スリープ対策** | GitHub Actions cron で毎日クロールを強制実行（Free プラン対応） |
@@ -25,12 +25,12 @@ Claude Code や CI/CD ツールから「今まさに悪用されているサイ�
 | **CVE 個別取得** | CVE ID を指定して脆弱性詳細を 1 件取得（KEV） |
 | **統計 API** | ベンダー別ランキング・月別トレンド・重要度別集計（KEV / OSV / JVN / DEPSCAN） |
 | **クローラー実行ログ API** | KEV / OSV / JVN / DEPSCAN クローラーの実行履歴（成否・件数・所要時間）を取得 |
-| **Dependabot PR 自動運用（DEPSOPS）** | 安全性の高い Dependabot PR（マイナー/パッチ更新・CI あり・コンフリクトなし）のみ自動マージ。判定履歴（自動マージ・要確認いずれも）は `GET /api/depsops` で後から確認可能 |
+| **Dependabot PR 自動運用（DEPSOPS）** | 安全性の高い Dependabot PR（マイナー/パッチ更新・CI あり・コンフリクトなし）のみ自動マージ。判定履歴（自動マージ・要確認いずれも、セキュリティ更新かのヒューリスティック判定・Compatibility score バッジ含む）は `GET /api/depsops` で後から確認可能 |
 | **Slack 通知** | 新規追加・更新時・エラー時に Slack へ自動通知（KEV / OSV / JVN / DEPSCAN / DEPSOPS） |
 | **手動クロール** | `POST /admin/crawl` / `POST /admin/osv-crawl` / `POST /admin/jvn-crawl` / `POST /admin/depscan-crawl` / `POST /admin/dependabot-ops`（バックグラウンド 202 即時返却・`?days=N` 対応） |
 | **API キー認証** | `X-API-KEY` ヘッダーによるシンプルな固定キー認証 |
 | **ヘルスチェック** | DB 接続確認付きの死活監視エンドポイント |
-| **React ダッシュボード** | CISA KEV・OSV（Pub 含む 10 エコシステム・180 日表示）・JVN・DEPSCAN（GitHub ログイン必須、本人所有リポジトリのみ表示。Dependabot 運用状況＝DEPSOPS の判定履歴も折りたたみセクションとして統合）を画面下部固定タブ（4つ）で切り替え表示（Vercel デプロイ） |
+| **React ダッシュボード** | CISA KEV・OSV（Pub 含む 10 エコシステム・180 日表示）・JVN・DEPSCAN（GitHub ログイン必須、本人所有リポジトリのみ表示。到達可能性の判定結果も表示）を画面下部固定タブ（4つ）で切り替え表示。Dependabot 運用状況＝DEPSOPS の判定履歴は DEPSCAN タブ内のボタンから開く全画面モーダルとして統合（Vercel デプロイ） |
 
 ---
 
@@ -359,12 +359,21 @@ curl -H "X-API-KEY: your-key" \
       "summary": "...",
       "fixed_versions": ["3.4.8"],
       "manifest_path": "requirements.txt",
+      "reachability": "reachable",
       "detected_at": "2026-08-01T04:05:00+00:00",
       "resolved_at": null
     }
   ]
 }
 ```
+
+> **`reachability`（到達可能性）について**
+> 脆弱なパッケージが検知元リポジトリのソースコード内で実際に import/require/use されているかを
+> ヒューリスティックに判定した結果（`reachable` / `unreachable` / `unknown`）。「脆弱な依存が
+> 存在すること」と「その脆弱性が実際に到達・悪用可能であること」は別問題であるため、優先度
+> 判断の参考情報として利用する。import レベルの判定に留まり（関数呼び出しレベルの解析は
+> 行わない）、特に Maven/Packagist/Hex はパッケージ座標とソース内識別子の対応が慣習的な
+> ものでしかなく精度が低い best-effort である点に注意。
 
 ### GET /api/depscan/stats — 依存ライブラリ脆弱性の統計情報
 
@@ -486,13 +495,30 @@ curl -H "X-API-KEY: your-key" \
       "title": "chore(deps-dev): Bump typescript from 6.0.3 to 7.0.2",
       "action": "flagged",
       "reason": "メジャーバージョンアップ",
+      "is_security_update": false,
+      "compatibility_badge_url": null,
       "processed_at": "2026-09-07T12:05:21+00:00"
     }
   ]
 }
 ```
 
-> **Note:** ダッシュボード（Vercel）では、DEPSOPS 専用タブは無く DEPSCAN タブ内の「Dependabot 運用状況」折りたたみセクションからこの一覧を閲覧できる。
+> **`is_security_update`（セキュリティ更新かのヒューリスティック判定）について**
+> GitHub 自身の Dependabot alerts（`GET /repos/{owner}/{repo}/dependabot/alerts?state=open`）と
+> PR タイトルを照合し、`true`（一致・セキュリティ更新の可能性が高い）/ `false`（不一致・
+> 通常のバージョン更新）/ `null`（判定不能）を記録する。`null` が続く場合は `GITHUB_TOKEN` に
+> Dependabot alerts の読み取り権限（classic PAT: `security_events` スコープ / fine-grained
+> PAT: 「Dependabot alerts: Read-only」）が付与されていない可能性がある。権限追加後に実行された
+> 分から反映され、過去に記録済みの履歴行は遡って再判定されない。
+>
+> **`compatibility_badge_url`（Compatibility score バッジ）について**
+> Dependabot が exact version bump のPR本文（`Bump X from A to B`形式）に埋め込む GitHub 提供の
+> バッジ画像URL。範囲指定の requirement 更新PR（`Update X requirement from >=A to >=B`形式）等
+> には存在せず `null` になる。GitHub 側にスコアを数値として取得する構造化APIが無いため、
+> 画像URLをそのまま保存・表示する。
+>
+> **Note:** ダッシュボード（Vercel）では、DEPSOPS 専用タブは無く DEPSCAN タブ内のボタンから
+> 開く「Dependabot 運用状況」全画面モーダルからこの一覧を閲覧できる。
 
 ### GET /api/crawler-logs — クローラー実行ログ一覧
 
@@ -661,7 +687,7 @@ pytest
 start htmlcov/index.html  # Mac/Linux: open htmlcov/index.html
 ```
 
-**テスト結果（最新）:** 390 テスト / カバレッジ 98%
+**テスト結果（最新）:** 454 テスト / カバレッジ 98%
 
 ---
 
@@ -785,7 +811,7 @@ cyberattack_info_api/
 | `OSV_DAYS` | - | OSV 取得対象の直近日数（デフォルト: `30`） |
 | `OSV_RETENTION_DAYS` | - | OSV データ保持期間（日数・デフォルト: `180`） |
 | `JVN_DAYS` | - | JVN 取得対象の直近日数（デフォルト: `30`） |
-| `GITHUB_TOKEN` | - | DEPSCAN/DEPSOPS 共用の GitHub PAT（fine-grained: Contents Read-only + **Issues Write** + **Pull requests Write** / classic: repo スコープ）。未設定時は DEPSCAN/DEPSOPS のみエラー終了。Issues Write が無い場合、Issue自動起票のみ失敗（DEPSCAN自体は成功扱い）。Pull requests Write が無い場合、DEPSOPSのPRマージ・rebase依頼のみ失敗 |
+| `GITHUB_TOKEN` | - | DEPSCAN/DEPSOPS 共用の GitHub PAT（fine-grained: Contents Read-only + **Issues Write** + **Pull requests Write** / classic: repo スコープ）。未設定時は DEPSCAN/DEPSOPS のみエラー終了。Issues Write が無い場合、Issue自動起票・自動クローズのみ失敗（DEPSCAN自体は成功扱い）。Pull requests Write が無い場合、DEPSOPSのPRマージ・rebase依頼のみ失敗。DEPSOPS の `is_security_update` 判定には別途 Dependabot alerts の読み取り権限（fine-grained: 「Dependabot alerts: Read-only」/ classic: `security_events` スコープ）が必要（無い場合は判定結果が `null` のまま記録されるのみで、DEPSOPS本来のマージ判定には影響しない） |
 | `GITHUB_USERNAME` | ✅ | DEPSCAN のスキャン対象 GitHub アカウント。コード側にデフォルト値は持たないため、**未設定だとアプリ全体が起動しない** |
 | `DEPSCAN_CRON_HOUR_UTC` | - | DEPSCAN 実行時刻（時・UTC）（デフォルト: `22`） |
 | `DEPSCAN_RETENTION_DAYS` | - | DEPSCAN データの保持期間（日数・デフォルト: `180`）。解決済み（`resolved_at` 設定済み）のままこの日数を超えたレコードのみ自動削除（未解決レコードは対象外） |
@@ -825,6 +851,11 @@ Slack 通知に加えて、DEPSCAN の新規検知は検知されたリポジト
 - タイトル固定（`🚨 依存ライブラリの脆弱性が検出されました (DEPSCAN)`）。同名の Open な Issue が既にあればコメントを追記し、無ければ新規作成する（1リポジトリにつき常に1つの Open Issue に集約）
 - 本文は Slack と同じくパッケージ単位に集約した形式
 - `GITHUB_TOKEN` に `Issues: Write` 権限が無い場合、Issue 作成のみ失敗しログに警告が残る（DEPSCAN 自体は成功扱い）
+
+**Issue の自動クローズ:** その後の再スキャンで、対象リポジトリの未解決 finding が実際に0件に
+なったことを確認できると、Open な DEPSCAN Issue へ解決を報告するコメントを追加した上で自動的に
+クローズする。トリガーは DEPSCAN の再スキャンでの検証後であり、Dependabot PR をマージした
+直後には（本当に解消されたか未検証のため）クローズしない。
 
 ---
 
