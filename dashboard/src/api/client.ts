@@ -324,6 +324,7 @@ export interface DependabotPrLogOut {
   action: 'merged' | 'flagged'
   reason: string | null
   is_security_update: boolean | null
+  compatibility_badge_url: string | null
   processed_at: string
 }
 

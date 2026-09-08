@@ -42,6 +42,22 @@ function SecurityUpdateBadge({ isSecurityUpdate }: { isSecurityUpdate: boolean |
   )
 }
 
+// Dependabot が PR 本文に埋め込む Compatibility score バッジ（GitHub提供の画像）。
+// exact version bump のPRにのみ存在し、範囲指定の requirement 更新PR等には無い
+function CompatibilityScoreBadge({ badgeUrl }: { badgeUrl: string | null }) {
+  if (!badgeUrl) {
+    return <span className="text-[10px] text-slate-600">—</span>
+  }
+  return (
+    <img
+      src={badgeUrl}
+      alt="Dependabot compatibility score"
+      className="h-5 max-w-[160px]"
+      loading="lazy"
+    />
+  )
+}
+
 // Dependabot PR 自動運用（DEPSOPS）の判定履歴を表示する全画面モーダル。
 // DEPSCAN タブ内のボタンから開く（5つ目の固定タブにはしない設計判断。詳細はCLAUDE.md参照）。
 export function DependabotOpsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -153,16 +169,17 @@ export function DependabotOpsModal({ open, onClose }: { open: boolean; onClose: 
           </div>
 
           {loading ? (
-            <TableLoadingSkeleton columnWidths={['w-40', 'w-16', 'flex-1', 'w-24']} />
+            <TableLoadingSkeleton columnWidths={['w-40', 'w-24', 'w-16', 'flex-1', 'w-24']} />
           ) : items.length === 0 ? (
             <EmptyState icon={<GitPullRequest size={24} />} message="該当する PR はありません" />
           ) : (
             <>
               <div className="overflow-x-auto -mx-1 px-1">
-                <table className="w-full text-sm min-w-[720px]">
+                <table className="w-full text-sm min-w-[860px]">
                   <thead>
                     <tr className="border-b border-slate-800">
                       <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-48">リポジトリ</th>
+                      <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-40">互換性スコア</th>
                       <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3">PR</th>
                       <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-28">判定</th>
                       <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-28">種別</th>
@@ -174,6 +191,9 @@ export function DependabotOpsModal({ open, onClose }: { open: boolean; onClose: 
                       <tr key={`${item.repo_full_name}-${item.pr_number}-${item.processed_at}`}>
                         <td className="py-2.5 pr-3">
                           <p className="text-slate-300 text-xs truncate max-w-[220px]">{item.repo_full_name}</p>
+                        </td>
+                        <td className="py-2.5 pr-3">
+                          <CompatibilityScoreBadge badgeUrl={item.compatibility_badge_url} />
                         </td>
                         <td className="py-2.5 pr-3">
                           <a
