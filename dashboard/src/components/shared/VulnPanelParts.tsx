@@ -28,10 +28,12 @@ export function SeverityBadge({
 // ── チャートカードの外枠（アイコン・タイトル・ローディング/空状態） ──
 
 export function ChartCard({
-  icon, title, loading, isEmpty, height, children, footer,
+  icon, title, description, loading, isEmpty, height, children, footer,
 }: {
   icon: ReactNode
   title: string
+  /** タイトル下に表示する小さな補足説明（誤解されやすい集計の前提等を明記する用途） */
+  description?: string
   loading: boolean
   isEmpty: boolean
   height: number
@@ -41,9 +43,14 @@ export function ChartCard({
 }) {
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        {icon}
-        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{title}</span>
+      <div className="flex flex-col gap-0.5">
+        <div className="flex items-center gap-2">
+          {icon}
+          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{title}</span>
+        </div>
+        {description && (
+          <p className="text-[10px] text-slate-600 leading-snug">{description}</p>
+        )}
       </div>
       <div style={{ height }}>
         {loading || isEmpty ? (

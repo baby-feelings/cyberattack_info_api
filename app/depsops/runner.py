@@ -147,6 +147,7 @@ def _record_pr_logs(
     merged: list[dict[str, Any]],
     flagged: list[dict[str, Any]],
     processed_at: datetime,
+    resolved: list[dict[str, Any]] | None = None,
 ) -> None:
     """判定した PR を1件1行で DependabotPrLog に記録する。
 
@@ -175,7 +176,55 @@ def _record_pr_logs(
             compatibility_badge_url=item.get("compatibility_badge_url"),
             processed_at=processed_at,
         ))
+    for item in resolved or []:
+        db.add(DependabotPrLog(
+            repo_full_name=item["repo_full_name"],
+            pr_number=item["pr_number"],
+            title=item["title"],
+            action="closed",
+            reason=item.get("reason"),
+            is_security_update=item.get("is_security_update"),
+            compatibility_badge_url=item.get("compatibility_badge_url"),
+            processed_at=processed_at,
+        ))
     db.commit()
+
+
+def _find_resolved_flagged_prs(
+    db: Session, full_name: str, open_pr_numbers: set[int],
+) -> list[dict[str, Any]]:
+    """当該リポジトリで直近の判定が "flagged"（要確認）のまま記録されているが、
+    今回のスキャンで Open な Dependabot PR 一覧に含まれなくなった PR を検出する。
+
+    Dependabot自身による自動クローズ（後続のgrouped PRに統合される等）や、
+    人手によるマージ・クローズなど、DEPSOPSの関知しないところで PR が解消される
+    ケースがある。これを検知して"closed"として記録しないと、ダッシュボードの
+    「未解決」件数（最新状態が"flagged"のPR数）が実態と乖離したまま残り続ける
+    （典型例: CI未設定のリポジトリでは全PRが機械的にflaggedになるため、後から
+    手動マージやDependabotの自動クローズで解消されても「未解決」表示が減らない）。
+    """
+    rows = (
+        db.query(DependabotPrLog)
+        .filter(DependabotPrLog.repo_full_name == full_name)
+        .order_by(DependabotPrLog.processed_at.desc())
+        .all()
+    )
+    latest_by_pr: dict[int, DependabotPrLog] = {}
+    for row in rows:
+        latest_by_pr.setdefault(row.pr_number, row)
+
+    return [
+        {
+            "repo_full_name": full_name,
+            "pr_number": row.pr_number,
+            "title": row.title,
+            "is_security_update": row.is_security_update,
+            "compatibility_badge_url": row.compatibility_badge_url,
+            "reason": "Dependabotの自動クローズや手動マージ等、DEPSOPS外の要因で解消済み",
+        }
+        for pr_number, row in latest_by_pr.items()
+        if row.action == "flagged" and pr_number not in open_pr_numbers
+    ]
 
 
 def _delete_old_depsops_records(db: Session) -> int:
@@ -207,90 +256,99 @@ def run_dependabot_ops() -> tuple[int, int, int]:
     started_at = now_utc()
     merged: list[dict[str, Any]] = []
     flagged: list[dict[str, Any]] = []
+    resolved: list[dict[str, Any]] = []
     error_count = 0
 
+    db: Session = SessionLocal()
     try:
-        repos = list_target_repos(settings.GITHUB_USERNAME, settings.GITHUB_TOKEN)
-        logger.info("DEPSOPS: %d target repos to scan", len(repos))
+        try:
+            repos = list_target_repos(settings.GITHUB_USERNAME, settings.GITHUB_TOKEN)
+            logger.info("DEPSOPS: %d target repos to scan", len(repos))
 
-        for repo_info in repos:
-            full_name = repo_info["full_name"]
-            owner, repo = full_name.split("/", 1)
+            for repo_info in repos:
+                full_name = repo_info["full_name"]
+                owner, repo = full_name.split("/", 1)
 
-            try:
-                prs = list_open_dependabot_prs(owner, repo, settings.GITHUB_TOKEN)
-            except httpx.HTTPError as exc:
-                logger.warning("DEPSOPS: failed to list PRs for %s: %s", full_name, exc)
-                error_count += 1
-                continue
-
-            if not prs:
-                continue
-
-            has_ci = has_ci_workflows(owner, repo, settings.GITHUB_TOKEN)
-            logger.info(
-                "DEPSOPS: %s has %d open Dependabot PR(s), CI=%s", full_name, len(prs), has_ci,
-            )
-
-            # セキュリティ更新かどうかの判定用に、リポジトリ単位で1回だけ取得し使い回す。
-            # 権限不足（GITHUB_TOKEN に Dependabot alerts: Read-only が無い）等で
-            # 失敗しても DEPSOPS 本来のマージ判定は継続する（判定不能 = None のまま）
-            alert_package_names: set[str] | None
-            try:
-                alerts = list_open_dependabot_alerts(owner, repo, settings.GITHUB_TOKEN)
-                alert_package_names = {a["dependency"]["package"]["name"] for a in alerts}
-            except httpx.HTTPError as exc:
-                logger.warning(
-                    "DEPSOPS: failed to list Dependabot alerts for %s: %s", full_name, exc,
-                )
-                alert_package_names = None
-
-            for pr in prs:
                 try:
-                    action, item = _process_pr(
-                        full_name, owner, repo, pr, has_ci, settings.GITHUB_TOKEN,
-                        alert_package_names,
-                    )
+                    prs = list_open_dependabot_prs(owner, repo, settings.GITHUB_TOKEN)
                 except httpx.HTTPError as exc:
-                    logger.warning(
-                        "DEPSOPS: failed to process %s#%d: %s", full_name, pr["number"], exc,
-                    )
+                    logger.warning("DEPSOPS: failed to list PRs for %s: %s", full_name, exc)
                     error_count += 1
                     continue
 
-                if action == "merged" and item is not None:
-                    merged.append(item)
-                elif action == "flagged" and item is not None:
-                    flagged.append(item)
+                # Open PR一覧が取得できた時点で、過去にflagged記録したPRが
+                # DEPSOPS外の要因で解消済みでないかを毎回チェックする（PRの有無に関わらず）
+                resolved.extend(_find_resolved_flagged_prs(
+                    db, full_name, {pr["number"] for pr in prs},
+                ))
 
-    except Exception as exc:
-        write_crawler_log(
-            crawler_type="DEPSOPS",
-            status="error",
-            started_at=started_at,
-            finished_at=now_utc(),
-            inserted=len(merged),
-            updated=len(flagged),
-            deleted=0,
-            error_message=str(exc),
-        )
-        notify_error("DEPSOPS", str(exc))
-        raise
+                if not prs:
+                    continue
 
-    # 判定履歴を DB に記録（ダッシュボードでの一覧表示用）。失敗してもクロール自体は成功扱いとする
-    try:
-        db: Session = SessionLocal()
+                has_ci = has_ci_workflows(owner, repo, settings.GITHUB_TOKEN)
+                logger.info(
+                    "DEPSOPS: %s has %d open Dependabot PR(s), CI=%s",
+                    full_name, len(prs), has_ci,
+                )
+
+                # セキュリティ更新かどうかの判定用に、リポジトリ単位で1回だけ取得し使い回す。
+                # 権限不足（GITHUB_TOKEN に Dependabot alerts: Read-only が無い）等で
+                # 失敗しても DEPSOPS 本来のマージ判定は継続する（判定不能 = None のまま）
+                alert_package_names: set[str] | None
+                try:
+                    alerts = list_open_dependabot_alerts(owner, repo, settings.GITHUB_TOKEN)
+                    alert_package_names = {a["dependency"]["package"]["name"] for a in alerts}
+                except httpx.HTTPError as exc:
+                    logger.warning(
+                        "DEPSOPS: failed to list Dependabot alerts for %s: %s", full_name, exc,
+                    )
+                    alert_package_names = None
+
+                for pr in prs:
+                    try:
+                        action, item = _process_pr(
+                            full_name, owner, repo, pr, has_ci, settings.GITHUB_TOKEN,
+                            alert_package_names,
+                        )
+                    except httpx.HTTPError as exc:
+                        logger.warning(
+                            "DEPSOPS: failed to process %s#%d: %s", full_name, pr["number"], exc,
+                        )
+                        error_count += 1
+                        continue
+
+                    if action == "merged" and item is not None:
+                        merged.append(item)
+                    elif action == "flagged" and item is not None:
+                        flagged.append(item)
+
+        except Exception as exc:
+            write_crawler_log(
+                crawler_type="DEPSOPS",
+                status="error",
+                started_at=started_at,
+                finished_at=now_utc(),
+                inserted=len(merged),
+                updated=len(flagged),
+                deleted=len(resolved),
+                error_message=str(exc),
+            )
+            notify_error("DEPSOPS", str(exc))
+            raise
+
+        # 判定履歴を DB に記録（ダッシュボードでの一覧表示用）。
+        # 失敗してもクロール自体は成功扱いとする
         try:
-            _record_pr_logs(db, merged, flagged, started_at)
+            _record_pr_logs(db, merged, flagged, started_at, resolved=resolved)
             _delete_old_depsops_records(db)
-        finally:
-            db.close()
-    except Exception as exc:
-        logger.error("Failed to record DEPSOPS PR logs: %s", exc, exc_info=True)
+        except Exception as exc:
+            logger.error("Failed to record DEPSOPS PR logs: %s", exc, exc_info=True)
+    finally:
+        db.close()
 
     logger.info(
-        "=== DEPSOPS completed: merged=%d, flagged=%d, errors=%d ===",
-        len(merged), len(flagged), error_count,
+        "=== DEPSOPS completed: merged=%d, flagged=%d, resolved=%d, errors=%d ===",
+        len(merged), len(flagged), len(resolved), error_count,
     )
     write_crawler_log(
         crawler_type="DEPSOPS",
@@ -299,7 +357,7 @@ def run_dependabot_ops() -> tuple[int, int, int]:
         finished_at=now_utc(),
         inserted=len(merged),
         updated=len(flagged),
-        deleted=0,
+        deleted=len(resolved),
     )
     notify_dependabot_ops(merged, flagged)
     return len(merged), len(flagged), error_count

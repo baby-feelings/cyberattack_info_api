@@ -28,6 +28,7 @@ from app.depsops.models import DependabotPrLog  # noqa: E402
 from app.depsops.runner import (  # noqa: E402
     _delete_old_depsops_records,
     _extract_compatibility_badge_url,
+    _find_resolved_flagged_prs,
     _matches_security_alert,
     _process_pr,
     _record_pr_logs,
@@ -486,6 +487,55 @@ class TestRunDependabotOps:
         assert rows[0].reason is None
         assert "メジャー" in rows[1].reason
 
+    def test_detects_and_records_pr_resolved_outside_depsops(self, db_session):
+        """CI未設定等で過去にflagged記録したPRが、今回のスキャンでOpen PR一覧に
+        含まれなくなった場合（Dependabotの自動クローズ・手動マージ等）、"closed"
+        として記録され、以後「未解決」件数から除外されること。"""
+        db_session.add(DependabotPrLog(
+            repo_full_name="u/r1", pr_number=99, title="bump old from 1.0.0 to 1.0.1",
+            action="flagged", reason="CI未設定のリポジトリ",
+            processed_at=datetime.now(timezone.utc) - timedelta(days=1),
+        ))
+        db_session.commit()
+
+        repos = [{"full_name": "u/r1"}]
+        with patch("app.depsops.runner.list_target_repos", return_value=repos), \
+             patch("app.depsops.runner.list_open_dependabot_prs", return_value=[]), \
+             patch("app.depsops.runner.notify_dependabot_ops"):
+            run_dependabot_ops()
+
+        rows = db_session.query(DependabotPrLog).filter_by(pr_number=99).order_by(
+            DependabotPrLog.processed_at,
+        ).all()
+        assert len(rows) == 2
+        assert rows[0].action == "flagged"
+        assert rows[-1].action == "closed"
+
+    def test_does_not_resolve_pr_that_is_still_open(self, db_session):
+        """過去にflagged記録したPRが今回もOpen一覧に含まれる場合は"closed"にしないこと。"""
+        db_session.add(DependabotPrLog(
+            repo_full_name="u/r1", pr_number=1, title="Bump x from 1.0.0 to 2.0.0",
+            action="flagged", reason="メジャーバージョンアップ",
+            processed_at=datetime.now(timezone.utc) - timedelta(days=1),
+        ))
+        db_session.commit()
+
+        repos = [{"full_name": "u/r1"}]
+        prs = [{"number": 1, "title": "Bump x from 1.0.0 to 2.0.0"}]  # 引き続きOpen・メジャー
+        with patch("app.depsops.runner.list_target_repos", return_value=repos), \
+             patch("app.depsops.runner.list_open_dependabot_prs", return_value=prs), \
+             patch("app.depsops.runner.has_ci_workflows", return_value=True), \
+             patch("app.depsops.runner.list_open_dependabot_alerts", return_value=[]), \
+             patch(
+                 "app.depsops.runner.get_pull_request",
+                 return_value={"mergeable_state": "clean"},
+             ), \
+             patch("app.depsops.runner.notify_dependabot_ops"):
+            run_dependabot_ops()
+
+        rows = db_session.query(DependabotPrLog).filter_by(pr_number=1).all()
+        assert all(r.action == "flagged" for r in rows)
+
 
 class TestRecordPrLogs:
     def test_writes_one_row_per_pr_with_correct_action_and_reason(self, db_session):
@@ -540,6 +590,88 @@ class TestRecordPrLogs:
 
         row = db_session.query(DependabotPrLog).filter_by(pr_number=1).first()
         assert row.compatibility_badge_url == "https://dependabot-badges.githubapp.com/badges/x"
+
+    def test_writes_resolved_prs_as_closed_action(self, db_session):
+        """resolved（DEPSOPS外の要因で解消済みと判定したPR）は"closed"として記録されること。"""
+        resolved = [
+            {"repo_full_name": "u/r", "pr_number": 3, "title": "bump z", "reason": "解消済み"},
+        ]
+        processed_at = datetime(2026, 6, 1, tzinfo=timezone.utc)
+
+        _record_pr_logs(db_session, [], [], processed_at, resolved=resolved)
+
+        row = db_session.query(DependabotPrLog).filter_by(pr_number=3).first()
+        assert row.action == "closed"
+        assert row.reason == "解消済み"
+
+
+class TestFindResolvedFlaggedPrs:
+    def test_detects_pr_no_longer_open(self, db_session):
+        """CI未設定リポジトリ等で過去にflagged記録したPRが、今回のOpen PR一覧に
+        含まれなくなっていれば「DEPSOPS外の要因で解消済み」として検出すること。"""
+        db_session.add(DependabotPrLog(
+            repo_full_name="u/r1", pr_number=5, title="bump z from 1.0.0 to 2.0.0",
+            action="flagged", reason="CI未設定のリポジトリ",
+            processed_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        ))
+        db_session.commit()
+
+        result = _find_resolved_flagged_prs(db_session, "u/r1", open_pr_numbers=set())
+
+        assert len(result) == 1
+        assert result[0]["pr_number"] == 5
+        assert result[0]["title"] == "bump z from 1.0.0 to 2.0.0"
+
+    def test_ignores_pr_still_open(self, db_session):
+        db_session.add(DependabotPrLog(
+            repo_full_name="u/r1", pr_number=5, title="bump z",
+            action="flagged", processed_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        ))
+        db_session.commit()
+
+        result = _find_resolved_flagged_prs(db_session, "u/r1", open_pr_numbers={5})
+
+        assert result == []
+
+    def test_ignores_already_merged_pr(self, db_session):
+        db_session.add(DependabotPrLog(
+            repo_full_name="u/r1", pr_number=5, title="bump z",
+            action="merged", processed_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        ))
+        db_session.commit()
+
+        result = _find_resolved_flagged_prs(db_session, "u/r1", open_pr_numbers=set())
+
+        assert result == []
+
+    def test_uses_latest_state_when_multiple_rows_exist(self, db_session):
+        """同一PRについて複数回判定履歴がある場合、最新の状態のみを見ること。"""
+        db_session.add_all([
+            DependabotPrLog(
+                repo_full_name="u/r1", pr_number=5, title="bump z",
+                action="flagged", processed_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+            ),
+            DependabotPrLog(
+                repo_full_name="u/r1", pr_number=5, title="bump z",
+                action="merged", processed_at=datetime(2026, 6, 2, tzinfo=timezone.utc),
+            ),
+        ])
+        db_session.commit()
+
+        result = _find_resolved_flagged_prs(db_session, "u/r1", open_pr_numbers=set())
+
+        assert result == []
+
+    def test_ignores_other_repos(self, db_session):
+        db_session.add(DependabotPrLog(
+            repo_full_name="u/other", pr_number=5, title="bump z",
+            action="flagged", processed_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        ))
+        db_session.commit()
+
+        result = _find_resolved_flagged_prs(db_session, "u/r1", open_pr_numbers=set())
+
+        assert result == []
 
 
 class TestDeleteOldDepsopsRecords:

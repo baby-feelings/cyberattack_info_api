@@ -30,11 +30,14 @@ class DependabotPrLog(Base):
     # PR タイトル
     title: Mapped[str] = mapped_column(Text, nullable=False)
 
-    # "merged"（自動マージ済み）/ "flagged"（要確認・自動マージしなかった）
+    # "merged"（自動マージ済み）/ "flagged"（要確認・自動マージしなかった）/
+    # "closed"（過去にflaggedと記録した後、Dependabotの自動クローズや人手のマージ・
+    # クローズ等 DEPSOPS の関知しないところで解消されたことを検知した記録。
+    # ダッシュボードの「未解決」件数は最新状態が"flagged"のPRのみを数えるため、
+    # このレコードにより解消済みPRが「未解決」に数えられ続けるのを防ぐ）
     action: Mapped[str] = mapped_column(String(20), nullable=False)
 
-    # action="flagged" の場合の理由（メジャーバージョンアップ・CI未設定 等）。
-    # action="merged" の場合は None
+    # action="flagged"/"closed" の場合の理由。action="merged" の場合は None
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # このPRがセキュリティ更新（GitHub Dependabot alertの対象パッケージと一致）か、
