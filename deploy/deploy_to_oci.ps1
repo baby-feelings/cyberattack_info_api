@@ -6,7 +6,7 @@
 
 # --- 1. 環境設定（ご自身の環境に合わせて修正してください） ---
 $OciUser   = "ubuntu"
-$OciHost   = "203.0.113.10"  # OCI インスタンス作成後、実際のパブリックIPに置き換える
+$OciHost   = "168.138.213.240"
 $SshKey    = "C:\Users\masud\.ssh\oci_cyberattack_info_api_key.key"
 $RemoteDir = "/home/ubuntu/cyberattack_info_api"
 

@@ -939,28 +939,38 @@ Docker Compose + Caddy 構成を、本プロジェクト専用の**新規別イ�
   切り替え → Render を停止）。`daily-crawl.yml` の叩き先URLもこのタイミングで変更する
   （それまでは Render を叩いたまま維持）
 
-**現状（このコミット時点）は "デプロイに使うファイル一式の用意" のみが完了しており、
-実際の OCI インスタンス作成・カットオーバーはまだ行っていない**:
+**現状（このコミット時点）: インスタンス作成・初回デプロイ・動作検証まで完了、
+カットオーバーは未実施**（Render/OCI 並行稼働中）:
 
-- `Dockerfile`（リポジトリルート）: `crypto_forecast/backend/Dockerfile` と同じ
-  Python slim ベースイメージパターン。Render の Start Command と同じ順序
-  （`python -m app.core.migrate && uvicorn ...`）を `CMD` に採用し、挙動を変えていない
-- `deploy/docker-compose.yml`: `api-prod`（本APIコンテナ、ホストへポート公開はしない）・
-  `caddy`（80/443 を公開し `api-prod` へリバースプロキシ）の2サービスのみ。Postgres
-  コンテナは無い（Neon 継続利用のため）
-- `deploy/Caddyfile`: `{$BACKEND_DOMAIN} { reverse_proxy api-prod:8000 }` のみのシンプル構成
-- `deploy/deploy_to_oci.ps1`: `crypto_forecast/deploy/deploy_to_oci.ps1` を踏襲。
-  `$OciHost`/`$SshKey` はプレースホルダのため、実際のインスタンス作成後に書き換える必要がある
-- `deploy/.env.example`: `BACKEND_DOMAIN`（`<インスタンスIP>.nip.io` 形式）のみ。
-  アプリ本体の環境変数（`DATABASE_URL`/`API_KEY` 等）はリポジトリルートの
-  `.env.example` を元に `.env.prod` を作成し、`deploy_to_oci.ps1` が転送する
-- `.dockerignore` / `.gitignore` に `deploy/.env`・`.env.prod` を追加済み
+- crypto_forecast（`crypto-bot-server`）は Always Free の Ampere A1 枠を
+  4 OCPU/24GB 全て使用していたため、まず 2 OCPU/12GB へリサイズして空きを確保した
+  （定常負荷は load average 0.26/4 OCPU・メモリ2.6GB/24GBと十分余裕があったため）
+- `cyberattack-info-api` インスタンス（Ampere A1、1 OCPU/6GB、Ubuntu 24.04 aarch64、
+  IP `168.138.213.240`）を crypto_forecast とは別に新規作成。ポート80/443は
+  OCIセキュリティリスト（`vcn-trading`。crypto_forecastと共用のため追加設定不要だった）
+  とインスタンスOS側の両方で開放が必要（**crypto_forecastと違い ufw ではなく
+  iptables + iptables-persistent** で管理されている点に注意。`sudo iptables -I INPUT
+  <ufwの手前> -p tcp -m state --state NEW -m tcp --dport <port> -j ACCEPT` →
+  `sudo netfilter-persistent save` で永続化する）
+- `deploy_to_oci.ps1` 相当の手順（SCP転送 → `docker compose up -d --build`）で
+  初回デプロイ済み。Caddy が Let's Encrypt 証明書を自動取得し、
+  `https://168.138.213.240.nip.io/health` が 200 を返すことを確認済み。
+  Render本番と同じ Neon DB を参照し、件数が完全一致することも確認済み
+- DEPSCAN の GitHub ログイン関連環境変数（`GITHUB_OAUTH_CLIENT_ID`/`SECRET`・
+  `SESSION_SECRET_KEY`・`PUBLIC_API_KEY`）も `.env.prod` に含めて転送済み。
+  ただし `API_BASE_URL_FOR_OAUTH` は意図的にまだ変更していない（デフォルト値の
+  Render URL のまま）ため、OCI上の `/auth/github/login` で開始した OAuth フローの
+  コールバック先は現時点でも Render になる。**GitHub OAuth App の callback URL
+  切り替えを伴う完全なログインフローの検証は、カットオーバー実施時にまとめて行う**
+  方針（Render側のログイン機能を検証期間中は止めたくないため）
 
-上記いずれも Docker Desktop（ローカル）でビルド・起動・`docker compose config`・
-`caddy validate` により動作確認済み。**残タスク**: OCI Always Free の残り容量確認
-（crypto_forecast の Ampere A1 使用量次第）→ インスタンス作成 → `deploy_to_oci.ps1`
-の実行 → 手動検証 → カットオーバー（`daily-crawl.yml`・`deploy.yml`・GitHub OAuth App
-の callback URL・Vercel の API ベースURLの更新）。
+**残タスク（カットオーバー本体）**: `daily-crawl.yml` の叩き先URL変更・`deploy.yml`
+の Render デプロイステップ削除・GitHub OAuth App の callback URL 変更・
+`API_BASE_URL_FOR_OAUTH` の更新・Vercel の API ベースURL変更・
+OAuthログインフローの通しテスト・Render停止。
+
+用意したファイル一式（`Dockerfile`・`deploy/docker-compose.yml`・`deploy/Caddyfile`・
+`deploy/deploy_to_oci.ps1`・`.dockerignore`）の設計詳細は各ファイル自体のコメントを参照。
 
 ---
 
