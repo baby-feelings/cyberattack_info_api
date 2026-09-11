@@ -15,7 +15,7 @@ services:
   # リバースプロキシ (Caddy) — バックエンドの HTTPS 化
   # Vercel（https）上のダッシュボードから API を呼ぶために必須。
   # Let's Encrypt の証明書を自動取得・自動更新する（無料）。
-  # BACKEND_DOMAIN 未設定時は :80 で平文プロキシ（ローカル確認用）。
+  # BACKEND_DOMAIN 未設定時は起動時にエラーになる（deploy/.env での設定が必須）。
   caddy:
     image: caddy:2-alpine
     container_name: cyberattack-caddy
