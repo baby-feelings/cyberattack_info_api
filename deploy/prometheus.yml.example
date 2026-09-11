@@ -4,7 +4,7 @@
 # deploy/.env（BACKEND_DOMAIN等）と同じ理由でgit管理対象外にしている。
 #
 # 使い方: このファイルを deploy/prometheus.yml としてコピーし、
-# credentials に .env.prod の METRICS_API_KEY と同じ値を設定してください。
+# credentials に .env.production の METRICS_API_KEY と同じ値を設定してください。
 
 global:
   scrape_interval: 30s

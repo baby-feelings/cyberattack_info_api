@@ -244,7 +244,8 @@ Ampere A1）上でDocker Composeにより稼働する（旧Renderから移行済
    `<インスタンスのパブリックIP>.nip.io`。Let's EncryptのHTTPS自動化にドメイン名が必要な
    ため、IPアドレスをそのまま解決してくれる無料DNS `nip.io` を利用する）・
    `GRAFANA_DOMAIN`・`GRAFANA_ADMIN_PASSWORD` を設定する
-2. `.env.example`（リポジトリルート）を元に `.env.prod` を作成し、以下を設定:
+2. `.env.example`（リポジトリルート）を元に `.env.production` を作成し、以下を設定
+   （ローカル開発と同じファイルをそのままOCIへ転送して使う。本番専用の別ファイルは作らない）:
 
    | 変数名 | 値 |
    |--------|-----|
@@ -280,7 +281,7 @@ SCPでコード一式を転送し、OCI上で `docker compose up -d --build` を
 
 | Secret 名 | 説明 |
 |-----------|------|
-| `API_KEY` | OCI の `.env.prod` に設定した API キーと同じ値（`.github/workflows/daily-crawl.yml` 用） |
+| `API_KEY` | OCI の `.env.production` に設定した API キーと同じ値（`.github/workflows/daily-crawl.yml` 用） |
 
 ダッシュボード（Vercel）は `main` ブランチへのマージで自動デプロイされる
 （`.github/workflows/deploy.yml`）。
@@ -322,7 +323,7 @@ SCPでコード一式を転送し、OCI上で `docker compose up -d --build` を
 
 1. [Slack App Directory](https://your-workspace.slack.com/apps/A0F7XDUAZ-incoming-webhooks) で「Incoming WebHooks」を追加
 2. 通知先チャンネルを選択して Webhook URL を取得
-3. OCI の `.env.prod` に `SLACK_WEBHOOK_URL` として設定
+3. OCI の `.env.production` に `SLACK_WEBHOOK_URL` として設定
 
 通知が届くタイミング:
 

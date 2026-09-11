@@ -16,7 +16,6 @@ build/
 .env.development
 .env.production
 .env.test
-.env.prod
 deploy/.env
 deploy/prometheus.yml
 !.env.example
