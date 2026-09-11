@@ -8,12 +8,12 @@ Claude Code や AI エージェントがこの API を「スキル（道具）�
 
 | 項目 | 内容 |
 |------|------|
-| **ベース URL（本番）** | `https://cyberattack-info-api.onrender.com` |
+| **ベース URL（本番）** | `https://168.138.213.240.nip.io` |
 | **ベース URL（開発）** | `http://localhost:8000` |
 | **認証方式** | `X-API-KEY` リクエストヘッダー |
 | **レスポンス形式** | JSON |
 | **データソース** | CISA KEV／OSV API／JVN MyJVN API／DEPSCAN（GitHub API + OSV API）（毎日 JST 04:05 に一括順次実行） |
-| **Swagger UI** | `https://cyberattack-info-api.onrender.com/docs` |
+| **Swagger UI** | `https://168.138.213.240.nip.io/docs` |
 
 ---
 
@@ -25,7 +25,7 @@ Claude Code や AI エージェントがこの API を「スキル（道具）�
 # 環境変数から API キーを渡す（推奨）
 export CYBERATTACK_API_KEY="your-secret-key"
 curl -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/vulnerabilities"
+  "https://168.138.213.240.nip.io/api/vulnerabilities"
 ```
 
 キーが不正または未設定の場合は `403 Forbidden` が返ります。
@@ -52,11 +52,11 @@ API キーの比較には `hmac.compare_digest` を使用し、タイミング�
 ```bash
 # 直近 30 日（デフォルト）
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/vulnerabilities/recent"
+  "https://168.138.213.240.nip.io/api/vulnerabilities/recent"
 
 # 直近 7 日
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/vulnerabilities/recent?days=7"
+  "https://168.138.213.240.nip.io/api/vulnerabilities/recent?days=7"
 ```
 
 | パラメータ | 型 | 範囲 | デフォルト |
@@ -72,19 +72,19 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 ```bash
 # キーワード検索
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/vulnerabilities?search=Apache"
+  "https://168.138.213.240.nip.io/api/vulnerabilities?search=Apache"
 
 # ベンダー完全一致
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/vulnerabilities?vendor=Microsoft"
+  "https://168.138.213.240.nip.io/api/vulnerabilities?vendor=Microsoft"
 
 # 製品名部分一致
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/vulnerabilities?product=Exchange"
+  "https://168.138.213.240.nip.io/api/vulnerabilities?product=Exchange"
 
 # EPSS スコア（悪用確率）0.5 以上のみに絞り込み
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/vulnerabilities?min_epss=0.5"
+  "https://168.138.213.240.nip.io/api/vulnerabilities?min_epss=0.5"
 ```
 
 | パラメータ | 型 | 説明 |
@@ -105,7 +105,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 ```bash
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/vulnerabilities/CVE-2021-44228"
+  "https://168.138.213.240.nip.io/api/vulnerabilities/CVE-2021-44228"
 ```
 
 存在しない CVE ID の場合は `404 Not Found` が返ります（大文字小文字不問）。
@@ -118,7 +118,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 ```bash
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/vulnerabilities/stats"
+  "https://168.138.213.240.nip.io/api/vulnerabilities/stats"
 ```
 
 **レスポンス例:**
@@ -146,15 +146,15 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 ```bash
 # PyPI の HIGH 以上の脆弱性を取得
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/osv?ecosystem=PyPI&severity=HIGH"
+  "https://168.138.213.240.nip.io/api/osv?ecosystem=PyPI&severity=HIGH"
 
 # パッケージ名で検索
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/osv?search=django"
+  "https://168.138.213.240.nip.io/api/osv?search=django"
 
 # CRITICAL のみ全エコシステムで取得（CVSS スコア降順）
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/osv?severity=CRITICAL&sort_by=cvss"
+  "https://168.138.213.240.nip.io/api/osv?severity=CRITICAL&sort_by=cvss"
 ```
 
 | パラメータ | 型 | 説明 |
@@ -175,7 +175,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 ```bash
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/osv/stats"
+  "https://168.138.213.240.nip.io/api/osv/stats"
 ```
 
 **レスポンス例:**
@@ -206,15 +206,15 @@ MyJVN API（jvndb.jvn.jp）から取得した JVNDB 登録脆弱性を対象と�
 ```bash
 # High 重要度の脆弱性を取得
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/jvn?severity=High"
+  "https://168.138.213.240.nip.io/api/jvn?severity=High"
 
 # キーワードで検索
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/jvn?search=Apache"
+  "https://168.138.213.240.nip.io/api/jvn?search=Apache"
 
 # CVSS スコア降順で取得
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/jvn?sort_by=cvss"
+  "https://168.138.213.240.nip.io/api/jvn?sort_by=cvss"
 ```
 
 | パラメータ | 型 | 説明 |
@@ -235,7 +235,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 ```bash
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/jvn/stats"
+  "https://168.138.213.240.nip.io/api/jvn/stats"
 ```
 
 **レスポンス例:**
@@ -268,15 +268,15 @@ fork・archived 除く）が依存するライブラリに脆弱性がないか�
 ```bash
 # 未解決の HIGH 以上の検知結果を取得
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/depscan?resolved=false&severity=HIGH"
+  "https://168.138.213.240.nip.io/api/depscan?resolved=false&severity=HIGH"
 
 # 特定リポジトリのみ絞り込み
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/depscan?repo=baby-feelings/baby_grow"
+  "https://168.138.213.240.nip.io/api/depscan?repo=baby-feelings/baby_grow"
 
 # リポジトリオーナー単位で絞り込み
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/depscan?owner=baby-feelings"
+  "https://168.138.213.240.nip.io/api/depscan?owner=baby-feelings"
 ```
 
 | パラメータ | 型 | 説明 |
@@ -303,7 +303,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 ```bash
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/depscan/stats"
+  "https://168.138.213.240.nip.io/api/depscan/stats"
 ```
 
 **レスポンス例:**
@@ -331,11 +331,11 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 ```bash
 # 要確認（自動マージされなかった）PR のみ取得
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/depsops?action=flagged"
+  "https://168.138.213.240.nip.io/api/depsops?action=flagged"
 
 # 特定リポジトリのみ絞り込み
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/depsops?repo=baby-feelings/baby_grow"
+  "https://168.138.213.240.nip.io/api/depsops?repo=baby-feelings/baby_grow"
 ```
 
 | パラメータ | 型 | 説明 |
@@ -402,15 +402,15 @@ DEPSCAN スキャンが実行され（直近24時間以内にスキャン済み�
 ```bash
 # 直近 10 件の実行ログを取得
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/crawler-logs?limit=10"
+  "https://168.138.213.240.nip.io/api/crawler-logs?limit=10"
 
 # JVN のみ絞り込み
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/crawler-logs?crawler_type=JVN"
+  "https://168.138.213.240.nip.io/api/crawler-logs?crawler_type=JVN"
 
 # エラーのみ確認
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/crawler-logs?status=error"
+  "https://168.138.213.240.nip.io/api/crawler-logs?status=error"
 ```
 
 | パラメータ | 型 | 説明 |
@@ -444,7 +444,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 **用途:** API サーバーと DB が正常稼働しているか確認する。
 
 ```bash
-curl -s "https://cyberattack-info-api.onrender.com/health"
+curl -s "https://168.138.213.240.nip.io/health"
 ```
 
 **レスポンス:**
@@ -458,13 +458,32 @@ curl -s "https://cyberattack-info-api.onrender.com/health"
 
 ---
 
+### スキル 14: 運用監視ダッシュボード（Grafana）を確認する
+
+**用途:** クローラー（KEV/OSV/JVN/DEPSCAN/DEPSOPS）が実際に成功し続けているか、OCIホストの
+CPU/メモリ/ディスク使用率を可視化されたダッシュボードで確認する。`curl`ではなくブラウザで
+アクセスする（ログイン必須）。
+
+```
+https://grafana.168.138.213.240.nip.io/
+```
+
+ダッシュボード名「サイバー攻撃情報API」に、クローラー実行結果（成否・経過時間・所要時間・
+新規/更新/削除件数）とホストリソース使用率のパネルがある。ログイン情報は管理者に確認する
+（`deploy/.env`の`GRAFANA_ADMIN_USER`/`GRAFANA_ADMIN_PASSWORD`）。
+
+Prometheus形式の生データが必要な場合は `GET /metrics`（`Authorization: Bearer
+$METRICS_API_KEY`で保護、未設定時は503）から直接取得することも可能。
+
+---
+
 ## Claude Code での活用パターン
 
 ### パターン 1: 直近の脅威を分析させる
 
 ```bash
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/vulnerabilities/recent?days=30" \
+  "https://168.138.213.240.nip.io/api/vulnerabilities/recent?days=30" \
   | claude -p "これらの脆弱性のうち、Python / FastAPI プロジェクトに影響するものを
                優先度順に整理し、対策案を教えてください"
 ```
@@ -476,7 +495,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 - name: Check crawler health
   run: |
     RESULT=$(curl -s -H "X-API-KEY: ${{ secrets.CYBERATTACK_API_KEY }}" \
-      "https://cyberattack-info-api.onrender.com/api/crawler-logs?limit=3&crawler_type=JVN")
+      "https://168.138.213.240.nip.io/api/crawler-logs?limit=3&crawler_type=JVN")
     STATUS=$(echo "$RESULT" | python -c "import sys,json; d=json.load(sys.stdin); print(d[0]['status'] if d else 'no_log')")
     echo "最新 JVN クロール: $STATUS"
     if [ "$STATUS" = "error" ]; then
@@ -489,7 +508,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 ```bash
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/vulnerabilities/CVE-2021-44228" \
+  "https://168.138.213.240.nip.io/api/vulnerabilities/CVE-2021-44228" \
   | claude -p "この脆弱性の影響と対策を日本語で説明してください"
 ```
 
@@ -498,13 +517,13 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 ```bash
 # 使用中の PyPI パッケージに CRITICAL な OSV 脆弱性がないか確認
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/osv?ecosystem=PyPI&severity=CRITICAL" \
+  "https://168.138.213.240.nip.io/api/osv?ecosystem=PyPI&severity=CRITICAL" \
   | claude -p "自分のプロジェクトで使っているパッケージが含まれているか確認し、
                影響があれば修正バージョンを教えてください"
 
 # Flutter プロジェクトの Pub パッケージに脆弱性がないか確認
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/osv?ecosystem=Pub" \
+  "https://168.138.213.240.nip.io/api/osv?ecosystem=Pub" \
   | claude -p "Flutter プロジェクトの pubspec.yaml に含まれるパッケージに
                影響する脆弱性があるか確認してください"
 ```
@@ -513,7 +532,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 ```bash
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/jvn?severity=High&sort_by=cvss" \
+  "https://168.138.213.240.nip.io/api/jvn?severity=High&sort_by=cvss" \
   | claude -p "直近の高重要度 JVN 脆弱性を整理し、対処優先度を教えてください"
 ```
 
@@ -521,7 +540,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 ```bash
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/depscan?resolved=false" \
+  "https://168.138.213.240.nip.io/api/depscan?resolved=false" \
   | claude -p "リポジトリ別に整理し、CRITICAL/HIGH を優先度順にリストアップしてください。
                各項目に修正済みバージョンへの更新コマンド案も添えてください"
 ```
