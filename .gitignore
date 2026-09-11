@@ -21,6 +21,11 @@ deploy/.env
 !.env.example
 !deploy/.env.example
 
+# SSHキー（OCIインスタンス作成時にダウンロードされるファイル等、絶対にコミットしないこと）
+*.key
+*.pem
+ssh-key-*
+
 # データベースファイル
 *.db
 *.sqlite3
