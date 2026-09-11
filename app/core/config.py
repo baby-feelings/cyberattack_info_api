@@ -80,6 +80,10 @@ class Settings(BaseSettings):
     # リクエストヘッダーから動的に推測せず固定値を持つ）
     API_BASE_URL_FOR_OAUTH: str = "https://cyberattack-info-api.onrender.com"
 
+    # 運用監視（Prometheus）用のメトリクスエンドポイント保護キー。
+    # 未設定時は /metrics 自体を無効化する（他の外部連携機能と同じ opt-in パターン）
+    METRICS_API_KEY: str = ""
+
     model_config = SettingsConfigDict(
         # 環境に応じて .env.development または .env.production を使用
         env_file=".env",

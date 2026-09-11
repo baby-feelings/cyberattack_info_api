@@ -13,6 +13,7 @@ defusedxml>=0.7.1
 PyJWT>=2.13.0
 PyYAML>=6.0.3
 tomli>=2.0.1; python_version < "3.11"
+prometheus-client>=0.21.0
 
 # ── セキュリティピン留め（間接依存の脆弱性対策） ──────────────────
 cryptography>=48.0.1

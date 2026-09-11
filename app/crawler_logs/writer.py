@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
+from app.core.metrics import record_crawler_run
 from app.core.types import CrawlerType
 from app.crawler_logs.models import CrawlerLog
 
@@ -67,6 +68,21 @@ def write_crawler_log(
         logger.error("Failed to write crawler log: %s", exc)
     finally:
         log_db.close()
+
+    # Prometheusメトリクス更新（DB書き込みとは独立。失敗してもクロール結果の記録自体は
+    # 上で既に完了しているため、ここでの例外もアプリを止めない）
+    try:
+        record_crawler_run(
+            crawler_type=crawler_type,
+            status=status,
+            duration_seconds=duration,
+            inserted=inserted,
+            updated=updated,
+            deleted=deleted,
+            finished_at_timestamp=finished_at.timestamp(),
+        )
+    except Exception as exc:
+        logger.error("Failed to record crawler metrics: %s", exc)
 
 
 def now_utc() -> datetime:

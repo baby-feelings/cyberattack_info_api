@@ -1,0 +1,12 @@
+# Grafanaの起動時に deploy/grafana/dashboards/ 配下のJSONを自動読み込みする。
+apiVersion: 1
+
+providers:
+  - name: cyberattack-info-api
+    orgId: 1
+    folder: ""
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards

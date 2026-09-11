@@ -18,8 +18,10 @@ build/
 .env.test
 .env.prod
 deploy/.env
+deploy/prometheus.yml
 !.env.example
 !deploy/.env.example
+!deploy/prometheus.yml.example
 
 # SSHキー（OCIインスタンス作成時にダウンロードされるファイル等、絶対にコミットしないこと）
 *.key

@@ -972,6 +972,57 @@ OAuthログインフローの通しテスト・Render停止。
 用意したファイル一式（`Dockerfile`・`deploy/docker-compose.yml`・`deploy/Caddyfile`・
 `deploy/deploy_to_oci.ps1`・`.dockerignore`）の設計詳細は各ファイル自体のコメントを参照。
 
+### 運用監視（Prometheus + Grafana、当初は見送っていたが移行当日に前倒しで導入）
+
+crypto_forecast の運用監視構成をそのまま模倣するのではなく、**本APIの実態
+（高トラフィックなWebアプリではなく、スケジュール実行される5種のクローラー）に
+合わせて設計し直した**。crypto_forecast 固有の自動売買サイクル・予測乖離率等の
+パネルは対象外とし、代わりに「クローラーが実際に成功しているか」を可視化する
+ことを主眼に置いている。
+
+- **`app/core/metrics.py`**: Prometheus形式の `/metrics` エンドポイント。
+  `crypto_forecast/backend/app/api/metrics.py` と同じく `Authorization: Bearer`
+  （`METRICS_API_KEY`、未設定時は503でopt-in）で保護し、`X-API-KEY` とは別の
+  認証方式にしている（Prometheusのスクレイプconfigが `authorization.credentials`
+  でBearerトークンをネイティブサポートするため）。
+- **クローラー実行結果を Gauge として公開**: `crawler_last_run_success`（1=成功/
+  0=エラー）・`crawler_last_run_timestamp_seconds`（陳腐化検知用）・
+  `crawler_last_run_duration_seconds`・`crawler_last_run_inserted`/`updated`/
+  `deleted`、いずれも `crawler_type` ラベル付き。Counter ではなく Gauge にして
+  いるのは、Grafana側で「直近の実行結果」を一目で確認したい（累積ではなく最新値
+  が欲しい）ため。`record_crawler_run()` の呼び出し元は
+  **`app.crawler_logs.writer.write_crawler_log`** 1箇所のみ（KEV/OSV/JVN/
+  DEPSCAN/DEPSOPS 全クローラーが共通で通る記録経路のため、ここに1回実装すれば
+  全種別をカバーできる）。メトリクス記録の失敗はDB書き込み成功後に
+  try/except で握りつぶし、クロール自体の成否には影響させない。
+- **`deploy/docker-compose.yml`**: `prometheus`（`api-prod:8000/metrics` を
+  30秒間隔でスクレイプ、`127.0.0.1` のみバインドで外部非公開）・`node-exporter`
+  （OCIホストのCPU/メモリ/ディスクをfilesystem+meminfoコレクタのみ有効化して収集。
+  crypto_forecastと違いDockerディスク使用量の内訳スクリプトは今回は入れていない
+  〈YAGNI、実際に容量問題が起きたら追加を検討〉）・`grafana`（Caddy経由で
+  `GRAFANA_DOMAIN` にHTTPS公開、ログイン必須・匿名アクセス無効）の3サービスを
+  追加。**`node-exporter` の `/:/host:ro,rslave` マウントは Windows Docker
+  Desktop（WSL2）ではエラーになる**（"path / is mounted on / but it is not a
+  shared or slave mount"）。crypto_forecast本番でも同じ設定が問題なく動いている
+  ことから、これは Windows 固有の制約であり OCI（ネイティブLinux）では問題ない
+  と判断し、ローカル検証では `node-exporter` を除外して他サービスのみ確認した
+  （`docker compose up -d --no-deps prometheus grafana` で依存関係を無視して
+  個別起動）。
+- **`deploy/grafana/`**: `provisioning/datasources/prometheus.yml` で
+  Prometheusデータソースを起動時に自動登録する（**`uid: prometheus_ds` を固定**
+  している点に注意。自動生成uidだと再プロビジョニングのたびに変わり、ダッシュ
+  ボードJSON側の参照が壊れるため）。`provisioning/dashboards/dashboards.yml` が
+  `dashboards/*.json` を自動読み込みする。ダッシュボード本体
+  （`cyberattack-info-api-overview.json`、タイトルは「サイバー攻撃情報API」）は
+  クローラー実行結果（成否・経過時間・所要時間・件数）・CPU/メモリ使用率・
+  ディスク使用率のパネルで構成。ローカルでビルド・起動し、`/metrics` の実際の値・
+  Prometheusのスクレイプ成功・Grafanaのデータソース/ダッシュボード自動登録まで
+  実機確認済み（`/admin/depscan-crawl` を実際に叩いて記録→スクレイプの経路も検証）。
+- **`deploy/prometheus.yml.example`**: `METRICS_API_KEY` の実値を含むファイルの
+  ため `deploy/prometheus.yml` としてコピー後に値を設定する運用（`deploy/.env`
+  と同じ理由でgit管理対象外）。`deploy_to_oci.ps1` は存在する場合のみ転送する
+  （無い場合はPrometheusコンテナが起動に失敗する旨を警告表示）。
+
 ---
 
 ## 環境ファイル

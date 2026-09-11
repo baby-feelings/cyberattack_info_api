@@ -1,3 +1,10 @@
 {$BACKEND_DOMAIN} {
 	reverse_proxy api-prod:8000
 }
+
+# 運用監視ダッシュボード（Grafana）。サブドメインを分けてHTTPS公開する
+# （80/443番はBACKEND_DOMAINと共用のため追加のポート開放は不要。
+# CaddyがSNI/Hostヘッダーでドメインごとに振り分ける）。
+{$GRAFANA_DOMAIN} {
+	reverse_proxy grafana:3000
+}
