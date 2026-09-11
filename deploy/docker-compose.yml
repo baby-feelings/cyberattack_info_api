@@ -12,10 +12,73 @@ services:
       - ../.env.prod
     # ホストへポートは公開しない（Caddy の内部 Docker ネットワーク経由でのみ到達可能）
 
+  # 運用監視: メトリクス収集 (Prometheus)。api-prod の /metrics（要 METRICS_API_KEY、
+  # app/core/metrics.py 参照）を定期スクレイプする。127.0.0.1のみへバインドし
+  # 外部公開しない（見る場合は SSH ポートフォワード経由:
+  # `ssh -L 9090:localhost:9090 -i <key> ubuntu@<host>`）。
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: cyberattack-prometheus
+    restart: always
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    depends_on:
+      - api-prod
+      - node-exporter
+
+  # 運用監視: OCIホストのリソース使用状況 (node_exporter)。api-prod（アプリプロセス）
+  # のメトリクスとは別に、ホスト側のCPU・メモリ・ディスク残量を把握するために追加。
+  # ホストの詳細な情報を不必要に晒さないよう、filesystem/meminfo コレクタのみ
+  # 有効化する（CPU等の他ホスト指標は収集しない。プロセスCPU/メモリは
+  # api-prod 自身の process_* 指標で既にカバーしている）。ポートを公開せず、
+  # Prometheusから docker の内部ネットワーク経由でのみ到達可能。
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: cyberattack-node-exporter
+    restart: always
+    volumes:
+      - /:/host:ro,rslave
+    command:
+      - "--path.rootfs=/host"
+      - "--collector.disable-defaults"
+      - "--collector.filesystem"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+      - "--collector.meminfo"
+
+  # 運用監視: 可視化ダッシュボード (Grafana)。Prometheusデータソース・ダッシュボードは
+  # deploy/grafana/provisioning/ から自動プロビジョニングされる。スマートフォン等の
+  # 外部端末からも見られるよう、Caddy経由でHTTPS公開している（GRAFANA_DOMAIN、
+  # 下記caddyサービス参照）。ログイン（GRAFANA_ADMIN_USER/GRAFANA_ADMIN_PASSWORD）で
+  # 保護される。127.0.0.1側のポート公開もSSHポートフォワード用に残している。
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: cyberattack-grafana
+    restart: always
+    environment:
+      - "GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}"
+      - "GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD を deploy/.env に設定してください}"
+      # インターネットへ公開するため、匿名アクセス・サインアップを明示的に無効化する
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - prometheus
+
   # リバースプロキシ (Caddy) — バックエンドの HTTPS 化
   # Vercel（https）上のダッシュボードから API を呼ぶために必須。
   # Let's Encrypt の証明書を自動取得・自動更新する（無料）。
   # BACKEND_DOMAIN 未設定時は起動時にエラーになる（deploy/.env での設定が必須）。
+  # GRAFANA_DOMAIN: 運用監視ダッシュボード（Grafana）をスマートフォン等の外部端末
+  # からも見られるよう、サブドメインを分けてHTTPS公開する（80/443番は
+  # BACKEND_DOMAINと共用のため追加のポート開放は不要）。
   caddy:
     image: caddy:2-alpine
     container_name: cyberattack-caddy
@@ -24,6 +87,7 @@ services:
       # nip.io: IP アドレスをそのままドメインとして解決してくれる無料 DNS
       # （Let's Encrypt の証明書取得にドメイン名が必要なため）
       - "BACKEND_DOMAIN=${BACKEND_DOMAIN:?BACKEND_DOMAIN を deploy/.env に設定してください（例 インスタンスIP.nip.io）}"
+      - "GRAFANA_DOMAIN=${GRAFANA_DOMAIN:?GRAFANA_DOMAIN を deploy/.env に設定してください（例 grafana.インスタンスIP.nip.io）}"
     ports:
       - "80:80"
       - "443:443"
@@ -33,7 +97,10 @@ services:
       - caddy_config:/config
     depends_on:
       - api-prod
+      - grafana
 
 volumes:
   caddy_data:
   caddy_config:
+  prometheus_data:
+  grafana_data:

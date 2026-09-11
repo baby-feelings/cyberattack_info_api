@@ -1,0 +1,24 @@
+# Prometheusのスクレイプ設定（運用監視）。
+#
+# このファイル自体に METRICS_API_KEY の実際の値を書く必要があるため、
+# deploy/.env（BACKEND_DOMAIN等）と同じ理由でgit管理対象外にしている。
+#
+# 使い方: このファイルを deploy/prometheus.yml としてコピーし、
+# credentials に .env.prod の METRICS_API_KEY と同じ値を設定してください。
+
+global:
+  scrape_interval: 30s
+
+scrape_configs:
+  - job_name: "api-prod"
+    metrics_path: /metrics
+    authorization:
+      credentials: "change-me-to-the-same-value-as-METRICS_API_KEY"
+    static_configs:
+      - targets: ["api-prod:8000"]
+
+  # OCIホストのリソース使用状況（node_exporter）。ポートを公開していない
+  # 内部専用コンテナのため認証不要。
+  - job_name: "node-exporter"
+    static_configs:
+      - targets: ["node-exporter:9100"]

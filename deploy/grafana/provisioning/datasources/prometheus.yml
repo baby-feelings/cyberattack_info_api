@@ -1,0 +1,13 @@
+# Grafanaの起動時にPrometheusデータソースを自動登録する（手動設定不要にするため）。
+# uid を固定しているのは、deploy/grafana/dashboards/ 配下のダッシュボードJSONが
+# この uid を直接参照しているため（自動生成uidだと再プロビジョニングで変わりうる）。
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus_ds
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false

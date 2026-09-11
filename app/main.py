@@ -17,6 +17,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.auth.router import router as auth_router
 from app.core.config import settings
 from app.core.database import Base, engine, get_db
+from app.core.metrics import router as metrics_router
 from app.core.schemas import HealthResponse
 from app.crawler_logs.router import router as crawler_logs_router
 from app.depscan.crawler import fetch_and_scan_dependencies
@@ -174,6 +175,7 @@ app.include_router(osv_admin_router)
 app.include_router(jvn_admin_router)
 app.include_router(depscan_admin_router)
 app.include_router(depsops_admin_router)
+app.include_router(metrics_router)
 
 
 # ──────────────────────────────────────────────
