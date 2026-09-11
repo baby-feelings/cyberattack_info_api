@@ -1,0 +1,55 @@
+# =====================================================================
+# バックエンド (FastAPI) OCIデプロイスクリプト
+# 実行場所: Windows側 cyberattack_info_api/deploy/ ディレクトリ内
+# crypto_forecast/deploy/deploy_to_oci.ps1 と同じ SSH/SCP + docker compose 方式
+# =====================================================================
+
+# --- 1. 環境設定（ご自身の環境に合わせて修正してください） ---
+$OciUser   = "ubuntu"
+$OciHost   = "203.0.113.10"  # OCI インスタンス作成後、実際のパブリックIPに置き換える
+$SshKey    = "C:\Users\masud\.ssh\oci_cyberattack_info_api_key.key"
+$RemoteDir = "/home/ubuntu/cyberattack_info_api"
+
+# 以前設定したOpenSSHのパス環境を引き継ぎ、パスフレーズ入力を回避してスムーズに実行します
+$SshCmd = "ssh -i $SshKey -o StrictHostKeyChecking=no"
+$ScpCmd = "scp -i $SshKey -o StrictHostKeyChecking=no"
+
+Write-Host "🚀 1. OCI上のディレクトリ階層を準備しています..." -ForegroundColor Cyan
+Invoke-Expression "$SshCmd ${OciUser}@${OciHost} 'mkdir -p $RemoteDir/app $RemoteDir/alembic/versions $RemoteDir/deploy'"
+
+Write-Host "📦 2. 本番稼働に必要なファイルのみを転送中..." -ForegroundColor Cyan
+# -- アプリケーション本体と Dockerfile・依存パッケージ定義 --
+Invoke-Expression "$ScpCmd -r ../app/* ${OciUser}@${OciHost}:${RemoteDir}/app/"
+Invoke-Expression "$ScpCmd ../Dockerfile ../requirements.txt ${OciUser}@${OciHost}:${RemoteDir}/"
+
+# -- Alembicマイグレーション定義 (DBスキーマ管理。DB自体は Neon を継続利用) --
+Invoke-Expression "$ScpCmd ../alembic.ini ${OciUser}@${OciHost}:${RemoteDir}/"
+Invoke-Expression "$ScpCmd -r ../alembic/* ${OciUser}@${OciHost}:${RemoteDir}/alembic/"
+
+# -- デプロイ設定ファイル (docker-compose.yml, Caddyfile) --
+Invoke-Expression "$ScpCmd ./docker-compose.yml ./Caddyfile ${OciUser}@${OciHost}:${RemoteDir}/deploy/"
+
+# -- docker-compose の ${BACKEND_DOMAIN} 変数展開用 (deploy/.env)
+#    事前に deploy/.env.example を deploy/.env にコピーし BACKEND_DOMAIN を設定しておくこと
+if (Test-Path "./.env") {
+    Invoke-Expression "$ScpCmd ./.env ${OciUser}@${OciHost}:${RemoteDir}/deploy/"
+} else {
+    Write-Warning "deploy/.env が見つかりません。deploy/.env.example を参考に BACKEND_DOMAIN を設定してください。"
+}
+
+# -- アプリの環境変数 (DATABASE_URL=Neon の接続文字列 等。API_KEY・GITHUB_TOKEN 等を含むため機密情報)
+#    事前に ../.env.example を参考に ../.env.prod を作成しておくこと（本番用の値を設定）
+if (Test-Path "../.env.prod") {
+    Invoke-Expression "$ScpCmd ../.env.prod ${OciUser}@${OciHost}:${RemoteDir}/"
+} else {
+    Write-Warning "../.env.prod が見つかりません。.env.example を参考に本番用の値で作成してください。"
+}
+
+Write-Host "🔄 3. OCI上でコンテナを再ビルドし、最新状態で起動します..." -ForegroundColor Cyan
+# BACKEND_DOMAIN は deploy/.env で設定する (例: <インスタンスIP>.nip.io)
+# Caddy が Let's Encrypt で HTTPS 化する (Vercel からの API 呼び出しに必須)
+# DB は Neon（マネージドPostgreSQL）を継続利用するため、Postgresコンテナは無い
+Invoke-Expression "$SshCmd ${OciUser}@${OciHost} 'cd $RemoteDir/deploy && docker compose up -d --build api-prod caddy'"
+
+Write-Host "✅ デプロイ完了！バックエンドは最新のコードで稼働しています。" -ForegroundColor Green
+Write-Host "   ヘルスチェック: https://<BACKEND_DOMAIN>/health" -ForegroundColor Green

@@ -917,6 +917,53 @@ GitHub Actions 無料プランでは複数 cron の発火が不安定なため�
 
 ---
 
+### OCI への移行（Issue #165、進行中）
+
+Render 無料プランはコールドスタート・スリープが発生し、`/admin/*-crawl` のバックグラウンド
+処理がデプロイ再起動で強制終了される事故（DEPSCAN オンデマンドスキャンが `running` のまま
+取り残される障害、PR #152 参照）の原因になっていた。`crypto_forecast`
+（`https://github.com/baby-feelings/crypto_forecast`）で実績のある OCI Always Free +
+Docker Compose + Caddy 構成を、本プロジェクト専用の**新規別インスタンス**に適用し、
+常時稼働化する。
+
+**方針（要件定義で確定済み）:**
+- インスタンスは crypto_forecast とは分離した新規インスタンス（ロードバランサーは使わず
+  Caddy 単体で HTTPS 終端。将来複数プロジェクトの集約が必要になった時点で再検討）
+- **DB は Neon を継続利用**（DB移行なし。`DATABASE_URL` の接続先を変えるだけ）
+- 監視（Prometheus/Grafana）は今回は導入しない。crypto_forecast も初回デプロイ時点では
+  無く後から追加した経緯（Issue #132相当）があり、まずは移行自体を安定させてから検討する
+- デプロイは**手動**（`deploy/deploy_to_oci.ps1` を都度実行。crypto_forecast と同じ
+  SSH/SCP + `docker compose up -d --build` 方式）。GitHub Actions 経由の自動デプロイ
+  （`deploy.yml` の Render フック）は、実際のカットオーバー時に削除する
+- カットオーバーは一時並行稼働（OCI側を手動検証 → 問題なければ Vercel の API ベースURLを
+  切り替え → Render を停止）。`daily-crawl.yml` の叩き先URLもこのタイミングで変更する
+  （それまでは Render を叩いたまま維持）
+
+**現状（このコミット時点）は "デプロイに使うファイル一式の用意" のみが完了しており、
+実際の OCI インスタンス作成・カットオーバーはまだ行っていない**:
+
+- `Dockerfile`（リポジトリルート）: `crypto_forecast/backend/Dockerfile` と同じ
+  Python slim ベースイメージパターン。Render の Start Command と同じ順序
+  （`python -m app.core.migrate && uvicorn ...`）を `CMD` に採用し、挙動を変えていない
+- `deploy/docker-compose.yml`: `api-prod`（本APIコンテナ、ホストへポート公開はしない）・
+  `caddy`（80/443 を公開し `api-prod` へリバースプロキシ）の2サービスのみ。Postgres
+  コンテナは無い（Neon 継続利用のため）
+- `deploy/Caddyfile`: `{$BACKEND_DOMAIN} { reverse_proxy api-prod:8000 }` のみのシンプル構成
+- `deploy/deploy_to_oci.ps1`: `crypto_forecast/deploy/deploy_to_oci.ps1` を踏襲。
+  `$OciHost`/`$SshKey` はプレースホルダのため、実際のインスタンス作成後に書き換える必要がある
+- `deploy/.env.example`: `BACKEND_DOMAIN`（`<インスタンスIP>.nip.io` 形式）のみ。
+  アプリ本体の環境変数（`DATABASE_URL`/`API_KEY` 等）はリポジトリルートの
+  `.env.example` を元に `.env.prod` を作成し、`deploy_to_oci.ps1` が転送する
+- `.dockerignore` / `.gitignore` に `deploy/.env`・`.env.prod` を追加済み
+
+上記いずれも Docker Desktop（ローカル）でビルド・起動・`docker compose config`・
+`caddy validate` により動作確認済み。**残タスク**: OCI Always Free の残り容量確認
+（crypto_forecast の Ampere A1 使用量次第）→ インスタンス作成 → `deploy_to_oci.ps1`
+の実行 → 手動検証 → カットオーバー（`daily-crawl.yml`・`deploy.yml`・GitHub OAuth App
+の callback URL・Vercel の API ベースURLの更新）。
+
+---
+
 ## 環境ファイル
 
 | ファイル | 用途 | Git 管理 |
