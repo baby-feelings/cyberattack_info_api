@@ -69,6 +69,14 @@ Write-Host "🔄 3. OCI上でコンテナを再ビルドし、最新状態で起
 # DB は Neon（マネージドPostgreSQL）を継続利用するため、Postgresコンテナは無い
 Invoke-Expression "$SshCmd ${OciUser}@${OciHost} 'cd $RemoteDir/deploy && docker compose up -d --build api-prod caddy prometheus grafana node-exporter'"
 
+Write-Host "🧹 4. 不要になったDockerイメージ・ビルドキャッシュを削除しています..." -ForegroundColor Cyan
+# デプロイ（docker compose build）のたびにビルドキャッシュ・タグなしイメージが蓄積し、
+# 自動クリーンアップの仕組みが無いとディスクを逼迫させる（crontab/systemdタイマーは
+# 意図的に使わず、手動デプロイのたびにここで掃除する方式に統一する）。
+# 稼働中のコンテナ（api-prod・caddy・prometheus・grafana・node-exporter）が使用する
+# イメージは対象外（-f フィルタでも稼働中コンテナの参照先は削除されない）
+Invoke-Expression "$SshCmd ${OciUser}@${OciHost} 'docker image prune -f && docker builder prune -af'"
+
 Write-Host "✅ デプロイ完了！バックエンドは最新のコードで稼働しています。" -ForegroundColor Green
 Write-Host "   ヘルスチェック: https://<BACKEND_DOMAIN>/health" -ForegroundColor Green
 Write-Host "   運用監視ダッシュボード: https://<GRAFANA_DOMAIN>/" -ForegroundColor Green

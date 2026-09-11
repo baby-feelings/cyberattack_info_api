@@ -786,6 +786,13 @@ crypto_forecast）で実績のあるOCI Always Free + Docker Compose + Caddy構�
 - `API_BASE_URL_FOR_OAUTH`はGitHub OAuth Appのcallback URLと一致させる必要がある。
   インスタンスを作り直した場合は`.env.production`・`app/core/config.py`のデフォルト値・
   GitHub OAuth Appのcallback URLの3箇所を同時に更新すること
+- **ディスク容量管理**: `docker compose up -d --build`はデプロイのたびにビルドキャッシュ・
+  タグなしイメージを蓄積させる（数回のデプロイだけでビルドキャッシュが1GB超に達した実績
+  あり）。自動クリーンアップ用のcrontab/systemdタイマーは意図的に設置せず、
+  `deploy/deploy_to_oci.ps1`のステップ4（`docker image prune -f && docker builder
+  prune -af`）で手動デプロイのたびに掃除する方式に統一している（稼働中コンテナが
+  参照するイメージは対象外のため安全）。デプロイを介さず長期間放置する運用に変更する
+  場合は、別途定期クリーンアップの仕組みを検討すること
 
 **教訓（`.env.production`取り扱いの事故）**: 秘密情報ファイルを`cat`/`awk -F=`等の
 全内容表示コマンドで確認すると値が露出する（YAML等`=`を含まない行はそのまま出力される
