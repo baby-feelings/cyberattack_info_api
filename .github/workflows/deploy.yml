@@ -7,23 +7,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  # ── Render（バックエンド API）デプロイ ──────────────────────────
-  deploy-render:
-    name: Deploy API to Render
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Trigger Render deploy
-        run: |
-          if [ -n "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" ]; then
-            curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
-            echo "Render deploy triggered"
-          else
-            echo "RENDER_DEPLOY_HOOK_URL is not set. Skipping Render deploy."
-          fi
+  # ── バックエンド (FastAPI) は OCI 上で手動デプロイ運用 ─────────────
+  # Render からOCIへ移行済み（deploy/deploy_to_oci.ps1 を都度手動実行する方式。
+  # CLAUDE.md「OCIへの移行」節参照）。GitHub Actions からの自動デプロイは無い。
 
   # ── Vercel（フロントエンド ダッシュボード）デプロイ ────────────
   deploy-vercel:

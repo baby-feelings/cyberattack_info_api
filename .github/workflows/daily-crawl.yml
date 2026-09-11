@@ -17,23 +17,24 @@ on:
         default: 'all'
 
 env:
-  API_BASE_URL: https://cyberattack-info-api.onrender.com
+  API_BASE_URL: https://168.138.213.240.nip.io
 
 jobs:
-  # ── Render 起動 ────────────────────────────────────────────────
+  # ── ヘルスチェック ────────────────────────────────────────────
   wake-up:
-    name: Wake up Render
+    name: Health check before crawl
     runs-on: ubuntu-latest
     steps:
-      - name: Wake up Render service
-        # Render の Free プランはスリープするため、まずヘルスチェックで起こす
+      - name: Health check
+        # OCI移行後はスリープしないため「起こす」意味は無いが、ネットワーク障害等で
+        # APScheduler が不発火だった場合の検知・後続ジョブのガードとして残している
         run: |
-          echo "Waking up Render service..."
+          echo "Checking service health..."
           for i in 1 2 3; do
             STATUS=$(curl -s --connect-timeout 10 --max-time 30 --fail -o /dev/null -w "%{http_code}" "$API_BASE_URL/health" || echo "000")
             echo "Attempt $i: HTTP $STATUS"
             if [ "$STATUS" = "200" ]; then
-              echo "Service is awake."
+              echo "Service is healthy."
               break
             fi
             sleep 20
