@@ -238,6 +238,45 @@ DEPSCAN（`app/depscan/router.py`）はダッシュボードから `X-API-KEY` �
 引き続き `API_KEY` のみを直接比較する）。Claude Code 等の既存クライアントは引き続き
 `API_KEY` を使えばよく、SKILL.md の運用は変わらない。
 
+### 外部API呼び出しの耐障害性（Issue #130）
+CISA KEVフィード・OSV API・MyJVN API・GitHub APIへの呼び出しは、`app.core.retry.
+request_with_retry` で指数バックオフ付きリトライを行う。一時的な障害（429・5xx・
+接続断）のみリトライ対象とし、恒久的なエラー（401/404、権限不足の403等）は即座に
+呼び出し元へ伝播させる（無駄なリトライで失敗までの時間を延ばさないため）。GitHub
+APIのレート制限は `X-RateLimit-Remaining`/`X-RateLimit-Reset`/`Retry-After` ヘッダーを
+見て待機時間を決定する（`X-RateLimit-Reset` 経由の待機は最大5分でキャップし、
+クロール全体が長時間ブロックされるのを防ぐ）。リトライ発生回数は
+`external_api_retry_total`（Prometheus Counter、`reason` ラベルで
+`rate_limited`/`transient_error` を区別）として `/metrics` に自動的に公開され、
+Grafanaダッシュボードの「外部API呼び出しのリトライ発生回数」パネルで可視化する。
+
+**新規リソース作成（POST）にはリトライを適用しない**: `create_issue`・
+`add_issue_comment`・`request_rebase` は、タイムアウト等でレスポンス受信前に
+失敗した場合、実際には成功しているリクエストを再送すると重複作成（Issue・
+コメントの二重投稿等）のリスクがあるため、意図的にリトライ対象から除外している。
+GET・PUT（`merge_pull_request`）・PATCH（`close_issue`）等の冪等な操作のみが
+リトライ対象。
+
+**Upsertロジックは冪等**: KEV/OSV/JVNの `_upsert_*` は自然キー（`cve_id`・
+`(osv_id, ecosystem, package_name)`・`jvndb_id` 等）で既存レコードを検索し、
+無ければINSERT・あれば内容差分がある場合のみUPDATEする設計のため、同じデータで
+複数回実行しても結果は変わらない（重複INSERTは発生しない）。
+
+**部分失敗時の再実行方針（設計判断）**: クロール処理の途中で例外が発生した場合、
+現状は `crawler_logs` にエラーを記録し、クロール全体としては失敗扱いのまま
+次回の定期実行（毎日）を待つのみで、即座の再試行は行わない。この方針を維持する
+と判断した理由:
+1. 個々のHTTPリクエストレベルの一時的障害は、上記のリトライ機構が既に吸収する
+   （crawl全体の再実行が必要になるのは、外部APIが数分以上ダウンしている等、
+   即座の再試行では解決しない障害であることが多い）
+2. KEV/OSV/JVNは直近N日分（`OSV_DAYS`/`JVN_DAYS`等）を取得する設計のため、
+   ある日のクロールが失敗しても、翌日以降のクロールが同じ期間を再度カバーし
+   自然に「取りこぼし」を回収する
+3. DEPSCAN/DEPSOPSは差分ではなく毎回全件を再評価する設計のため、失敗した回の
+   状態は次回実行で完全に上書き・回復する
+4. crawl全体の即時リトライを追加すると、DEPSCAN/DEPSOPSが内部で呼ぶ
+   非冪等なGitHub API呼び出し（Issue作成等）が重複実行されるリスクが増す
+
 ### 実装Tips
 - APIキー比較は `hmac.compare_digest` で定数時間比較する（タイミング攻撃対策）
 - ORM定義は `Mapped`/`mapped_column` スタイル（`Column` 直書きは mypy と非互換。`pyproject.toml` に `sqlalchemy.ext.mypy.plugin` 設定済み）

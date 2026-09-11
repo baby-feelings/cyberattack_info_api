@@ -155,6 +155,22 @@
         }
       ],
       "fieldConfig": { "defaults": { "unit": "percent" }, "overrides": [] }
+    },
+    {
+      "id": 9,
+      "title": "外部API呼び出しのリトライ発生回数（1時間あたり、要因別）",
+      "description": "CISA KEV・OSV・MyJVN・GitHub API呼び出しが一時的エラー（5xx・接続断）や\nレート制限（429・GitHub二次レート制限の403）でリトライされた回数。恒久的な\nエラー（401/403〈権限不足〉/404等）はリトライされないため含まれない\n（Issue #130、app.core.retry参照）。増加傾向が続く場合は外部API側の障害や\nレート制限の恒常的な超過を示唆する。",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus_ds" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 38 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus_ds" },
+          "expr": "sum(increase(external_api_retry_total[1h])) by (reason)",
+          "legendFormat": "{{reason}}",
+          "refId": "A"
+        }
+      ]
     }
   ]
 }

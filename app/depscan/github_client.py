@@ -10,6 +10,8 @@ from typing import Any
 
 import httpx
 
+from app.core.retry import request_with_retry
+
 logger = logging.getLogger(__name__)
 
 _GITHUB_API_BASE = "https://api.github.com"
@@ -43,15 +45,13 @@ def list_target_repos(username: str, token: str) -> list[dict[str, Any]]:
     page = 1
     with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
         while True:
-            resp = client.get(
-                f"{_GITHUB_API_BASE}/user/repos",
-                params={
-                    "affiliation": "owner",
-                    "per_page": _PER_PAGE,
-                    "page": page,
-                },
-            )
-            resp.raise_for_status()
+            def _get_repos_page(p: int = page) -> httpx.Response:
+                return client.get(
+                    f"{_GITHUB_API_BASE}/user/repos",
+                    params={"affiliation": "owner", "per_page": _PER_PAGE, "page": p},
+                )
+
+            resp = request_with_retry(_get_repos_page)
             batch = resp.json()
             if not batch:
                 break
@@ -76,11 +76,12 @@ def get_repo_tree(owner: str, repo: str, default_branch: str, token: str) -> lis
         ファイルパスのリスト（ディレクトリは除外）
     """
     with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
-        resp = client.get(
-            f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/git/trees/{default_branch}",
-            params={"recursive": "1"},
+        resp = request_with_retry(
+            lambda: client.get(
+                f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/git/trees/{default_branch}",
+                params={"recursive": "1"},
+            ),
         )
-        resp.raise_for_status()
     data = resp.json()
 
     # GitHub API は巨大なツリーの場合 truncated=true を返す（大規模リポジトリのみ発生）
@@ -107,8 +108,9 @@ def get_file_content(owner: str, repo: str, path: str, token: str) -> str:
         ファイル内容（UTF-8 文字列）
     """
     with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
-        resp = client.get(f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/contents/{path}")
-        resp.raise_for_status()
+        resp = request_with_retry(
+            lambda: client.get(f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/contents/{path}"),
+        )
     data = resp.json()
     content = data.get("content", "")
     encoding = data.get("encoding", "base64")
@@ -180,11 +182,12 @@ def find_open_issue(owner: str, repo: str, title: str, token: str) -> int | None
         見つかった Issue 番号。無ければ None。
     """
     with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
-        resp = client.get(
-            f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/issues",
-            params={"state": "open", "per_page": _PER_PAGE},
+        resp = request_with_retry(
+            lambda: client.get(
+                f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/issues",
+                params={"state": "open", "per_page": _PER_PAGE},
+            ),
         )
-        resp.raise_for_status()
     for issue in resp.json():
         if issue.get("title") == title and "pull_request" not in issue:
             return int(issue["number"])
@@ -192,7 +195,13 @@ def find_open_issue(owner: str, repo: str, title: str, token: str) -> int | None
 
 
 def create_issue(owner: str, repo: str, title: str, body: str, token: str) -> dict[str, Any]:
-    """Issue を新規作成する。"""
+    """Issue を新規作成する。
+
+    新規リソース作成（POST）のため、request_with_retryは使わずリトライしない
+    （タイムアウト等でレスポンス受信前に失敗した場合、実際には作成済みのIssueに
+    対して重複作成してしまうリスクがあるため。GETやIssueクローズ等の冪等な
+    操作とは異なる方針）。
+    """
     with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
         resp = client.post(
             f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/issues",
@@ -205,7 +214,11 @@ def create_issue(owner: str, repo: str, title: str, body: str, token: str) -> di
 def add_issue_comment(
     owner: str, repo: str, issue_number: int, body: str, token: str,
 ) -> dict[str, Any]:
-    """既存の Issue にコメントを追加する。"""
+    """既存の Issue にコメントを追加する。
+
+    新規リソース作成（POST）のため create_issue と同様の理由でリトライしない
+    （重複コメント投稿のリスクを避けるため）。
+    """
     with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
         resp = client.post(
             f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/issues/{issue_number}/comments",
@@ -216,11 +229,12 @@ def add_issue_comment(
 
 
 def close_issue(owner: str, repo: str, issue_number: int, token: str) -> dict[str, Any]:
-    """Issue をクローズする（state を "closed" に更新）。"""
+    """Issue をクローズする（state を "closed" に更新）。冪等な操作のためリトライする。"""
     with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
-        resp = client.patch(
-            f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/issues/{issue_number}",
-            json={"state": "closed"},
+        resp = request_with_retry(
+            lambda: client.patch(
+                f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/issues/{issue_number}",
+                json={"state": "closed"},
+            ),
         )
-        resp.raise_for_status()
     return dict(resp.json())

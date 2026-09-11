@@ -13,6 +13,7 @@ os.environ.setdefault("API_KEY", "test-api-key-for-pytest")
 os.environ.setdefault("ENVIRONMENT", "development")
 
 import httpx  # noqa: E402
+import pytest  # noqa: E402
 
 from app.core.notifications import notify_dependabot_ops  # noqa: E402
 from app.depsops.classify import classify_bump  # noqa: E402
@@ -113,6 +114,34 @@ class TestListOpenDependabotPrs:
             result = list_open_dependabot_prs("owner", "repo", "token")
         assert [pr["number"] for pr in result] == [1]
 
+    def test_retries_on_rate_limit_403_then_succeeds(self):
+        """レート制限由来の403（X-RateLimit-Remaining: 0）はリトライされること。
+        権限不足の403（ヘッダー無し）と区別する（Issue #130）。"""
+        prs = [{"number": 1, "title": "bump x", "user": {"login": "dependabot[bot]"}}]
+        request = httpx.Request("GET", "https://api.github.com")
+        rate_limited = httpx.Response(
+            403,
+            headers={"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "0"},
+            request=request,
+        )
+        mock_client = _mock_httpx_client()
+        mock_client.get = MagicMock(side_effect=[rate_limited, _mock_response(prs)])
+        with patch("app.depsops.github_client.httpx.Client", return_value=mock_client), \
+             patch("app.core.retry.time.sleep"):
+            result = list_open_dependabot_prs("owner", "repo", "token")
+        assert [pr["number"] for pr in result] == [1]
+        assert mock_client.get.call_count == 2
+
+    def test_does_not_retry_on_permission_403(self):
+        """権限不足の403（レート制限ヘッダー無し）は即座に伝播すること。"""
+        request = httpx.Request("GET", "https://api.github.com")
+        forbidden = httpx.Response(403, request=request)
+        mock_client = _mock_httpx_client(get_return=forbidden)
+        with patch("app.depsops.github_client.httpx.Client", return_value=mock_client):
+            with pytest.raises(httpx.HTTPStatusError):
+                list_open_dependabot_prs("owner", "repo", "token")
+        mock_client.get.assert_called_once()
+
 
 class TestGetPullRequest:
     def test_returns_detail(self):
@@ -171,6 +200,28 @@ class TestHasCiWorkflows:
         mock_client = _mock_httpx_client(get_return=resp)
         with patch("app.depsops.github_client.httpx.Client", return_value=mock_client):
             assert has_ci_workflows("owner", "repo", "token") is False
+
+    def test_returns_false_on_real_404_response(self):
+        """実際のhttpx.Responseで404を返した場合（raise_for_status()が実際に例外を送出する
+        経路）でも、リトライされずFalseを返すこと（Issue #130でのリトライ導入後の回帰防止）。"""
+        request = httpx.Request("GET", "https://api.github.com")
+        resp_404 = httpx.Response(404, request=request)
+        mock_client = _mock_httpx_client(get_return=resp_404)
+        with patch("app.depsops.github_client.httpx.Client", return_value=mock_client):
+            assert has_ci_workflows("owner", "repo", "token") is False
+        mock_client.get.assert_called_once()
+
+    def test_retries_on_transient_error_then_succeeds(self):
+        """502等の一時的なエラーはリトライされ、最終的に成功すること（Issue #130）。"""
+        request = httpx.Request("GET", "https://api.github.com")
+        transient = httpx.Response(502, request=request)
+        success = _mock_response([{"name": "ci.yml"}], status_code=200)
+        mock_client = _mock_httpx_client()
+        mock_client.get = MagicMock(side_effect=[transient, success])
+        with patch("app.depsops.github_client.httpx.Client", return_value=mock_client), \
+             patch("app.core.retry.time.sleep"):
+            assert has_ci_workflows("owner", "repo", "token") is True
+        assert mock_client.get.call_count == 2
 
 
 class TestListOpenDependabotAlerts:

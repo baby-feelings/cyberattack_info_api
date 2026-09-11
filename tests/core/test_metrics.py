@@ -122,3 +122,14 @@ class TestMetricsEndpoint:
             )
         assert res.status_code == 200
         assert "crawler_last_run_success" in res.text
+
+    def test_exposes_external_api_retry_metric(self, client):
+        """app.core.retryが定義するCounterも、明示的な結線なしに自動的に
+        /metricsへ公開されること（prometheus_clientのグローバルレジストリ経由、
+        Issue #130）。"""
+        with patch("app.core.metrics.settings.METRICS_API_KEY", "secret-metrics-key"):
+            res = client.get(
+                "/metrics", headers={"Authorization": "Bearer secret-metrics-key"},
+            )
+        assert res.status_code == 200
+        assert "external_api_retry_total" in res.text
