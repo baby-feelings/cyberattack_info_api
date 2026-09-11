@@ -238,14 +238,11 @@ DEPSCAN（`app/depscan/router.py`）はダッシュボードから `X-API-KEY` �
 引き続き `API_KEY` のみを直接比較する）。Claude Code 等の既存クライアントは引き続き
 `API_KEY` を使えばよく、SKILL.md の運用は変わらない。
 
-### API キー認証のタイミング攻撃対策
-```python
-# ❌ 通常の文字列比較（タイミング攻撃に脆弱）
-if api_key != settings.API_KEY:
-
-# ✅ 定数時間比較（hmac.compare_digest）
-if not hmac.compare_digest(api_key, settings.API_KEY):
-```
+### 実装Tips
+- APIキー比較は `hmac.compare_digest` で定数時間比較する（タイミング攻撃対策）
+- ORM定義は `Mapped`/`mapped_column` スタイル（`Column` 直書きは mypy と非互換。`pyproject.toml` に `sqlalchemy.ext.mypy.plugin` 設定済み）
+- `Settings()` の呼び出しには `# type: ignore[call-arg]`（mypy が `.env` からの注入を認識できないため）
+- ヘルスチェック等で `db_gen` を使う場合は try の前で `None` 初期化してから `finally` でガードする（`UnboundLocalError` 対策）
 
 ### CORS・Swagger の本番制限
 - CORS: 本番は `["https://cyberattackinfoapi.vercel.app"]` のみ許可。開発時は localhost も追加
@@ -291,33 +288,6 @@ datetime 型の属性だけ自動変換する。`JvnVulnerabilityOut`/`OsvVulner
 の構築（検索キーワード・重要度・エコシステム等の絞り込み）はドメインごとに大きく異なるため
 対象外とし、真に共通していたページネーション部分のみを抽出した。
 
-### SQLAlchemy 2.x スタイルの使用（mypy 互換）
-```python
-# ❌ 旧スタイル（mypy エラーが出る）
-id: int = Column(Integer, primary_key=True)
-
-# ✅ 新スタイル（Mapped + mapped_column）
-id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-```
-`pyproject.toml` に `plugins = ["sqlalchemy.ext.mypy.plugin"]` を設定済み。
-
-### pydantic-settings の型無視
-```python
-# mypy は env_file からの注入を理解できないため type: ignore が必要
-settings = Settings()  # type: ignore[call-arg]
-```
-
-### ヘルスチェックの UnboundLocalError 対策
-```python
-db_gen = None  # try ブロックの前で必ず初期化する
-try:
-    db_gen = get_db()
-    ...
-finally:
-    if db_gen is not None:  # ガードなしだと UnboundLocalError
-        ...
-```
-
 ### SQLite / PostgreSQL 切り替え
 `DATABASE_URL` が `sqlite://` で始まる場合は `check_same_thread=False` と PRAGMA 設定を自動適用。  
 PostgreSQL の場合は `pool_pre_ping=True` で接続断を自動検出。
@@ -361,34 +331,21 @@ KEVクロール自体の成功可否には影響させない。`GET /api/vulnera
 絞り込みを可能にした。
 
 ### 来歴・鮮度・差分API（Issue #129・KEV/OSV/JVN共通）
-文献調査（サイバー攻撃情報API_機能要件調査論文）の指摘「source_modified_at と
-fetched_at を区別し、差分取得（updated_since）を提供する」に対応。KEV/OSV/JVN の
-3ドメインすべてに以下を追加した:
+「source_modified_at と fetched_at を区別し、差分取得（updated_since）を提供する」
+という要件に対応し、KEV/OSV/JVNに以下を追加した:
 
-- **`fetched_at`**: このレコードを最後にクローラーが取得元で存在確認した日時。
-  既存の `updated_at`（`onupdate=func.now()`。**内容が実際に変わった時だけ**更新される）
-  とは異なり、`fetched_at` は**内容に変更が無かった回のクロールでも毎回更新**する
-  （鮮度の可視化用。「このデータは今日も取得元に存在することを確認した」という証跡）。
-  KEV は `_upsert_vulnerabilities` の `existing.fetched_at = now` を `changed` 判定と
-  無関係に必ず実行、OSV は `_upsert_osv_records`、JVN は `_apply_update` で同様。
-  `record_data`/`rec` の等値比較（`changed` 判定）には `fetched_at` を含めない
-  （含めると値が毎回異なるため常に「変更あり」と誤判定してしまう）。
-- **`updated_since` クエリパラメータ**: 差分取得（増分同期）用に、各一覧APIへ追加。
-  `fetched_at` ではなく既存の **`updated_at`** を条件に使う（`fetched_at` は毎回の
-  クロールで更新されてしまうため、フィルタに使うと実質「直近クロールで見えた全件」を
-  返すだけになり差分取得として機能しない。「内容が実際に変わったレコードだけを返す」
-  という要件には `updated_at` が正しい）。
-- **OSV の `withdrawn_at`**: OSVスキーマの `withdrawn`（撤回日時、ISO8601文字列）
-  フィールドをパースして保存する（`_build_records`）。KEV・JVNには撤回の概念が
-  無いため対象外。
+- **`fetched_at`**: クローラーが取得元で最後に存在確認した日時。既存の`updated_at`
+  （内容が実際に変わった時だけ更新）とは異なり、**変更が無かった回のクロールでも毎回
+  更新**する（鮮度の可視化用）。`changed`判定の等値比較には含めない（含めると常に
+  「変更あり」と誤判定するため）
+- **`updated_since`クエリパラメータ**: `fetched_at`は毎回更新されフィルタに使うと
+  実質全件を返してしまうため、内容が実際に変わった時だけ動く`updated_at`を条件に使う
+- **OSVの`withdrawn_at`**: OSVスキーマの`withdrawn`フィールドをパースして保存
+  （KEV・JVNには撤回の概念が無いため対象外）
 
-テストでのSQLite特有の注意点: SQLiteは`DateTime(timezone=True)`でもtz情報を保持
-せず、かつ`CURRENT_TIMESTAMP`（`server_default=func.now()`）は**秒精度**（マイクロ秒
-を持たない）で返す。そのため `updated_since` のテストで「insert直後のレコードは
-cutoffより新しいはず」という前提を置くと、同一秒内のinsertでcutoffのマイクロ秒部分
-に負けて意図せず古い扱いになるレースコンディションが発生する。対策として、両レコード
-の `updated_at` を明示的な固定値へ強制更新してからフィルタを検証する
-（`tests/{kev,osv,jvn}/test_*.py` の `test_*_updated_since_filter` 参照）。
+SQLiteは`CURRENT_TIMESTAMP`が秒精度（マイクロ秒無し）のため、`updated_since`のテストで
+同一秒内のinsertがcutoff比較に負けるレースコンディションに注意（`updated_at`を明示的な
+固定値へ強制更新してから検証する。`test_*_updated_since_filter`参照）。
 
 ### OSV クローラーの 2 ステップ取得
 OSV REST API の `/v1/querybatch` は `{id, modified}` しか返さないため、完全情報の取得は 2 ステップ:
@@ -450,28 +407,17 @@ finding が本当に0件か」を再度 DB に問い合わせてから判定す�
 全体の成功可否には影響させない（Issue 起票と同じ方針）。
 
 ### DEPSCAN の到達可能性（reachability）ヒューリスティック判定
-「脆弱な依存が存在すること」と「その脆弱性が当該アプリで実際に到達・悪用可能であること」は
-別問題である（依存スキャナの偽陽性の主因は到達不能コードの検知）。`app.depscan.reachability`
-が、脆弱なパッケージが検知元リポジトリのソースコード内で実際に **import/require/use されて
-いるか**（import レベル。関数呼び出しレベルの解析はスコープ外）をヒューリスティックに判定し、
-`DependencyFinding.reachability`（`"reachable"` / `"unreachable"` / `"unknown"`）へ格納する
-（DEPSCAN テーブルの「到達可能性」列に表示）。
-
-- 対応エコシステムは DEPSCAN が対応する全10エコシステム（PyPI/npm/NuGet/Pub/Go/Maven/
-  RubyGems/crates.io/Packagist/Hex）。パッケージ名からソースコード内の識別子への変換精度は
-  エコシステムによって大きく異なる（npm・Pub はほぼ厳密、PyPI・RubyGems・crates.io は
-  ハイフン→アンダースコア等のヒューリスティック正規化で概ね対応、Maven・Packagist・Hex は
-  パッケージ座標とソース内識別子の対応が慣習的なものでしかなく最も精度が低い best-effort）
-- `app.depscan.github_client.get_source_files` が対象リポジトリの git tree から拡張子で
-  ソースファイルを絞り込み取得する（vendored ディレクトリ除外、`_MAX_SOURCE_FILES=200`件・
-  `_MAX_SOURCE_FILE_SIZE=300_000`バイトの上限あり）。`app.depscan.crawler._apply_reachability`
-  がリポジトリ×エコシステムごとに1回だけソースを取得して使い回し、`check_reachability` を
-  各 finding に適用する
-- ソース取得失敗はリポジトリ・エコシステム単位で `except httpx.HTTPError` により握りつぶし
-  `"unknown"` のまま残す。DEPSCAN 全体（`fetch_and_scan_dependencies`）は `_apply_reachability`
-  自体の呼び出しも try/except で囲み、失敗してもクロール全体は成功扱いとする
-- 既存の未解決レコードについても、再スキャンのたびに `reachability` を再計算して上書きする
-  （`_upsert_findings` の既存レコード分岐）
+「脆弱な依存が存在すること」と「実際に到達・悪用可能であること」は別問題（依存スキャナの
+偽陽性の主因は到達不能コードの検知）。`app.depscan.reachability`が、脆弱なパッケージが
+リポジトリのソースコード内で実際に**import/require/useされているか**（importレベルのみ。
+関数呼び出しレベルの解析はスコープ外）を判定し、`DependencyFinding.reachability`
+（`"reachable"`/`"unreachable"`/`"unknown"`）へ格納する。対応は全10エコシステム。
+パッケージ名からソース内識別子への変換精度はエコシステムにより差が大きく、Maven・
+Packagist・Hexは最も精度が低いbest-effort。`get_source_files`が対象リポジトリの
+ソースを取得（`_MAX_SOURCE_FILES=200`件・`_MAX_SOURCE_FILE_SIZE=300_000`バイト上限）し、
+`_apply_reachability`がリポジトリ×エコシステムごとに1回だけ使い回す。取得失敗は
+`"unknown"`のまま残し、DEPSCAN全体の成功可否には影響させない。再スキャンのたびに
+既存レコードの`reachability`も再計算・上書きする。
 
 ### DEPSCAN の解決済みレコードは保持期間超過で自動削除する（未解決は対象外）
 `app.depscan.crawler._delete_old_depscan_records` が、`resolved_at` が
@@ -495,15 +441,11 @@ GitHub の Dependabot には独立した2つの機能があり、**`dependabot.y
 「Dependabot version updates」（週次の通常バージョンアップPR）しか有効にならない**。
 DEPSCAN が検知したような脆弱性に対して即座に修正PRを出す「Dependabot security updates」は、
 各リポジトリの `Settings → Code security` で個別に ON にする必要がある（`Dependency graph`・
-`Dependabot alerts`・`Dependabot security updates` の3点、`Grouped security updates` も
-推奨）。有効化すると、既存の Open な Dependabot alert 全件に対して自動でPRが作成される。
-**Dependabot PR は内容を確認せず自動マージしないこと。** マイナー/パッチ更新は概ね安全だが、
-メジャーバージョンアップは非互換な依存衝突を起こしうる（実例: `typescript` 6.0.3→7.0.2 が
-`typescript-eslint@8.61.0` の peer 依存 `typescript >=4.8.4 <6.1.0` と衝突し、Vercel の
-`npm install` が失敗した。`typescript-eslint` 側が TypeScript 7 系に対応するまで `~6.0.3` に
-固定している）。マージ前に CI（Test & Lint）に加え、フロントエンド変更は Vercel のプレビュー
-デプロイが `Deployment has completed` になっているかを確認する。マージ後にビルドが壊れた場合は
-該当パッケージのバージョンを差し戻す fix PR で対応する。
+`Dependabot alerts`・`Dependabot security updates` の3点）。
+**Dependabot PR は内容を確認せず自動マージしないこと。** メジャーバージョンアップは非互換な
+依存衝突を起こしうる（実例: `typescript` 6.0.3→7.0.2 が `typescript-eslint` の peer 依存と
+衝突しVercelビルドが失敗、対応するまで `~6.0.3` に固定）。マージ前にCIに加え、フロントエンド
+変更はVercelプレビューデプロイの完了を確認する。
 
 DEPSCAN 対象の他リポジトリ（`baby-feelings` アカウント配下）でも同様に Dependabot を有効化
 済み。それらの PR をマージする際のチェックリスト:
@@ -543,99 +485,38 @@ DEPSCAN 対象の他リポジトリ（`baby-feelings` アカウント配下）�
 
 ### DEPSOPS（`app/depsops/`）: Dependabot PR の安全な自動マージ運用層
 DEPSCAN（検知）・Dependabot（修正PR作成）に続く3層目として、Dependabot PR のうち
-**安全性が高いものだけを自動マージする**運用層。`POST /admin/dependabot-ops`
-（`app/depsops/router.py` の `admin_router`）から `app.depsops.runner.run_dependabot_ops`
-を呼ぶ。当初は安全性確認のため
-APScheduler/GitHub Actions への登録なし・手動トリガーのみで運用していたが、
-半日ほど手動運用して問題ないことを確認した上で、他クローラーと同様に
-`DEPSOPS_CRON_HOUR_UTC`（デフォルト UTC 23:00 = JST 8:00、DEPSCAN の後段）で
-自動実行するようにした（`app/main.py` の `scheduler.add_job` および
-`.github/workflows/daily-crawl.yml` の `dependabot-ops` ジョブ）。
-コンフリクトで自動マージできなかった PR（rebase 依頼のみで終わった PR）は、
-翌日以降の実行時にリベースが完了していれば通常通り自動マージされる
-（複数日にまたがる自己修復。追加のポーリング処理等は無く、単に毎日の
-再実行が同じ判定ロジックを通るだけ）。
+**安全性が高いものだけを自動マージする**運用層。`POST /admin/dependabot-ops`から
+`run_dependabot_ops`を呼ぶ。手動運用で半日問題ないことを確認した後、他クローラーと
+同様に`DEPSOPS_CRON_HOUR_UTC`（既定UTC 23:00=JST 8:00、DEPSCANの後段）で自動実行する
+ようにした。コンフリクトでマージできなかったPRは、翌日以降リベースが完了していれば
+自動的に再判定・マージされる（複数日にまたがる自己修復）。
 
-判定ロジック（`_process_pr`）:
-1. `mergeable_state == "dirty"`（コンフリクト）→ `@dependabot rebase` をコメントして
-   flagged 扱い（マージしない）
-2. 対象リポジトリに CI（`.github/workflows` の存在）が無い → 常に flagged
-   （CI が無いと自動マージの安全性を検証する手段が無いため）
-3. PR タイトルから `app.depsops.classify.classify_bump` で判定した結果が
-   `"major"` または `"unknown"`（タイトルから `from X to Y` 形式のバージョンを
-   抽出できない grouped PR 等）→ flagged
-4. `mergeable_state != "clean"`（CI 失敗・レビュー待ち等）→ flagged
-5. 上記いずれにも該当しない（マイナー/パッチ・CI あり・コンフリクトなし）→ 自動マージ
+**判定ロジック**（`_process_pr`、上から順に評価）:
+1. `mergeable_state == "dirty"`（コンフリクト）→ `@dependabot rebase`をコメントしflagged
+2. 対象リポジトリにCI（`.github/workflows`）が無い → 常にflagged（安全性を検証する
+   手段が無いため）
+3. `classify_bump`の判定が`"major"`または`"unknown"`（`from X to Y`を抽出できない
+   grouped PR等）→ flagged。**0.x系はminorの変化もmajor扱い**（semverの慣習）
+4. `mergeable_state != "clean"`（CI失敗・レビュー待ち等）→ flagged
+5. いずれにも該当しない（マイナー/パッチ・CIあり・コンフリクトなし）→ 自動マージ
 
-`classify_bump` は正規表現でタイトルから `from X to Y` を抽出し、メジャーバージョン
-（`major.minor` の `major`）が変わっていれば `"major"` とする。**0.x 系は minor の
-変化も `"major"` 扱いにする**（semver の慣習で 0.x は minor が実質的な破壊的変更を
-意味するため）。バージョンが抽出できない場合は安全側に倒し `"unknown"` とし、
-自動マージしない。
+マージ・flaggedいずれも毎回Slack通知（監査性優先、0件同士のみスキップ）。判定結果は
+`DependabotPrLog`テーブルへ1PR1行で永続化し（Slack通知は実行時点のスナップショットの
+みで履歴を持たないため）、`GET /api/depsops`で参照する。ダッシュボードにはDEPSOPS専用
+タブは作らず、DEPSCANタブ内のボタンから開く全画面モーダル（`DependabotOpsModal.tsx`）
+として統合している。
 
-マージ・要確認（flagged）いずれも `notify_dependabot_ops`（`app.core.notifications`）で
-**毎回** Slack 通知する（0 件同士の場合のみスキップ）。監査性を優先し、自動マージした
-という事実も必ず可視化する設計。crawler_logs には `crawler_type="DEPSOPS"` で記録し、
-`inserted`=自動マージ件数、`updated`=要確認件数として保存する（`deleted` は未使用）。
+**`is_security_update`（セキュリティ更新/バージョン更新の判定）**: `list_open_
+dependabot_alerts`でリポジトリのOpenなDependabot alert対象パッケージ名を取得し、PR
+タイトルと単語境界一致で照合する（GitHub自身のalertsと照合する方式、DEPSCAN自前DBとは
+照合しない）。`GITHUB_TOKEN`に**Dependabot alertsの読み取り権限**が必要（classic PAT:
+`security_events`スコープ / fine-grained PAT:「Dependabot alerts: Read-only」）。権限が
+無い場合は`null`（不明）のまま記録され、**過去の記録は遡って再判定されない**（履歴を
+積み増すだけのテーブルのため）。
 
-`app.depsops.github_client` は `app.depscan.github_client` とは別モジュール
-（ロックファイル収集とPR運用でドメインが異なるため）。ただし `list_target_repos`
-（対象リポジトリ一覧取得）は DEPSCAN 側のものをそのまま import して再利用している
-（DRY。リポジトリ一覧取得ロジック自体はドメイン非依存のため）。
-
-**判定履歴の永続化（`DependabotPrLog`）とダッシュボード表示:**
-Slack 通知は実行時点のスナップショットのみで履歴を持たないため、「要確認」PR が
-どのリポジトリ・どんな理由で自動マージされなかったかを後から確認できるよう、
-`run_dependabot_ops` は成功時に判定結果（merged/flagged 双方）を `DependabotPrLog`
-テーブルへ1 PR 1 行で永続化する（`_record_pr_logs`）。あわせて保持期間
-（`DEPSOPS_RETENTION_DAYS`、既定180日）を超えた古いレコードを削除する
-（`_delete_old_depsops_records`）。永続化・削除の失敗はクロール自体を失敗させない
-（KEV/OSV/JVN の保持期間削除処理と同じベストエフォート方針）。`GET /api/depsops`
-（`app/depsops/router.py`、リポジトリ・action でフィルタ可能なページネーション付き一覧）
-で参照する。
-
-ダッシュボードには DEPSOPS 専用タブは作らず、DEPSCAN タブ内のボタンから開く全画面モーダル
-（`dashboard/src/components/depscan/DependabotOpsModal.tsx`）として統合している
-（KEV/OSV/JVN/DEPSCAN は脆弱性データソースという同列の性質だが、DEPSOPS は
-「PR運用状況の確認」という別の性質のため、5つ目のタブは過剰と判断した。当初は
-折りたたみセクション〈`DependabotOpsSection.tsx`〉として実装していたが、
-「リポジトリ別件数（未解決）」の棒グラフ〈`DepsOpsRepoBarChart.tsx`〉を追加する際に
-画面が縦に間延びする問題があり、全画面モーダルへ作り直した）。開いたときのみ
-`GET /api/depsops` を取得する。
-
-**セキュリティ更新/バージョン更新のヒューリスティック判定（`is_security_update`）:**
-DEPSOPS が判定した各 Dependabot PR について、それが「セキュリティ更新」（脆弱性検知に
-即応した修正PR）なのか「単なる定期バージョン更新」なのかをヒューリスティックに判定し、
-`DependabotPrLog.is_security_update` に記録する（DEPSOPSモーダルの「種別」列に表示）。
-`app.depsops.github_client.list_open_dependabot_alerts`（`GET /repos/{owner}/{repo}/
-dependabot/alerts?state=open`）でリポジトリ単位に1回だけ Open な Dependabot alert の
-対象パッケージ名一覧を取得し、`app.depsops.runner._matches_security_alert` が PR タイトルと
-正規表現の単語境界一致で照合する（**GitHub 自身の Dependabot alerts と照合する方式**。
-DEPSCAN 自前の DB とは照合しない、という明示的な選択）。alert取得に失敗した場合（後述の
-権限不足等）は `None`（判定不能）のままとし、DEPSOPS本来のマージ判定処理は継続する。
-
-`GITHUB_TOKEN` に **Dependabot alerts の読み取り権限**が必要。この権限はトークンの種類に
-より設定箇所が異なる点に注意（実際に classic PAT を使っている場合の設定手順は下記参照）:
-- **fine-grained PAT**: Permissions の「Dependabot alerts: Read-only」
-- **classic PAT**: `security_events` スコープ（fine-grained のような個別権限名は無い）
-
-権限が無い場合は GitHub API が 403 を返し、`is_security_update` は `null`（ダッシュボードでは
-「不明」）のまま記録され続ける。**過去に記録済みの `DependabotPrLog` 行は遡って再判定
-されない**（`DependabotPrLog` は実行のたびに新しい行を積み増す履歴テーブルであり、
-既存行を書き換える処理は無いため）。権限追加後に反映されるのは、その反映後に実行された
-DEPSOPS の判定結果のみ。
-
-**Compatibility score バッジ（`compatibility_badge_url`）:**
-Dependabot は exact version bump のPR（`Bump X from A to B`形式）の本文に、GitHub が
-提供する「Compatibility score」バッジ画像（`![Dependabot compatibility score](https://
-dependabot-badges.githubapp.com/badges/compatibility_score?...)` 形式のMarkdown画像
-リンク）を埋め込む。範囲指定の requirement 更新PR（`Update X requirement from >=A to
->=B`形式）等には存在しない。GitHub側にこのスコアを取得する構造化APIは無く、画像として
-のみ提供されるため、`app.depsops.runner._extract_compatibility_badge_url` が
-`get_pull_request` で取得済みのPR本文（`detail["body"]`）から正規表現でバッジ画像URLを
-抽出し、`DependabotPrLog.compatibility_badge_url` にそのまま永続化する。ダッシュボードは
-数値化・独自判定は一切行わず、URLがあればそのまま `<img>` として表示するのみ（バッジ画像
-自体がGitHub側で動的にレンダリングされるスコアの視覚表現のため）。
+**`compatibility_badge_url`**: Dependabotがexact version bumpのPR本文に埋め込む
+「Compatibility score」バッジ画像URLを正規表現で抽出し保存する。GitHub側に数値取得APIは
+無いため、ダッシュボードは独自判定をせずURLをそのまま`<img>`表示する。
 
 ### DEPSCAN のロックファイル検出は Git Tree API で1リポジトリ1回のみ
 `app.depscan.github_client.get_repo_tree` で `git/trees/{branch}?recursive=1` を使い、
@@ -657,8 +538,8 @@ DDL 競合や権限不足で失敗してもサービスを止めないよう `tr
 `/admin/crawl`（KEV）・`/admin/osv-crawl`・`/admin/jvn-crawl`・`/admin/depscan-crawl`・
 `/admin/dependabot-ops` は即座に 202 Accepted を返し、`app.core.background.run_in_background`
 （daemon スレッドで実行し、例外はログに記録するだけで呼び出し元へは伝播させない共通ヘルパー）で
-バックグラウンド実行する。Render Free プランのリクエストタイムアウト（~30s）で OSV クロール
-（~150s）が 502 になる問題を回避するための設計。結果は `/api/crawler-logs` で確認する。
+バックグラウンド実行する（旧Render無料プランのリクエストタイムアウト対策として導入した設計だが、
+即時返却自体はOCI移行後も有用なため維持）。結果は `/api/crawler-logs` で確認する。
 OSV・JVN は `?days=N` クエリパラメータで取得対象日数を指定可能（初回バックフィル用）。
 
 各エンドポイントは対応するドメインの `app/{kev,osv,jvn,depscan,depsops}/router.py` に、
@@ -667,11 +548,6 @@ OSV・JVN は `?days=N` クエリパラメータで取得対象日数を指定�
 `/admin/crawl` が巻き込まれてしまうのを避けるため）。`app/main.py` はこれらの router と
 admin_router をすべて `include_router` するだけで、エンドポイント定義自体は持たない
 （include_router 呼び出しと lifespan・スケジューラ配線に専念する）。
-
-### Render Free プランのスリープ対策
-Render Free プランはアクセスがないと 15 分でスリープし APScheduler が発火しない。  
-`.github/workflows/daily-crawl.yml` で GitHub Actions cron が毎日 `/admin/crawl`・`/admin/osv-crawl`・`/admin/jvn-crawl` を叩いて補完している。  
-APScheduler と GitHub Actions の二重クロールは発生しない（Render がスリープ中は APScheduler が動かない）。
 
 ### ダッシュボードのタブ切り替え UI（App.tsx）
 KEV / OSV / JVN / DEPSCAN の 4 データソースは、画面下部固定のタブバーで切り替え表示する構成
@@ -724,99 +600,34 @@ Dependabot の PR 数（パッケージ単位で1PR）と数字が食い違っ�
 両方を出し、どちらの数字を見ているか誤解しないようにしている。
 
 ### DEPSCAN ダッシュボードの GitHub ログイン・アクセス制御（Issue #107）
-DEPSCAN タブは誰でも閲覧できてしまう状態だったため、任意の GitHub アカウントで OAuth
-ログインし、**本人が所有するリポジトリの検知結果のみ**を表示するようにした。UI上のゲート
-ではなく、バックエンド側で強制するアクセス制御である点が重要。
+任意の GitHub アカウントで OAuth ログインし、**本人が所有するリポジトリの検知結果のみ**
+表示する（UIゲートではなくバックエンド側で強制するアクセス制御）。
 
-**GitHub OAuth（Web Application Flow）:**
-`app/auth/router.py` の `/auth/github/login` → GitHub 認可画面へリダイレクト（CSRF対策の
-`state` を httpOnly Cookie に保持）→ `/auth/github/callback` で `code` を `access_token` に
-交換し、`GET /user` でログインユーザー名（`login`）を取得 → セッション JWT（PyJWT、
-`SESSION_SECRET_KEY` で HS256 署名、24時間有効）を発行する。OAuth スコープは `repo`
-（GitHub OAuth App は fine-grained PAT のような読み取り専用スコープを持たないため、
-本人所有の公開・非公開リポジトリへの読み取りアクセスに必要）。
-
-**セッションJWTの受け渡し方式（Issue #128 → Safari/iOS PWA不具合により再変更）:**
-当初はセッションJWTをフロントエンドURLのクエリ文字列（`?depscan_token=...`）に付与して
-渡していたが、RFC 9700（OAuth 2.0 Security BCP）がアクセストークン相当の値をURIクエリ
-パラメータで渡すことを明示的に禁止しているため（ブラウザ履歴・Referer・プロキシ/サーバー
-ログ等への漏えいリスク）、いったん HttpOnly・Secure・SameSite=None の Cookie に変更した
-（PR #137）。しかしバックエンド（Render）とフロントエンド（Vercel）はドメインが異なる
-クロスサイト構成のため、**Safari の ITP（Intelligent Tracking Prevention）がこの
-クロスサイトCookieを既定でブロックし、iOS の PWA（ホーム画面追加アプリ）を含む Safari
-系ブラウザでログイン後にセッションが確立されない不具合が実際に発生した**（Chromeは
-`SameSite=None; Secure` のクロスサイトCookieを許可するため気づきにくい）。この経緯から、
-Cookie方式を撤回し、**使い捨ての交換コード＋Bearerトークン方式**へ変更した:
-
-1. `/auth/github/callback` はセッションJWT本体ではなく、`app/auth/router.py` の
-   `_pending_exchange_codes`（インメモリの `{code: (session_token, expires_at)}` 辞書。
-   Render は `WEB_CONCURRENCY=1` の単一プロセス運用のためインメモリで問題ない）に
-   数十秒（`_EXCHANGE_CODE_TTL_SECONDS`）だけ有効な使い捨てコードを発行し、
-   `?depscan_code=...` としてフロントエンドへリダイレクトする
-2. フロントエンドは即座に `POST /auth/exchange`（`ExchangeRequest` ボディ `{code}`）へ
-   そのコードを渡し、レスポンスJSONボディで `{token, username}` を受け取る
-   （`_consume_exchange_code` が pop するため一度しか使えない）
-3. 以降はこの `token` を `localStorage` に保存し、`Authorization: Bearer <token>`
-   ヘッダーで各エンドポイントを呼ぶ（Cookie不要・ブラウザ非依存）
-
-この方式は、RFC 9700が問題視する「長命なアクセストークンをURLクエリに載せ続ける」
-リスクは回避しつつ（コードは数十秒・一度きりしか使えない）、Safari のクロスサイト
-Cookie制限の影響を受けない。`app/main.py` の CORS 設定から `allow_credentials=True`
-は撤去済み（Cookieに依存しなくなったため不要）。
-
-**`/api/depscan`・`/api/depscan/stats` の認証:**
-`app/depscan/router.py` の `_resolve_access` が `X-API-KEY`（既存の共有鍵、絞り込みなしの
-フルアクセス。Claude Code 等の既存クライアント向け・SKILL.md の運用を壊さないため維持）
-または `Authorization: Bearer <セッションJWT>` を検証する。セッション認証の場合は
-`owner` クエリパラメータをログインユーザー名で強制上書きし、`repo` パラメータで
-`{username}/` 以外のリポジトリを直接指定しようとした場合は 403 で拒否する
-（owner 制限の迂回防止）。
-
-**オンデマンドスキャン（`run_depscan_for_user`）:**
-DEPSCAN の毎日クロール（`fetch_and_scan_dependencies`）は `GITHUB_USERNAME`
-（baby-feelings）専用のため、任意のアカウントに対応するにはログイン時にその場でスキャン
-する必要がある。既存の `_collect_dependencies`/`_build_findings`/`_upsert_findings` は
-username/token で汎用化済みのためそのまま再利用し、`run_depscan_for_user` を新設。
-毎日クロールとは意図的に独立させており、Slack通知・GitHub Issue自動起票・
-`crawler_logs` への記録は**行わない**（第三者のログインのたびにノイズが出ないようにする
-ため）。進捗は専用の `UserScan` テーブル（`depscan_user_scans`。username が主キー）に
-`running`/`done`/`error` を記録し、`GET /auth/scan-status`（セッションJWT必須）で
-ポーリング取得する。
-
-**`_resolve_stale_findings` への `repo_owner_prefix`（クロスユーザー事故防止）:**
-`_resolve_stale_findings` はテーブル全体を対象に「今回検知されなかった既存レコード」を
-`resolved_at` 済みにする関数。オンデマンドスキャンでこれを無絞り込みのまま呼ぶと、
-1ユーザーの少数リポジトリのスキャン結果で baby-feelings 含む無関係な全ユーザーの
-未解決 finding を誤って解決済み扱いにしてしまう。これを防ぐため、`repo_full_name LIKE
-'{repo_owner_prefix}/%'` で絞り込む任意引数を追加し、`run_depscan_for_user` から
-ログインユーザー名を渡している。
-
-**24時間以内は再スキャンしない（`should_rescan_for_user`）:**
-当初は毎回ログインの度に必ずスキャンしていたが、リポジトリ数が多いアカウントほど毎回の
-ログインで完了まで待たされる問題があった。ユーザーからのフィードバックを受け、直近
-`RESCAN_INTERVAL_HOURS`（24時間）以内に完了したスキャンがあれば再スキャンせず DB の
-結果をそのまま使うよう変更。実行中（`status == "running"`）の場合は重複起動防止のため
-再スキャンしない。エラー終了時は毎回再試行対象とする（一時的な失敗で長時間ブロックしない
-ため）。フロントエンド側の変更は不要で、スキャンをスキップした場合は
-`/auth/scan-status` が直近の `status: "done"` を即座に返すため自然にローディングなしで
-即表示される。SQLite（開発/テスト）は `DateTime(timezone=True)` でも tz 情報を保持せず
-naive で返すため、比較前に `tzinfo=UTC` を補完している（PostgreSQL 本番では発生しない
-差異）。
-
-**フロントエンド（`DepscanAuthGate.tsx`）:**
-未ログイン時は「GitHubでログイン」ボタンを表示。OAuthコールバックからの復帰
-（`/?depscan_code=...`）を検出すると、`exchangeAuthCode()` でそのコードをセッション
-JWT・ユーザー名と交換し、両方を `localStorage` に保存してURLからは
-`history.replaceState` で即座に取り除く（交換失敗＝コード期限切れ・二重使用等の場合は
-未ログイン状態のままログイン画面を再表示する）。ログイン後は `/auth/scan-status`
-（`Authorization: Bearer <token>`）を4秒間隔でポーリングし、スキャン完了まで
-（既にキャッシュがあれば実質即座に）ローディング表示。**ネットワーク瞬断等の
-一時的なエラーではログアウトさせず、セッションが実際に無効（401）な場合のみ
-ログアウト扱いにする**（`client.ts` の `UnauthorizedError` で区別。ローカル動作確認中に
-「fetch失敗のたびに毎回ログアウトしてしまう」不具合を発見し修正済み）。ログアウトは
-サーバー側に何も保持していない（JWTはステートレス）ため、`window.confirm` の確認
-ダイアログを挟んで `localStorage` をクリアするだけのクライアント側のみの操作。
-`App.tsx` は URL に `depscan_code` があれば DEPSCAN タブを自動選択する。
+- **OAuthフロー**: `/auth/github/login` → GitHub認可（scope `repo`）→
+  `/auth/github/callback` で `code` を `access_token` に交換しログインユーザー名取得 →
+  セッションJWT（PyJWT、`SESSION_SECRET_KEY`でHS256署名、24時間有効）発行
+- **セッションJWTの受け渡しは使い捨て交換コード方式**: JWT本体をURLクエリに載せるのは
+  RFC 9700（OAuth 2.0 Security BCP）違反、Cookie方式はSafari ITPがクロスサイトCookieを
+  ブロックしiOS PWAでログインできない不具合が実際に発生した（過去2回の設計変更を経て
+  現方式に到達）。現在は `/auth/github/callback` が数十秒だけ有効な使い捨て交換コードを
+  `?depscan_code=...` でフロントエンドへ渡し、フロントエンドが即座に
+  `POST /auth/exchange` でセッションJWTと交換、以降 `Authorization: Bearer <token>` を
+  `localStorage` 経由で使う（Cookie不要）
+- **`/api/depscan`系の認証**: `_resolve_access` が `X-API-KEY`（フルアクセス、Claude Code
+  等向け）または `Authorization: Bearer <セッションJWT>` を検証。セッション認証時は
+  `owner` を強制的にログインユーザー名で上書きし、他人のリポジトリを`repo`パラメータで
+  直接指定しても403（owner制限の迂回防止）
+- **オンデマンドスキャン**（`run_depscan_for_user`）: 毎日クロールは`GITHUB_USERNAME`
+  専用のため、任意アカウントはログイン時にその場でスキャンする。Slack通知・Issue起票・
+  `crawler_logs`記録は行わない（第三者ログインのたびのノイズを避けるため）。進捗は
+  `UserScan`テーブルに記録し`/auth/scan-status`でポーリング取得。直近24時間以内に完了
+  済みなら再スキャンをスキップする（`should_rescan_for_user`）
+- **`_resolve_stale_findings`のクロスユーザー事故防止**: 無絞り込みで呼ぶと1ユーザーの
+  スキャン結果で他ユーザーの未解決findingを誤って解決済み扱いにしてしまうため、
+  `repo_owner_prefix`引数でそのユーザーのリポジトリのみに絞り込む
+- **フロントエンド**（`DepscanAuthGate.tsx`）: ネットワーク瞬断等の一時的エラーでは
+  ログアウトさせず、セッションが実際に無効（401）な場合のみログアウト扱いにする
+  （`UnauthorizedError`で区別。当初「fetch失敗のたびにログアウトする」不具合があった）
 
 ### index.css の CSS カスケードレイヤーに関する注意
 `*, *::before, *::after` の余白リセットは必ず `@layer base` の中に書くこと。
@@ -835,15 +646,7 @@ JWT・ユーザー名と交換し、両方を `localStorage` に保存してURL�
 - `db_session`: テスト用 SQLAlchemy セッション
 
 ### Windows でのテスト DB ファイルロック
-```python
-# teardown 時は dispose() でコネクションを解放してからファイル削除
-test_engine.dispose()
-try:
-    if os.path.exists("test.db"):
-        os.remove("test.db")
-except OSError:
-    pass
-```
+teardown時は `test_engine.dispose()` でコネクションを解放してから `os.remove("test.db")` する（`OSError` は無視）。dispose せず削除すると Windows ではファイルロックで失敗する。
 
 ---
 
@@ -936,121 +739,60 @@ GitHub Actions 無料プランでは複数 cron の発火が不安定なため�
 
 ### OCI への移行（Issue #165、完了）
 
-Render 無料プランはコールドスタート・スリープが発生し、`/admin/*-crawl` のバックグラウンド
-処理がデプロイ再起動で強制終了される事故（DEPSCAN オンデマンドスキャンが `running` のまま
-取り残される障害、PR #152 参照）の原因になっていた。`crypto_forecast`
-（`https://github.com/baby-feelings/crypto_forecast`）で実績のある OCI Always Free +
-Docker Compose + Caddy 構成を、本プロジェクト専用の**新規別インスタンス**に適用し、
-常時稼働化する。
+Render無料プランはコールドスタート・スリープがあり、`/admin/*-crawl`のバックグラウンド
+処理がデプロイ再起動で強制終了される事故（DEPSCANスキャンが`running`のまま取り残される
+障害、PR #152）の原因になっていた。`crypto_forecast`（https://github.com/baby-feelings/
+crypto_forecast）で実績のあるOCI Always Free + Docker Compose + Caddy構成を、本プロジェ
+クト専用の新規別インスタンスに適用し常時稼働化した。DBはNeonを継続利用（DB移行なし）。
+デプロイは`deploy/deploy_to_oci.ps1`を都度手動実行する運用（GitHub Actions経由の自動
+デプロイは廃止）。
 
-**方針（要件定義で確定済み）:**
-- インスタンスは crypto_forecast とは分離した新規インスタンス（ロードバランサーは使わず
-  Caddy 単体で HTTPS 終端。将来複数プロジェクトの集約が必要になった時点で再検討）
-- **DB は Neon を継続利用**（DB移行なし。`DATABASE_URL` の接続先を変えるだけ）
-- 監視（Prometheus/Grafana）は当初は見送る予定だったが、移行当日に前倒しで導入した
-  （Issue #167、詳細は「運用監視」節参照）
-- デプロイは**手動**（`deploy/deploy_to_oci.ps1` を都度実行。crypto_forecast と同じ
-  SSH/SCP + `docker compose up -d --build` 方式）。GitHub Actions 経由の自動デプロイ
-  （`deploy.yml` の Render フック）は、実際のカットオーバー時に削除する
-- カットオーバーは一時並行稼働（OCI側を手動検証 → 問題なければ Vercel の API ベースURLを
-  切り替え → Render を停止）。`daily-crawl.yml` の叩き先URLもこのタイミングで変更する
-  （それまでは Render を叩いたまま維持）
+**現状**: インスタンス作成・デプロイ・監視導入（Issue #167）・カットオーバー・キー
+ローテーションまで完了。稼働先は`cyberattack-info-api`インスタンス（Ampere A1、
+1 OCPU/6GB、Ubuntu 24.04 aarch64、IP `168.138.213.240`）。Renderは安全のためすぐには
+削除せず、Suspend状態でしばらく保持する。
 
-**現状: カットオーバー・キーローテーションまで完了。Render は Suspend 状態で
-1〜2週間ほど保持後、問題なければ削除する（安全のためすぐには削除しない）。**
+**運用上の注意点**:
+- crypto_forecast（`crypto-bot-server`）とAlways FreeのAmpere A1枠（合計4 OCPU/24GB）
+  を共有するため、新規インスタンス作成前に残り容量を確認すること。現在は
+  crypto_forecast側を2 OCPU/12GBへリサイズして空きを確保している
+  （リサイズはインスタンスの一時停止が必要）
+- ポート80/443の開放はOCIセキュリティリストとインスタンスOS側の両方が必要。
+  **本インスタンスはufwではなくiptables + iptables-persistentで管理されている**
+  （crypto_forecastと異なる点）。`sudo iptables -I INPUT <ufwの手前> -p tcp -m state
+  --state NEW -m tcp --dport <port> -j ACCEPT` → `sudo netfilter-persistent save`
+- `API_BASE_URL_FOR_OAUTH`はGitHub OAuth Appのcallback URLと一致させる必要がある。
+  インスタンスを作り直した場合は`.env.prod`・`app/core/config.py`のデフォルト値・
+  GitHub OAuth Appのcallback URLの3箇所を同時に更新すること
 
-- crypto_forecast（`crypto-bot-server`）は Always Free の Ampere A1 枠を
-  4 OCPU/24GB 全て使用していたため、まず 2 OCPU/12GB へリサイズして空きを確保した
-  （定常負荷は load average 0.26/4 OCPU・メモリ2.6GB/24GBと十分余裕があったため）
-- `cyberattack-info-api` インスタンス（Ampere A1、1 OCPU/6GB、Ubuntu 24.04 aarch64、
-  IP `168.138.213.240`）を crypto_forecast とは別に新規作成。ポート80/443は
-  OCIセキュリティリスト（`vcn-trading`。crypto_forecastと共用のため追加設定不要だった）
-  とインスタンスOS側の両方で開放が必要（**crypto_forecastと違い ufw ではなく
-  iptables + iptables-persistent** で管理されている点に注意。`sudo iptables -I INPUT
-  <ufwの手前> -p tcp -m state --state NEW -m tcp --dport <port> -j ACCEPT` →
-  `sudo netfilter-persistent save` で永続化する）
-- `deploy_to_oci.ps1` 相当の手順（SCP転送 → `docker compose up -d --build`）で
-  初回デプロイ済み。Caddy が Let's Encrypt 証明書を自動取得し、
-  `https://168.138.213.240.nip.io/health` が 200 を返すことを確認済み。
-  Render本番と同じ Neon DB を参照し、件数が完全一致することも確認済み
-- DEPSCAN の GitHub ログイン関連環境変数（`GITHUB_OAUTH_CLIENT_ID`/`SECRET`・
-  `SESSION_SECRET_KEY`・`PUBLIC_API_KEY`）も `.env.prod` に含めて転送済み
-- **カットオーバー完了**: GitHub OAuth Appのcallback URLをOCI側に変更 →
-  `API_BASE_URL_FOR_OAUTH`をOCI URLに更新・再デプロイ（`redirect_uri`がOCI自身を
-  指すことを確認済み）→ `daily-crawl.yml`の`API_BASE_URL`変更・`deploy.yml`の
-  Renderデプロイジョブ削除（PR #170）→ Vercelの`VITE_API_BASE_URL`をOCIに変更・
-  再デプロイ → ダッシュボード上でDEPSCANのGitHubログインを含め実機検証 → Render停止
-- **キーローテーション実施済み**: 本セッション中に`.env.production`ファイルの
-  誤操作（後述）でいくつかの値が会話ログに露出したため、影響を受けた全キー
-  （`API_KEY`・`SESSION_SECRET_KEY`・`GITHUB_TOKEN`・Neonの`DATABASE_URL`
-  パスワード・`SLACK_WEBHOOK_URL`）を再発行し、OCI本番・GitHub Secretsへ反映済み
+**教訓（`.env.production`取り扱いの事故）**: 秘密情報ファイルを`cat`/`awk -F=`等の
+全内容表示コマンドで確認すると値が露出する（YAML等`=`を含まない行はそのまま出力される
+ため`awk -F=`でも防げない）。キー名だけの確認には`grep -oE '^[A-Z_]+='`、行数確認には
+`grep -c '^KEY='`を使う。ファイルへの追記前は末尾に改行があるか確認する（無いと追記が
+既存行に連結される）。`python3`はこの環境ではWindowsストアの無効なスタブのため使わず
+`python`を使う。
 
-**教訓（`.env.production`取り扱いの事故）**: 本セッション中、`cat -A`・`awk -F=`・
-`python3`（実体はWindowsストアの無効なスタブで実行されない）等の確認コマンドを
-安易に使ったことで、秘密情報の値が複数回チャット上に露出したり、ファイルへの
-追記が同じ行に連結される事故が繰り返し発生した。今後の教訓:
-- 秘密情報ファイルの中身を確認する際は `grep -oE '^[A-Z_]+='`（キー名のみ）や
-  `grep -c '^KEY='`（行数のみ）に限定し、`cat`/`awk -F=`（YAML等`=`を含まない
-  行はそのまま出力されてしまう）等の全内容表示コマンドは使わない
-- ファイルへの追記前に、追記対象ファイルが改行で終わっているか確認する
-  （`tail -c1 file | wc -l`が0なら改行なし）。安全のため Python の
-  `readlines()` + 明示的な改行補完で書き換える方式を使う
-- `python3`はこの環境ではWindowsストアの無効なスタブのため使わない。
-  `python`（`which python`で実体を確認したもの）を使う
+### 運用監視（Prometheus + Grafana、Issue #167）
+「クローラーが実際に成功しているか」を可視化することを主眼に、crypto_forecastの構成を
+本APIの実態（スケジュール実行される5種のクローラー）に合わせて設計し直した。
 
-用意したファイル一式（`Dockerfile`・`deploy/docker-compose.yml`・`deploy/Caddyfile`・
-`deploy/deploy_to_oci.ps1`・`.dockerignore`）の設計詳細は各ファイル自体のコメントを参照。
-
-### 運用監視（Prometheus + Grafana、当初は見送っていたが移行当日に前倒しで導入）
-
-crypto_forecast の運用監視構成をそのまま模倣するのではなく、**本APIの実態
-（高トラフィックなWebアプリではなく、スケジュール実行される5種のクローラー）に
-合わせて設計し直した**。crypto_forecast 固有の自動売買サイクル・予測乖離率等の
-パネルは対象外とし、代わりに「クローラーが実際に成功しているか」を可視化する
-ことを主眼に置いている。
-
-- **`app/core/metrics.py`**: Prometheus形式の `/metrics` エンドポイント。
-  `crypto_forecast/backend/app/api/metrics.py` と同じく `Authorization: Bearer`
-  （`METRICS_API_KEY`、未設定時は503でopt-in）で保護し、`X-API-KEY` とは別の
-  認証方式にしている（Prometheusのスクレイプconfigが `authorization.credentials`
-  でBearerトークンをネイティブサポートするため）。
-- **クローラー実行結果を Gauge として公開**: `crawler_last_run_success`（1=成功/
-  0=エラー）・`crawler_last_run_timestamp_seconds`（陳腐化検知用）・
-  `crawler_last_run_duration_seconds`・`crawler_last_run_inserted`/`updated`/
-  `deleted`、いずれも `crawler_type` ラベル付き。Counter ではなく Gauge にして
-  いるのは、Grafana側で「直近の実行結果」を一目で確認したい（累積ではなく最新値
-  が欲しい）ため。`record_crawler_run()` の呼び出し元は
-  **`app.crawler_logs.writer.write_crawler_log`** 1箇所のみ（KEV/OSV/JVN/
-  DEPSCAN/DEPSOPS 全クローラーが共通で通る記録経路のため、ここに1回実装すれば
-  全種別をカバーできる）。メトリクス記録の失敗はDB書き込み成功後に
-  try/except で握りつぶし、クロール自体の成否には影響させない。
-- **`deploy/docker-compose.yml`**: `prometheus`（`api-prod:8000/metrics` を
-  30秒間隔でスクレイプ、`127.0.0.1` のみバインドで外部非公開）・`node-exporter`
-  （OCIホストのCPU/メモリ/ディスクをfilesystem+meminfoコレクタのみ有効化して収集。
-  crypto_forecastと違いDockerディスク使用量の内訳スクリプトは今回は入れていない
-  〈YAGNI、実際に容量問題が起きたら追加を検討〉）・`grafana`（Caddy経由で
-  `GRAFANA_DOMAIN` にHTTPS公開、ログイン必須・匿名アクセス無効）の3サービスを
-  追加。**`node-exporter` の `/:/host:ro,rslave` マウントは Windows Docker
-  Desktop（WSL2）ではエラーになる**（"path / is mounted on / but it is not a
-  shared or slave mount"）。crypto_forecast本番でも同じ設定が問題なく動いている
-  ことから、これは Windows 固有の制約であり OCI（ネイティブLinux）では問題ない
-  と判断し、ローカル検証では `node-exporter` を除外して他サービスのみ確認した
-  （`docker compose up -d --no-deps prometheus grafana` で依存関係を無視して
-  個別起動）。
-- **`deploy/grafana/`**: `provisioning/datasources/prometheus.yml` で
-  Prometheusデータソースを起動時に自動登録する（**`uid: prometheus_ds` を固定**
-  している点に注意。自動生成uidだと再プロビジョニングのたびに変わり、ダッシュ
-  ボードJSON側の参照が壊れるため）。`provisioning/dashboards/dashboards.yml` が
-  `dashboards/*.json` を自動読み込みする。ダッシュボード本体
-  （`cyberattack-info-api-overview.json`、タイトルは「サイバー攻撃情報API」）は
-  クローラー実行結果（成否・経過時間・所要時間・件数）・CPU/メモリ使用率・
-  ディスク使用率のパネルで構成。ローカルでビルド・起動し、`/metrics` の実際の値・
-  Prometheusのスクレイプ成功・Grafanaのデータソース/ダッシュボード自動登録まで
-  実機確認済み（`/admin/depscan-crawl` を実際に叩いて記録→スクレイプの経路も検証）。
-- **`deploy/prometheus.yml.example`**: `METRICS_API_KEY` の実値を含むファイルの
-  ため `deploy/prometheus.yml` としてコピー後に値を設定する運用（`deploy/.env`
-  と同じ理由でgit管理対象外）。`deploy_to_oci.ps1` は存在する場合のみ転送する
-  （無い場合はPrometheusコンテナが起動に失敗する旨を警告表示）。
+- **`app/core/metrics.py`**: `Authorization: Bearer`（`METRICS_API_KEY`、未設定時は
+  503でopt-in）で保護する`/metrics`エンドポイント。クローラー実行結果を
+  `crawler_last_run_success`/`_timestamp_seconds`/`_duration_seconds`/`_inserted`/
+  `_updated`/`_deleted`のGauge（`crawler_type`ラベル付き）として公開する。Counterでは
+  なくGaugeなのは「直近の実行結果」を一目で見たいため。`record_crawler_run()`の呼び出し
+  元は`app.crawler_logs.writer.write_crawler_log`1箇所のみ（全クローラー共通の記録経路）
+- **`deploy/docker-compose.yml`**: `prometheus`（30秒間隔でスクレイプ、`127.0.0.1`のみ
+  バインド）・`node-exporter`（filesystem+meminfoコレクタのみ）・`grafana`（Caddy経由で
+  `GRAFANA_DOMAIN`にHTTPS公開）を追加。**`node-exporter`の`/:/host:ro,rslave`マウントは
+  Windows Docker Desktop（WSL2）ではエラーになる**が、OCI（ネイティブLinux）では問題ない
+  （ローカル検証時は`docker compose up -d --no-deps prometheus grafana`で除外する）
+- **`deploy/grafana/`**: `provisioning/datasources/prometheus.yml`で`uid: prometheus_ds`
+  を固定してデータソースを自動登録する（自動生成uidだと再プロビジョニングのたびに変わり
+  ダッシュボードJSON側の参照が壊れるため）。ダッシュボード名は「サイバー攻撃情報API」
+- **Grafana管理者ユーザー名の変更**: `GF_SECURITY_ADMIN_USER`は初回シードのみに効くため、
+  既存adminユーザーの改名にはGrafana API（`PUT /api/users/:id`、`{"login": "新名前"}`）
+  が必要（`docker-compose.yml`のコメント参照）
 
 ---
 
