@@ -47,7 +47,12 @@ jobs:
         # Vercelのネイティブ本番自動デプロイは無効化済み（dashboard/vercel.json参照）のため、
         # VERCEL_TOKEN 未設定のままだとダッシュボードが本番に一切反映されなくなる。
         # サイレントスキップにせず明示的に失敗させ、設定漏れに気づけるようにする
-        working-directory: dashboard
+        #
+        # working-directory は指定しない（リポジトリルートで実行する）。Vercelプロジェクト
+        # 自体の Root Directory 設定が "dashboard" のため、dashboard/ ディレクトリ内から
+        # 実行すると "dashboard/dashboard does not exist" エラーになる（過去にも発生した
+        # 既知の事故。Vercel CLIは実行時のカレントディレクトリ + プロジェクトのRoot
+        # Directory設定を連結してパスを解決するため、二重に "dashboard" を指定する形になる）
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
