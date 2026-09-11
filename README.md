@@ -197,7 +197,7 @@ cyberattack_info_api/
 │   ├── dependabot.yml       # Dependabot（pip: / ・npm: /dashboard、週次で依存更新PRを自動作成）
 │   └── workflows/
 │       ├── ci.yml           # CI: lint + type check + test (PR 時に自動実行)
-│       ├── deploy.yml       # CD: Vercel デプロイ (main マージ時に自動実行。バックエンドは手動デプロイ)
+│       ├── deploy.yml       # CD: Vercel デプロイ (dashboard/変更時のmainマージ時のみ自動実行。バックエンドは手動デプロイ)
 │       └── daily-crawl.yml  # 毎日クロール (単一 cron UTC 19:05 で KEV → OSV → JVN → DEPSCAN → DEPSOPS 順次実行)
 ├── deploy/                  # OCIデプロイ関連（deploy_to_oci.ps1・docker-compose.yml・Caddyfile・
 │   │                       # Grafanaプロビジョニング設定。秘密情報を含む.env/prometheus.ymlはgit管理外）
@@ -219,7 +219,7 @@ cyberattack_info_api/
 バックエンド（FastAPI）はOracle Cloud Infrastructure（OCI）のCompute VM（Always Free、
 Ampere A1）上でDocker Composeにより稼働する（旧Renderから移行済み）。デプロイは
 `deploy/deploy_to_oci.ps1`を都度手動実行する運用で、GitHub Actions経由の自動デプロイは
-無い（ダッシュボード＝Vercelのみ`main`マージ時に自動デプロイされる）。
+無い（ダッシュボード＝Vercelのみ、`dashboard/`配下に変更がある`main`マージ時にのみ自動デプロイされる）。
 
 ### Step 1: Neon で PostgreSQL を作成
 
@@ -282,9 +282,12 @@ SCPでコード一式を転送し、OCI上で `docker compose up -d --build` を
 | Secret 名 | 説明 |
 |-----------|------|
 | `API_KEY` | OCI の `.env.production` に設定した API キーと同じ値（`.github/workflows/daily-crawl.yml` 用） |
+| `VERCEL_TOKEN` | [Vercelのアカウント設定](https://vercel.com/account/tokens)で発行したトークン（`.github/workflows/deploy.yml` 用。ダッシュボードの本番デプロイの唯一の経路のため必須） |
+| `VERCEL_ORG_ID` / `VERCEL_PROJECT_ID` | Vercelプロジェクトの識別子（`dashboard/`で`vercel link`実行時に生成される`.vercel/project.json`から取得） |
 
-ダッシュボード（Vercel）は `main` ブランチへのマージで自動デプロイされる
-（`.github/workflows/deploy.yml`）。
+ダッシュボード（Vercel）は `dashboard/` 配下に変更がある `main` ブランチへのマージで
+自動デプロイされる（`.github/workflows/deploy.yml`。Vercel側のネイティブGit連携による
+本番自動デプロイは無効化済みで、GitHub Actions経由のデプロイのみが本番に反映される）。
 
 ---
 

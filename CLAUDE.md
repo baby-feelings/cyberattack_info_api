@@ -206,7 +206,7 @@ alembic/                 # DBスキーマのマイグレーション管理
 ├── dependabot.yml   # Dependabot（pip: / ・npm: /dashboard、週次で依存更新PRを自動作成）
 └── workflows/
     ├── ci.yml           # CI: ruff → mypy → pytest（PR 時・Python 3.10/3.11 matrix）
-    ├── deploy.yml       # CD: Vercel デプロイ（main マージ時。バックエンドはOCIへ手動デプロイ）
+    ├── deploy.yml       # CD: Vercel デプロイ（dashboard/変更時のmainマージ時のみ。バックエンドはOCIへ手動デプロイ）
     └── daily-crawl.yml  # 毎日クロール: 単一 cron(UTC 19:05) で KEV → OSV → JVN → DEPSCAN → DEPSOPS を順次実行
 
 Dockerfile                  # バックエンドのコンテナイメージ定義（OCI上でdocker composeがビルド）
@@ -674,9 +674,19 @@ PR 作成・main/develop へのプッシュで自動実行。
 5. Python 3.10 / 3.11 の matrix で並列実行
 
 ### CD（deploy.yml）
-main ブランチへのマージ後に自動実行。
+`dashboard/` 配下に変更がある場合のみ、main ブランチへのマージ後に自動実行。
 
-- Vercel デプロイ: `VERCEL_TOKEN` / `VERCEL_ORG_ID` / `VERCEL_PROJECT_ID` を設定（未設定時はスキップ）
+- Vercel デプロイ: `VERCEL_TOKEN` / `VERCEL_ORG_ID` / `VERCEL_PROJECT_ID`（GitHub Secrets）
+  経由のCLI実行（`vercel deploy --prod`）のみが本番デプロイを担う。Vercel側のネイティブ
+  Git連携による本番自動デプロイは`dashboard/vercel.json`の`ignoreCommand`
+  （`$VERCEL_ENV=production`のときのみビルドをスキップ）で無効化してあり、
+  PRプレビューデプロイ（`$VERCEL_ENV=preview`）は従来通り機能する（Issue #106）。
+  `VERCEL_TOKEN`未設定のまま放置するとダッシュボードが本番に一切反映されなくなるため、
+  以前のような「未設定ならサイレントスキップ」ではなく明示的に`exit 1`で失敗させる
+- `concurrency`（グループ`vercel-deploy-production`・`cancel-in-progress: true`）により、
+  短時間に複数PRが連続マージされても実行中の古いデプロイジョブはキャンセルされ、
+  最新コミットの分だけが実際にデプロイされる（旧: Dependabot PR等の連続マージで
+  Vercelの1日あたりデプロイ回数上限に達した障害の再発防止、Issue #106）
 - **注意:** `secrets` コンテキストは `if` 条件式で直接参照できないため、`run` ブロック内のシェル分岐で判定する
 - バックエンド（FastAPI）は Render から OCI へ移行済み（下記「OCI への移行」節）。
   GitHub Actions からの自動デプロイは無く、`deploy/deploy_to_oci.ps1` を都度手動実行する運用
