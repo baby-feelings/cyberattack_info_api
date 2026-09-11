@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     # OAuth の redirect_uri 組み立てに使う、本 API 自身の公開 URL
     # （GitHub OAuth App の Authorization callback URL と scheme まで一致させる必要があるため、
     # リクエストヘッダーから動的に推測せず固定値を持つ）
-    API_BASE_URL_FOR_OAUTH: str = "https://cyberattack-info-api.onrender.com"
+    API_BASE_URL_FOR_OAUTH: str = "https://168.138.213.240.nip.io"
 
     # 運用監視（Prometheus）用のメトリクスエンドポイント保護キー。
     # 未設定時は /metrics 自体を無効化する（他の外部連携機能と同じ opt-in パターン）

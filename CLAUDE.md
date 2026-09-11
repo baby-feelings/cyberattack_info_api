@@ -29,7 +29,7 @@ code-review-graph watch
 | **バリデーション** | Pydantic 2.11.x + pydantic-settings 2.9.x |
 | **HTTP クライアント** | httpx |
 | **XML パーサー** | defusedxml（XXE / Billion-laughs 攻撃防止） |
-| **デプロイ先** | Render（Web Service） |
+| **デプロイ先** | OCI（Compute VM、Docker Compose。旧Renderから移行済み） |
 | **GitHub** | `https://github.com/baby-feelings/cyberattack_info_api` |
 
 ---
@@ -206,7 +206,7 @@ alembic/                 # DBスキーマのマイグレーション管理
 ├── dependabot.yml   # Dependabot（pip: / ・npm: /dashboard、週次で依存更新PRを自動作成）
 └── workflows/
     ├── ci.yml           # CI: ruff → mypy → pytest（PR 時・Python 3.10/3.11 matrix）
-    ├── deploy.yml       # CD: Render Deploy Hook トリガー（main マージ時）
+    ├── deploy.yml       # CD: Vercel デプロイ（main マージ時。バックエンドはOCIへ手動デプロイ）
     └── daily-crawl.yml  # 毎日クロール: 単一 cron(UTC 19:05) で KEV → OSV → JVN → DEPSCAN → DEPSOPS を順次実行
 ```
 
@@ -853,18 +853,21 @@ PR 作成・main/develop へのプッシュで自動実行。
 ### CD（deploy.yml）
 main ブランチへのマージ後に自動実行。
 
-- Render デプロイ: GitHub Secrets の `RENDER_DEPLOY_HOOK_URL` に Deploy Hook URL を設定（未設定時はスキップ）
 - Vercel デプロイ: `VERCEL_TOKEN` / `VERCEL_ORG_ID` / `VERCEL_PROJECT_ID` を設定（未設定時はスキップ）
 - **注意:** `secrets` コンテキストは `if` 条件式で直接参照できないため、`run` ブロック内のシェル分岐で判定する
+- バックエンド（FastAPI）は Render から OCI へ移行済み（下記「OCI への移行」節）。
+  GitHub Actions からの自動デプロイは無く、`deploy/deploy_to_oci.ps1` を都度手動実行する運用
 
 ### 毎日クロール（daily-crawl.yml）
-Render Free プランのスリープ問題を回避するため、GitHub Actions から直接 API を叩いてクロールを強制実行する。
+OCI移行前はRender Freeプランのスリープ対策として導入したが、OCI移行後は「ネットワーク障害等で
+APSchedulerが不発火だった場合の二重バックアップ」として維持している（`wake-up`ジョブは
+実質ヘルスチェックのみで、スリープ解除の意味は無くなった）。
 **単一 cron（`5 19 * * *` / JST 翌 04:05）で KEV → OSV → JVN → DEPSCAN → DEPSOPS を順次実行する構成。**
 GitHub Actions 無料プランでは複数 cron の発火が不安定なため、単一 cron に統合した。
 
 | 実行順 | ジョブ | 対象 | 備考 |
 |--------|--------|------|------|
-| 1 | `wake-up` | Render 起動 | ヘルスチェックでスリープ解除 |
+| 1 | `wake-up` | ヘルスチェック | OCI移行後は死活監視のみ（スリープ解除の意味は無い） |
 | 2 | `crawl-kev` | `POST /admin/crawl` | KEV フィード取得 |
 | 3 | `crawl-osv` | `POST /admin/osv-crawl` | OSV 脆弱性取得（timeout 600s） |
 | 4 | `crawl-jvn` | `POST /admin/jvn-crawl` | JVN 脆弱性取得（timeout 600s） |
@@ -873,7 +876,9 @@ GitHub Actions 無料プランでは複数 cron の発火が不安定なため�
 
 - 各ジョブは `always()` で前段の失敗に関わらず実行される（`wake-up` 成功が前提）
 - `workflow_dispatch` で手動実行可能（`target: kev / osv / jvn / depscan / all`）
-- GitHub Secrets に `API_KEY`（Render 環境変数と同じ値）を設定すること
+- `API_BASE_URL`（ワークフロー内の env）は OCI インスタンスのドメイン
+  （`https://168.138.213.240.nip.io`）。インスタンスを作り直した場合はここも更新すること
+- GitHub Secrets に `API_KEY`（OCI の `.env.prod` と同じ値）を設定すること
 
 ---
 
@@ -881,16 +886,18 @@ GitHub Actions 無料プランでは複数 cron の発火が不安定なため�
 
 | 役割 | サービス | 備考 |
 |------|---------|------|
-| **アプリサーバー** | Render（Web Service） | Python 3.11、Free プラン |
-| **データベース** | Neon（PostgreSQL 16） | Free プラン、0.5 GB |
-| **ダッシュボード** | Vercel | React（`dashboard/` ディレクトリ） |
-| **CI/CD** | GitHub Actions | PR → CI → Merge → 自動デプロイ |
+| **アプリサーバー** | OCI（Compute VM、Ampere A1） | Docker Compose、手動デプロイ（`deploy/deploy_to_oci.ps1`）。旧Renderから移行済み |
+| **データベース** | Neon（PostgreSQL 16） | Free プラン、0.5 GB。OCI移行後も継続利用（DB移行なし） |
+| **ダッシュボード** | Vercel | React（`dashboard/` ディレクトリ）。GitHub Actions（`deploy.yml`）経由で自動デプロイ |
+| **CI/CD** | GitHub Actions | PR → CI → Merge → Vercel自動デプロイ。バックエンドは手動デプロイ |
 
-### Render の設定
-- **Build Command:** `pip install -r requirements.txt`
-- **Start Command:** `sh -c "python -m app.core.migrate && uvicorn app.main:app --host 0.0.0.0 --port $PORT"`
-  （DBマイグレーション適用の詳細は上記「DBマイグレーションは Alembic で管理する」節を参照）
-- **Environment Variables:** `DATABASE_URL`, `API_KEY`, `ENVIRONMENT=production`, `GITHUB_USERNAME`
+### OCI の設定（旧Render設定からの移行、詳細は「OCIへの移行」節参照）
+- **稼働方式:** Docker Compose（`deploy/docker-compose.yml`。`api-prod`・`caddy`・
+  `prometheus`・`grafana`・`node-exporter`）。DBマイグレーションはコンテナ起動時に
+  `Dockerfile`の`CMD`（`python -m app.core.migrate && uvicorn ...`）で自動適用する
+  （Renderの Start Command と同じ順序を踏襲）
+- **Environment Variables（`.env.prod`、OCIへ転送）:** `DATABASE_URL`, `API_KEY`,
+  `ENVIRONMENT=production`, `GITHUB_USERNAME`
   （DEPSCAN スキャン対象アカウント。コード側にデフォルト値なし、**未設定だとアプリが起動しない**）、
   `SLACK_WEBHOOK_URL`（任意）、`GITHUB_TOKEN`（任意、DEPSCAN/DEPSOPS 共用の PAT。
   Contents: Read-only + Issues: Write + Pull requests: Write 推奨。未設定時は DEPSCAN/DEPSOPS
@@ -904,16 +911,18 @@ GitHub Actions 無料プランでは複数 cron の発火が不安定なため�
   `python -c "import secrets; print(secrets.token_urlsafe(32))"` 等で生成）も設定する
   （いずれも任意項目・ソフトフェイル方針だが、未設定だと `/auth/*` が 503 を返すのみで
   DEPSCAN タブが機能しない）。`FRONTEND_URL`（既定値: Vercel の本番URL）・
-  `API_BASE_URL_FOR_OAUTH`（既定値: Render の本番URL。GitHub OAuth App の
-  Authorization callback URL と scheme まで一致させる必要があるため固定値で持つ）は
+  `API_BASE_URL_FOR_OAUTH`（既定値・現在値ともに OCI インスタンスの URL
+  `https://168.138.213.240.nip.io`。GitHub OAuth App の Authorization callback URL
+  と scheme まで一致させる必要があるため固定値で持つ。インスタンスを作り直した場合は
+  `.env.prod`・コード側デフォルト値〈`app/core/config.py`〉・GitHub OAuth Appの
+  callback URL の3箇所を同時に更新すること）・`METRICS_API_KEY`（運用監視、任意）は
   値を変える場合のみ設定すればよい
 
 ### GitHub Secrets の設定
 
 | Secret 名 | 説明 |
 |-----------|------|
-| `RENDER_DEPLOY_HOOK_URL` | Render の Deploy Hook URL（CD 用） |
-| `API_KEY` | Render に設定した API キーと同じ値（daily-crawl.yml 用） |
+| `API_KEY` | OCI の `.env.prod` に設定した API キーと同じ値（daily-crawl.yml 用） |
 
 ---
 

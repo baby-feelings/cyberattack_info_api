@@ -19,7 +19,7 @@ Claude Code や CI/CD ツールから「今まさに悪用されているサイ�
 | **依存ライブラリ脆弱性スキャン（DEPSCAN）** | 同上（GitHub 上の自作アプリ全リポジトリ〈プライベート含む〉のロックファイルを OSV API とリアルタイム照合。新規検知はリポジトリ自身に GitHub Issue も自動起票し、未解決 finding が0件になると自動クローズ。到達可能性〈import レベルのヒューリスティック〉も判定） |
 | **DEPSCAN ダッシュボードの GitHub ログイン** | 任意の GitHub アカウントで OAuth ログインし、本人が所有するリポジトリの検知結果のみ閲覧可能（サーバー側で強制するアクセス制御）。ログイン時にオンデマンドでスキャンを実行し、直近 24 時間以内にスキャン済みなら再スキャンせず結果を即座に表示 |
 | **OSV 古いデータ自動削除** | 180 日以上前のレコードをクロール時に自動削除（DB 容量管理） |
-| **Render スリープ対策** | GitHub Actions cron で毎日クロールを強制実行（Free プラン対応） |
+| **運用監視** | Prometheus + Grafana によるクローラー実行結果・ホストリソースの可視化（OCI上、任意） |
 | **一覧取得 API** | ページネーション・キーワード検索・フィルタリング対応（KEV / OSV / JVN / DEPSCAN） |
 | **直近脅威 API** | 過去 N 日以内に追加された脆弱性を即座に取得（KEV） |
 | **CVE 個別取得** | CVE ID を指定して脆弱性詳細を 1 件取得（KEV） |
@@ -405,7 +405,7 @@ curl -H "X-API-KEY: your-key" \
 > - ダッシュボード（Vercel）の DEPSCAN タブ
 > - Slack 通知（新規検知時に自動送信される `:rotating_light:` メッセージ）
 >
-> なお DEPSCAN は対応ロックファイル（10 エコシステム分。一覧は [`app/depscan/parsers/__init__.py`](app/depscan/parsers/__init__.py) の `LOCKFILE_FILENAMES` を参照）が存在するリポジトリのみをスキャン対象とする。ロックファイルが存在しないリポジトリの一覧は API では取得できず、Render の実行ログ（`DEPSCAN: [i/N] scanning ...` の行）でのみ確認できる。
+> なお DEPSCAN は対応ロックファイル（10 エコシステム分。一覧は [`app/depscan/parsers/__init__.py`](app/depscan/parsers/__init__.py) の `LOCKFILE_FILENAMES` を参照）が存在するリポジトリのみをスキャン対象とする。ロックファイルが存在しないリポジトリの一覧は API では取得できず、OCI上の実行ログ（`DEPSCAN: [i/N] scanning ...` の行）でのみ確認できる。
 
 > **検知された脆弱性の実際の修正について**
 > DEPSCAN は検知・通知のみを行い、修正コードは生成しない。実際の修正は、DEPSCAN 対象の各リポジトリで有効化した **Dependabot** の更新 PR をマージすることで対応する。マージ運用のポイント:
@@ -421,12 +421,12 @@ curl -H "X-API-KEY: your-key" \
 ブラウザから直接アクセスする（`<a href>` でリダイレクトさせる）エンドポイント。`curl` での確認には向かない。
 
 ```
-https://cyberattack-info-api.onrender.com/auth/github/login
+https://168.138.213.240.nip.io/auth/github/login
 ```
 
 GitHub の認可画面へリダイレクトする。認可後は `/auth/github/callback` へ戻り、数十秒で失効し一度しか使えない**交換コード**を発行して、ダッシュボード（`FRONTEND_URL`）へ `?depscan_code=...` としてリダイレクトする。フロントエンドはこのコードを `POST /auth/exchange` に渡してセッションJWTと交換し、以降は `Authorization: Bearer <JWT>` で API を呼び出す。
 
-セッションJWT自体をURLクエリに載せると、RFC 9700（OAuth 2.0 Security BCP）が禁止する「アクセストークンのURIクエリパラメータでの受け渡し」に該当するため、使い捨ての交換コードのみを載せる方式にしている。バックエンド（Render）とフロントエンド（Vercel）はドメインが異なるため、セッションをCookieで保持する方式も検討したが、Safari の ITP（Intelligent Tracking Prevention）がクロスサイトCookieを既定でブロックし、iOS の PWA を含む Safari 系ブラウザでログインできなくなる不具合が実際に発生したため、Bearerトークン方式を採用している。
+セッションJWT自体をURLクエリに載せると、RFC 9700（OAuth 2.0 Security BCP）が禁止する「アクセストークンのURIクエリパラメータでの受け渡し」に該当するため、使い捨ての交換コードのみを載せる方式にしている。バックエンド（OCI）とフロントエンド（Vercel）はドメインが異なるため、セッションをCookieで保持する方式も検討したが、Safari の ITP（Intelligent Tracking Prevention）がクロスサイトCookieを既定でブロックし、iOS の PWA を含む Safari 系ブラウザでログインできなくなる不具合が実際に発生したため、Bearerトークン方式を採用している。
 
 ログインの都度、そのアカウントが所有するリポジトリをオンデマンドでスキャンする（直近 24 時間以内にスキャン済みならスキップして DB の結果をそのまま使う）。
 
@@ -435,7 +435,7 @@ GitHub の認可画面へリダイレクトする。認可後は `/auth/github/c
 ### POST /auth/exchange — 交換コードをセッションJWTに交換する
 
 ```bash
-curl -X POST "https://cyberattack-info-api.onrender.com/auth/exchange" \
+curl -X POST "https://168.138.213.240.nip.io/auth/exchange" \
   -H "Content-Type: application/json" \
   -d '{"code": "（/auth/github/callbackのリダイレクト先URLに付与されたコード）"}'
 # → 200 OK: {"token": "<セッションJWT>", "username": "octocat"}
@@ -447,7 +447,7 @@ curl -X POST "https://cyberattack-info-api.onrender.com/auth/exchange" \
 
 ```bash
 curl -H "Authorization: Bearer $DEPSCAN_SESSION_TOKEN" \
-  "https://cyberattack-info-api.onrender.com/auth/scan-status"
+  "https://168.138.213.240.nip.io/auth/scan-status"
 ```
 
 **レスポンス例:**
@@ -736,7 +736,7 @@ cyberattack_info_api/
 │   ├── dependabot.yml       # Dependabot（pip: / ・npm: /dashboard、週次で依存更新PRを自動作成）
 │   └── workflows/
 │       ├── ci.yml           # CI: lint + type check + test (PR 時に自動実行)
-│       ├── deploy.yml       # CD: Render デプロイ (main マージ時に自動実行)
+│       ├── deploy.yml       # CD: Vercel デプロイ (main マージ時に自動実行。バックエンドは手動デプロイ)
 │       └── daily-crawl.yml  # 毎日クロール (単一 cron UTC 19:05 で KEV → OSV → JVN → DEPSCAN → DEPSOPS 順次実行)
 ├── .env.example         # 環境変数テンプレート
 ├── .python-version      # Python バージョン固定 (3.11)
@@ -749,7 +749,12 @@ cyberattack_info_api/
 
 ---
 
-## デプロイ（Render + Neon）
+## デプロイ（OCI + Neon）
+
+バックエンド（FastAPI）はOracle Cloud Infrastructure（OCI）のCompute VM（Always Free、
+Ampere A1）上でDocker Composeにより稼働する（旧Renderから移行済み）。デプロイは
+`deploy/deploy_to_oci.ps1`を都度手動実行する運用で、GitHub Actions経由の自動デプロイは
+無い（ダッシュボード＝Vercelのみ`main`マージ時に自動デプロイされる）。
 
 ### Step 1: Neon で PostgreSQL を作成
 
@@ -757,18 +762,24 @@ cyberattack_info_api/
 2. **Project name:** `cyberattack-info-api`、**Postgres version:** `16`、**Region:** `Singapore`
 3. 接続文字列（`postgresql://...`）をコピー
 
-### Step 2: Render で Web Service を作成
+### Step 2: OCI で Compute インスタンスを作成
 
-1. [Render](https://render.com) で `New > Web Service` を作成
-2. このリポジトリを接続
-3. 以下を設定:
-   - **Runtime:** Python 3
-   - **Build Command:** `pip install -r requirements.txt`
-   - **Start Command:** `sh -c "python -m app.core.migrate && uvicorn app.main:app --host 0.0.0.0 --port $PORT"`
-     （`alembic upgrade head` 相当の DB マイグレーションをアプリ起動前に必ず実行する。
-     初回実行時は既存テーブルの有無を見て自動的にベースラインへ `stamp` してから
-     適用するため、既存の Neon DB に対しても安全に一度だけ実行すればよい）
-4. 環境変数を設定:
+1. [OCI コンソール](https://cloud.oracle.com/)で `Compute > Instances > Create Instance`
+2. **Image:** Canonical Ubuntu（最新版）、**Shape:** `VM.Standard.A1.Flex`（Always Free対象。
+   本APIは低負荷なため 1 OCPU / 6GB 程度で十分）
+3. パブリックIPv4アドレスを割り当てる、SSHキーペアを生成してダウンロード
+4. OCIセキュリティリスト・インスタンスOS側（`iptables` + `iptables-persistent`。Ubuntu標準
+   イメージは `ufw` ではないため注意）の両方で80/443番ポートを開放する
+5. SSH接続し、Docker Engine + Composeプラグインをインストール
+   （`curl -fsSL https://get.docker.com | sh`）
+
+### Step 3: デプロイ設定ファイルを準備
+
+1. `deploy/.env.example` を `deploy/.env` にコピーし、`BACKEND_DOMAIN`（例:
+   `<インスタンスのパブリックIP>.nip.io`。Let's EncryptのHTTPS自動化にドメイン名が必要な
+   ため、IPアドレスをそのまま解決してくれる無料DNS `nip.io` を利用する）・
+   `GRAFANA_DOMAIN`・`GRAFANA_ADMIN_PASSWORD` を設定する
+2. `.env.example`（リポジトリルート）を元に `.env.prod` を作成し、以下を設定:
 
    | 変数名 | 値 |
    |--------|-----|
@@ -779,19 +790,35 @@ cyberattack_info_api/
    | `GITHUB_USERNAME` | DEPSCAN のスキャン対象アカウント（必須。未設定だとアプリが起動しない） |
    | `SLACK_WEBHOOK_URL` | Slack Webhook URL（任意） |
    | `GITHUB_TOKEN` | DEPSCAN/DEPSOPS 用 GitHub PAT（任意。未設定時は DEPSCAN/DEPSOPS のみエラー終了） |
-   | `GITHUB_OAUTH_CLIENT_ID` / `GITHUB_OAUTH_CLIENT_SECRET` | DEPSCAN ダッシュボードの GitHub ログイン用（任意。[GitHub Developer Settings](https://github.com/settings/developers) で OAuth App を作成して取得。Authorization callback URL は `https://<Renderのドメイン>/auth/github/callback`） |
+   | `GITHUB_OAUTH_CLIENT_ID` / `GITHUB_OAUTH_CLIENT_SECRET` | DEPSCAN ダッシュボードの GitHub ログイン用（任意。[GitHub Developer Settings](https://github.com/settings/developers) で OAuth App を作成して取得。Authorization callback URL は `https://<BACKEND_DOMAIN>/auth/github/callback`） |
    | `SESSION_SECRET_KEY` | セッションJWT署名鍵（任意。`python -c "import secrets; print(secrets.token_urlsafe(32))"` で生成） |
+   | `API_BASE_URL_FOR_OAUTH` | 本API自身の公開URL（`https://<BACKEND_DOMAIN>`）。GitHub OAuth Appのcallback URLと一致させる |
+   | `METRICS_API_KEY` | Prometheus用メトリクスエンドポイント（`/metrics`）保護キー（任意。`openssl rand -hex 24`） |
 
-5. **Deploy Hook URL** を取得 → GitHub Secrets の `RENDER_DEPLOY_HOOK_URL` に登録
+3. `deploy/prometheus.yml.example` を `deploy/prometheus.yml` にコピーし、
+   `credentials` に `METRICS_API_KEY` と同じ値を設定する（運用監視を使う場合）
 
-### Step 3: GitHub Secrets の設定
+### Step 4: デプロイ実行
+
+`deploy/deploy_to_oci.ps1` 内の `$OciHost`（パブリックIP）・`$SshKey`（秘密鍵パス）を
+実環境に合わせて書き換えた上で実行する:
+
+```powershell
+cd deploy
+.\deploy_to_oci.ps1
+```
+
+SCPでコード一式を転送し、OCI上で `docker compose up -d --build` を実行する
+（`api-prod`・`caddy`・`prometheus`・`grafana`・`node-exporter`）。
+
+### GitHub Secrets の設定
 
 | Secret 名 | 説明 |
 |-----------|------|
-| `RENDER_DEPLOY_HOOK_URL` | Render の Deploy Hook URL（CD 用） |
-| `API_KEY` | Render に設定した API キーと同じ値（daily-crawl.yml 用） |
+| `API_KEY` | OCI の `.env.prod` に設定した API キーと同じ値（`.github/workflows/daily-crawl.yml` 用） |
 
-設定後、`main` ブランチへのマージで自動デプロイが走ります。
+ダッシュボード（Vercel）は `main` ブランチへのマージで自動デプロイされる
+（`.github/workflows/deploy.yml`）。
 
 ---
 
@@ -821,7 +848,8 @@ cyberattack_info_api/
 | `GITHUB_OAUTH_CLIENT_SECRET` | - | 同 OAuth App の Client Secret |
 | `SESSION_SECRET_KEY` | - | セッショントークン（JWT・HS256）の署名鍵。未設定のまま本番運用しないこと |
 | `FRONTEND_URL` | - | OAuth コールバック後にリダイレクトするダッシュボード URL（デフォルト: Vercel の本番URL） |
-| `API_BASE_URL_FOR_OAUTH` | - | OAuth の `redirect_uri` 組み立てに使う本 API 自身の公開 URL。GitHub OAuth App の Authorization callback URL と一致させる必要がある（デフォルト: Render の本番URL） |
+| `API_BASE_URL_FOR_OAUTH` | - | OAuth の `redirect_uri` 組み立てに使う本 API 自身の公開 URL。GitHub OAuth App の Authorization callback URL と一致させる必要がある（デフォルト・現在値: OCI インスタンスの URL） |
+| `METRICS_API_KEY` | - | 運用監視（Prometheus）用の `/metrics` エンドポイント保護キー（`Authorization: Bearer` で認証）。未設定時は `/metrics` 自体が `503` を返すのみ |
 
 ---
 
@@ -829,7 +857,7 @@ cyberattack_info_api/
 
 1. [Slack App Directory](https://your-workspace.slack.com/apps/A0F7XDUAZ-incoming-webhooks) で「Incoming WebHooks」を追加
 2. 通知先チャンネルを選択して Webhook URL を取得
-3. Render の環境変数 `SLACK_WEBHOOK_URL` に設定
+3. OCI の `.env.prod` に `SLACK_WEBHOOK_URL` として設定
 
 通知が届くタイミング:
 
@@ -871,8 +899,9 @@ Slack 通知に加えて、DEPSCAN の新規検知は検知されたリポジト
 | `POST /admin/depscan-crawl` 実行時 | DEPSCAN バックグラウンド取得（GitHub 全リポジトリを再スキャン） |
 | `POST /admin/dependabot-ops` 実行時 | DEPSOPS バックグラウンド実行（Dependabot PR の自動マージ判定） |
 
-> **Note:** APScheduler（アプリ内スケジューラ）も UTC 19:00 / 20:00 / 21:00 / 22:00 / 23:00 に設定されていますが、  
-> Render Free プランのスリープ中は発火しません。GitHub Actions の単一 cron がその補完として機能します。
+> **Note:** APScheduler（アプリ内スケジューラ）も UTC 19:00 / 20:00 / 21:00 / 22:00 / 23:00 に設定されており、
+> OCI移行後はこちらが主経路として機能する（OCIは常時稼働のためスリープしない）。GitHub Actions の
+> 単一 cron は、ネットワーク障害等で APScheduler が不発火だった場合の二重バックアップとして維持している。
 
 ---
 
@@ -881,20 +910,20 @@ Slack 通知に加えて、DEPSCAN の新規検知は検知されたリポジト
 ```bash
 # 直近 30 日の脅威を分析
 curl -s -H "X-API-KEY: $API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/vulnerabilities/recent?days=30" \
+  "https://168.138.213.240.nip.io/api/vulnerabilities/recent?days=30" \
   | claude -p "Python プロジェクトに影響する脆弱性を優先度順に教えて"
 
 # OSV の高リスク脆弱性を確認
 curl -s -H "X-API-KEY: $API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/osv?severity=CRITICAL&ecosystem=PyPI"
+  "https://168.138.213.240.nip.io/api/osv?severity=CRITICAL&ecosystem=PyPI"
 
 # JVN の直近 High 重要度脆弱性を確認
 curl -s -H "X-API-KEY: $API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/jvn?severity=High&sort_by=cvss"
+  "https://168.138.213.240.nip.io/api/jvn?severity=High&sort_by=cvss"
 
 # クローラーの最新実行結果を確認
 curl -s -H "X-API-KEY: $API_KEY" \
-  "https://cyberattack-info-api.onrender.com/api/crawler-logs?limit=5"
+  "https://168.138.213.240.nip.io/api/crawler-logs?limit=5"
 ```
 
 ---
