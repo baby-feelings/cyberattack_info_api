@@ -515,17 +515,10 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 ### パターン 4: OSV で使用ライブラリのリスクを確認する
 
 ```bash
-# 使用中の PyPI パッケージに CRITICAL な OSV 脆弱性がないか確認
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
   "https://168.138.213.240.nip.io/api/osv?ecosystem=PyPI&severity=CRITICAL" \
   | claude -p "自分のプロジェクトで使っているパッケージが含まれているか確認し、
                影響があれば修正バージョンを教えてください"
-
-# Flutter プロジェクトの Pub パッケージに脆弱性がないか確認
-curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://168.138.213.240.nip.io/api/osv?ecosystem=Pub" \
-  | claude -p "Flutter プロジェクトの pubspec.yaml に含まれるパッケージに
-               影響する脆弱性があるか確認してください"
 ```
 
 ### パターン 5: JVN で国内脆弱性の最新動向を把握する
@@ -546,21 +539,9 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 ```
 
 > **実際の修正は Dependabot が担当。** DEPSCAN は検知・通知のみで、修正コードは生成しない。
-> 検知後は対象リポジトリの Dependabot 更新 PR をマージすることで対応する。
-> - PR マージ前に `mergeable: MERGEABLE` を確認し、メジャーバージョンアップは
->   マージ後のデプロイ結果（Vercel 等）を必ず確認する
-> - `package-lock.json` 等の競合でマージできない PR には `@dependabot rebase` とコメントする
-> - 対象パッケージが別 PR で既に修正済みの場合、Dependabot が PR を自動クローズすることがある
-> - 本番反映方法（自動デプロイ／手動デプロイ）はリポジトリごとに異なるため、マージ後に
->   そのリポジトリのデプロイ方式を確認する
-> - 脆弱性検知に即応する「Dependabot security updates」は、`dependabot.yml` を置くだけでは
->   有効にならず、各リポジトリの `Settings → Code security` で個別に ON にする必要がある
->
-> **上記のマージ判断は `POST /admin/dependabot-ops`（DEPSOPS）が毎日 JST 08:00 に自動実行する。**
-> マイナー/パッチ・CIあり・コンフリクトなしの PR だけを自動マージし、それ以外
-> （メジャーバージョンアップ等）は Slack 通知のみで人の判断に委ねる。即時実行したい場合は
-> このエンドポイントを手動で呼ぶことも可能（スキル 12 の `crawler_type=DEPSOPS` で
-> サマリーを、スキル 11（`GET /api/depsops`）で PR 単位の判定結果・理由を確認できる）。
+> `POST /admin/dependabot-ops`（DEPSOPS）が毎日JST 08:00に自動実行され、安全なPR
+> （マイナー/パッチ・CIあり・コンフリクトなし）のみ自動マージし、それ以外はSlack通知で
+> 人の判断に委ねる（判定結果はスキル11の`GET /api/depsops`で確認できる）。
 
 ---
 
@@ -691,70 +672,14 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | `POST /admin/depscan-crawl` 実行時 | DEPSCAN バックグラウンド取得（202 即時返却・GitHub 全リポジトリ再スキャン） |
 | `POST /admin/dependabot-ops` 実行時 | DEPSOPS バックグラウンド実行（202 即時返却・毎日 JST 08:00 自動実行 + 手動トリガー可） |
 
-Upsert ロジック:
+Upsertロジックの概要:
+- **KEV/OSV/JVN**: 新規→INSERT、内容変更あり→UPDATE、変更なし→スキップ。新規・更新時は
+  Slack通知。保持期間（既定180日、`*_RETENTION_DAYS`）超過レコードは自動削除
+- **DEPSCAN**: OSV APIとリアルタイム照合。新規検知はSlack通知＋対象リポジトリへの
+  GitHub Issue自動起票（未解決findingが0件になると自動クローズ）。実際の修正はDependabot
+  が担当（DEPSCANは検知・通知のみ）
+- **DEPSOPS**: 安全なPR（マイナー/パッチ・CIあり・コンフリクトなし）のみ自動マージ、それ
+  以外はSlack通知のみで人の判断に委ねる。毎日JST 08:00に自動実行、手動実行も可能
 
-**CISA KEV:**
-- **新規 CVE** → INSERT → Slack 通知（`SLACK_WEBHOOK_URL` 設定時）
-- **既存 CVE で内容変更あり** → UPDATE → Slack 通知
-- **既存 CVE で変更なし** → スキップ
-- **EPSS スコア**: 毎回のクロールで全 KEV レコードに対し FIRST の EPSS API から
-  スコア・パーセンタイルを再取得・上書きする（CVE 自体の内容が変わらなくても
-  悪用確率は日次で変動するため）。EPSS API 呼び出しが失敗しても KEV クロール
-  自体は成功扱いとする
-
-**OSV:**
-- **新規レコード** → INSERT
-- **既存レコードで `modified` 更新あり** → UPDATE
-- **既存レコードで変更なし** → スキップ
-- **`modified` が 180 日以上前のレコード** → 自動削除（`OSV_RETENTION_DAYS` で変更可）
-- クロール完了後（新規・更新・削除あり）→ Slack 通知（`SLACK_WEBHOOK_URL` 設定時）
-- エラーメッセージは接続文字列マスク + 200 文字制限でサニタイズ
-
-**JVN:**
-- **新規 JVNDB エントリ** → INSERT
-- **既存エントリで `date_last_modified` 更新あり** → UPDATE
-- **既存エントリで変更なし** → スキップ
-- クロール完了後（新規・更新あり）→ Slack 通知（`SLACK_WEBHOOK_URL` 設定時）
-- 実行結果は `crawler_logs` テーブルに自動記録
-
-**DEPSCAN:**
-- GitHub 上の対象リポジトリ（プライベート含む・fork・archived 除く）のロックファイルを
-  収集・パースし、`(ecosystem, package_name, version)` を OSV API にバージョン指定で
-  リアルタイムクエリ（既存の `OsvVulnerability` テーブルとは照合しない）
-- **新規検知** → INSERT →
-  - Slack 通知（リポジトリ別グルーピング・パッケージ単位に集約〈重大度別件数＋修正済み
-    バージョン一覧〉した1通のダイジェスト）
-  - 検知されたリポジトリ自身に GitHub Issue も自動起票（タイトル固定・Open Issue があれば
-    コメント追記、無ければ新規作成）
-- **今回のスキャンで検知されなくなった既存レコード** → `resolved_at` を設定
-- **`resolved_at` が 180 日以上前のレコード** → 自動削除（`DEPSCAN_RETENTION_DAYS` で変更可。
-  未解決レコードは対象外）
-- `GITHUB_TOKEN` 未設定時は DEPSCAN のみエラー終了し `crawler_logs` にエラー記録
-  （`GITHUB_USERNAME` は必須環境変数のため、未設定だとアプリ自体が起動しない）。
-  Issue 自動起票には `Issues: Write` 権限も必要（無い場合は Issue 作成のみ失敗し、
-  DEPSCAN 自体は成功扱い）
-- 検知された脆弱性の実際の修正は、対象リポジトリで有効化した **Dependabot** が更新PRを
-  自動作成する運用（DEPSCAN は検知・通知に専念し、修正コードの自動生成は行わない）
-- 実行結果は `crawler_logs` テーブルに自動記録
-- 上記は `GITHUB_USERNAME` 向けの毎日クロール（`fetch_and_scan_dependencies`）の挙動。
-  DEPSCAN ダッシュボードの GitHub ログイン経由のオンデマンドスキャン
-  （`run_depscan_for_user`）は独立した別経路で、Slack通知・GitHub Issue起票・
-  `crawler_logs` への記録は行わない。進捗は `depscan_user_scans` テーブルに記録し、
-  直近24時間以内にスキャン済みなら再スキャンをスキップする
-
-**DEPSOPS:**
-- DEPSCAN 対象の全リポジトリを走査し、Dependabot が作成した Open な PR を判定する
-- **自動マージする条件**（すべて満たす場合のみ）: マイナー/パッチ更新（PRタイトルの
-  `from X to Y` から判定。0.x系はminorの変化もメジャー扱い）・CI（`.github/workflows`）
-  ありのリポジトリ・コンフリクトなし（`mergeable_state == "clean"`）
-- 条件を満たさない PR（メジャーバージョンアップ・CI 未設定・バージョン判定不可・
-  コンフリクトあり等）は自動マージせず flagged 扱い。コンフリクトの場合は
-  `@dependabot rebase` を自動コメント
-- 自動マージ・flagged いずれも毎回 Slack 通知（監査目的、0件同士の場合のみスキップ）
-- `inserted`=自動マージ件数、`updated`=flagged件数として `crawler_logs` に記録
-  （`deleted` は未使用）。判定した PR 1件1行の詳細（理由含む）は `dependabot_pr_logs`
-  テーブルへ永続化し、`GET /api/depsops` で参照できる（スキル 11 参照。保持期間
-  `DEPSOPS_RETENTION_DAYS` を超えた古いレコードは自動削除）
-- 毎日 JST 08:00（DEPSCAN の後段）に自動実行される他、`POST /admin/dependabot-ops`
-  で手動実行も可能。コンフリクトで自動マージできなかった PR は、翌日以降の実行時に
-  リベースが完了していれば自動的にマージされる（複数日にまたがる自己修復）
+Upsertロジック・自動化の実装詳細（フィールド単位の判定条件・GitHub権限要件等）は
+リポジトリの`CLAUDE.md`を参照。
