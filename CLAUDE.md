@@ -518,6 +518,18 @@ dependabot_alerts`でリポジトリのOpenなDependabot alert対象パッケー
 「Compatibility score」バッジ画像URLを正規表現で抽出し保存する。GitHub側に数値取得APIは
 無いため、ダッシュボードは独自判定をせずURLをそのまま`<img>`表示する。
 
+**`action="closed"`（DEPSOPS外の要因で解消済みPRの検知）**: DEPSOPSは実行のたびOpenな
+Dependabot PRのみを判定・記録するため、CI未設定のリポジトリで一度`flagged`記録した
+PRがDependabotの自動クローズ（後続のgrouped PRに統合される等）や人手によるマージ・
+クローズ等、DEPSOPSの関知しないところで解消されても、それを記録する手段が無く、
+ダッシュボードの「未解決」件数（最新状態が`flagged`のPR数）が実態と乖離したまま残り
+続ける不具合があった（parent_diaryリポジトリで、対応するIssue・Dependabot alertsが
+無いのに「未解決9件」と表示される事象として発覚）。`_find_resolved_flagged_prs`が、
+直近`flagged`記録されたPRのうち今回のOpen PR一覧に含まれなくなったものを検出し
+`action="closed"`として記録することで解消した。`CrawlerLog`（`crawler_type="DEPSOPS"`）
+の`deleted`フィールドは、この`closed`記録件数を表す（DEPSCANの`inserted`/`updated`/
+`deleted`の意味の repurpose と同じ方針）。
+
 ### DEPSCAN のロックファイル検出は Git Tree API で1リポジトリ1回のみ
 `app.depscan.github_client.get_repo_tree` で `git/trees/{branch}?recursive=1` を使い、
 サブディレクトリ（monorepo）も含めて全ファイルパスを1回のAPI呼び出しで取得する。
