@@ -343,7 +343,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | `page` | int | ページ番号（デフォルト: 1） |
 | `per_page` | int | 件数（デフォルト: 50、最大: 200） |
 | `repo` | string | リポジトリ名で絞り込み（完全一致。例: `owner/repo`） |
-| `action` | string | 判定結果で絞り込み（`merged` / `flagged`） |
+| `action` | string | 判定結果で絞り込み（`merged` / `flagged` / `closed`） |
 
 **レスポンス例:**
 ```json
@@ -372,6 +372,11 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 > 読み取り権限（classic PAT: `security_events` スコープ / fine-grained PAT: 「Dependabot
 > alerts: Read-only」）が付与されていない可能性がある。付与後に実行された分から反映される
 > （過去に記録済みの履歴行は遡って再判定されない）。
+>
+> `action=closed` は、過去に `flagged`（要確認）と記録した PR が、Dependabotの自動
+> クローズや手動マージ等 DEPSOPS の関知しないところで解消されたことを検知した記録
+> （詳細は [CLAUDE.md](CLAUDE.md) の「DEPSOPS」節参照）。ダッシュボードの「未解決」
+> 件数計算はこれを`flagged`と区別して除外するため、実態に合った件数になる。
 
 ---
 
@@ -626,8 +631,8 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | `repo_full_name` | string | 対象リポジトリ（例: `baby-feelings/baby_grow`） |
 | `pr_number` | int | Dependabot PR 番号 |
 | `title` | string | PR タイトル |
-| `action` | string | 判定結果（`merged`: 自動マージ済み / `flagged`: 要確認） |
-| `reason` | string \| null | `action=flagged` の場合の理由（メジャーバージョンアップ等）。`merged` の場合は `null` |
+| `action` | string | 判定結果（`merged`: 自動マージ済み / `flagged`: 要確認 / `closed`: 過去のflaggedがDEPSOPS外の要因で解消済み） |
+| `reason` | string \| null | `action=flagged`/`closed` の場合の理由（メジャーバージョンアップ等）。`merged` の場合は `null` |
 | `is_security_update` | bool \| null | セキュリティ更新（GitHub Dependabot alertの対象パッケージと一致）のヒューリスティック判定。`true`=セキュリティ更新の可能性が高い / `false`=通常のバージョン更新 / `null`=判定不能（`GITHUB_TOKEN` に Dependabot alerts の読み取り権限が無い等） |
 | `compatibility_badge_url` | string \| null | Dependabot が PR 本文に埋め込む Compatibility score バッジ画像のURL。exact version bump のPRにのみ存在し、範囲指定の requirement 更新PR等は `null` |
 | `processed_at` | string (ISO 8601) | 判定を行った DEPSOPS 実行日時 |
