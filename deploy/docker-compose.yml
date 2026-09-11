@@ -1,7 +1,11 @@
 services:
   # バックエンド (FastAPI) — 本番: OCI 上で稼働
   # DB は自前構築せず、既存の Neon（マネージド PostgreSQL）を継続利用する
-  # （DATABASE_URL は ../.env.prod の Neon 接続文字列をそのまま使う）
+  # （DATABASE_URL は ../.env.production の Neon 接続文字列をそのまま使う）
+  # 以前は本番用に別ファイル ../.env.prod を用意していたが、秘密情報ローテーション時に
+  # .env.production 側だけ更新して .env.prod への反映を忘れる事故が発生したため、
+  # ローカル開発と同じ .env.production を唯一の本番設定ファイルとして直接OCIへ転送する
+  # 運用に統一した（deploy/deploy_to_oci.ps1 参照）
   api-prod:
     build:
       context: ..
@@ -9,7 +13,7 @@ services:
     container_name: cyberattack-api-prod
     restart: always
     env_file:
-      - ../.env.prod
+      - ../.env.production
     # ホストへポートは公開しない（Caddy の内部 Docker ネットワーク経由でのみ到達可能）
 
   # 運用監視: メトリクス収集 (Prometheus)。api-prod の /metrics（要 METRICS_API_KEY、

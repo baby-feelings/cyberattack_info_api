@@ -45,16 +45,18 @@ if (Test-Path "./.env") {
 
 # -- アプリの環境変数 (DATABASE_URL=Neon の接続文字列 等。API_KEY・GITHUB_TOKEN・
 #    METRICS_API_KEY 等を含むため機密情報)
-#    事前に ../.env.example を参考に ../.env.prod を作成しておくこと（本番用の値を設定）
-if (Test-Path "../.env.prod") {
-    Invoke-Expression "$ScpCmd ../.env.prod ${OciUser}@${OciHost}:${RemoteDir}/"
+#    ローカル開発と同じ ../.env.production をそのまま本番用としてOCIへ転送する
+#    （以前は別ファイル ../.env.prod を使っていたが、秘密情報ローテーション時に
+#    .env.production 側だけ更新して .env.prod への反映を忘れる事故が発生したため統一した）
+if (Test-Path "../.env.production") {
+    Invoke-Expression "$ScpCmd ../.env.production ${OciUser}@${OciHost}:${RemoteDir}/"
 } else {
-    Write-Warning "../.env.prod が見つかりません。.env.example を参考に本番用の値で作成してください。"
+    Write-Warning "../.env.production が見つかりません。.env.example を参考に本番用の値で作成してください。"
 }
 
 # -- Prometheusのスクレイプ設定 (METRICS_API_KEY の実値を含むためgit管理対象外、.env等と同じ理由)
 #    事前に deploy/prometheus.yml.example を deploy/prometheus.yml にコピーし
-#    credentials に .env.prod の METRICS_API_KEY と同じ値を設定しておくこと
+#    credentials に .env.production の METRICS_API_KEY と同じ値を設定しておくこと
 if (Test-Path "./prometheus.yml") {
     Invoke-Expression "$ScpCmd ./prometheus.yml ${OciUser}@${OciHost}:${RemoteDir}/deploy/"
 } else {

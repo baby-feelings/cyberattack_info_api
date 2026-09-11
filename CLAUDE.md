@@ -689,7 +689,7 @@ GitHub Actions 無料プランでは複数 cron の発火が不安定なため�
 - `workflow_dispatch` で手動実行可能（`target: kev / osv / jvn / depscan / all`）
 - `API_BASE_URL`（ワークフロー内の env）は OCI インスタンスのドメイン
   （`https://168.138.213.240.nip.io`）。インスタンスを作り直した場合はここも更新すること
-- GitHub Secrets に `API_KEY`（OCI の `.env.prod` と同じ値）を設定すること
+- GitHub Secrets に `API_KEY`（OCI の `.env.production` と同じ値）を設定すること
 
 ---
 
@@ -707,7 +707,7 @@ GitHub Actions 無料プランでは複数 cron の発火が不安定なため�
   `prometheus`・`grafana`・`node-exporter`）。DBマイグレーションはコンテナ起動時に
   `Dockerfile`の`CMD`（`python -m app.core.migrate && uvicorn ...`）で自動適用する
   （Renderの Start Command と同じ順序を踏襲）
-- **Environment Variables（`.env.prod`、OCIへ転送）:** `DATABASE_URL`, `API_KEY`,
+- **Environment Variables（`.env.production`、OCIへ転送）:** `DATABASE_URL`, `API_KEY`,
   `ENVIRONMENT=production`, `GITHUB_USERNAME`
   （DEPSCAN スキャン対象アカウント。コード側にデフォルト値なし、**未設定だとアプリが起動しない**）、
   `SLACK_WEBHOOK_URL`（任意）、`GITHUB_TOKEN`（任意、DEPSCAN/DEPSOPS 共用の PAT。
@@ -725,7 +725,7 @@ GitHub Actions 無料プランでは複数 cron の発火が不安定なため�
   `API_BASE_URL_FOR_OAUTH`（既定値・現在値ともに OCI インスタンスの URL
   `https://168.138.213.240.nip.io`。GitHub OAuth App の Authorization callback URL
   と scheme まで一致させる必要があるため固定値で持つ。インスタンスを作り直した場合は
-  `.env.prod`・コード側デフォルト値〈`app/core/config.py`〉・GitHub OAuth Appの
+  `.env.production`・コード側デフォルト値〈`app/core/config.py`〉・GitHub OAuth Appの
   callback URL の3箇所を同時に更新すること）・`METRICS_API_KEY`（運用監視、任意）は
   値を変える場合のみ設定すればよい
 
@@ -733,7 +733,7 @@ GitHub Actions 無料プランでは複数 cron の発火が不安定なため�
 
 | Secret 名 | 説明 |
 |-----------|------|
-| `API_KEY` | OCI の `.env.prod` に設定した API キーと同じ値（daily-crawl.yml 用） |
+| `API_KEY` | OCI の `.env.production` に設定した API キーと同じ値（daily-crawl.yml 用） |
 
 ---
 
@@ -762,7 +762,7 @@ crypto_forecast）で実績のあるOCI Always Free + Docker Compose + Caddy構�
   （crypto_forecastと異なる点）。`sudo iptables -I INPUT <ufwの手前> -p tcp -m state
   --state NEW -m tcp --dport <port> -j ACCEPT` → `sudo netfilter-persistent save`
 - `API_BASE_URL_FOR_OAUTH`はGitHub OAuth Appのcallback URLと一致させる必要がある。
-  インスタンスを作り直した場合は`.env.prod`・`app/core/config.py`のデフォルト値・
+  インスタンスを作り直した場合は`.env.production`・`app/core/config.py`のデフォルト値・
   GitHub OAuth Appのcallback URLの3箇所を同時に更新すること
 
 **教訓（`.env.production`取り扱いの事故）**: 秘密情報ファイルを`cat`/`awk -F=`等の
@@ -771,6 +771,16 @@ crypto_forecast）で実績のあるOCI Always Free + Docker Compose + Caddy構�
 `grep -c '^KEY='`を使う。ファイルへの追記前は末尾に改行があるか確認する（無いと追記が
 既存行に連結される）。`python3`はこの環境ではWindowsストアの無効なスタブのため使わず
 `python`を使う。
+
+**教訓（`.env.prod`と`.env.production`の二重管理事故）**: OCI移行当初、ローカル開発と
+同じ`.env.production`とは別に、OCI転送専用の`.env.prod`という似た名前のファイルを
+用意していた。しかしその後の秘密情報ローテーション・GitHub OAuth設定はすべて
+`.env.production`側にのみ適用され、`.env.prod`への反映が漏れたまま気づかず、
+後日`.env.prod`をそのままOCIへ再デプロイした際に本番の`GITHUB_OAUTH_CLIENT_ID`等が
+空になりログイン不能になる障害が発生した。原因究明後、`.env.prod`を廃止し
+`.env.production`を唯一の本番設定ファイルとしてそのままOCIへ転送する構成に統一した
+（`deploy/docker-compose.yml`の`env_file`・`deploy/deploy_to_oci.ps1`参照）。
+同じ内容を持つはずのファイルを2つ運用しないこと（DRY原則）。
 
 ### 運用監視（Prometheus + Grafana、Issue #167）
 「クローラーが実際に成功しているか」を可視化することを主眼に、crypto_forecastの構成を
