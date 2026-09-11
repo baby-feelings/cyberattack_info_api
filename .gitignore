@@ -16,7 +16,10 @@ build/
 .env.development
 .env.production
 .env.test
+.env.prod
+deploy/.env
 !.env.example
+!deploy/.env.example
 
 # データベースファイル
 *.db

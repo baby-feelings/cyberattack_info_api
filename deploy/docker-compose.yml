@@ -1,0 +1,39 @@
+services:
+  # バックエンド (FastAPI) — 本番: OCI 上で稼働
+  # DB は自前構築せず、既存の Neon（マネージド PostgreSQL）を継続利用する
+  # （DATABASE_URL は ../.env.prod の Neon 接続文字列をそのまま使う）
+  api-prod:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: cyberattack-api-prod
+    restart: always
+    env_file:
+      - ../.env.prod
+    # ホストへポートは公開しない（Caddy の内部 Docker ネットワーク経由でのみ到達可能）
+
+  # リバースプロキシ (Caddy) — バックエンドの HTTPS 化
+  # Vercel（https）上のダッシュボードから API を呼ぶために必須。
+  # Let's Encrypt の証明書を自動取得・自動更新する（無料）。
+  # BACKEND_DOMAIN 未設定時は起動時にエラーになる（deploy/.env での設定が必須）。
+  caddy:
+    image: caddy:2-alpine
+    container_name: cyberattack-caddy
+    restart: always
+    environment:
+      # nip.io: IP アドレスをそのままドメインとして解決してくれる無料 DNS
+      # （Let's Encrypt の証明書取得にドメイン名が必要なため）
+      - "BACKEND_DOMAIN=${BACKEND_DOMAIN:?BACKEND_DOMAIN を deploy/.env に設定してください（例 インスタンスIP.nip.io）}"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api-prod
+
+volumes:
+  caddy_data:
+  caddy_config:
