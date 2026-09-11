@@ -19,9 +19,10 @@ describe('DepsOpsRepoBarChart', () => {
     expect(screen.getByText('データなし')).toBeInTheDocument()
   })
 
-  it('renders the chart title once data is available', () => {
+  it('renders the chart title and description once data is available', () => {
     render(<DepsOpsRepoBarChart stats={STATS} loading={false} />)
-    expect(screen.getByText('リポジトリ別件数（未解決）')).toBeInTheDocument()
+    expect(screen.getByText('リポジトリ別 要確認PR件数（未解決）')).toBeInTheDocument()
+    expect(screen.getByText(/セキュリティ課題の件数ではありません/)).toBeInTheDocument()
     expect(screen.queryByText('データなし')).not.toBeInTheDocument()
   })
 })

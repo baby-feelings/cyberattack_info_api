@@ -25,7 +25,8 @@ export function DepsOpsRepoBarChart({ stats, loading }: { stats: RepoOpsStat[]; 
   return (
     <ChartCard
       icon={<BarChart2 size={13} className="text-slate-400" />}
-      title="リポジトリ別件数（未解決）"
+      title="リポジトリ別 要確認PR件数（未解決）"
+      description="セキュリティ課題の件数ではありません。CI未設定のリポジトリは全PRが機械的に「要確認」になります。"
       loading={loading}
       isEmpty={data.length === 0}
       height={160}

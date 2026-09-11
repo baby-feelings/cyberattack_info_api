@@ -155,8 +155,20 @@ describe('DependabotOpsModal', () => {
     render(<DependabotOpsModal open onClose={vi.fn()} />)
 
     await waitFor(() => {
-      expect(screen.getByText('リポジトリ別件数（未解決）')).toBeInTheDocument()
+      expect(screen.getByText('リポジトリ別 要確認PR件数（未解決）')).toBeInTheDocument()
     })
     expect(mockedAll).toHaveBeenCalled()
+  })
+
+  it('shows a neutral "resolved" badge for PRs closed outside DEPSOPS', async () => {
+    mockedList.mockResolvedValue(listResponse([
+      item({ pr_number: 1, action: 'closed', reason: 'Dependabotの自動クローズ等で解消済み' }),
+    ]))
+    mockedAll.mockResolvedValue([])
+    render(<DependabotOpsModal open onClose={vi.fn()} />)
+
+    // "解消済み" はフィルターボタンとバッジの両方に表示されるため getAllByText で確認する
+    await waitFor(() => expect(screen.getAllByText('解消済み').length).toBeGreaterThan(1))
+    expect(screen.getByText('Dependabotの自動クローズ等で解消済み')).toBeInTheDocument()
   })
 })

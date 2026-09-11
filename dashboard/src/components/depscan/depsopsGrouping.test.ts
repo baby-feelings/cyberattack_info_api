@@ -55,6 +55,16 @@ describe('computeUnresolvedRepoStats', () => {
     expect(stats).toEqual([])
   })
 
+  it('does not count a PR whose latest status is closed (resolved outside DEPSOPS)', () => {
+    // CI未設定のリポジトリで一度flaggedになった後、Dependabotの自動クローズ等で
+    // 解消され"closed"が記録されたPRは、未解決件数に含めないこと
+    const stats = computeUnresolvedRepoStats([
+      entry({ pr_number: 1, action: 'flagged', processed_at: '2026-06-01T00:00:00Z' }),
+      entry({ pr_number: 1, action: 'closed', processed_at: '2026-06-02T00:00:00Z' }),
+    ])
+    expect(stats).toEqual([])
+  })
+
   it('sorts by count descending', () => {
     const stats = computeUnresolvedRepoStats([
       entry({ repo_full_name: 'u/small', pr_number: 1 }),
