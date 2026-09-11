@@ -687,7 +687,7 @@ pytest
 start htmlcov/index.html  # Mac/Linux: open htmlcov/index.html
 ```
 
-**テスト結果（最新）:** 454 テスト / カバレッジ 98%
+**テスト結果（最新）:** 463 テスト / カバレッジ 98%
 
 ---
 
@@ -738,6 +738,10 @@ cyberattack_info_api/
 │       ├── ci.yml           # CI: lint + type check + test (PR 時に自動実行)
 │       ├── deploy.yml       # CD: Vercel デプロイ (main マージ時に自動実行。バックエンドは手動デプロイ)
 │       └── daily-crawl.yml  # 毎日クロール (単一 cron UTC 19:05 で KEV → OSV → JVN → DEPSCAN → DEPSOPS 順次実行)
+├── deploy/                  # OCIデプロイ関連（deploy_to_oci.ps1・docker-compose.yml・Caddyfile・
+│   │                       # Grafanaプロビジョニング設定。秘密情報を含む.env/prometheus.ymlはgit管理外）
+│   └── grafana/             # 運用監視ダッシュボードの自動プロビジョニング設定・ダッシュボードJSON
+├── Dockerfile               # バックエンドのコンテナイメージ定義（OCI上でdocker composeがビルド）
 ├── .env.example         # 環境変数テンプレート
 ├── .python-version      # Python バージョン固定 (3.11)
 ├── requirements.txt     # 本番依存パッケージ

@@ -208,6 +208,14 @@ alembic/                 # DBスキーマのマイグレーション管理
     ├── ci.yml           # CI: ruff → mypy → pytest（PR 時・Python 3.10/3.11 matrix）
     ├── deploy.yml       # CD: Vercel デプロイ（main マージ時。バックエンドはOCIへ手動デプロイ）
     └── daily-crawl.yml  # 毎日クロール: 単一 cron(UTC 19:05) で KEV → OSV → JVN → DEPSCAN → DEPSOPS を順次実行
+
+Dockerfile                  # バックエンドのコンテナイメージ定義（OCI上でdocker composeがビルド）
+deploy/                     # OCIデプロイ関連（下記「OCIへの移行」節参照）
+├── deploy_to_oci.ps1       # SCP転送 + docker compose up -d --build を行うデプロイスクリプト
+├── docker-compose.yml      # api-prod・caddy・prometheus・grafana・node-exporter
+├── Caddyfile                # リバースプロキシ設定（BACKEND_DOMAIN/GRAFANA_DOMAINをHTTPS化）
+├── .env.example / prometheus.yml.example  # 秘密情報を含む実ファイル（.env/prometheus.yml）はgit管理外
+└── grafana/                 # データソース・ダッシュボードの自動プロビジョニング設定
 ```
 
 ---
@@ -326,9 +334,9 @@ EPSS スコア用カラム追加（Issue #127）を機に、これまで未初�
 `app/core/migrate.py` の `run_migrations()`（`python -m app.core.migrate` で実行）が
 実際のマイグレーション適用を担う。**FastAPI の lifespan には組み込まない**
 （`tests/conftest.py` が `Base.metadata.create_all` で直接テーブルを作る既存のテストDBに
-対し、意図せず alembic の管理外操作が走ってテストが壊れるのを避けるため）。Render の
-Start Command で `python -m app.core.migrate && uvicorn ...` として、アプリ起動前に
-明示的に呼び出す運用とする。
+対し、意図せず alembic の管理外操作が走ってテストが壊れるのを避けるため）。`Dockerfile`
+の `CMD`（`python -m app.core.migrate && uvicorn ...`。旧Renderの Start Command と
+同じ順序を踏襲）として、アプリ起動前に明示的に呼び出す運用とする。
 
 **既存DB（alembic導入前）への一度きりの移行を自動化する自己修復ロジック**: `vulnerabilities`
 テーブルは存在するが `alembic_version` テーブルが無い場合（＝create_allだけで運用してきた
