@@ -3,6 +3,11 @@ name: CD — Deploy to Production
 on:
   push:
     branches: [main]
+    # dashboard/ 配下に変更があった場合のみ実行（バックエンドのみの変更でトリガーしない。
+    # Issue #106: Dependabot PR等の連続マージでVercelの1日あたりデプロイ回数上限に
+    # 達した事故の再発防止）
+    paths:
+      - 'dashboard/**'
   # 手動トリガーも可能
   workflow_dispatch:
 
@@ -12,11 +17,17 @@ jobs:
   # CLAUDE.md「OCIへの移行」節参照）。GitHub Actions からの自動デプロイは無い。
 
   # ── Vercel（フロントエンド ダッシュボード）デプロイ ────────────
+  # 本番デプロイはこのジョブ（VERCEL_TOKEN経由のCLI実行）のみが担う。Vercel側の
+  # ネイティブGit連携による本番自動デプロイは dashboard/vercel.json の ignoreCommand で
+  # 無効化してあり（PRプレビューデプロイは維持）、デプロイ回数をここで一元的に制御する
+  # （Issue #106）。concurrency により、短時間に複数PRが連続マージされても実行中の
+  # 古いデプロイはキャンセルされ、最新コミットの分だけが実際にデプロイされる。
   deploy-vercel:
     name: Deploy Dashboard to Vercel
     runs-on: ubuntu-latest
-    # dashboard/ 配下に変更があった場合のみデプロイ
-    # （バックエンドのみの変更でダッシュボードを再デプロイしない）
+    concurrency:
+      group: vercel-deploy-production
+      cancel-in-progress: true
 
     steps:
       - name: Checkout code
@@ -33,15 +44,17 @@ jobs:
         run: npm install -g vercel@latest
 
       - name: Deploy to Vercel (Production)
-        # VERCEL_TOKEN を GitHub Secrets に登録することでデプロイが有効になる
+        # Vercelのネイティブ本番自動デプロイは無効化済み（dashboard/vercel.json参照）のため、
+        # VERCEL_TOKEN 未設定のままだとダッシュボードが本番に一切反映されなくなる。
+        # サイレントスキップにせず明示的に失敗させ、設定漏れに気づけるようにする
         working-directory: dashboard
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
-          if [ -n "$VERCEL_TOKEN" ]; then
-            vercel deploy --prod --token=$VERCEL_TOKEN --yes
-          else
-            echo "VERCEL_TOKEN is not set. Skipping Vercel deploy."
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "::error::VERCEL_TOKEN is not set. Vercel本番デプロイの唯一の経路のため、GitHub Secretsに設定してください。"
+            exit 1
           fi
+          vercel deploy --prod --token=$VERCEL_TOKEN --yes
