@@ -53,6 +53,11 @@ services:
   # 外部端末からも見られるよう、Caddy経由でHTTPS公開している（GRAFANA_DOMAIN、
   # 下記caddyサービス参照）。ログイン（GRAFANA_ADMIN_USER/GRAFANA_ADMIN_PASSWORD）で
   # 保護される。127.0.0.1側のポート公開もSSHポートフォワード用に残している。
+  # 既定のユーザー名"admin"は推測されやすいため、GRAFANA_ADMIN_USERで固有のユーザー名に
+  # 変更することを推奨する（crypto_forecastと同じ方針）。ただし GF_SECURITY_ADMIN_USER は
+  # 初回起動時のシード投入にのみ効く点に注意。既にadminユーザーが作成済みの環境で変更する
+  # 場合は、Grafana API（PUT /api/users/:id、{"login": "<新ユーザー名>"}）でlogin
+  # フィールドを直接書き換える必要がある。
   grafana:
     image: grafana/grafana:11.4.0
     container_name: cyberattack-grafana

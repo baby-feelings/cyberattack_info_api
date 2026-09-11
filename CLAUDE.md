@@ -926,7 +926,7 @@ GitHub Actions 無料プランでは複数 cron の発火が不安定なため�
 
 ---
 
-### OCI への移行（Issue #165、進行中）
+### OCI への移行（Issue #165、完了）
 
 Render 無料プランはコールドスタート・スリープが発生し、`/admin/*-crawl` のバックグラウンド
 処理がデプロイ再起動で強制終了される事故（DEPSCAN オンデマンドスキャンが `running` のまま
@@ -939,8 +939,8 @@ Docker Compose + Caddy 構成を、本プロジェクト専用の**新規別イ�
 - インスタンスは crypto_forecast とは分離した新規インスタンス（ロードバランサーは使わず
   Caddy 単体で HTTPS 終端。将来複数プロジェクトの集約が必要になった時点で再検討）
 - **DB は Neon を継続利用**（DB移行なし。`DATABASE_URL` の接続先を変えるだけ）
-- 監視（Prometheus/Grafana）は今回は導入しない。crypto_forecast も初回デプロイ時点では
-  無く後から追加した経緯（Issue #132相当）があり、まずは移行自体を安定させてから検討する
+- 監視（Prometheus/Grafana）は当初は見送る予定だったが、移行当日に前倒しで導入した
+  （Issue #167、詳細は「運用監視」節参照）
 - デプロイは**手動**（`deploy/deploy_to_oci.ps1` を都度実行。crypto_forecast と同じ
   SSH/SCP + `docker compose up -d --build` 方式）。GitHub Actions 経由の自動デプロイ
   （`deploy.yml` の Render フック）は、実際のカットオーバー時に削除する
@@ -948,8 +948,8 @@ Docker Compose + Caddy 構成を、本プロジェクト専用の**新規別イ�
   切り替え → Render を停止）。`daily-crawl.yml` の叩き先URLもこのタイミングで変更する
   （それまでは Render を叩いたまま維持）
 
-**現状（このコミット時点）: インスタンス作成・初回デプロイ・動作検証まで完了、
-カットオーバーは未実施**（Render/OCI 並行稼働中）:
+**現状: カットオーバー・キーローテーションまで完了。Render は Suspend 状態で
+1〜2週間ほど保持後、問題なければ削除する（安全のためすぐには削除しない）。**
 
 - crypto_forecast（`crypto-bot-server`）は Always Free の Ampere A1 枠を
   4 OCPU/24GB 全て使用していたため、まず 2 OCPU/12GB へリサイズして空きを確保した
@@ -966,17 +966,29 @@ Docker Compose + Caddy 構成を、本プロジェクト専用の**新規別イ�
   `https://168.138.213.240.nip.io/health` が 200 を返すことを確認済み。
   Render本番と同じ Neon DB を参照し、件数が完全一致することも確認済み
 - DEPSCAN の GitHub ログイン関連環境変数（`GITHUB_OAUTH_CLIENT_ID`/`SECRET`・
-  `SESSION_SECRET_KEY`・`PUBLIC_API_KEY`）も `.env.prod` に含めて転送済み。
-  ただし `API_BASE_URL_FOR_OAUTH` は意図的にまだ変更していない（デフォルト値の
-  Render URL のまま）ため、OCI上の `/auth/github/login` で開始した OAuth フローの
-  コールバック先は現時点でも Render になる。**GitHub OAuth App の callback URL
-  切り替えを伴う完全なログインフローの検証は、カットオーバー実施時にまとめて行う**
-  方針（Render側のログイン機能を検証期間中は止めたくないため）
+  `SESSION_SECRET_KEY`・`PUBLIC_API_KEY`）も `.env.prod` に含めて転送済み
+- **カットオーバー完了**: GitHub OAuth Appのcallback URLをOCI側に変更 →
+  `API_BASE_URL_FOR_OAUTH`をOCI URLに更新・再デプロイ（`redirect_uri`がOCI自身を
+  指すことを確認済み）→ `daily-crawl.yml`の`API_BASE_URL`変更・`deploy.yml`の
+  Renderデプロイジョブ削除（PR #170）→ Vercelの`VITE_API_BASE_URL`をOCIに変更・
+  再デプロイ → ダッシュボード上でDEPSCANのGitHubログインを含め実機検証 → Render停止
+- **キーローテーション実施済み**: 本セッション中に`.env.production`ファイルの
+  誤操作（後述）でいくつかの値が会話ログに露出したため、影響を受けた全キー
+  （`API_KEY`・`SESSION_SECRET_KEY`・`GITHUB_TOKEN`・Neonの`DATABASE_URL`
+  パスワード・`SLACK_WEBHOOK_URL`）を再発行し、OCI本番・GitHub Secretsへ反映済み
 
-**残タスク（カットオーバー本体）**: `daily-crawl.yml` の叩き先URL変更・`deploy.yml`
-の Render デプロイステップ削除・GitHub OAuth App の callback URL 変更・
-`API_BASE_URL_FOR_OAUTH` の更新・Vercel の API ベースURL変更・
-OAuthログインフローの通しテスト・Render停止。
+**教訓（`.env.production`取り扱いの事故）**: 本セッション中、`cat -A`・`awk -F=`・
+`python3`（実体はWindowsストアの無効なスタブで実行されない）等の確認コマンドを
+安易に使ったことで、秘密情報の値が複数回チャット上に露出したり、ファイルへの
+追記が同じ行に連結される事故が繰り返し発生した。今後の教訓:
+- 秘密情報ファイルの中身を確認する際は `grep -oE '^[A-Z_]+='`（キー名のみ）や
+  `grep -c '^KEY='`（行数のみ）に限定し、`cat`/`awk -F=`（YAML等`=`を含まない
+  行はそのまま出力されてしまう）等の全内容表示コマンドは使わない
+- ファイルへの追記前に、追記対象ファイルが改行で終わっているか確認する
+  （`tail -c1 file | wc -l`が0なら改行なし）。安全のため Python の
+  `readlines()` + 明示的な改行補完で書き換える方式を使う
+- `python3`はこの環境ではWindowsストアの無効なスタブのため使わない。
+  `python`（`which python`で実体を確認したもの）を使う
 
 用意したファイル一式（`Dockerfile`・`deploy/docker-compose.yml`・`deploy/Caddyfile`・
 `deploy/deploy_to_oci.ps1`・`.dockerignore`）の設計詳細は各ファイル自体のコメントを参照。
