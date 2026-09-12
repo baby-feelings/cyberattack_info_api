@@ -126,7 +126,9 @@ Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
 | POST | `/admin/dependabot-ops` | DEPSOPS手動実行（安全なPRのみ自動マージ） |
 | GET | `/health` | ヘルスチェック（認証不要） |
 
-全て`/admin/*`はバックグラウンド実行で即座に202を返す（結果は`/api/crawler-logs`で確認）。
+クロール系の`/admin/*`（`*-crawl`・`dependabot-ops`）はバックグラウンド実行で即座に202を
+返す（結果は`/api/crawler-logs`で確認）。`PUT /admin/depscan/assets/{owner}/{repo}`は
+同期的なUpsertのため200を即時返す（バックグラウンド実行ではない）。
 DEPSCANダッシュボードのGitHubログイン方式（使い捨て交換コード＋Bearerトークン、RFC 9700
 対応・Safari ITP回避の経緯）や、Dependabot PRのマージ運用ルールは`CLAUDE.md`を参照。
 
@@ -198,9 +200,12 @@ cyberattack_info_api/
 ├── .github/
 │   ├── dependabot.yml       # Dependabot（pip: / ・npm: /dashboard、週次で依存更新PRを自動作成）
 │   └── workflows/
-│       ├── ci.yml           # CI: lint + type check + test (PR 時に自動実行)
-│       ├── deploy.yml       # CD: Vercel デプロイ (dashboard/変更時のmainマージ時のみ自動実行。バックエンドは手動デプロイ)
-│       └── daily-crawl.yml  # 毎日クロール (単一 cron UTC 19:05 で KEV → OSV → JVN → DEPSCAN → DEPSOPS 順次実行)
+│       ├── ci.yml                    # CI: lint + type check + test (PR 時に自動実行)
+│       ├── deploy.yml                # CD: Vercel デプロイ (dashboard/変更時のmainマージ時のみ自動実行。バックエンドは手動デプロイ)
+│       ├── daily-crawl.yml           # 毎日クロール (単一 cron UTC 19:05 で KEV → OSV → JVN → DEPSCAN → DEPSOPS 順次実行)
+│       ├── osv-scanner-scheduled.yml # OSV-Scanner: 本リポジトリ自身の依存関係を週次・mainマージ時にスキャン
+│       ├── osv-scanner-pr.yml        # OSV-Scanner: PRで新規導入された脆弱性のみを差分検出
+│       └── pip-audit.yml             # pip-audit: requirements.txtを週次・mainマージ時にスキャン
 ├── deploy/                  # OCIデプロイ関連（deploy_to_oci.ps1・docker-compose.yml・Caddyfile・
 │   │                       # Grafanaプロビジョニング設定。秘密情報を含む.env/prometheus.ymlはgit管理外）
 │   └── grafana/             # 運用監視ダッシュボードの自動プロビジョニング設定・ダッシュボードJSON

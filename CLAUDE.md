@@ -150,14 +150,16 @@ app/
 │   └── router.py           # router: /api/jvn エンドポイント（一覧・統計）
 │                           # admin_router: POST /admin/jvn-crawl（手動トリガー）
 ├── depscan/                # 依存ライブラリ脆弱性スキャン（DEPSCAN）ドメイン
-│   ├── models.py           # DependencyFinding・UserScan（GitHub ログイン経由のオンデマンドスキャン状況）
+│   ├── models.py           # DependencyFinding・UserScan（GitHub ログイン経由のオンデマンドスキャン状況）・
+│   │                       # RepoAssetContext（資産コンテキスト、Issue #131）
 │   ├── schemas.py          # DependencyFindingOut 等
 │   ├── crawler.py          # GitHub 全リポジトリのロックファイルを OSV API とリアルタイム照合
 │   ├── user_scan.py        # run_depscan_for_user/get_user_scan_status/should_rescan_for_user
 │   │                       # （GitHub ログイン経由のオンデマンドスキャン）
 │   ├── router.py           # router: /api/depscan エンドポイント（一覧・統計。X-API-KEY またはセッション
-│   │                       # トークンの二重認証）
-│   │                       # admin_router: POST /admin/depscan-crawl（手動トリガー）
+│   │                       # トークンの二重認証）・/api/depscan/assets（資産コンテキスト一覧）
+│   │                       # admin_router: POST /admin/depscan-crawl（手動トリガー）・
+│   │                       # PUT /admin/depscan/assets/{owner}/{repo}（資産コンテキスト設定）
 │   ├── github_client.py    # GitHub API クライアント（リポジトリ一覧・ツリー・ファイル取得）
 │   └── parsers/            # 10 エコシステム分のロックファイルパーサー
 ├── depsops/                # Dependabot PR 自動運用（DEPSOPS）ドメイン
@@ -211,9 +213,13 @@ alembic/                 # DBスキーマのマイグレーション管理
 .github/
 ├── dependabot.yml   # Dependabot（pip: / ・npm: /dashboard、週次で依存更新PRを自動作成）
 └── workflows/
-    ├── ci.yml           # CI: ruff → mypy → pytest（PR 時・Python 3.10/3.11 matrix）
-    ├── deploy.yml       # CD: Vercel デプロイ（dashboard/変更時のmainマージ時のみ。バックエンドはOCIへ手動デプロイ）
-    └── daily-crawl.yml  # 毎日クロール: 単一 cron(UTC 19:05) で KEV → OSV → JVN → DEPSCAN → DEPSOPS を順次実行
+    ├── ci.yml                    # CI: ruff → mypy → pytest（PR 時・Python 3.10/3.11 matrix）
+    ├── deploy.yml                # CD: Vercel デプロイ（dashboard/変更時のmainマージ時のみ。バックエンドはOCIへ手動デプロイ）
+    ├── daily-crawl.yml           # 毎日クロール: 単一 cron(UTC 19:05) で KEV → OSV → JVN → DEPSCAN → DEPSOPS を順次実行
+    ├── osv-scanner-scheduled.yml # OSV-Scanner: 本リポジトリ自身の依存関係を週次・mainマージ時にスキャン
+    ├── osv-scanner-pr.yml        # OSV-Scanner: PRで新規導入された脆弱性のみを差分検出
+    └── pip-audit.yml             # pip-audit: requirements.txtを週次・mainマージ時にスキャン（PyPI Advisory
+                                   # Database。OSV-Scannerとは別の情報源によるクロスチェック、Issue #63）
 
 Dockerfile                  # バックエンドのコンテナイメージ定義（OCI上でdocker composeがビルド）
 deploy/                     # OCIデプロイ関連（下記「OCIへの移行」節参照）
@@ -856,6 +862,8 @@ GitHub Actions 無料プランでは複数 cron の発火が不安定なため�
 | Secret 名 | 説明 |
 |-----------|------|
 | `API_KEY` | OCI の `.env.production` に設定した API キーと同じ値（daily-crawl.yml 用） |
+| `VERCEL_TOKEN` | [Vercelのアカウント設定](https://vercel.com/account/tokens)で発行したトークン（deploy.yml用。ダッシュボードの本番デプロイの唯一の経路のため必須） |
+| `VERCEL_ORG_ID` / `VERCEL_PROJECT_ID` | Vercelプロジェクトの識別子（`dashboard/`で`vercel link`実行時に生成される`.vercel/project.json`から取得） |
 
 ---
 
