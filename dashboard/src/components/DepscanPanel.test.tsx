@@ -42,6 +42,7 @@ function finding(overrides: Partial<DependencyFindingOut> = {}): DependencyFindi
     resolved_at: null,
     reachability: null,
     repo_visibility: null,
+    priority_reasons: [],
     ...overrides,
   }
 }

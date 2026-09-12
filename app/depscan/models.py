@@ -56,6 +56,11 @@ class DependencyFinding(Base):
     # 修正済みバージョン一覧（JSON 配列）
     fixed_versions: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
 
+    # OSVエントリのaliasesからCVE形式のみ抽出したもの（JSON配列。無ければ空配列）。
+    # Issue #135: KEV掲載有無・EPSSスコアとの突合に使う（OSV IDだけではCVEと
+    # 直接対応しないため、OSV側が提供する別名情報を保存しておく必要がある）
+    cve_ids: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+
     # 検知元のロックファイルパス（例: dashboard/package-lock.json）
     manifest_path: Mapped[str] = mapped_column(String(500), nullable=False)
 

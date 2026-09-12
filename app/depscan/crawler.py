@@ -144,6 +144,12 @@ def _build_findings(
                 for event in rng.get("events", [])
                 if "fixed" in event
             })
+            # OSV IDだけではCVEと直接対応しないため、aliasesからCVE形式のみ抽出して
+            # 保存しておく（Issue #135: KEV掲載有無・EPSSスコアとの突合に使う）
+            cve_ids = sorted({
+                alias for alias in vuln.get("aliases", [])
+                if alias.startswith("CVE-")
+            })
 
             for repo_full_name, manifest_path in dep_to_repos[key]:
                 records.append({
@@ -156,6 +162,7 @@ def _build_findings(
                     "cvss_score": cvss_score,
                     "summary": summary,
                     "fixed_versions": fixed_versions,
+                    "cve_ids": cve_ids,
                     "manifest_path": manifest_path,
                     # _apply_reachability が上書きする。呼び出し自体が失敗した場合の
                     # フォールバック値として "unknown" を既定にしておく
@@ -259,10 +266,12 @@ def _upsert_findings(
             existing.resolved_at = None
         else:
             # 既存の未解決レコード: 到達可能性はソースコードの変化を反映するため、
-            # repo_visibilityはリポジトリの公開設定変更を反映するため、
-            # 毎回のスキャンで更新する（他のフィールドは安定しているため更新しない）
+            # repo_visibilityはリポジトリの公開設定変更を反映するため、cve_idsは
+            # OSV側のalias追加を反映するため、毎回のスキャンで更新する
+            # （他のフィールドは安定しているため更新しない）
             existing.reachability = rec.get("reachability")
             existing.repo_visibility = rec.get("repo_visibility")
+            existing.cve_ids = rec.get("cve_ids", [])
 
     db.commit()
     return inserted, new_snapshots

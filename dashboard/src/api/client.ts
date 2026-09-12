@@ -246,6 +246,9 @@ export interface DependencyFindingOut {
   reachability: 'reachable' | 'unreachable' | 'unknown' | null
   // GitHub APIの"private"フィールドから自動取得（Issue #131）。旧レコードはnull
   repo_visibility: 'public' | 'private' | null
+  // 優先度判定に寄与した要因（Issue #135）。kev_listed/epss_high/reachable/
+  // public_repo/internet_facing_asset/production_asset/high_importance_asset
+  priority_reasons: string[]
   detected_at: string
   resolved_at: string | null
 }

@@ -20,6 +20,7 @@ function makeFinding(overrides: Partial<DependencyFindingOut> = {}): DependencyF
     resolved_at: null,
     reachability: null,
     repo_visibility: null,
+    priority_reasons: [],
     ...overrides,
   }
 }
@@ -134,6 +135,32 @@ describe('DepscanGroupRow', () => {
     renderRow(group)
     expect(screen.queryByText('Public')).not.toBeInTheDocument()
     expect(screen.queryByText('Private')).not.toBeInTheDocument()
+  })
+
+  it('shows a KEV badge when any finding in the group has kev_listed', () => {
+    const group = makeGroup([
+      makeFinding({ osv_id: 'GHSA-a', priority_reasons: [] }),
+      makeFinding({ osv_id: 'GHSA-b', priority_reasons: ['kev_listed'] }),
+    ])
+    renderRow(group)
+    expect(screen.getByText('KEV')).toBeInTheDocument()
+  })
+
+  it('shows no KEV badge when no finding has kev_listed', () => {
+    const group = makeGroup([makeFinding({ priority_reasons: ['reachable'] })])
+    renderRow(group)
+    expect(screen.queryByText('KEV')).not.toBeInTheDocument()
+  })
+
+  it('shows priority reason badges for each finding when expanded', () => {
+    const group = makeGroup([
+      makeFinding({ priority_reasons: ['kev_listed', 'epss_high', 'production_asset'] }),
+    ])
+    renderRow(group)
+    fireEvent.click(screen.getByText('cryptography'))
+    expect(screen.getByText('KEV掲載')).toBeInTheDocument()
+    expect(screen.getByText('EPSS高')).toBeInTheDocument()
+    expect(screen.getByText('本番資産')).toBeInTheDocument()
   })
 
   it('does not toggle the row when clicking the repo link itself', () => {

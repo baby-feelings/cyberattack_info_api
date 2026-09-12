@@ -39,6 +39,44 @@ function RepoVisibilityBadge({ visibility }: { visibility: 'public' | 'private' 
   )
 }
 
+// 優先度判定に寄与した要因の日本語ラベル（Issue #135）
+const PRIORITY_REASON_LABELS: Record<string, string> = {
+  kev_listed: 'KEV掲載',
+  epss_high: 'EPSS高',
+  reachable: '到達可能',
+  public_repo: '公開リポジトリ',
+  internet_facing_asset: 'ネット公開資産',
+  production_asset: '本番資産',
+  high_importance_asset: '重要度high',
+}
+
+// KEV掲載は最も緊急度が高いシグナルのため、グループ行に集約表示する際は
+// これだけを別枠で目立たせる（他の理由は展開時のCVE単位の内訳で確認する）
+function KevListedBadge({ show }: { show: boolean }) {
+  if (!show) return null
+  return (
+    <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-red-500/20 text-red-400 border border-red-500/40 whitespace-nowrap">
+      KEV
+    </span>
+  )
+}
+
+function PriorityReasonBadges({ reasons }: { reasons: string[] }) {
+  if (reasons.length === 0) return null
+  return (
+    <div className="flex flex-wrap gap-1 mt-1">
+      {reasons.map(reason => (
+        <span
+          key={reason}
+          className="inline-block px-1 py-0.5 rounded text-[9px] font-medium bg-violet-500/15 text-violet-400 border border-violet-500/30 whitespace-nowrap"
+        >
+          {PRIORITY_REASON_LABELS[reason] ?? reason}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 export function DepscanGroupRow({ group }: { group: FindingGroup }) {
   const [open, setOpen] = useState(false)
   const bestSeverity = group.findings
@@ -47,6 +85,7 @@ export function DepscanGroupRow({ group }: { group: FindingGroup }) {
   const fixedVersions = groupFixedVersions(group)
   const reachability = groupReachability(group)
   const severityCounts = groupSeverityCounts(group)
+  const hasKevListed = group.findings.some(f => f.priority_reasons.includes('kev_listed'))
   const latestDate = new Date(groupLatestDetectedAt(group)).toLocaleDateString('ja-JP', {
     year: 'numeric', month: 'short', day: 'numeric',
   })
@@ -58,7 +97,10 @@ export function DepscanGroupRow({ group }: { group: FindingGroup }) {
         onClick={() => setOpen(o => !o)}
       >
         <td className="py-2.5 pr-3 w-20">
-          <SeverityBadge severity={bestSeverity} classMap={SEVERITY_CLS} />
+          <div className="flex items-center gap-1">
+            <SeverityBadge severity={bestSeverity} classMap={SEVERITY_CLS} />
+            <KevListedBadge show={hasKevListed} />
+          </div>
           <span className="block text-[10px] text-slate-600 mt-0.5 tabular-nums">
             計{group.findings.length}件
           </span>
@@ -165,6 +207,7 @@ export function DepscanGroupRow({ group }: { group: FindingGroup }) {
                       </a>
                     </div>
                     <p className="leading-relaxed">{f.summary}</p>
+                    <PriorityReasonBadges reasons={f.priority_reasons} />
                     {f.fixed_versions.length > 0 && (
                       <p className="flex flex-wrap items-center gap-1">
                         <span className="text-slate-500">修正版:</span>

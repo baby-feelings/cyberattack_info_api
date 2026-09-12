@@ -23,6 +23,7 @@ function makeFinding(overrides: Partial<DependencyFindingOut> = {}): DependencyF
     resolved_at: null,
     reachability: null,
     repo_visibility: null,
+    priority_reasons: [],
     ...overrides,
   }
 }

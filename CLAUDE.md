@@ -489,9 +489,35 @@ Packagist・Hexは最も精度が低いbest-effort。`get_source_files`が対象
   問い合わせ（N+1回避）、Python側で`repo_full_name`をキーに結合する
 - `GET /api/depscan/assets`で設定済みの資産コンテキストを一覧取得できる
   （未設定のリポジトリは含まれない）
-- 優先度判断の理由を機械可読な形で返す機能（`priority_reasons`等）は、Issue #135
-  （Could、#131の実装後の拡張として位置づけ）に切り出し済みのため本Issueの
-  スコープ外とした
+
+### DEPSCAN の説明可能な優先度推薦（Issue #135：priority_reasons）
+#131（資産コンテキスト）・#127（EPSS連携）・#132（到達可能性解析）の実装完了を
+前提に、「なぜその脆弱性の優先度が高いと判断されたか」を機械可読な理由コード
+配列として提示する。
+
+- `DependencyFinding.cve_ids`（JSON配列）: OSVエントリの`aliases`から
+  `CVE-`始まりのIDのみ抽出して保存する（`_build_findings`が設定）。OSV ID
+  （`GHSA-xxx`等）だけではKEVテーブルの`cve_id`と直接対応しないため、
+  突合用に別途保持する必要がある
+- `GET /api/depscan`のレスポンスに`priority_reasons`（文字列配列）を追加する。
+  `app.depscan.router._compute_priority_reasons`が以下を判定する
+  （複数該当してもよい）:
+  - `kev_listed`: `cve_ids`のいずれかがCISA KEV（`app.kev.models.Vulnerability`）
+    に掲載されている
+  - `epss_high`: KEV側のマッチしたレコードの`epss_score`が0.5以上
+    （`_EPSS_HIGH_THRESHOLD`。FIRSTのEPSS運用ガイドで明確な閾値の定義は無いが、
+    「悪用確率が偶然を上回る」目安として一般的に引用される値）
+  - `reachable` / `public_repo` / `internet_facing_asset` / `production_asset` /
+    `high_importance_asset`: それぞれ`reachability`/`repo_visibility`/
+    `asset_context`の値から導出
+  - KEV突合は`app.depscan.router._fetch_kev_map`が一覧取得のたびに該当CVE群を
+    まとめて1回で問い合わせる（`_fetch_asset_context_map`と同じN+1回避パターン）
+- **書き込み時ではなく読み取り時に計算する**設計とした（KEV掲載・EPSSスコアは
+  DEPSCANのスキャンとは独立して毎日更新されるため、DEPSCAN側を再スキャンしなくても
+  常に最新のKEV/EPSS状態を反映できるようにするため）
+- ダッシュボード（`DepscanGroupRow.tsx`）では、グループ内のいずれかのCVEが
+  `kev_listed`の場合に赤い「KEV」バッジを行レベルで表示し（最も緊急度が高い
+  シグナルのため）、それ以外の理由は展開時のCVE単位の内訳でバッジ表示する
 
 ### DEPSCAN の解決済みレコードは保持期間超過で自動削除する（未解決は対象外）
 `app.depscan.crawler._delete_old_depscan_records` が、`resolved_at` が
