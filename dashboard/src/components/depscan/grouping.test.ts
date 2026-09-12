@@ -22,6 +22,7 @@ function makeFinding(overrides: Partial<DependencyFindingOut> = {}): DependencyF
     detected_at: '2026-06-01T00:00:00Z',
     resolved_at: null,
     reachability: null,
+    repo_visibility: null,
     ...overrides,
   }
 }

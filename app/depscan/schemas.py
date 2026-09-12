@@ -1,7 +1,41 @@
 """DEPSCAN（依存ライブラリ脆弱性スキャン）ドメインの Pydantic スキーマ定義。"""
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from app.core.schemas import OrmDatetimeModel, SeverityStat
+
+
+class RepoAssetContextOut(OrmDatetimeModel):
+    """リポジトリ単位の資産コンテキストの出力スキーマ（Issue #131）。"""
+
+    repo_full_name: str = Field(description="対象リポジトリ（例: baby-feelings/baby_grow）")
+    is_production: bool = Field(description="本番デプロイ済みか")
+    is_internet_facing: bool = Field(description="インターネットに公開されたサービスか")
+    importance: Literal["high", "medium", "low"] | None = Field(
+        None, description="資産重要度（high/medium/low）。未評価なら null",
+    )
+    updated_at: str = Field(description="最終更新日時（ISO 8601）")
+
+    model_config = {"from_attributes": True}
+
+
+class RepoAssetContextIn(BaseModel):
+    """リポジトリ単位の資産コンテキストの設定リクエスト
+    （PUT /admin/depscan/assets/{owner}/{repo}）。
+    """
+
+    is_production: bool = Field(False, description="本番デプロイ済みか")
+    is_internet_facing: bool = Field(False, description="インターネットに公開されたサービスか")
+    importance: Literal["high", "medium", "low"] | None = Field(
+        None, description="資産重要度（high/medium/low）。未評価なら null",
+    )
+
+
+class RepoAssetContextListResponse(BaseModel):
+    """資産コンテキスト一覧取得レスポンス。"""
+
+    data: list[RepoAssetContextOut] = Field(description="設定済みの資産コンテキスト一覧")
 
 
 class DependencyFindingOut(OrmDatetimeModel):
@@ -26,6 +60,16 @@ class DependencyFindingOut(OrmDatetimeModel):
         description="到達可能性（import レベルのヒューリスティック判定）: "
         "reachable（importを確認） / unreachable（該当拡張子のソースはあるがimportなし） / "
         "unknown（判定不能）",
+    )
+    repo_visibility: str | None = Field(
+        None,
+        description="対象リポジトリの公開範囲（GitHub APIの\"private\"フィールドから自動取得。"
+        "public/private。旧レコードで未取得の場合は null）",
+    )
+    asset_context: RepoAssetContextOut | None = Field(
+        None,
+        description="対象リポジトリの資産コンテキスト（本番デプロイ済みか・インターネット公開か・"
+        "重要度。PUT /admin/depscan/assets/{owner}/{repo} で手動設定。未設定なら null）",
     )
     detected_at: str = Field(description="初回検知日時（ISO 8601）")
     resolved_at: str | None = Field(None, description="解決日時（未解決なら null）")

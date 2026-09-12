@@ -59,18 +59,25 @@ def _discover_manifests(owner: str, repo: str, default_branch: str, token: str) 
 
 def _collect_dependencies(
     username: str, token: str,
-) -> tuple[dict[DepKey, list[tuple[str, str]]], int]:
+) -> tuple[dict[DepKey, list[tuple[str, str]]], int, dict[str, str]]:
     """全対象リポジトリからロックファイルを収集・パースする。
 
     Returns:
         (
             {(ecosystem, package_name, version): [(repo_full_name, manifest_path), ...]},
             スキャンしたリポジトリ数,
+            {repo_full_name: "public"/"private"}（Issue #131: 資産コンテキストのrepo_visibility用。
+            GitHub APIの"private"フィールドから導出する）,
         )
     """
     dep_to_repos: dict[DepKey, list[tuple[str, str]]] = {}
     repos = list_target_repos(username, token)
     logger.info("DEPSCAN: %d target repos to scan", len(repos))
+
+    repo_visibility: dict[str, str] = {
+        repo_info["full_name"]: "private" if repo_info.get("private") else "public"
+        for repo_info in repos
+    }
 
     for i, repo_info in enumerate(repos, start=1):
         full_name = repo_info["full_name"]
@@ -98,11 +105,12 @@ def _collect_dependencies(
                 dep_to_repos.setdefault(key, []).append((full_name, path))
 
     logger.info("DEPSCAN: repo scan complete, %d unique dependencies found", len(dep_to_repos))
-    return dep_to_repos, len(repos)
+    return dep_to_repos, len(repos), repo_visibility
 
 
 def _build_findings(
     dep_to_repos: dict[DepKey, list[tuple[str, str]]],
+    repo_visibility: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     """パッケージ×バージョンを OSV に照合し、DependencyFinding レコード辞書のリストを構築する。"""
     hits = query_versions_batch(list(dep_to_repos.keys()))
@@ -152,6 +160,7 @@ def _build_findings(
                     # _apply_reachability が上書きする。呼び出し自体が失敗した場合の
                     # フォールバック値として "unknown" を既定にしておく
                     "reachability": "unknown",
+                    "repo_visibility": (repo_visibility or {}).get(repo_full_name),
                     "detected_at": now,
                 })
 
@@ -249,9 +258,11 @@ def _upsert_findings(
                 setattr(existing, field, value)
             existing.resolved_at = None
         else:
-            # 既存の未解決レコード: 到達可能性はソースコードの変化を反映するため
+            # 既存の未解決レコード: 到達可能性はソースコードの変化を反映するため、
+            # repo_visibilityはリポジトリの公開設定変更を反映するため、
             # 毎回のスキャンで更新する（他のフィールドは安定しているため更新しない）
             existing.reachability = rec.get("reachability")
+            existing.repo_visibility = rec.get("repo_visibility")
 
     db.commit()
     return inserted, new_snapshots
@@ -420,7 +431,7 @@ def fetch_and_scan_dependencies() -> tuple[int, int, int]:
 
     db: Session = SessionLocal()
     try:
-        dep_to_repos, repos_scanned = _collect_dependencies(
+        dep_to_repos, repos_scanned, repo_visibility = _collect_dependencies(
             settings.GITHUB_USERNAME, settings.GITHUB_TOKEN,
         )
         logger.info(
@@ -428,7 +439,7 @@ def fetch_and_scan_dependencies() -> tuple[int, int, int]:
             repos_scanned, len(dep_to_repos),
         )
 
-        records = _build_findings(dep_to_repos)
+        records = _build_findings(dep_to_repos, repo_visibility)
 
         # 到達可能性の判定失敗はクロール全体を失敗させない（"unknown" のまま据え置く）
         try:

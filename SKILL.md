@@ -295,6 +295,10 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 > 所有するリポジトリのみに強制的に絞り込まれる（下記「GitHub ログイン API」参照）。
 > Claude Code からの利用では引き続き `X-API-KEY` を使えばよく、影響はない。
 
+各検知結果には `repo_visibility`（`"public"`/`"private"`、GitHub APIから自動取得）と
+`asset_context`（本番デプロイ済みか・インターネット公開か・重要度。未設定なら`null`。
+スキル11参照）も含まれる（Issue #131）。
+
 ---
 
 ### スキル 10: DEPSCAN 統計情報を取得する
@@ -322,7 +326,36 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 ---
 
-### スキル 11: Dependabot PR 自動運用（DEPSOPS）の判定履歴を確認する
+### スキル 11: リポジトリの資産コンテキストを設定・確認する（Issue #131）
+
+**用途:** DEPSCANの検知結果に「本番デプロイ済みか」「インターネット公開サービスか」
+「資産重要度」を紐付けるための設定を行う。GitHub APIから自動判定できない情報のため
+手動設定が必要（`repo_visibility`は自動取得のため対象外、スキル9参照）。
+
+```bash
+# 設定（Upsert。既存設定があれば上書き）
+curl -s -X PUT -H "X-API-KEY: $CYBERATTACK_API_KEY" -H "Content-Type: application/json" \
+  -d '{"is_production": true, "is_internet_facing": true, "importance": "high"}' \
+  "https://168.138.213.240.nip.io/admin/depscan/assets/baby-feelings/cyberattack_info_api"
+
+# 設定済み一覧を取得
+curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
+  "https://168.138.213.240.nip.io/api/depscan/assets"
+```
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| `is_production` | bool | 本番デプロイ済みか（デフォルト: `false`） |
+| `is_internet_facing` | bool | インターネットに公開されたサービスか（デフォルト: `false`） |
+| `importance` | string \| null | 資産重要度（`high`/`medium`/`low`）。未評価なら`null` |
+
+> 設定した内容は `GET /api/depscan` の各検知結果に `asset_context` として自動的に
+> 埋め込まれる（スキル9参照）。未設定のリポジトリは `GET /api/depscan/assets` の
+> 一覧には含まれず、`asset_context` は `null` になる。
+
+---
+
+### スキル 12: Dependabot PR 自動運用（DEPSOPS）の判定履歴を確認する
 
 **用途:** `POST /admin/dependabot-ops` が判定した Dependabot PR の履歴（自動マージ済み・
 要確認いずれも）を確認する。Slack 通知は実行時点のスナップショットのみで履歴を持たないため、
@@ -400,7 +433,7 @@ DEPSCAN スキャンが実行され（直近24時間以内にスキャン済み�
 
 ---
 
-### スキル 12: クローラーの実行ログを確認する
+### スキル 13: クローラーの実行ログを確認する
 
 **用途:** KEV / OSV / JVN / DEPSCAN クローラーが正常に動作しているか、最新の実行結果（件数・所要時間・エラー）を確認する。
 
@@ -444,7 +477,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 ---
 
-### スキル 13: サービス状態を確認する
+### スキル 14: サービス状態を確認する
 
 **用途:** API サーバーと DB が正常稼働しているか確認する。
 
@@ -463,7 +496,7 @@ curl -s "https://168.138.213.240.nip.io/health"
 
 ---
 
-### スキル 14: 運用監視ダッシュボード（Grafana）を確認する
+### スキル 15: 運用監視ダッシュボード（Grafana）を確認する
 
 **用途:** クローラー（KEV/OSV/JVN/DEPSCAN/DEPSOPS）が実際に成功し続けているか、OCIホストの
 CPU/メモリ/ディスク使用率を可視化されたダッシュボードで確認する。`curl`ではなくブラウザで

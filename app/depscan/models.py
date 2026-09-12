@@ -3,7 +3,18 @@ SQLAlchemy 2.x の Mapped + mapped_column スタイルを採用し、mypy との
 """
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Float, Index, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -52,6 +63,11 @@ class DependencyFinding(Base):
     # "reachable"（ソース内でimport/use確認）/ "unreachable"（該当拡張子のソースはあるが
     # importが見つからない）/ "unknown"（判定不能。該当拡張子のソースが無い・取得失敗等）
     reachability: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
+    # リポジトリの公開範囲（GitHub APIの"private"フィールドから取得。Issue #131）:
+    # "public"（一般公開コード）/ "private"（非公開）。スキャンのたびに上書きするため、
+    # リポジトリの公開設定変更は次回スキャンで自動反映される
+    repo_visibility: Mapped[str | None] = mapped_column(String(10), nullable=True)
 
     # 初回検知日時
     detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -118,3 +134,53 @@ class UserScan(Base):
 
     def __repr__(self) -> str:
         return f"<UserScan {self.username} status={self.status}>"
+
+
+class RepoAssetContext(Base):
+    """リポジトリ単位の資産コンテキスト（Issue #131：多層リスク優先度づけ）。
+
+    「その脆弱性が実際に自組織のどの資産に影響するか」を判断するための文脈情報
+    （本番デプロイ済みか・インターネット公開サービスか・資産重要度）。GitHub API
+    から自動取得できる repo_visibility（DependencyFinding側）とは異なり、これらは
+    自動判定できないため、管理者が `PUT /admin/depscan/assets/{owner}/{repo}` で
+    手動設定する。
+
+    新しいリポジトリを作った時など変更頻度が低いため、POPULAR_PACKAGES等の静的な
+    設定ファイルで管理する方式も検討したが、変更の都度デプロイが必要になるのを
+    避けるため、他の管理系操作（DependabotPrLog等）と同様にDB+管理APIで管理する
+    方式を採用した。
+    """
+
+    __tablename__ = "repo_asset_contexts"
+
+    # 対象リポジトリ（例: baby-feelings/baby_grow）
+    repo_full_name: Mapped[str] = mapped_column(String(255), primary_key=True)
+
+    # 本番デプロイ済みか（未設定時はFalse扱い＝優先度に寄与しない安全側デフォルト）
+    is_production: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    # インターネットに公開されたサービスか
+    is_internet_facing: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    # 資産重要度（"high" / "medium" / "low"）。未設定（null）は「未評価」を意味し、
+    # "low" とは区別する
+    importance: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
+    # DB 登録日時
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # DB 更新日時
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<RepoAssetContext {self.repo_full_name} "
+            f"production={self.is_production} importance={self.importance}>"
+        )

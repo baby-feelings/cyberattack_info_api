@@ -110,8 +110,9 @@ Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
 | GET | `/api/osv/stats` | OSV統計 |
 | GET | `/api/jvn` | JVN 一覧 |
 | GET | `/api/jvn/stats` | JVN統計 |
-| GET | `/api/depscan` | DEPSCAN検知結果一覧（`reachability`到達可能性判定含む） |
+| GET | `/api/depscan` | DEPSCAN検知結果一覧（`reachability`到達可能性判定・`repo_visibility`・`asset_context`含む） |
 | GET | `/api/depscan/stats` | DEPSCAN統計（リポジトリ別・重要度別） |
+| GET | `/api/depscan/assets` | リポジトリ資産コンテキスト一覧（Issue #131） |
 | GET | `/api/depsops` | DEPSOPS判定履歴（`is_security_update`・`compatibility_badge_url`含む） |
 | GET | `/api/crawler-logs` | クローラー実行ログ |
 | GET | `/auth/github/login` | DEPSCANダッシュボードのGitHubログイン開始（ブラウザ専用） |
@@ -121,6 +122,7 @@ Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
 | POST | `/admin/osv-crawl` | OSV手動クロール（`?days=N`対応） |
 | POST | `/admin/jvn-crawl` | JVN手動クロール（`?days=N`対応） |
 | POST | `/admin/depscan-crawl` | DEPSCAN手動実行 |
+| PUT | `/admin/depscan/assets/{owner}/{repo}` | リポジトリ資産コンテキスト設定（Upsert、Issue #131） |
 | POST | `/admin/dependabot-ops` | DEPSOPS手動実行（安全なPRのみ自動マージ） |
 | GET | `/health` | ヘルスチェック（認証不要） |
 

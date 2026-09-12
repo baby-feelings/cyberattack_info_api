@@ -464,6 +464,35 @@ Packagist・Hexは最も精度が低いbest-effort。`get_source_files`が対象
 `"unknown"`のまま残し、DEPSCAN全体の成功可否には影響させない。再スキャンのたびに
 既存レコードの`reachability`も再計算・上書きする。
 
+### DEPSCAN の資産コンテキスト（Issue #131：多層リスク優先度づけ）
+「脆弱性そのものの深刻度」に加えて「その脆弱性が実際にどの資産に影響するか」
+「その資産がインターネットに露出しているか」を組み合わせてこそ、対応の優先度を
+正しく判断できる（SSVC的な意思決定支援）という社内技術報告書の指摘に基づく。
+
+- **`DependencyFinding.repo_visibility`**（`"public"`/`"private"`）: GitHub APIの
+  `private`フィールドから`_collect_dependencies`が自動導出し、スキャンのたびに
+  上書きする（リポジトリの公開設定変更は次回スキャンで自動反映）。自動判定できる
+  情報のため、手動設定は不要
+- **`RepoAssetContext`テーブル**（`app/depscan/models.py`）: `is_production`
+  （本番デプロイ済みか）・`is_internet_facing`（インターネット公開サービスか）・
+  `importance`（`"high"`/`"medium"`/`"low"`、`null`=未評価）を管理者が
+  `PUT /admin/depscan/assets/{owner}/{repo}`で手動設定する（Upsert）。GitHub APIから
+  自動判定できない情報のため。新しいリポジトリを作った時程度の低頻度でしか
+  変更されないため、DependabotPrLog等と同じ「DB＋管理API」方式を採用し、
+  `POPULAR_PACKAGES`のような静的設定ファイル方式（変更にデプロイが必要）は
+  見送った
+- `GET /api/depscan`のレスポンス（`DependencyFindingOut`）には、この2つを
+  `repo_visibility`（フラットなフィールド）・`asset_context`（`RepoAssetContextOut`
+  のネストオブジェクト、未設定なら`null`）として埋め込む。`asset_context`は
+  `DependencyFinding`テーブルの列ではないため、`app.depscan.router
+  ._fetch_asset_context_map`が一覧取得のたびに該当リポジトリ群をまとめて1回で
+  問い合わせ（N+1回避）、Python側で`repo_full_name`をキーに結合する
+- `GET /api/depscan/assets`で設定済みの資産コンテキストを一覧取得できる
+  （未設定のリポジトリは含まれない）
+- 優先度判断の理由を機械可読な形で返す機能（`priority_reasons`等）は、Issue #135
+  （Could、#131の実装後の拡張として位置づけ）に切り出し済みのため本Issueの
+  スコープ外とした
+
 ### DEPSCAN の解決済みレコードは保持期間超過で自動削除する（未解決は対象外）
 `app.depscan.crawler._delete_old_depscan_records` が、`resolved_at` が
 `DEPSCAN_RETENTION_DAYS`（デフォルト 180 日）より古いレコードのみを削除する
