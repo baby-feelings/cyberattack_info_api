@@ -110,7 +110,7 @@ Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
 | GET | `/api/osv/stats` | OSV統計 |
 | GET | `/api/jvn` | JVN 一覧 |
 | GET | `/api/jvn/stats` | JVN統計 |
-| GET | `/api/depscan` | DEPSCAN検知結果一覧（`reachability`到達可能性判定・`repo_visibility`・`asset_context`含む） |
+| GET | `/api/depscan` | DEPSCAN検知結果一覧（`reachability`到達可能性判定・`repo_visibility`・`asset_context`・`priority_reasons`含む） |
 | GET | `/api/depscan/stats` | DEPSCAN統計（リポジトリ別・重要度別） |
 | GET | `/api/depscan/assets` | リポジトリ資産コンテキスト一覧（Issue #131） |
 | GET | `/api/depsops` | DEPSOPS判定履歴（`is_security_update`・`compatibility_badge_url`含む） |

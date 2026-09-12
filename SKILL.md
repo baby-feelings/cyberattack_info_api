@@ -299,6 +299,11 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 `asset_context`（本番デプロイ済みか・インターネット公開か・重要度。未設定なら`null`。
 スキル11参照）も含まれる（Issue #131）。
 
+さらに `priority_reasons`（文字列配列。`kev_listed`/`epss_high`/`reachable`/
+`public_repo`/`internet_facing_asset`/`production_asset`/`high_importance_asset`の
+いずれか0件以上）も含まれ、なぜその検知結果の優先度が高いと判断されるかを
+機械可読な形で確認できる（Issue #135）。
+
 ---
 
 ### スキル 10: DEPSCAN 統計情報を取得する

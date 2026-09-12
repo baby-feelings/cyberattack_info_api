@@ -54,6 +54,10 @@ class DependencyFindingOut(OrmDatetimeModel):
     cvss_score: float | None = Field(None, description="CVSS スコア")
     summary: str = Field(description="脆弱性の概要")
     fixed_versions: list[str] = Field(default_factory=list, description="修正済みバージョン")
+    cve_ids: list[str] = Field(
+        default_factory=list,
+        description="OSVエントリのaliasesから抽出したCVE ID一覧（無ければ空配列）",
+    )
     manifest_path: str = Field(description="検知元のロックファイルパス")
     reachability: str | None = Field(
         None,
@@ -70,6 +74,18 @@ class DependencyFindingOut(OrmDatetimeModel):
         None,
         description="対象リポジトリの資産コンテキスト（本番デプロイ済みか・インターネット公開か・"
         "重要度。PUT /admin/depscan/assets/{owner}/{repo} で手動設定。未設定なら null）",
+    )
+    # OrmDatetimeModel.model_validate は宣言済みフィールドをORMオブジェクトから
+    # getattr(obj, name, None) で取得するため、DependencyFindingには存在しない
+    # このフィールドは常に None を経由する（型を list[str] | None にする必要がある
+    # 理由）。実際の値は list_depscan が model_copy で必ず上書きするため、
+    # クライアントに返る時点では常にリストになる
+    priority_reasons: list[str] | None = Field(
+        default=None,
+        description="優先度判定に寄与した要因の機械可読な一覧（Issue #135）。"
+        "kev_listed（CISA KEV掲載）/ epss_high（EPSSスコア高） / reachable（到達可能）/ "
+        "public_repo（公開リポジトリ）/ internet_facing_asset（インターネット公開資産）/ "
+        "production_asset（本番資産）/ high_importance_asset（重要度high）のいずれか0件以上",
     )
     detected_at: str = Field(description="初回検知日時（ISO 8601）")
     resolved_at: str | None = Field(None, description="解決日時（未解決なら null）")
