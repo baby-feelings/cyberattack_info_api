@@ -160,6 +160,13 @@ class TestRetryDelayCalculation:
         # 上限 (300秒) でキャップされること
         assert mock_sleep.call_args_list[0][0][0] == 300.0
 
+    def test_invalid_rate_limit_reset_falls_back_to_exponential_backoff(self):
+        headers = {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "not-a-number"}
+        request_func = MagicMock(side_effect=[_response(429, headers), _response(200)])
+        with patch("app.core.retry.time.sleep") as mock_sleep:
+            request_with_retry(request_func, max_attempts=3, base_delay=1.0)
+        mock_sleep.assert_called_once_with(1.0)
+
     def test_invalid_retry_after_falls_back_to_exponential_backoff(self):
         request_func = MagicMock(
             side_effect=[_response(503, {"Retry-After": "not-a-number"}), _response(200)],
