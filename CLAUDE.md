@@ -85,6 +85,12 @@ mypy app/ --ignore-missing-imports
 
 # 依存パッケージインストール（開発）
 pip install -r requirements-dev.txt
+
+# 本番依存ライブラリの脆弱性確認（PyPI Advisory Database。OSV-Scannerとは別の
+# 情報源によるクロスチェック。.github/workflows/pip-audit.ymlで週次・mainマージ時に自動実行）
+# Windowsでrequirements.txt内の日本語コメントがcp932でデコードされエラーになる場合は
+# PYTHONUTF8=1 を付与する（CI（Ubuntu）では発生しない）
+pip-audit -r requirements.txt --desc
 ```
 
 ---

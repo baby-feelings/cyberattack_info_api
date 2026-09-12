@@ -1,0 +1,33 @@
+name: pip-audit — Scheduled Scan
+
+# OSV-Scanner（osv-scanner-scheduled.yml）とは別の情報源（PyPI Advisory Database）
+# でのクロスチェックとして追加（Issue #63）。個々のPRをブロックしないよう、
+# osv-scanner-scheduled.ymlと同じトリガー（毎週月曜・mainマージ時）で実行する
+on:
+  schedule:
+    - cron: "30 12 * * 1"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  pip-audit:
+    name: pip-audit (requirements.txt)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pip-audit
+        run: pip install "pip-audit>=2.10.1"
+
+      # requirements.txt（本番依存のみ）を対象とする。開発・テスト依存
+      # （requirements-dev.txt）はデプロイ対象に含まれないため対象外
+      - name: Run pip-audit
+        run: pip-audit -r requirements.txt --desc
