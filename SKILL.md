@@ -474,7 +474,8 @@ https://grafana.168.138.213.240.nip.io/
 ```
 
 ダッシュボード名「サイバー攻撃情報API」に、クローラー実行結果（成否・経過時間・所要時間・
-新規/更新/削除件数）とホストリソース使用率のパネルがある。ログイン情報は管理者に確認する
+新規/更新/削除件数）・ホストリソース使用率・外部API呼び出しのリトライ発生回数
+（レート制限/一時的エラー別、Issue #130）のパネルがある。ログイン情報は管理者に確認する
 （`deploy/.env`の`GRAFANA_ADMIN_USER`/`GRAFANA_ADMIN_PASSWORD`）。
 
 Prometheus形式の生データが必要な場合は `GET /metrics`（`Authorization: Bearer

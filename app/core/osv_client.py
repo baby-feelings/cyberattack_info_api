@@ -9,6 +9,8 @@ from typing import Any
 
 import httpx
 
+from app.core.retry import request_with_retry
+
 # OSV REST API ベース URL
 OSV_API_BASE = "https://api.osv.dev/v1"
 
@@ -91,11 +93,9 @@ def query_packages_batch(
     ]
 
     with httpx.Client(timeout=60.0) as client:
-        resp = client.post(
-            f"{OSV_API_BASE}/querybatch",
-            json={"queries": queries},
+        resp = request_with_retry(
+            lambda: client.post(f"{OSV_API_BASE}/querybatch", json={"queries": queries}),
         )
-        resp.raise_for_status()
 
     data = resp.json()
     # 脆弱性を ID でユニーク化（複数パッケージが同じ CVE に影響する場合の重複除去）
@@ -139,11 +139,11 @@ def query_versions_batch(
                 {"version": version, "package": {"name": name, "ecosystem": eco}}
                 for eco, name, version in chunk
             ]
-            resp = client.post(
-                f"{OSV_API_BASE}/querybatch",
-                json={"queries": queries},
-            )
-            resp.raise_for_status()
+
+            def _post_batch(q: list[dict[str, Any]] = queries) -> httpx.Response:
+                return client.post(f"{OSV_API_BASE}/querybatch", json={"queries": q})
+
+            resp = request_with_retry(_post_batch)
             results = resp.json().get("results", [])
 
             for item, result in zip(chunk, results, strict=False):
@@ -157,6 +157,5 @@ def query_versions_batch(
 def fetch_vuln_by_id(osv_id: str) -> dict[str, Any]:
     """GET /v1/vulns/{id} で脆弱性の完全な情報（affected・severity 等）を取得する。"""
     with httpx.Client(timeout=30.0) as client:
-        resp = client.get(f"{OSV_API_BASE}/vulns/{osv_id}")
-        resp.raise_for_status()
+        resp = request_with_retry(lambda: client.get(f"{OSV_API_BASE}/vulns/{osv_id}"))
     return resp.json()

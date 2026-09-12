@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.crawler_runner import CrawlCounters, run_crawler
+from app.core.retry import request_with_retry
 from app.crawler_logs.writer import now_utc
 from app.kev.models import Vulnerability
 
@@ -38,8 +39,7 @@ def _fetch_cisa_kev() -> list[dict[str, Any]]:
     """
     logger.info("Fetching CISA KEV feed: %s", settings.CISA_KEV_URL)
     with httpx.Client(timeout=30.0) as client:
-        response = client.get(settings.CISA_KEV_URL)
-        response.raise_for_status()
+        response = request_with_retry(lambda: client.get(settings.CISA_KEV_URL))
 
     data = response.json()
     entries = data.get("vulnerabilities", [])
@@ -119,8 +119,11 @@ def _fetch_epss_scores(cve_ids: list[str]) -> dict[str, tuple[float, float]]:
     with httpx.Client(timeout=30.0) as client:
         for i in range(0, len(cve_ids), _EPSS_BATCH_SIZE):
             batch = cve_ids[i : i + _EPSS_BATCH_SIZE]
-            response = client.get(_EPSS_API_URL, params={"cve": ",".join(batch)})
-            response.raise_for_status()
+
+            def _get_epss_batch(b: list[str] = batch) -> httpx.Response:
+                return client.get(_EPSS_API_URL, params={"cve": ",".join(b)})
+
+            response = request_with_retry(_get_epss_batch)
             for item in response.json().get("data", []):
                 cve = item.get("cve")
                 if not cve:

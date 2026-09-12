@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.crawler_runner import CrawlCounters, run_crawler
+from app.core.retry import request_with_retry
 from app.crawler_logs.writer import now_utc
 from app.jvn.models import JvnVulnerability
 from app.jvn.parser import NS as _NS
@@ -51,8 +52,7 @@ def _fetch_page(cutoff_date: str, start_item: int) -> stdlib_ET.Element | None:
     }
     try:
         with httpx.Client(timeout=30.0) as client:
-            resp = client.get(_MYJVN_BASE_URL, params=params)
-            resp.raise_for_status()
+            resp = request_with_retry(lambda: client.get(_MYJVN_BASE_URL, params=params))
         return defused_ET.fromstring(resp.text)
     except (httpx.HTTPError, stdlib_ET.ParseError) as exc:
         logger.error("MyJVN API fetch failed (start=%d): %s", start_item, exc)

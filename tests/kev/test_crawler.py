@@ -95,6 +95,24 @@ def test_fetch_cisa_kev_http_error():
             _fetch_cisa_kev()
 
 
+def test_fetch_cisa_kev_retries_on_transient_error_then_succeeds():
+    """一時的なエラー（503）はリトライされ、最終的に成功すること（Issue #130）。"""
+    request = httpx.Request("GET", "https://example.com")
+    transient_response = httpx.Response(503, request=request)
+    success_response = MagicMock()
+    success_response.raise_for_status = MagicMock()
+    success_response.json.return_value = SAMPLE_KEV_RESPONSE
+
+    with patch("app.kev.crawler.httpx.Client") as mock_client_cls, \
+         patch("app.core.retry.time.sleep"):
+        mock_get = mock_client_cls.return_value.__enter__.return_value.get
+        mock_get.side_effect = [transient_response, success_response]
+        entries = _fetch_cisa_kev()
+
+    assert len(entries) == 2
+    assert mock_get.call_count == 2
+
+
 # ── _upsert_vulnerabilities テスト ──────────────────────────────
 
 

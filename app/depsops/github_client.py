@@ -10,6 +10,8 @@ from typing import Any
 
 import httpx
 
+from app.core.retry import request_with_retry
+
 logger = logging.getLogger(__name__)
 
 _GITHUB_API_BASE = "https://api.github.com"
@@ -31,11 +33,12 @@ def _headers(token: str) -> dict[str, str]:
 def list_open_dependabot_prs(owner: str, repo: str, token: str) -> list[dict[str, Any]]:
     """Open な Dependabot 作成 PR の一覧を取得する（number・title を含む）。"""
     with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
-        resp = client.get(
-            f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/pulls",
-            params={"state": "open", "per_page": _PER_PAGE},
+        resp = request_with_retry(
+            lambda: client.get(
+                f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/pulls",
+                params={"state": "open", "per_page": _PER_PAGE},
+            ),
         )
-        resp.raise_for_status()
     return [
         pr for pr in resp.json()
         if (pr.get("user") or {}).get("login") == _DEPENDABOT_LOGIN
@@ -45,19 +48,23 @@ def list_open_dependabot_prs(owner: str, repo: str, token: str) -> list[dict[str
 def get_pull_request(owner: str, repo: str, number: int, token: str) -> dict[str, Any]:
     """PR 詳細を取得する（`mergeable_state` 判定に使用）。"""
     with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
-        resp = client.get(f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/pulls/{number}")
-        resp.raise_for_status()
+        resp = request_with_retry(
+            lambda: client.get(f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/pulls/{number}"),
+        )
     return dict(resp.json())
 
 
 def merge_pull_request(owner: str, repo: str, number: int, token: str) -> dict[str, Any]:
     """PR をマージし、ブランチを削除する。"""
     with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
-        resp = client.put(
-            f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/pulls/{number}/merge",
-            json={"merge_method": "merge"},
+        # PUTでの状態遷移（マージ）は冪等（再試行してもマージ済みエラーが返るのみで
+        # 重複マージにはならない）ためリトライ対象とする
+        resp = request_with_retry(
+            lambda: client.put(
+                f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/pulls/{number}/merge",
+                json={"merge_method": "merge"},
+            ),
         )
-        resp.raise_for_status()
         merged = dict(resp.json())
         try:
             branch = get_pull_request(owner, repo, number, token)["head"]["ref"]
@@ -70,7 +77,11 @@ def merge_pull_request(owner: str, repo: str, number: int, token: str) -> dict[s
 
 
 def request_rebase(owner: str, repo: str, number: int, token: str) -> None:
-    """PR に `@dependabot rebase` コメントを投稿し、リベースを依頼する。"""
+    """PR に `@dependabot rebase` コメントを投稿し、リベースを依頼する。
+
+    新規リソース作成（POST）のためリトライしない（重複コメント投稿のリスクを
+    避けるため。app.depscan.github_client.create_issue と同じ方針）。
+    """
     with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
         resp = client.post(
             f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/issues/{number}/comments",
@@ -82,10 +93,18 @@ def request_rebase(owner: str, repo: str, number: int, token: str) -> None:
 def has_ci_workflows(owner: str, repo: str, token: str) -> bool:
     """`.github/workflows` 配下に何らかのワークフローファイルがあるか判定する。"""
     with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
-        resp = client.get(f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/contents/.github/workflows")
-    if resp.status_code == 404:
-        return False
-    resp.raise_for_status()
+        try:
+            resp = request_with_retry(
+                lambda: client.get(
+                    f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/contents/.github/workflows",
+                ),
+            )
+        except httpx.HTTPStatusError as exc:
+            # 404（workflowsディレクトリが無い）は正常系のため、リトライ対象外・
+            # エラーとせずFalseを返す
+            if exc.response.status_code == 404:
+                return False
+            raise
     data = resp.json()
     return isinstance(data, list) and len(data) > 0
 
@@ -99,9 +118,10 @@ def list_open_dependabot_alerts(owner: str, repo: str, token: str) -> list[dict[
     捕捉し、判定不能として扱うこと）。
     """
     with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
-        resp = client.get(
-            f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/dependabot/alerts",
-            params={"state": "open", "per_page": _PER_PAGE},
+        resp = request_with_retry(
+            lambda: client.get(
+                f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/dependabot/alerts",
+                params={"state": "open", "per_page": _PER_PAGE},
+            ),
         )
-        resp.raise_for_status()
     return list(resp.json())
