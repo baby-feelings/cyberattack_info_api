@@ -658,8 +658,12 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | `cvss_score` | float \| null | CVSS スコア |
 | `summary` | string | 脆弱性の概要 |
 | `fixed_versions` | string[] | 修正済みバージョン |
+| `cve_ids` | string[] | OSVエントリのaliasesから抽出したCVE ID一覧（無ければ空配列） |
 | `manifest_path` | string | 検知元のロックファイルパス（例: `dashboard/package-lock.json`） |
 | `reachability` | string \| null | 到達可能性のヒューリスティック判定（`reachable` / `unreachable` / `unknown`）。脆弱なパッケージがソースコード内で import/require/use されているかを判定（関数呼び出しレベルの解析は行わない best-effort） |
+| `repo_visibility` | string \| null | 対象リポジトリの公開範囲（`public` / `private`）。GitHub APIから自動取得（Issue #131） |
+| `asset_context` | object \| null | 資産コンテキスト（`is_production`・`is_internet_facing`・`importance`）。`PUT /admin/depscan/assets/{owner}/{repo}`で手動設定。未設定なら `null`（Issue #131） |
+| `priority_reasons` | string[] | 優先度判定に寄与した要因（`kev_listed` / `epss_high` / `reachable` / `public_repo` / `internet_facing_asset` / `production_asset` / `high_importance_asset`）。Issue #135 |
 | `detected_at` | string (ISO 8601) | 初回検知日時 |
 | `resolved_at` | string \| null (ISO 8601) | 解決日時（未解決なら `null`） |
 
