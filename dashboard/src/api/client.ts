@@ -244,6 +244,8 @@ export interface DependencyFindingOut {
   fixed_versions: string[]
   manifest_path: string
   reachability: 'reachable' | 'unreachable' | 'unknown' | null
+  // GitHub APIの"private"フィールドから自動取得（Issue #131）。旧レコードはnull
+  repo_visibility: 'public' | 'private' | null
   detected_at: string
   resolved_at: string | null
 }

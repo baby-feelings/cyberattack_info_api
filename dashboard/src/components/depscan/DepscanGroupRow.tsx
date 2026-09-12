@@ -23,6 +23,22 @@ function ReachabilityBadge({ reachability }: { reachability: string | null }) {
   )
 }
 
+// GitHub APIの"private"フィールドから自動取得した公開範囲（Issue #131）。
+// publicの方が露出リスクが高いため目立たせ、privateは控えめに、
+// 旧レコード（未取得でnull）は何も表示しない
+function RepoVisibilityBadge({ visibility }: { visibility: 'public' | 'private' | null }) {
+  if (visibility === null) return null
+  return visibility === 'public' ? (
+    <span className="inline-block px-1 py-0.5 rounded text-[9px] font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30 whitespace-nowrap">
+      Public
+    </span>
+  ) : (
+    <span className="inline-block px-1 py-0.5 rounded text-[9px] font-medium bg-slate-700/40 text-slate-500 border border-slate-600 whitespace-nowrap">
+      Private
+    </span>
+  )
+}
+
 export function DepscanGroupRow({ group }: { group: FindingGroup }) {
   const [open, setOpen] = useState(false)
   const bestSeverity = group.findings
@@ -50,16 +66,19 @@ export function DepscanGroupRow({ group }: { group: FindingGroup }) {
 
         {/* リポジトリ */}
         <td className="py-2.5 pr-3 w-52">
-          <a
-            href={`https://github.com/${group.repo_full_name}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-slate-300 hover:text-white text-xs transition-colors truncate max-w-[200px]"
-            onClick={e => e.stopPropagation()}
-          >
-            {group.repo_full_name}
-            <ExternalLink size={9} className="shrink-0" />
-          </a>
+          <div className="flex items-center gap-1.5">
+            <a
+              href={`https://github.com/${group.repo_full_name}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-slate-300 hover:text-white text-xs transition-colors truncate max-w-[160px]"
+              onClick={e => e.stopPropagation()}
+            >
+              {group.repo_full_name}
+              <ExternalLink size={9} className="shrink-0" />
+            </a>
+            <RepoVisibilityBadge visibility={group.findings[0].repo_visibility} />
+          </div>
           {groupIsResolved(group) && (
             <span className="inline-flex items-center gap-0.5 mt-0.5 text-[10px] text-emerald-500">
               <CheckCircle2 size={9} /> 解決済み

@@ -118,8 +118,8 @@ def run_depscan_for_user(username: str, token: str) -> None:
     try:
         _set_user_scan_status(db, username, "running", started_at=started_at)
 
-        dep_to_repos, repos_scanned = _collect_dependencies(username, token)
-        records = _build_findings(dep_to_repos)
+        dep_to_repos, repos_scanned, repo_visibility = _collect_dependencies(username, token)
+        records = _build_findings(dep_to_repos, repo_visibility)
         _upsert_findings(db, records)
 
         current_keys: set[FindingKey] = {

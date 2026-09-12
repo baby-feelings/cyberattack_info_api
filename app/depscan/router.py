@@ -16,18 +16,21 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.auth.session import decode_session_token
-from app.core.auth import require_api_key
+from app.core.auth import require_api_key, require_public_api_key
 from app.core.background import run_in_background
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.pagination import paginate
 from app.core.schemas import SeverityStat
 from app.depscan.crawler import fetch_and_scan_dependencies
-from app.depscan.models import DependencyFinding
+from app.depscan.models import DependencyFinding, RepoAssetContext
 from app.depscan.schemas import (
     DependencyFindingListResponse,
     DependencyFindingOut,
     DependencyFindingStatsResponse,
+    RepoAssetContextIn,
+    RepoAssetContextListResponse,
+    RepoAssetContextOut,
     RepoStat,
 )
 
@@ -139,12 +142,40 @@ def list_depscan(
         total, page, repo, owner, ecosystem, severity, resolved,
     )
 
+    asset_context_map = _fetch_asset_context_map(
+        db, {item.repo_full_name for item in items},
+    )
+
     return DependencyFindingListResponse(
         total=total,
         page=page,
         per_page=per_page,
-        data=[DependencyFindingOut.model_validate(item) for item in items],
+        data=[
+            DependencyFindingOut.model_validate(item).model_copy(
+                update={"asset_context": asset_context_map.get(item.repo_full_name)},
+            )
+            for item in items
+        ],
     )
+
+
+def _fetch_asset_context_map(
+    db: Session, repo_full_names: set[str],
+) -> dict[str, RepoAssetContextOut]:
+    """指定リポジトリ群の資産コンテキストをまとめて取得する（N+1クエリ回避）。
+
+    Issue #131: DependencyFindingOut.asset_context に埋め込むため、一覧取得の
+    たびにこのマップを1回のクエリで作り、Python側でrepo_full_nameをキーに
+    引き当てる（1件ずつ問い合わせない）。
+    """
+    if not repo_full_names:
+        return {}
+    rows = (
+        db.query(RepoAssetContext)
+        .filter(RepoAssetContext.repo_full_name.in_(repo_full_names))
+        .all()
+    )
+    return {row.repo_full_name: RepoAssetContextOut.model_validate(row) for row in rows}
 
 
 @router.get(
@@ -192,3 +223,55 @@ def get_depscan_stats(
 
     logger.info("get_depscan_stats: total=%d, repos=%d", total, len(repos))
     return DependencyFindingStatsResponse(total=total, repos=repos, severities=severities)
+
+
+@router.get(
+    "/assets",
+    response_model=RepoAssetContextListResponse,
+    dependencies=[Security(require_public_api_key)],
+    summary="リポジトリ資産コンテキスト一覧取得",
+    description="手動設定済みの資産コンテキスト（本番デプロイ済みか・インターネット公開か・"
+    "重要度）を全件返す（Issue #131）。設定されていないリポジトリは含まれない。",
+)
+def list_asset_contexts(
+    db: Annotated[Session, Depends(get_db)],
+) -> RepoAssetContextListResponse:
+    """設定済みの資産コンテキストを全件返す。"""
+    rows = db.query(RepoAssetContext).order_by(RepoAssetContext.repo_full_name).all()
+    return RepoAssetContextListResponse(
+        data=[RepoAssetContextOut.model_validate(row) for row in rows],
+    )
+
+
+@admin_router.put(
+    "/admin/depscan/assets/{owner}/{repo}",
+    response_model=RepoAssetContextOut,
+    dependencies=[Security(require_api_key)],
+    summary="リポジトリ資産コンテキストの設定",
+    description="本番デプロイ済みか・インターネット公開か・資産重要度を手動設定する"
+    "（Issue #131。X-API-KEY 必須）。既存設定があれば上書きする（Upsert）。",
+)
+def set_asset_context(
+    owner: str, repo: str, body: RepoAssetContextIn, db: Annotated[Session, Depends(get_db)],
+) -> RepoAssetContextOut:
+    """指定リポジトリの資産コンテキストを設定（Upsert）する。"""
+    repo_full_name = f"{owner}/{repo}"
+    existing = (
+        db.query(RepoAssetContext)
+        .filter(RepoAssetContext.repo_full_name == repo_full_name)
+        .first()
+    )
+    if existing is None:
+        existing = RepoAssetContext(repo_full_name=repo_full_name)
+        db.add(existing)
+    existing.is_production = body.is_production
+    existing.is_internet_facing = body.is_internet_facing
+    existing.importance = body.importance
+    db.commit()
+    db.refresh(existing)
+
+    logger.info(
+        "set_asset_context: repo=%s, is_production=%s, is_internet_facing=%s, importance=%r",
+        repo_full_name, body.is_production, body.is_internet_facing, body.importance,
+    )
+    return RepoAssetContextOut.model_validate(existing)

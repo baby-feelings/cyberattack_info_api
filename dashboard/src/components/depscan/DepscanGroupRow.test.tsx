@@ -19,6 +19,7 @@ function makeFinding(overrides: Partial<DependencyFindingOut> = {}): DependencyF
     detected_at: '2026-06-01T00:00:00Z',
     resolved_at: null,
     reachability: null,
+    repo_visibility: null,
     ...overrides,
   }
 }
@@ -114,6 +115,25 @@ describe('DepscanGroupRow', () => {
     const group = makeGroup([makeFinding({ reachability: null })])
     renderRow(group)
     expect(screen.getByText('不明')).toBeInTheDocument()
+  })
+
+  it('shows a Public badge when repo_visibility is public', () => {
+    const group = makeGroup([makeFinding({ repo_visibility: 'public' })])
+    renderRow(group)
+    expect(screen.getByText('Public')).toBeInTheDocument()
+  })
+
+  it('shows a Private badge when repo_visibility is private', () => {
+    const group = makeGroup([makeFinding({ repo_visibility: 'private' })])
+    renderRow(group)
+    expect(screen.getByText('Private')).toBeInTheDocument()
+  })
+
+  it('shows no visibility badge when repo_visibility is null', () => {
+    const group = makeGroup([makeFinding({ repo_visibility: null })])
+    renderRow(group)
+    expect(screen.queryByText('Public')).not.toBeInTheDocument()
+    expect(screen.queryByText('Private')).not.toBeInTheDocument()
   })
 
   it('does not toggle the row when clicking the repo link itself', () => {

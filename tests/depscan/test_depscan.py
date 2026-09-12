@@ -191,6 +191,36 @@ class TestListDepscan:
         )
         assert res.status_code == 403
 
+    def test_returns_repo_visibility(self, client, db_session):
+        """Issue #131: repo_visibilityフィールドがそのまま返ること。"""
+        _make_finding(db_session, repo_visibility="private")
+        res = client.get("/api/depscan", headers=HEADERS)
+        assert res.json()["data"][0]["repo_visibility"] == "private"
+
+    def test_asset_context_null_when_not_configured(self, client, db_session):
+        """Issue #131: 資産コンテキスト未設定のリポジトリはnullを返すこと。"""
+        _make_finding(db_session)
+        res = client.get("/api/depscan", headers=HEADERS)
+        assert res.json()["data"][0]["asset_context"] is None
+
+    def test_asset_context_attached_when_configured(self, client, db_session):
+        """Issue #131: 設定済みの資産コンテキストが検知結果に埋め込まれること。"""
+        from app.depscan.models import RepoAssetContext
+
+        _make_finding(db_session, repo_full_name="baby-feelings/prod-app", osv_id="GHSA-ctx")
+        db_session.add(RepoAssetContext(
+            repo_full_name="baby-feelings/prod-app",
+            is_production=True,
+            is_internet_facing=True,
+            importance="high",
+        ))
+        db_session.commit()
+
+        res = client.get("/api/depscan", headers=HEADERS)
+        ctx = res.json()["data"][0]["asset_context"]
+        assert ctx["is_production"] is True
+        assert ctx["is_internet_facing"] is True
+        assert ctx["importance"] == "high"
 
 
 class TestDepscanStats:
@@ -242,6 +272,113 @@ class TestAdminDepscanCrawl:
     def test_requires_auth(self, client):
         res = client.post("/admin/depscan-crawl")
         assert res.status_code == 403
+
+
+# ──────────────────────────────────────────────────────────────
+# GET /api/depscan/assets, PUT /admin/depscan/assets/{owner}/{repo}
+# （Issue #131: リポジトリ資産コンテキスト）
+# ──────────────────────────────────────────────────────────────
+
+
+class TestListAssetContexts:
+    def test_requires_auth(self, client):
+        res = client.get("/api/depscan/assets")
+        assert res.status_code == 403
+
+    def test_empty(self, client):
+        res = client.get("/api/depscan/assets", headers=HEADERS)
+        assert res.status_code == 200
+        assert res.json()["data"] == []
+
+    def test_returns_configured_contexts(self, client, db_session):
+        from app.depscan.models import RepoAssetContext
+
+        db_session.add(RepoAssetContext(
+            repo_full_name="baby-feelings/prod-app",
+            is_production=True,
+            is_internet_facing=True,
+            importance="high",
+        ))
+        db_session.commit()
+
+        res = client.get("/api/depscan/assets", headers=HEADERS)
+        data = res.json()["data"]
+        assert len(data) == 1
+        assert data[0]["repo_full_name"] == "baby-feelings/prod-app"
+        assert data[0]["is_production"] is True
+        assert data[0]["importance"] == "high"
+
+
+class TestSetAssetContext:
+    def test_requires_auth(self, client):
+        res = client.put(
+            "/admin/depscan/assets/baby-feelings/prod-app",
+            json={"is_production": True, "is_internet_facing": True, "importance": "high"},
+        )
+        assert res.status_code == 403
+
+    def test_creates_new_context(self, client, db_session):
+        res = client.put(
+            "/admin/depscan/assets/baby-feelings/prod-app",
+            headers=HEADERS,
+            json={"is_production": True, "is_internet_facing": False, "importance": "medium"},
+        )
+        assert res.status_code == 200
+        body = res.json()
+        assert body["repo_full_name"] == "baby-feelings/prod-app"
+        assert body["is_production"] is True
+        assert body["is_internet_facing"] is False
+        assert body["importance"] == "medium"
+
+        from app.depscan.models import RepoAssetContext
+        row = db_session.query(RepoAssetContext).filter_by(
+            repo_full_name="baby-feelings/prod-app",
+        ).first()
+        assert row is not None
+        assert row.importance == "medium"
+
+    def test_upserts_existing_context(self, client, db_session):
+        from app.depscan.models import RepoAssetContext
+
+        db_session.add(RepoAssetContext(
+            repo_full_name="baby-feelings/prod-app",
+            is_production=False,
+            is_internet_facing=False,
+            importance=None,
+        ))
+        db_session.commit()
+
+        res = client.put(
+            "/admin/depscan/assets/baby-feelings/prod-app",
+            headers=HEADERS,
+            json={"is_production": True, "is_internet_facing": True, "importance": "high"},
+        )
+        assert res.status_code == 200
+
+        rows = db_session.query(RepoAssetContext).filter_by(
+            repo_full_name="baby-feelings/prod-app",
+        ).all()
+        assert len(rows) == 1  # 新規行が増えず上書きされること
+        assert rows[0].is_production is True
+        assert rows[0].importance == "high"
+
+    def test_rejects_invalid_importance(self, client):
+        res = client.put(
+            "/admin/depscan/assets/baby-feelings/prod-app",
+            headers=HEADERS,
+            json={"is_production": True, "is_internet_facing": True, "importance": "critical"},
+        )
+        assert res.status_code == 422
+
+    def test_defaults_when_fields_omitted(self, client):
+        res = client.put(
+            "/admin/depscan/assets/baby-feelings/prod-app", headers=HEADERS, json={},
+        )
+        assert res.status_code == 200
+        body = res.json()
+        assert body["is_production"] is False
+        assert body["is_internet_facing"] is False
+        assert body["importance"] is None
 
 
 # ──────────────────────────────────────────────────────────────
@@ -455,10 +592,11 @@ class TestCollectDependencies:
         with patch("app.depscan.crawler.list_target_repos", return_value=repos), \
              patch("app.depscan.crawler._discover_manifests", return_value=["requirements.txt"]), \
              patch("app.depscan.crawler.get_file_content", return_value="fastapi==0.115.6\n"):
-            dep_to_repos, repos_scanned = _collect_dependencies("u", "token")
+            dep_to_repos, repos_scanned, repo_visibility = _collect_dependencies("u", "token")
 
         assert repos_scanned == 1
         assert dep_to_repos[("PyPI", "fastapi", "0.115.6")] == [("u/repo1", "requirements.txt")]
+        assert repo_visibility == {"u/repo1": "public"}
 
     def test_fetch_failure_skips_file(self):
         repos = [{"full_name": "u/repo1", "default_branch": "main"}]
@@ -470,9 +608,20 @@ class TestCollectDependencies:
                      "404", request=MagicMock(), response=MagicMock()
                  ),
              ):
-            dep_to_repos, repos_scanned = _collect_dependencies("u", "token")
+            dep_to_repos, repos_scanned, repo_visibility = _collect_dependencies("u", "token")
         assert dep_to_repos == {}
         assert repos_scanned == 1
+
+    def test_repo_visibility_derived_from_private_field(self):
+        """Issue #131: GitHub APIの"private"フィールドからrepo_visibilityを導出すること。"""
+        repos = [
+            {"full_name": "u/public-repo", "default_branch": "main", "private": False},
+            {"full_name": "u/private-repo", "default_branch": "main", "private": True},
+        ]
+        with patch("app.depscan.crawler.list_target_repos", return_value=repos), \
+             patch("app.depscan.crawler._discover_manifests", return_value=[]):
+            _, _, repo_visibility = _collect_dependencies("u", "token")
+        assert repo_visibility == {"u/public-repo": "public", "u/private-repo": "private"}
 
 
 class TestBuildFindings:
@@ -524,6 +673,28 @@ class TestBuildFindings:
         ), patch("app.depscan.crawler.fetch_vuln_by_id", return_value=vuln):
             records = _build_findings(dep_to_repos)
         assert records[0]["reachability"] == "unknown"
+
+    def test_sets_repo_visibility_from_map(self):
+        """Issue #131: repo_visibilityマップの値がレコードに反映されること。"""
+        dep_to_repos = {("PyPI", "cryptography", "3.4.7"): [("u/repo1", "requirements.txt")]}
+        vuln = {"id": "GHSA-x", "summary": "vuln", "affected": []}
+        with patch(
+            "app.depscan.crawler.query_versions_batch",
+            return_value={("PyPI", "cryptography", "3.4.7"): ["GHSA-x"]},
+        ), patch("app.depscan.crawler.fetch_vuln_by_id", return_value=vuln):
+            records = _build_findings(dep_to_repos, {"u/repo1": "private"})
+        assert records[0]["repo_visibility"] == "private"
+
+    def test_repo_visibility_none_when_map_missing_entry(self):
+        """repo_visibilityマップが渡されない/該当リポジトリが無い場合はNoneのまま。"""
+        dep_to_repos = {("PyPI", "cryptography", "3.4.7"): [("u/repo1", "requirements.txt")]}
+        vuln = {"id": "GHSA-x", "summary": "vuln", "affected": []}
+        with patch(
+            "app.depscan.crawler.query_versions_batch",
+            return_value={("PyPI", "cryptography", "3.4.7"): ["GHSA-x"]},
+        ), patch("app.depscan.crawler.fetch_vuln_by_id", return_value=vuln):
+            records = _build_findings(dep_to_repos)
+        assert records[0]["repo_visibility"] is None
 
 
 class TestApplyReachability:
@@ -726,7 +897,9 @@ class TestFetchAndScanDependencies:
     def test_success_path(self, db_session):
         with patch(
             "app.depscan.crawler._collect_dependencies",
-            return_value=({("PyPI", "pkg", "1.0.0"): [("u/r", "requirements.txt")]}, 1),
+            return_value=(
+                {("PyPI", "pkg", "1.0.0"): [("u/r", "requirements.txt")]}, 1, {"u/r": "public"},
+            ),
         ), patch(
             "app.depscan.crawler._build_findings",
             return_value=[{
@@ -750,7 +923,7 @@ class TestFetchAndScanDependencies:
     def test_delete_failure_does_not_fail_crawler(self, db_session):
         """_delete_old_depscan_records が失敗してもクローラー全体はエラーにならないこと。"""
         with patch(
-            "app.depscan.crawler._collect_dependencies", return_value=({}, 0),
+            "app.depscan.crawler._collect_dependencies", return_value=({}, 0, {}),
         ), patch(
             "app.depscan.crawler._build_findings", return_value=[],
         ), patch("app.depscan.crawler.SessionLocal", return_value=db_session), \
@@ -1014,7 +1187,11 @@ class TestRunDepscanForUser:
     def test_success_path_records_done_status(self, db_session):
         with patch(
             "app.depscan.user_scan._collect_dependencies",
-            return_value=({("PyPI", "pkg", "1.0.0"): [("octocat/repo", "requirements.txt")]}, 1),
+            return_value=(
+                {("PyPI", "pkg", "1.0.0"): [("octocat/repo", "requirements.txt")]},
+                1,
+                {"octocat/repo": "public"},
+            ),
         ), patch(
             "app.depscan.user_scan._build_findings",
             return_value=[{
@@ -1040,7 +1217,7 @@ class TestRunDepscanForUser:
         _make_finding(db_session, repo_full_name="baby-feelings/baby_grow", osv_id="GHSA-untouched")
 
         with patch(
-            "app.depscan.user_scan._collect_dependencies", return_value=({}, 0),
+            "app.depscan.user_scan._collect_dependencies", return_value=({}, 0, {}),
         ), patch(
             "app.depscan.user_scan._build_findings", return_value=[],
         ), patch("app.depscan.user_scan.SessionLocal", return_value=db_session):
@@ -1062,7 +1239,7 @@ class TestRunDepscanForUser:
 
     def test_second_run_updates_existing_status_row(self, db_session):
         with patch(
-            "app.depscan.user_scan._collect_dependencies", return_value=({}, 0),
+            "app.depscan.user_scan._collect_dependencies", return_value=({}, 0, {}),
         ), patch(
             "app.depscan.user_scan._build_findings", return_value=[],
         ), patch("app.depscan.user_scan.SessionLocal", return_value=db_session):
