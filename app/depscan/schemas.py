@@ -58,6 +58,14 @@ class DependencyFindingOut(OrmDatetimeModel):
         default_factory=list,
         description="OSVエントリのaliasesから抽出したCVE ID一覧（無ければ空配列）",
     )
+    # cve_ids/priority_reasons と同様、DependencyFindingには存在しない計算フィールド
+    # （list_depscan が model_copy で必ず上書きする）。Issue #133: 他のSBOM/SCA
+    # ツールとの相互運用性のため、パッケージ識別にpurl（Package URL）を使う
+    purl: str | None = Field(
+        default=None,
+        description="パッケージURL（例: pkg:pypi/cryptography@3.4.7）。"
+        "app.depscan.sbom.build_purlによるbest-effort生成",
+    )
     manifest_path: str = Field(description="検知元のロックファイルパス")
     reachability: str | None = Field(
         None,

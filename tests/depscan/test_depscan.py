@@ -544,6 +544,127 @@ class TestListDepscanPriorityReasons:
         }
 
 
+class TestListDepscanPurl:
+    """GET /api/depscan の purl フィールド（Issue #133、統合テスト）。"""
+
+    def test_includes_purl(self, client, db_session):
+        _make_finding(db_session, ecosystem="PyPI", package_name="cryptography",
+                       installed_version="3.4.7")
+        res = client.get("/api/depscan", headers=HEADERS)
+        assert res.json()["data"][0]["purl"] == "pkg:pypi/cryptography@3.4.7"
+
+
+# ──────────────────────────────────────────────────────────────
+# GET /api/depscan/export（SBOMエクスポート、Issue #133）
+# ──────────────────────────────────────────────────────────────
+
+
+class TestExportDepscanSbom:
+    def test_requires_auth(self, client):
+        res = client.get("/api/depscan/export?repo=baby-feelings/baby_grow")
+        assert res.status_code == 403
+
+    def test_requires_repo_param(self, client):
+        res = client.get("/api/depscan/export", headers=HEADERS)
+        assert res.status_code == 422
+
+    def test_cyclonedx_export(self, client, db_session):
+        _make_finding(db_session)
+        res = client.get(
+            "/api/depscan/export?repo=baby-feelings/baby_grow&format=cyclonedx",
+            headers=HEADERS,
+        )
+        assert res.status_code == 200
+        assert res.headers["content-type"] == "application/vnd.cyclonedx+json"
+        body = res.json()
+        assert body["bomFormat"] == "CycloneDX"
+        assert len(body["components"]) == 1
+
+    def test_spdx_export(self, client, db_session):
+        _make_finding(db_session)
+        res = client.get(
+            "/api/depscan/export?repo=baby-feelings/baby_grow&format=spdx",
+            headers=HEADERS,
+        )
+        assert res.status_code == 200
+        assert res.headers["content-type"] == "application/spdx+json"
+        body = res.json()
+        assert body["spdxVersion"] == "SPDX-2.3"
+        assert len(body["packages"]) == 1
+
+    def test_defaults_to_cyclonedx_when_format_omitted(self, client, db_session):
+        _make_finding(db_session)
+        res = client.get(
+            "/api/depscan/export?repo=baby-feelings/baby_grow", headers=HEADERS,
+        )
+        assert res.json()["bomFormat"] == "CycloneDX"
+
+    def test_rejects_unknown_format(self, client):
+        res = client.get(
+            "/api/depscan/export?repo=baby-feelings/baby_grow&format=xml", headers=HEADERS,
+        )
+        assert res.status_code == 422
+
+    def test_only_includes_matching_repo(self, client, db_session):
+        _make_finding(db_session, repo_full_name="baby-feelings/repo-a", osv_id="GHSA-a")
+        _make_finding(db_session, repo_full_name="baby-feelings/repo-b", osv_id="GHSA-b")
+        res = client.get(
+            "/api/depscan/export?repo=baby-feelings/repo-a", headers=HEADERS,
+        )
+        body = res.json()
+        assert len(body["vulnerabilities"]) == 1
+        assert body["vulnerabilities"][0]["id"] == "GHSA-a"
+
+    def test_filters_by_resolved(self, client, db_session):
+        _make_finding(db_session, osv_id="GHSA-open", resolved_at=None)
+        _make_finding(db_session, osv_id="GHSA-resolved", resolved_at=_NOW)
+        res = client.get(
+            "/api/depscan/export?repo=baby-feelings/baby_grow&resolved=false",
+            headers=HEADERS,
+        )
+        body = res.json()
+        assert len(body["vulnerabilities"]) == 1
+        assert body["vulnerabilities"][0]["id"] == "GHSA-open"
+
+    def test_filters_by_resolved_true(self, client, db_session):
+        _make_finding(db_session, osv_id="GHSA-open", resolved_at=None)
+        _make_finding(db_session, osv_id="GHSA-resolved", resolved_at=_NOW)
+        res = client.get(
+            "/api/depscan/export?repo=baby-feelings/baby_grow&resolved=true",
+            headers=HEADERS,
+        )
+        body = res.json()
+        assert len(body["vulnerabilities"]) == 1
+        assert body["vulnerabilities"][0]["id"] == "GHSA-resolved"
+
+    def test_empty_repo_produces_empty_sbom(self, client):
+        res = client.get(
+            "/api/depscan/export?repo=baby-feelings/no-findings", headers=HEADERS,
+        )
+        assert res.status_code == 200
+        assert res.json()["components"] == []
+
+    def test_session_token_forces_owner_scope(self, client, db_session):
+        _make_finding(db_session, repo_full_name="octocat/repo-a", osv_id="GHSA-mine")
+        with patch("app.depscan.router.settings.SESSION_SECRET_KEY", "test-secret"):
+            token = create_session_token("octocat")
+            res = client.get(
+                "/api/depscan/export?repo=octocat/repo-a",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        assert res.status_code == 200
+
+    def test_session_token_rejects_other_owners_repo(self, client, db_session):
+        _make_finding(db_session, repo_full_name="baby-feelings/baby_grow")
+        with patch("app.depscan.router.settings.SESSION_SECRET_KEY", "test-secret"):
+            token = create_session_token("octocat")
+            res = client.get(
+                "/api/depscan/export?repo=baby-feelings/baby_grow",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        assert res.status_code == 403
+
+
 # ──────────────────────────────────────────────────────────────
 # app.depscan.github_client
 # ──────────────────────────────────────────────────────────────

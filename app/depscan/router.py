@@ -7,10 +7,11 @@ GET /api/depscan/stats  – リポジトリ別・重要度別の統計情報（�
 （GitHub ログイン経由。本人所有リポジトリのみに強制的に絞り込む）のいずれかを受け付ける。
 """
 import hmac
+import json
 import logging
-from typing import Annotated
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Security, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, Security, status
 from fastapi.security import APIKeyHeader
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -24,6 +25,7 @@ from app.core.pagination import paginate
 from app.core.schemas import SeverityStat
 from app.depscan.crawler import fetch_and_scan_dependencies
 from app.depscan.models import DependencyFinding, RepoAssetContext
+from app.depscan.sbom import build_cyclonedx_sbom, build_purl, build_spdx_sbom
 from app.depscan.schemas import (
     DependencyFindingListResponse,
     DependencyFindingOut,
@@ -159,6 +161,7 @@ def list_depscan(
         data.append(DependencyFindingOut.model_validate(item).model_copy(update={
             "asset_context": asset_context,
             "priority_reasons": _compute_priority_reasons(item, asset_context, kev_map),
+            "purl": build_purl(item.ecosystem, item.package_name, item.installed_version),
         }))
 
     return DependencyFindingListResponse(total=total, page=page, per_page=per_page, data=data)
@@ -333,3 +336,52 @@ def set_asset_context(
         repo_full_name, body.is_production, body.is_internet_facing, body.importance,
     )
     return RepoAssetContextOut.model_validate(existing)
+
+
+# SBOM形式ごとのメディアタイプ（各ツールがContent-Typeで形式を判別できるように、
+# 標準JSONではなくSBOM専用のメディアタイプを明示する）
+_SBOM_MEDIA_TYPES = {
+    "cyclonedx": "application/vnd.cyclonedx+json",
+    "spdx": "application/spdx+json",
+}
+
+
+@router.get(
+    "/export",
+    summary="DEPSCAN検知結果をSBOM形式でエクスポート",
+    description="指定リポジトリの検知結果をCycloneDX 1.5またはSPDX 2.3形式でエクスポートする"
+    "（Issue #133）。パッケージ識別にはpurl（Package URL）を使用する。SPDXはコア仕様に"
+    "脆弱性を表現する概念が無いためパッケージ一覧のみを返す（脆弱性はCycloneDX形式か"
+    "GET /api/depscan で確認する）。",
+)
+def export_depscan_sbom(
+    db: Annotated[Session, Depends(get_db)],
+    forced_owner: Annotated[str | None, Depends(_resolve_access)],
+    repo: str = Query(..., description="対象リポジトリ（例: owner/repo）"),
+    format: Literal["cyclonedx", "spdx"] = Query("cyclonedx", description="出力形式"),
+    resolved: bool | None = Query(None, description="解決状態で絞り込み（未指定なら全件）"),
+) -> Response:
+    """指定リポジトリのDEPSCAN検知結果をSBOM形式でエクスポートする。"""
+    if forced_owner is not None and not repo.startswith(f"{forced_owner}/"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only export repositories you own.",
+        )
+
+    query = db.query(DependencyFinding).filter(DependencyFinding.repo_full_name == repo)
+    if resolved is not None:
+        if resolved:
+            query = query.filter(DependencyFinding.resolved_at.is_not(None))
+        else:
+            query = query.filter(DependencyFinding.resolved_at.is_(None))
+    findings = query.all()
+
+    sbom = build_spdx_sbom(repo, findings) if format == "spdx" else build_cyclonedx_sbom(
+        repo, findings,
+    )
+
+    logger.info(
+        "export_depscan_sbom: repo=%s, format=%s, resolved=%r, findings=%d",
+        repo, format, resolved, len(findings),
+    )
+    return Response(content=json.dumps(sbom), media_type=_SBOM_MEDIA_TYPES[format])
