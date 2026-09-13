@@ -189,6 +189,80 @@ def _upsert_osv_records(
     return inserted, updated
 
 
+def _process_ecosystem(
+    db: Session,
+    counters: CrawlCounters,
+    ecosystem: str,
+    packages: list[str],
+    cutoff: datetime,
+) -> None:
+    """1エコシステム分の OSV 取得・DB Upsert を行う（fetch_and_store_osv から呼ばれる）。
+
+    Step 1: パッケージを BATCH_SIZE ずつ分割して {id, modified} を一括取得
+    Step 2: cutoff 以降に更新されたものに絞り込む
+    Step 3: 直近のものだけ GET /v1/vulns/{id} で完全情報を取得してレコード構築・Upsert
+
+    HTTPError・予期しない例外はこのエコシステム単位で握りつぶし、他エコシステムの
+    処理を継続させる（呼び出し元 fetch_and_store_osv の既存挙動を維持）。
+    """
+    try:
+        pkg_tuples = [(pkg, ecosystem) for pkg in packages]
+        raw_refs: list[dict[str, Any]] = []
+        for i in range(0, len(pkg_tuples), BATCH_SIZE):
+            chunk = pkg_tuples[i: i + BATCH_SIZE]
+            raw_refs.extend(query_packages_batch(chunk))
+
+        # 複数バッチにまたがる重複 ID を除去
+        seen_ids: set[str] = set()
+        refs: list[dict[str, Any]] = []
+        for ref in raw_refs:
+            if ref["id"] not in seen_ids:
+                seen_ids.add(ref["id"])
+                refs.append(ref)
+
+        # cutoff 以降に更新されたものに絞り込む
+        recent_refs = []
+        for ref in refs:
+            try:
+                modified = datetime.fromisoformat(
+                    ref["modified"].replace("Z", "+00:00")
+                )
+                if modified >= cutoff:
+                    recent_refs.append((ref["id"], modified))
+            except (ValueError, AttributeError, KeyError):
+                continue
+
+        logger.info(
+            "OSV API [%s]: %d total vulns, %d recent (>= %s)",
+            ecosystem, len(refs), len(recent_refs), cutoff.date(),
+        )
+
+        # 直近のものだけ GET /v1/vulns/{id} で完全情報を取得してレコード構築
+        records: list[dict[str, Any]] = []
+        for osv_id, modified in recent_refs:
+            try:
+                vuln = fetch_vuln_by_id(osv_id)
+                records.extend(_build_records(vuln, modified))
+            except httpx.HTTPError as exc:
+                logger.warning("Failed to fetch %s: %s", osv_id, exc)
+
+        ins, upd = _upsert_osv_records(db, records)
+        counters.inserted += ins
+        counters.updated += upd
+        logger.info(
+            "OSV [%s] done: recent=%d records=%d inserted=%d updated=%d",
+            ecosystem, len(recent_refs), len(records), ins, upd,
+        )
+
+    except httpx.HTTPError as exc:
+        logger.error("HTTP error for ecosystem %s: %s", ecosystem, exc)
+    except Exception as exc:
+        logger.error(
+            "Unexpected error for ecosystem %s: %s",
+            ecosystem, exc, exc_info=True,
+        )
+
+
 def fetch_and_store_osv(days: int | None = None) -> tuple[int, int, int]:
     """OSV クローラーのメインエントリポイント。
 
@@ -209,65 +283,9 @@ def fetch_and_store_osv(days: int | None = None) -> tuple[int, int, int]:
 
     def _body(db: Session, counters: CrawlCounters) -> None:
         for ecosystem, packages in POPULAR_PACKAGES.items():
-            try:
-                # Step 1: パッケージを BATCH_SIZE ずつ分割して {id, modified} を一括取得
-                pkg_tuples = [(pkg, ecosystem) for pkg in packages]
-                raw_refs: list[dict[str, Any]] = []
-                for i in range(0, len(pkg_tuples), BATCH_SIZE):
-                    chunk = pkg_tuples[i: i + BATCH_SIZE]
-                    raw_refs.extend(query_packages_batch(chunk))
+            _process_ecosystem(db, counters, ecosystem, packages, cutoff)
 
-                # 複数バッチにまたがる重複 ID を除去
-                seen_ids: set[str] = set()
-                refs: list[dict[str, Any]] = []
-                for ref in raw_refs:
-                    if ref["id"] not in seen_ids:
-                        seen_ids.add(ref["id"])
-                        refs.append(ref)
-
-                # Step 2: cutoff 以降に更新されたものに絞り込む
-                recent_refs = []
-                for ref in refs:
-                    try:
-                        modified = datetime.fromisoformat(
-                            ref["modified"].replace("Z", "+00:00")
-                        )
-                        if modified >= cutoff:
-                            recent_refs.append((ref["id"], modified))
-                    except (ValueError, AttributeError, KeyError):
-                        continue
-
-                logger.info(
-                    "OSV API [%s]: %d total vulns, %d recent (>= %s)",
-                    ecosystem, len(refs), len(recent_refs), cutoff.date(),
-                )
-
-                # Step 3: 直近のものだけ GET /v1/vulns/{id} で完全情報を取得してレコード構築
-                records: list[dict[str, Any]] = []
-                for osv_id, modified in recent_refs:
-                    try:
-                        vuln = fetch_vuln_by_id(osv_id)
-                        records.extend(_build_records(vuln, modified))
-                    except httpx.HTTPError as exc:
-                        logger.warning("Failed to fetch %s: %s", osv_id, exc)
-
-                ins, upd = _upsert_osv_records(db, records)
-                counters.inserted += ins
-                counters.updated += upd
-                logger.info(
-                    "OSV [%s] done: recent=%d records=%d inserted=%d updated=%d",
-                    ecosystem, len(recent_refs), len(records), ins, upd,
-                )
-
-            except httpx.HTTPError as exc:
-                logger.error("HTTP error for ecosystem %s: %s", ecosystem, exc)
-            except Exception as exc:
-                logger.error(
-                    "Unexpected error for ecosystem %s: %s",
-                    ecosystem, exc, exc_info=True,
-                )
-
-        # Step 4: 保持期間を超えた古いレコードを削除（DB 容量管理）
+        # 保持期間を超えた古いレコードを削除（DB 容量管理）
         try:
             counters.deleted = _delete_old_osv_records(db)
         except Exception as exc:
