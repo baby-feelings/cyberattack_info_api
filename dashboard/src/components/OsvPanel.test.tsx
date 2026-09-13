@@ -84,6 +84,10 @@ describe('OsvPanel', () => {
     await user.click(screen.getByText('PyPI'))
     await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2))
     expect(mockedList).toHaveBeenLastCalledWith(expect.objectContaining({ ecosystem: 'PyPI' }))
+
+    await user.click(screen.getAllByText('ALL')[0])
+    await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(3))
+    expect(mockedList).toHaveBeenLastCalledWith(expect.objectContaining({ ecosystem: null }))
   })
 
   it('requests the selected severity when a severity filter is clicked', async () => {
@@ -97,6 +101,11 @@ describe('OsvPanel', () => {
     await user.click(screen.getByText('CRITICAL'))
     await waitFor(() => expect(mockedList).toHaveBeenLastCalledWith(
       expect.objectContaining({ severity: 'CRITICAL' }),
+    ))
+
+    await user.click(screen.getAllByText('ALL')[1])
+    await waitFor(() => expect(mockedList).toHaveBeenLastCalledWith(
+      expect.objectContaining({ severity: null }),
     ))
   })
 
