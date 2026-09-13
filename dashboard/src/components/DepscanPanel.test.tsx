@@ -65,6 +65,15 @@ describe('DepscanPanel', () => {
     vi.resetAllMocks()
   })
 
+  it('does not crash when fetching the latest crawl log id fails', async () => {
+    mockedFindings.mockResolvedValue([])
+    mockedStats.mockResolvedValue(EMPTY_STATS)
+    mockedLogs.mockRejectedValue(new Error('network error'))
+
+    render(<DepscanPanel />)
+    await waitFor(() => expect(screen.getByText('該当する依存ライブラリ脆弱性はありません')).toBeInTheDocument())
+  })
+
   it('shows the empty state when there are no findings', async () => {
     mockedFindings.mockResolvedValue([])
     mockedStats.mockResolvedValue(EMPTY_STATS)
@@ -73,7 +82,7 @@ describe('DepscanPanel', () => {
     await waitFor(() => expect(screen.getByText('該当する依存ライブラリ脆弱性はありません')).toBeInTheDocument())
   })
 
-  it('opens the Dependabot ops modal when its button is clicked', async () => {
+  it('opens the Dependabot ops modal when its button is clicked, and closes it', async () => {
     mockedFindings.mockResolvedValue([])
     mockedStats.mockResolvedValue(EMPTY_STATS)
 
@@ -84,6 +93,22 @@ describe('DepscanPanel', () => {
     await waitFor(() => {
       expect(screen.getByText('Dependabot 運用状況（DEPSOPS）')).toBeInTheDocument()
     })
+
+    await userEvent.click(screen.getByLabelText('閉じる'))
+    await waitFor(() => {
+      expect(screen.queryByText('Dependabot 運用状況（DEPSOPS）')).not.toBeInTheDocument()
+    })
+  })
+
+  it('reloads the data when the manual refresh button is clicked', async () => {
+    mockedFindings.mockResolvedValue([])
+    mockedStats.mockResolvedValue(EMPTY_STATS)
+
+    render(<DepscanPanel />)
+    await waitFor(() => expect(mockedFindings).toHaveBeenCalledTimes(1))
+
+    await userEvent.click(screen.getByTitle('再読み込み'))
+    await waitFor(() => expect(mockedFindings).toHaveBeenCalledTimes(2))
   })
 
   it('groups findings by package and renders a row per group', async () => {
@@ -102,6 +127,18 @@ describe('DepscanPanel', () => {
     await waitFor(() => expect(screen.getByText('cryptography')).toBeInTheDocument())
     expect(screen.getByText('requests')).toBeInTheDocument()
     expect(screen.getByText(/3 件（2 パッケージ）/)).toBeInTheDocument()
+  })
+
+  it('shows the CRIT count badge when there are critical findings', async () => {
+    mockedFindings.mockResolvedValue([finding({ severity: 'CRITICAL' })])
+    mockedStats.mockResolvedValue({
+      total: 1,
+      repos: [{ repo_full_name: 'baby-feelings/baby_grow', count: 1 }],
+      severities: [{ severity: 'CRITICAL', count: 1 }],
+    })
+
+    render(<DepscanPanel />)
+    await waitFor(() => expect(screen.getByText(/CRIT 1/)).toBeInTheDocument())
   })
 
   it('only shows the owner filter when findings span more than one owner', async () => {
