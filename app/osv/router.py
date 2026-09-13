@@ -1,13 +1,15 @@
 """OSV 脆弱性 API ルーター。
 
-GET /api/osv        – 直近 N 日の OSV 脆弱性一覧（ページネーション・フィルタ対応）
-GET /api/osv/stats  – エコシステム別・重要度別・月別の統計情報
+GET /api/osv          – 直近 N 日の OSV 脆弱性一覧（ページネーション・フィルタ対応）
+GET /api/osv/stats    – エコシステム別・重要度別・月別の統計情報
+GET /api/osv/{osv_id} – OSV ID 個別取得（Issue #134：`format=stix` でSTIX 2.1形式も返せる）
 """
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Query, Security
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, Security
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
@@ -26,6 +28,7 @@ from app.osv.schemas import (
     OsvStatsResponse,
     OsvVulnerabilityOut,
 )
+from app.osv.stix import build_stix_bundle
 
 logger = logging.getLogger(__name__)
 
@@ -193,3 +196,38 @@ def get_osv_stats(
         severities=severities,
         monthly_trend=monthly_trend,
     )
+
+
+@router.get(
+    "/{osv_id}",
+    response_model=None,
+    summary="OSV ID 個別取得",
+    description="OSV ID を指定して該当する全レコードを取得する。"
+    "OSV は (osv_id, ecosystem, package_name) の複合キーが自然キーのため、"
+    "1つの OSV ID が複数パッケージに影響する場合は複数件のリストを返す。"
+    "`format=stix` を指定すると STIX 2.1 の Bundle 形式で返す（Issue #134）。",
+)
+def get_osv_vulnerability(
+    osv_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    format: Literal["json", "stix"] = Query("json", description="出力形式"),
+) -> list[OsvVulnerabilityOut] | Response:
+    """指定した OSV ID に該当する全レコードを返す。1件も無ければ 404 を返す。
+
+    `format`引数の型が`response_model=list[OsvVulnerabilityOut]`と両立しないため、
+    本エンドポイントは response_model を指定しない（app.kev.router.get_vulnerability
+    と同じ理由。詳細はそちらのdocstring参照）。
+    """
+    items = db.query(OsvVulnerability).filter(OsvVulnerability.osv_id == osv_id).all()
+    if not items:
+        raise HTTPException(status_code=404, detail=f"{osv_id} は見つかりませんでした。")
+
+    logger.info("get_osv_vulnerability: osv_id=%s, format=%s, count=%d", osv_id, format, len(items))
+
+    if format == "stix":
+        bundle = build_stix_bundle(items)
+        return Response(
+            content=json.dumps(bundle),
+            media_type="application/stix+json;version=2.1",
+        )
+    return [OsvVulnerabilityOut.model_validate(item) for item in items]

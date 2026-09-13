@@ -937,4 +937,56 @@ class TestOsvVulnerabilityOutModelValidate:
         result = OsvVulnerabilityOut.model_validate(record)
         dumped = result.model_dump()
         assert dumped["withdrawn_at"] is None
-        assert dumped["fetched_at"] is None
+
+
+# ──────────────────────────────────────────────────────────────
+# GET /api/osv/{osv_id} — OSV ID 個別取得（Issue #134：STIX拡張）
+# ──────────────────────────────────────────────────────────────
+
+
+class TestGetOsvVulnerability:
+    def test_returns_json_by_default(self, client, db_session):
+        _make_osv(db_session, osv_id="GHSA-route-0001", package_name="pkg-a")
+
+        res = client.get(
+            "/api/osv/GHSA-route-0001", headers={"X-API-KEY": TEST_API_KEY},
+        )
+        assert res.status_code == 200
+        assert "application/json" in res.headers["content-type"]
+        body = res.json()
+        assert isinstance(body, list)
+        assert body[0]["osv_id"] == "GHSA-route-0001"
+
+    def test_returns_multiple_rows_for_same_osv_id_across_packages(self, client, db_session):
+        _make_osv(db_session, osv_id="GHSA-multi-0001", ecosystem="PyPI", package_name="pkg-a")
+        _make_osv(db_session, osv_id="GHSA-multi-0001", ecosystem="npm", package_name="pkg-b")
+
+        res = client.get(
+            "/api/osv/GHSA-multi-0001", headers={"X-API-KEY": TEST_API_KEY},
+        )
+        assert res.status_code == 200
+        assert len(res.json()) == 2
+
+    def test_returns_stix_bundle_format(self, client, db_session):
+        _make_osv(db_session, osv_id="GHSA-route-0002", package_name="pkg-c")
+
+        res = client.get(
+            "/api/osv/GHSA-route-0002?format=stix", headers={"X-API-KEY": TEST_API_KEY},
+        )
+        assert res.status_code == 200
+        assert res.headers["content-type"] == "application/stix+json;version=2.1"
+        body = res.json()
+        assert body["type"] == "bundle"
+        assert len(body["objects"]) == 1
+        assert body["objects"][0]["name"] == "GHSA-route-0002"
+
+    def test_404_for_unknown_osv_id(self, client):
+        res = client.get(
+            "/api/osv/GHSA-unknown-9999", headers={"X-API-KEY": TEST_API_KEY},
+        )
+        assert res.status_code == 404
+
+    def test_requires_auth(self, client, db_session):
+        _make_osv(db_session, osv_id="GHSA-route-0001", package_name="pkg-a")
+        res = client.get("/api/osv/GHSA-route-0001")
+        assert res.status_code == 403

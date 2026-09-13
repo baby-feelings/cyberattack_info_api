@@ -5,20 +5,21 @@
 SIEM/TIPとの連携を想定し、KEVレコードをSTIX 2.1のVulnerability SDO
 形式に変換する。
 
-対応範囲: KEVのみ（Issue #134本文の具体例
-`GET /api/vulnerabilities/{cve_id}?format=stix` に準拠）。OSV/JVNへの
-拡張は必要になったタイミングで別途対応する。
+対応範囲: KEV/OSV/JVNの3ドメイン（Issue #134本文の具体例
+`GET /api/vulnerabilities/{cve_id}?format=stix` に準拠したKEV対応がベース。
+OSV/JVNへの拡張はIssue #134の後続対応として実装済み。OSV/JVN向けの変換は
+それぞれ app.osv.stix / app.jvn.stix を参照）。
+
+タイムスタンプ変換・IDネームスペースといった共通処理は app.core.stix に
+切り出してあり、本モジュールはそれをimportして使う（DRY。既存のオブジェクトID
+生成結果は変更していない）。
 """
 import uuid
 from datetime import date, datetime, time, timezone
 from typing import Any
 
+from app.core.stix import STIX_ID_NAMESPACE, stix_timestamp
 from app.kev.models import Vulnerability
-
-# STIXオブジェクトIDを安定させるための名前空間UUID（uuid5用、DNS名前空間の
-# 標準UUID）。同じCVEに対して常に同じIDを生成することで、TAXIIクライアント側の
-# 差分取得（added_after等）や重複排除が正しく機能する
-_STIX_ID_NAMESPACE = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
 
 _CISA_KEV_URL = "https://www.cisa.gov/known-exploited-vulnerabilities-catalog"
 
@@ -29,13 +30,7 @@ def stix_vulnerability_id(cve_id: str) -> str:
     TAXIIコレクションの/objects/{object-id}/エンドポイントで単体取得する際にも
     同じ関数を使い、常に同じIDで参照できるようにする。
     """
-    return f"vulnerability--{uuid.uuid5(_STIX_ID_NAMESPACE, f'cisa-kev:{cve_id}')}"
-
-
-def _stix_timestamp(dt: datetime) -> str:
-    """STIXタイムスタンプ形式（RFC3339、ミリ秒・Z終端）に変換する。"""
-    dt_utc = dt.astimezone(timezone.utc)
-    return dt_utc.strftime("%Y-%m-%dT%H:%M:%S.") + f"{dt_utc.microsecond // 1000:03d}Z"
+    return f"vulnerability--{uuid.uuid5(STIX_ID_NAMESPACE, f'cisa-kev:{cve_id}')}"
 
 
 def _to_datetime(d: date) -> datetime:
@@ -55,8 +50,8 @@ def build_stix_vulnerability(vuln: Vulnerability) -> dict[str, Any]:
         "type": "vulnerability",
         "spec_version": "2.1",
         "id": stix_vulnerability_id(vuln.cve_id),
-        "created": _stix_timestamp(created_at),
-        "modified": _stix_timestamp(modified_at),
+        "created": stix_timestamp(created_at),
+        "modified": stix_timestamp(modified_at),
         "name": vuln.cve_id,
         "description": description,
         "external_references": [

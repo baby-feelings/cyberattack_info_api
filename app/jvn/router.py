@@ -1,13 +1,15 @@
 """JVN 脆弱性 API ルーター。
 
-GET /api/jvn        – 直近 N 日の JVN 脆弱性一覧（ページネーション・フィルタ対応）
-GET /api/jvn/stats  – 重要度別・月別の統計情報
+GET /api/jvn              – 直近 N 日の JVN 脆弱性一覧（ページネーション・フィルタ対応）
+GET /api/jvn/stats        – 重要度別・月別の統計情報
+GET /api/jvn/{jvndb_id}   – JVNDB ID 個別取得（Issue #134：`format=stix` でSTIX 2.1形式も返せる）
 """
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Query, Security
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, Security
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
@@ -20,6 +22,7 @@ from app.core.schemas import MonthlyStat
 from app.jvn.crawler import fetch_and_store_jvn
 from app.jvn.models import JvnVulnerability
 from app.jvn.schemas import JvnListResponse, JvnSeverityStat, JvnStatsResponse, JvnVulnerabilityOut
+from app.jvn.stix import build_stix_vulnerability
 
 logger = logging.getLogger(__name__)
 
@@ -179,3 +182,40 @@ def get_jvn_stats(
         severities=severities,
         monthly_trend=monthly_trend,
     )
+
+
+@router.get(
+    "/{jvndb_id}",
+    response_model=None,
+    summary="JVNDB ID 個別取得",
+    description="JVNDB ID を指定して脆弱性の詳細を1件取得する。"
+    "`format=stix` を指定すると STIX 2.1 の Vulnerability SDO 形式で返す（Issue #134）。",
+)
+def get_jvn_vulnerability(
+    jvndb_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    format: Literal["json", "stix"] = Query("json", description="出力形式"),
+) -> JvnVulnerabilityOut | Response:
+    """指定した JVNDB ID の脆弱性を返す。存在しない場合は 404 を返す。
+
+    `format`引数の型が`response_model=JvnVulnerabilityOut`と両立しないため、
+    本エンドポイントは response_model を指定しない（app.kev.router.get_vulnerability
+    と同じ理由。詳細はそちらのdocstring参照）。
+    """
+    item = (
+        db.query(JvnVulnerability)
+        .filter(JvnVulnerability.jvndb_id == jvndb_id)
+        .first()
+    )
+    if item is None:
+        raise HTTPException(status_code=404, detail=f"{jvndb_id} は見つかりませんでした。")
+
+    logger.info("get_jvn_vulnerability: jvndb_id=%s, format=%s", jvndb_id, format)
+
+    if format == "stix":
+        stix_obj = build_stix_vulnerability(item)
+        return Response(
+            content=json.dumps(stix_obj),
+            media_type="application/stix+json;version=2.1",
+        )
+    return JvnVulnerabilityOut.model_validate(item)
