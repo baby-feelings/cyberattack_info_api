@@ -134,7 +134,10 @@ app/
 │   ├── schemas.py          # VulnerabilityOut 等
 │   ├── crawler.py          # CISA KEV クローラー・Upsert ロジック（fetch_and_store_kev は
 │   │                       # app.core.crawler_runner.run_crawler 経由で実行される）
-│   └── router.py           # router: /api/vulnerabilities エンドポイント（一覧・個別・統計）
+│   ├── stix.py             # STIX 2.1 Vulnerability SDO変換（Issue #134）
+│   ├── taxii.py            # TAXII 2.1配信（/taxii2/、Issue #134）
+│   └── router.py           # router: /api/vulnerabilities エンドポイント（一覧・個別・統計。
+│                           # ?format=stix でSTIX 2.1形式も返せる）
 │                           # admin_router: POST /admin/crawl（手動トリガー）
 ├── osv/                    # OSV ドメイン
 │   ├── models.py           # OsvVulnerability
@@ -399,6 +402,38 @@ KEVクロール自体の成功可否には影響させない。`GET /api/vulnera
 SQLiteは`CURRENT_TIMESTAMP`が秒精度（マイクロ秒無し）のため、`updated_since`のテストで
 同一秒内のinsertがcutoff比較に負けるレースコンディションに注意（`updated_at`を明示的な
 固定値へ強制更新してから検証する。`test_*_updated_since_filter`参照）。
+
+### KEVのSTIX 2.1 / TAXII 2.1配信（Issue #134）
+複数の脆弱性DB・APIを跨いで情報を収集する際、標準フォーマットの欠如が相互運用の
+障害となっているという社内技術報告書の指摘に基づき、MISP等の既存CTI共有基盤や
+SIEM/TIPとの連携を想定した配信フォーマットに対応した。**対応範囲はKEVのみ**
+（Issue本文の具体例`GET /api/vulnerabilities/{cve_id}?format=stix`に準拠。OSV/JVNへの
+拡張は必要になったタイミングで別途対応する）。配信（読み取り専用）のみで、
+STIXオブジェクトのPUSH・TAXII固有の認証方式（OAuth2等）はスコープ外とした。
+
+- **`app/kev/stix.py`**: `build_stix_vulnerability`がKEVレコード1件をSTIX 2.1の
+  Vulnerability SDOに変換する。オブジェクトIDは`uuid5(namespace, f"cisa-kev:{cve_id}")`
+  による決定論的な値とし、同じCVEに対して常に同じIDを生成する（TAXIIクライアント側の
+  差分取得・重複排除が正しく機能するために必要）。EPSSスコアはSTIXコア仕様に無い概念
+  のため`x_epss_score`/`x_epss_percentile`というカスタムプロパティ（`x_`接頭辞、
+  STIX 2.1が許容する拡張方法）として付与する
+- **`GET /api/vulnerabilities/{cve_id}?format=stix`**: 既存の個別取得エンドポイントに
+  `format`パラメータを追加。`response_model`を指定した状態で戻り値の型を
+  `VulnerabilityOut | Response`とし、`format=stix`時は`Response`を直接返すことで
+  FastAPIの自動シリアライズをバイパスする。**このFastAPIバージョンでは
+  `response_model=None`の明示指定も必要**（型アノテーションのUnionだけでは
+  `FastAPIError: Invalid args for response field`になる）
+- **`app/kev/taxii.py`**: 最小構成のTAXII 2.1サーバー（`/taxii2/`配下、
+  `require_public_api_key`で保護）。discovery・api-root情報・collections一覧・
+  collection詳細・objects一覧（`added_after`/`limit`で簡易フィルタ）・object単体取得
+  を実装。単一API root・単一コレクション（KEV用、IDは固定値のため変更不可）構成。
+  manifestエンドポイント（TAXII 2.1では任意〈MAY〉）・フルのページネーション
+  （`Content-Range`・`X-TAXII-Date-Added-*`ヘッダー）は省略した簡易実装
+- **object単体取得の実装上の制約**: STIXオブジェクトIDはCVE IDの一方向ハッシュ
+  （uuid5）のため、`GET .../objects/{object_id}/`は全CVE IDに対して`stix_vulnerability_id`
+  を再計算して照合する線形走査になる。KEVカタログの規模（数千件程度）では実用上
+  問題ないが、より大規模なデータセットに拡張する場合は`stix_id`列を追加し
+  インデックス検索に切り替える必要がある
 
 ### OSV クローラーの 2 ステップ取得
 OSV REST API の `/v1/querybatch` は `{id, modified}` しか返さないため、完全情報の取得は 2 ステップ:
