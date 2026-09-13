@@ -110,6 +110,16 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 存在しない CVE ID の場合は `404 Not Found` が返ります（大文字小文字不問）。
 
+`?format=stix` を付けると STIX 2.1 の Vulnerability SDO 形式で返す（Issue #134。
+MISP等の既存CTI共有基盤・SIEM/TIPとの連携用）:
+
+```bash
+curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
+  "https://168.138.213.240.nip.io/api/vulnerabilities/CVE-2021-44228?format=stix"
+```
+
+継続的な購読には、下記スキル（TAXII 2.1配信）も利用できる。
+
 ---
 
 ### スキル 4: 統計情報を取得する（CISA KEV）
@@ -555,6 +565,36 @@ https://grafana.168.138.213.240.nip.io/
 
 Prometheus形式の生データが必要な場合は `GET /metrics`（`Authorization: Bearer
 $METRICS_API_KEY`で保護、未設定時は503）から直接取得することも可能。
+
+---
+
+### スキル 17: KEVデータをTAXII 2.1で購読する（Issue #134）
+
+**用途:** MISP等の既存CTI共有基盤・SIEM/TIPからKEVデータを継続的に購読する
+（最小構成のTAXII 2.1サーバー。配信対象は現状KEVのみ）。
+
+```bash
+# Discovery（利用可能なAPI rootを確認）
+curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
+  "https://168.138.213.240.nip.io/taxii2/"
+
+# コレクション一覧
+curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
+  "https://168.138.213.240.nip.io/taxii2/cyberattack-info-api/collections/"
+
+# コレクション内のSTIXオブジェクト（KEVレコード）を取得
+curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
+  "https://168.138.213.240.nip.io/taxii2/cyberattack-info-api/collections/d4d8f0c0-3f5f-5b1e-9c1a-6f6f6a6b6a6a/objects/"
+
+# 差分取得（前回取得以降に更新されたオブジェクトのみ）
+curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
+  "https://168.138.213.240.nip.io/taxii2/cyberattack-info-api/collections/d4d8f0c0-3f5f-5b1e-9c1a-6f6f6a6b6a6a/objects/?added_after=2026-06-01T00:00:00Z"
+```
+
+> 認証はTAXII固有の方式ではなく、既存APIと同じ`X-API-KEY`/`Authorization: Bearer
+> <PUBLIC_API_KEY>`を使う。manifestエンドポイント・フルのTAXIIページネーション
+> （`Content-Range`ヘッダー等）には対応していない簡易実装（`added_after`/`limit`
+> クエリパラメータのみ）。
 
 ---
 

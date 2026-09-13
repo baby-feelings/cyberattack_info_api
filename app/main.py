@@ -32,6 +32,7 @@ from app.jvn.router import router as jvn_router
 from app.kev.crawler import fetch_and_store_kev
 from app.kev.router import admin_router as kev_admin_router
 from app.kev.router import router as kev_router
+from app.kev.taxii import taxii_router
 from app.osv.crawler import fetch_and_store_osv
 from app.osv.router import admin_router as osv_admin_router
 from app.osv.router import router as osv_router
@@ -176,6 +177,7 @@ app.include_router(jvn_admin_router)
 app.include_router(depscan_admin_router)
 app.include_router(depsops_admin_router)
 app.include_router(metrics_router)
+app.include_router(taxii_router)
 
 
 # ──────────────────────────────────────────────

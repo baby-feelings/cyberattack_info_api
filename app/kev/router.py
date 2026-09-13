@@ -4,11 +4,12 @@ GET /api/vulnerabilities/recent  – 直近追加データ取得
 GET /api/vulnerabilities/stats   – 統計情報取得
 GET /api/vulnerabilities/{cve_id} – CVE 個別取得
 """
+import json
 import logging
 from datetime import date, datetime, timedelta
-from typing import Annotated
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Security
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, Security
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
@@ -21,6 +22,7 @@ from app.core.schemas import MonthlyStat
 from app.kev.crawler import fetch_and_store_kev
 from app.kev.models import Vulnerability
 from app.kev.schemas import StatsResponse, VendorStat, VulnerabilityListResponse, VulnerabilityOut
+from app.kev.stix import build_stix_vulnerability
 
 logger = logging.getLogger(__name__)
 
@@ -205,15 +207,24 @@ def get_stats(
 
 @router.get(
     "/{cve_id}",
-    response_model=VulnerabilityOut,
+    response_model=None,
     summary="CVE 個別取得",
-    description="CVE ID を指定して脆弱性の詳細を1件取得する。",
+    description="CVE ID を指定して脆弱性の詳細を1件取得する。"
+    "`format=stix` を指定すると STIX 2.1 の Vulnerability SDO 形式で返す（Issue #134）。",
 )
 def get_vulnerability(
     cve_id: str,
     db: Annotated[Session, Depends(get_db)],
-) -> VulnerabilityOut:
-    """指定した CVE ID の脆弱性を返す。存在しない場合は 404 を返す。"""
+    format: Literal["json", "stix"] = Query("json", description="出力形式"),
+) -> VulnerabilityOut | Response:
+    """指定した CVE ID の脆弱性を返す。存在しない場合は 404 を返す。
+
+    `format`引数の型が`response_model=VulnerabilityOut`と両立しないため、本エンドポイントは
+    response_modelを指定しない。`format=json`（既定）ではPydanticモデルをそのまま返し
+    FastAPIの標準シリアライズに委ね、`format=stix`ではResponseを直接返すことで
+    response_model相当の変換をバイパスする（FastAPIはResponseサブクラスの戻り値を
+    そのまま素通しする仕様のため）。
+    """
     # CVE ID は大文字小文字を問わず一致させる
     item = (
         db.query(Vulnerability)
@@ -223,5 +234,12 @@ def get_vulnerability(
     if item is None:
         raise HTTPException(status_code=404, detail=f"{cve_id} は見つかりませんでした。")
 
-    logger.info("get_vulnerability: cve_id=%s", cve_id)
+    logger.info("get_vulnerability: cve_id=%s, format=%s", cve_id, format)
+
+    if format == "stix":
+        stix_obj = build_stix_vulnerability(item)
+        return Response(
+            content=json.dumps(stix_obj),
+            media_type="application/stix+json;version=2.1",
+        )
     return VulnerabilityOut.model_validate(item)

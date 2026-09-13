@@ -103,7 +103,7 @@ Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
 | メソッド | パス | 説明 |
 |---------|------|------|
 | GET | `/api/vulnerabilities` | CISA KEV 一覧（検索・フィルタ・`min_epss`対応） |
-| GET | `/api/vulnerabilities/{cve_id}` | CVE 個別取得 |
+| GET | `/api/vulnerabilities/{cve_id}` | CVE 個別取得（`?format=stix`でSTIX 2.1形式、Issue #134） |
 | GET | `/api/vulnerabilities/recent` | 直近N日の新規KEV |
 | GET | `/api/vulnerabilities/stats` | KEV統計（ベンダー別・月別トレンド） |
 | GET | `/api/osv` | OSV 一覧（10エコシステム対応） |
@@ -125,6 +125,7 @@ Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
 | POST | `/admin/depscan-crawl` | DEPSCAN手動実行 |
 | PUT | `/admin/depscan/assets/{owner}/{repo}` | リポジトリ資産コンテキスト設定（Upsert、Issue #131） |
 | POST | `/admin/dependabot-ops` | DEPSOPS手動実行（安全なPRのみ自動マージ） |
+| GET | `/taxii2/*` | TAXII 2.1配信（KEVデータの購読用、最小実装。Issue #134） |
 | GET | `/health` | ヘルスチェック（認証不要） |
 
 クロール系の`/admin/*`（`*-crawl`・`dependabot-ops`）はバックグラウンド実行で即座に202を

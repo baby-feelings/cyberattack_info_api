@@ -293,6 +293,62 @@ def test_get_vulnerability_requires_auth(client: TestClient):
     assert response.status_code == 403
 
 
+# ── STIX 2.1 エクスポートテスト（Issue #134）───────────────────────
+
+
+def test_get_vulnerability_stix_format(client: TestClient, db_session: Session, monkeypatch):
+    """format=stix 指定時にSTIX 2.1 Vulnerability SDO形式で返すことを確認する。"""
+    monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+    _make_vuln(db_session, cve_id="CVE-2026-40003", vendor="StixVendor", product="StixProduct")
+
+    response = client.get(
+        "/api/vulnerabilities/CVE-2026-40003?format=stix",
+        headers={"X-API-KEY": TEST_API_KEY},
+    )
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/stix+json;version=2.1"
+    body = response.json()
+    assert body["type"] == "vulnerability"
+    assert body["spec_version"] == "2.1"
+    assert body["name"] == "CVE-2026-40003"
+
+
+def test_get_vulnerability_stix_format_not_found(client: TestClient, monkeypatch):
+    """format=stix指定時も未存在のCVEでは404を返すことを確認する。"""
+    monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+
+    response = client.get(
+        "/api/vulnerabilities/CVE-9999-99999?format=stix",
+        headers={"X-API-KEY": TEST_API_KEY},
+    )
+    assert response.status_code == 404
+
+
+def test_get_vulnerability_defaults_to_json_format(
+    client: TestClient, db_session: Session, monkeypatch,
+):
+    """format未指定時は従来通りのJSON形式を返すことを確認する（後方互換性）。"""
+    monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+    _make_vuln(db_session, cve_id="CVE-2026-40004")
+
+    response = client.get(
+        "/api/vulnerabilities/CVE-2026-40004",
+        headers={"X-API-KEY": TEST_API_KEY},
+    )
+    assert response.status_code == 200
+    assert "application/json" in response.headers["content-type"]
+    assert response.json()["cve_id"] == "CVE-2026-40004"
+
+
+def test_get_vulnerability_rejects_unknown_format(client: TestClient, monkeypatch):
+    monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+    response = client.get(
+        "/api/vulnerabilities/CVE-2026-00001?format=xml",
+        headers={"X-API-KEY": TEST_API_KEY},
+    )
+    assert response.status_code == 422
+
+
 # ── 統計エンドポイントテスト ─────────────────────────────────────
 
 
