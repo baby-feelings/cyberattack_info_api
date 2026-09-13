@@ -107,8 +107,10 @@ Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
 | GET | `/api/vulnerabilities/recent` | 直近N日の新規KEV |
 | GET | `/api/vulnerabilities/stats` | KEV統計（ベンダー別・月別トレンド） |
 | GET | `/api/osv` | OSV 一覧（10エコシステム対応） |
+| GET | `/api/osv/{osv_id}` | 同一osv_idの全行取得（`?format=stix`でSTIX Bundle形式、Issue #134） |
 | GET | `/api/osv/stats` | OSV統計 |
 | GET | `/api/jvn` | JVN 一覧 |
+| GET | `/api/jvn/{jvndb_id}` | JVNDB ID個別取得（`?format=stix`でSTIX 2.1形式、Issue #134） |
 | GET | `/api/jvn/stats` | JVN統計 |
 | GET | `/api/depscan` | DEPSCAN検知結果一覧（`reachability`到達可能性判定・`repo_visibility`・`asset_context`・`priority_reasons`含む） |
 | GET | `/api/depscan/stats` | DEPSCAN統計（リポジトリ別・重要度別） |
@@ -125,7 +127,7 @@ Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
 | POST | `/admin/depscan-crawl` | DEPSCAN手動実行 |
 | PUT | `/admin/depscan/assets/{owner}/{repo}` | リポジトリ資産コンテキスト設定（Upsert、Issue #131） |
 | POST | `/admin/dependabot-ops` | DEPSOPS手動実行（安全なPRのみ自動マージ） |
-| GET | `/taxii2/*` | TAXII 2.1配信（KEVデータの購読用、最小実装。Issue #134） |
+| GET | `/taxii2/*` | TAXII 2.1配信（KEV/OSV/JVN 3コレクション購読用、最小実装。Issue #134） |
 | GET | `/health` | ヘルスチェック（認証不要） |
 
 クロール系の`/admin/*`（`*-crawl`・`dependabot-ops`）はバックグラウンド実行で即座に202を
