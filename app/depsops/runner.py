@@ -246,6 +246,101 @@ def _delete_old_depsops_records(db: Session) -> int:
     return deleted
 
 
+def _process_repo(
+    db: Session, full_name: str,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], int]:
+    """1リポジトリ分の Open な Dependabot PR を取得・判定する。
+
+    run_dependabot_ops のリポジトリループ本体（PR取得・解消済みflagged検知・
+    CI有無判定・Dependabot alert取得・各PRの判定）を1リポジトリ単位に切り出したもの。
+
+    Returns:
+        (merged, flagged, resolved, error_count) のタプル。
+        PRリスト取得・個別PR処理のHTTPErrorはこのリポジトリ単位で握りつぶし、
+        error_countとしてカウントする（他リポジトリの処理は継続する既存挙動を維持）。
+    """
+    owner, repo = full_name.split("/", 1)
+    merged: list[dict[str, Any]] = []
+    flagged: list[dict[str, Any]] = []
+    resolved: list[dict[str, Any]] = []
+    error_count = 0
+
+    try:
+        prs = list_open_dependabot_prs(owner, repo, settings.GITHUB_TOKEN)
+    except httpx.HTTPError as exc:
+        logger.warning("DEPSOPS: failed to list PRs for %s: %s", full_name, exc)
+        return merged, flagged, resolved, error_count + 1
+
+    # Open PR一覧が取得できた時点で、過去にflagged記録したPRが
+    # DEPSOPS外の要因で解消済みでないかを毎回チェックする（PRの有無に関わらず）
+    resolved.extend(_find_resolved_flagged_prs(
+        db, full_name, {pr["number"] for pr in prs},
+    ))
+
+    if not prs:
+        return merged, flagged, resolved, error_count
+
+    has_ci = has_ci_workflows(owner, repo, settings.GITHUB_TOKEN)
+    logger.info(
+        "DEPSOPS: %s has %d open Dependabot PR(s), CI=%s",
+        full_name, len(prs), has_ci,
+    )
+
+    # セキュリティ更新かどうかの判定用に、リポジトリ単位で1回だけ取得し使い回す。
+    # 権限不足（GITHUB_TOKEN に Dependabot alerts: Read-only が無い）等で
+    # 失敗しても DEPSOPS 本来のマージ判定は継続する（判定不能 = None のまま）
+    alert_package_names: set[str] | None
+    try:
+        alerts = list_open_dependabot_alerts(owner, repo, settings.GITHUB_TOKEN)
+        alert_package_names = {a["dependency"]["package"]["name"] for a in alerts}
+    except httpx.HTTPError as exc:
+        logger.warning(
+            "DEPSOPS: failed to list Dependabot alerts for %s: %s", full_name, exc,
+        )
+        alert_package_names = None
+
+    for pr in prs:
+        try:
+            action, item = _process_pr(
+                full_name, owner, repo, pr, has_ci, settings.GITHUB_TOKEN,
+                alert_package_names,
+            )
+        except httpx.HTTPError as exc:
+            logger.warning(
+                "DEPSOPS: failed to process %s#%d: %s", full_name, pr["number"], exc,
+            )
+            error_count += 1
+            continue
+
+        if action == "merged" and item is not None:
+            merged.append(item)
+        elif action == "flagged" and item is not None:
+            flagged.append(item)
+
+    return merged, flagged, resolved, error_count
+
+
+def _scan_target_repos(
+    db: Session, repos: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], int]:
+    """対象リポジトリ全件を走査し、判定結果を集約する。"""
+    merged: list[dict[str, Any]] = []
+    flagged: list[dict[str, Any]] = []
+    resolved: list[dict[str, Any]] = []
+    error_count = 0
+
+    for repo_info in repos:
+        repo_merged, repo_flagged, repo_resolved, repo_errors = _process_repo(
+            db, repo_info["full_name"],
+        )
+        merged.extend(repo_merged)
+        flagged.extend(repo_flagged)
+        resolved.extend(repo_resolved)
+        error_count += repo_errors
+
+    return merged, flagged, resolved, error_count
+
+
 def run_dependabot_ops() -> tuple[int, int, int]:
     """DEPSOPS のメインエントリポイント。
 
@@ -265,62 +360,7 @@ def run_dependabot_ops() -> tuple[int, int, int]:
             repos = list_target_repos(settings.GITHUB_USERNAME, settings.GITHUB_TOKEN)
             logger.info("DEPSOPS: %d target repos to scan", len(repos))
 
-            for repo_info in repos:
-                full_name = repo_info["full_name"]
-                owner, repo = full_name.split("/", 1)
-
-                try:
-                    prs = list_open_dependabot_prs(owner, repo, settings.GITHUB_TOKEN)
-                except httpx.HTTPError as exc:
-                    logger.warning("DEPSOPS: failed to list PRs for %s: %s", full_name, exc)
-                    error_count += 1
-                    continue
-
-                # Open PR一覧が取得できた時点で、過去にflagged記録したPRが
-                # DEPSOPS外の要因で解消済みでないかを毎回チェックする（PRの有無に関わらず）
-                resolved.extend(_find_resolved_flagged_prs(
-                    db, full_name, {pr["number"] for pr in prs},
-                ))
-
-                if not prs:
-                    continue
-
-                has_ci = has_ci_workflows(owner, repo, settings.GITHUB_TOKEN)
-                logger.info(
-                    "DEPSOPS: %s has %d open Dependabot PR(s), CI=%s",
-                    full_name, len(prs), has_ci,
-                )
-
-                # セキュリティ更新かどうかの判定用に、リポジトリ単位で1回だけ取得し使い回す。
-                # 権限不足（GITHUB_TOKEN に Dependabot alerts: Read-only が無い）等で
-                # 失敗しても DEPSOPS 本来のマージ判定は継続する（判定不能 = None のまま）
-                alert_package_names: set[str] | None
-                try:
-                    alerts = list_open_dependabot_alerts(owner, repo, settings.GITHUB_TOKEN)
-                    alert_package_names = {a["dependency"]["package"]["name"] for a in alerts}
-                except httpx.HTTPError as exc:
-                    logger.warning(
-                        "DEPSOPS: failed to list Dependabot alerts for %s: %s", full_name, exc,
-                    )
-                    alert_package_names = None
-
-                for pr in prs:
-                    try:
-                        action, item = _process_pr(
-                            full_name, owner, repo, pr, has_ci, settings.GITHUB_TOKEN,
-                            alert_package_names,
-                        )
-                    except httpx.HTTPError as exc:
-                        logger.warning(
-                            "DEPSOPS: failed to process %s#%d: %s", full_name, pr["number"], exc,
-                        )
-                        error_count += 1
-                        continue
-
-                    if action == "merged" and item is not None:
-                        merged.append(item)
-                    elif action == "flagged" and item is not None:
-                        flagged.append(item)
+            merged, flagged, resolved, error_count = _scan_target_repos(db, repos)
 
         except Exception as exc:
             write_crawler_log(
