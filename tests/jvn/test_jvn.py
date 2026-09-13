@@ -873,3 +873,57 @@ class TestJvnVulnerabilityOutModelValidate:
 
         result = JvnVulnerabilityOut.model_validate(record)
         assert result.model_dump()["fetched_at"] is None
+
+
+# ──────────────────────────────────────────────────────────────
+# GET /api/jvn/{jvndb_id} — JVNDB ID 個別取得（Issue #134：STIX拡張）
+# ──────────────────────────────────────────────────────────────
+
+
+class TestGetJvnVulnerability:
+    def test_returns_json_by_default(self, client, db_session):
+        record = _make_jvn(jvndb_id="JVNDB-2026-500001")
+        db_session.add(record)
+        db_session.commit()
+
+        res = client.get(
+            "/api/jvn/JVNDB-2026-500001", headers={"X-API-KEY": TEST_API_KEY},
+        )
+        assert res.status_code == 200
+        assert "application/json" in res.headers["content-type"]
+        assert res.json()["jvndb_id"] == "JVNDB-2026-500001"
+
+    def test_returns_stix_format(self, client, db_session):
+        record = _make_jvn(jvndb_id="JVNDB-2026-500002")
+        db_session.add(record)
+        db_session.commit()
+
+        res = client.get(
+            "/api/jvn/JVNDB-2026-500002?format=stix", headers={"X-API-KEY": TEST_API_KEY},
+        )
+        assert res.status_code == 200
+        assert res.headers["content-type"] == "application/stix+json;version=2.1"
+        body = res.json()
+        assert body["type"] == "vulnerability"
+        assert body["spec_version"] == "2.1"
+        assert body["name"] == "JVNDB-2026-500002"
+
+    def test_404_for_unknown_jvndb_id(self, client):
+        res = client.get(
+            "/api/jvn/JVNDB-9999-999999", headers={"X-API-KEY": TEST_API_KEY},
+        )
+        assert res.status_code == 404
+
+    def test_requires_auth(self, client):
+        res = client.get("/api/jvn/JVNDB-2026-500001")
+        assert res.status_code == 403
+
+    def test_rejects_unknown_format(self, client, db_session):
+        record = _make_jvn(jvndb_id="JVNDB-2026-500003")
+        db_session.add(record)
+        db_session.commit()
+
+        res = client.get(
+            "/api/jvn/JVNDB-2026-500003?format=xml", headers={"X-API-KEY": TEST_API_KEY},
+        )
+        assert res.status_code == 422
