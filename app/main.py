@@ -53,28 +53,24 @@ logger = logging.getLogger(__name__)
 scheduler = BackgroundScheduler()
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """アプリの起動・終了時に実行するライフサイクル処理。"""
-    # ── 起動処理 ──
-    logger.info("Starting Cyberattack Info API (env=%s)", settings.ENVIRONMENT)
+def _drop_scan_results_table(db_engine) -> None:
+    """scan_results テーブルを削除する（スキャン機能廃止に伴うクリーンアップ）。
 
-    # DB テーブルを自動作成（存在しない場合のみ）
-    Base.metadata.create_all(bind=engine)
-    # scan_results テーブルを削除（スキャン機能廃止）
-    # 失敗してもサービス起動を止めないようベストエフォートで実行する
+    DDL 競合や権限不足で失敗してもサービス起動を止めないようベストエフォートで実行する。
+    """
     try:
-        with engine.connect() as conn:
+        with db_engine.connect() as conn:
             conn.execute(text("DROP TABLE IF EXISTS scan_results"))
             conn.commit()
         logger.info("scan_results table dropped (scan feature removed)")
     except SQLAlchemyError as exc:
         logger.warning("Could not drop scan_results table: %s", exc)
-    logger.info("Database tables created/verified")
 
-    # クローラーを毎日 UTC 19:00（JST 翌日 4:00）に実行
+
+def _register_scheduled_jobs(job_scheduler: BackgroundScheduler) -> None:
+    """5種のクローラー（KEV/OSV/JVN/DEPSCAN/DEPSOPS）を APScheduler に登録し起動する。"""
     # CISA KEV クローラー: 毎日 UTC 19:00（JST 翌日 4:00）
-    scheduler.add_job(
+    job_scheduler.add_job(
         fetch_and_store_kev,
         trigger="cron",
         hour=settings.CRON_HOUR_UTC,
@@ -83,7 +79,7 @@ async def lifespan(app: FastAPI):
         replace_existing=True,
     )
     # OSV クローラー
-    scheduler.add_job(
+    job_scheduler.add_job(
         fetch_and_store_osv,
         trigger="cron",
         hour=settings.OSV_CRON_HOUR_UTC,
@@ -92,7 +88,7 @@ async def lifespan(app: FastAPI):
         replace_existing=True,
     )
     # JVN クローラー
-    scheduler.add_job(
+    job_scheduler.add_job(
         fetch_and_store_jvn,
         trigger="cron",
         hour=settings.JVN_CRON_HOUR_UTC,
@@ -101,7 +97,7 @@ async def lifespan(app: FastAPI):
         replace_existing=True,
     )
     # 依存ライブラリ脆弱性スキャナー（DEPSCAN）
-    scheduler.add_job(
+    job_scheduler.add_job(
         fetch_and_scan_dependencies,
         trigger="cron",
         hour=settings.DEPSCAN_CRON_HOUR_UTC,
@@ -110,7 +106,7 @@ async def lifespan(app: FastAPI):
         replace_existing=True,
     )
     # Dependabot PR 自動運用（DEPSOPS）
-    scheduler.add_job(
+    job_scheduler.add_job(
         run_dependabot_ops,
         trigger="cron",
         hour=settings.DEPSOPS_CRON_HOUR_UTC,
@@ -118,7 +114,7 @@ async def lifespan(app: FastAPI):
         id="dependabot_ops",
         replace_existing=True,
     )
-    scheduler.start()
+    job_scheduler.start()
     logger.info(
         "Scheduler started: KEV UTC %02d:%02d / OSV UTC %02d:00 / JVN UTC %02d:00 / "
         "DEPSCAN UTC %02d:00 / DEPSOPS UTC %02d:00",
@@ -126,6 +122,20 @@ async def lifespan(app: FastAPI):
         settings.OSV_CRON_HOUR_UTC, settings.JVN_CRON_HOUR_UTC,
         settings.DEPSCAN_CRON_HOUR_UTC, settings.DEPSOPS_CRON_HOUR_UTC,
     )
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """アプリの起動・終了時に実行するライフサイクル処理。"""
+    # ── 起動処理 ──
+    logger.info("Starting Cyberattack Info API (env=%s)", settings.ENVIRONMENT)
+
+    # DB テーブルを自動作成（存在しない場合のみ）
+    Base.metadata.create_all(bind=engine)
+    _drop_scan_results_table(engine)
+    logger.info("Database tables created/verified")
+
+    _register_scheduled_jobs(scheduler)
 
     yield  # アプリ実行中
 
