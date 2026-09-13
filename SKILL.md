@@ -177,6 +177,15 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | `sort_by` | string | ソート基準（`modified`（デフォルト） / `cvss`） |
 | `updated_since` | string (ISO 8601) | この日時以降に内容が更新されたレコードのみ返す（差分取得・増分同期用） |
 
+`osv_id`を指定して単体取得することもできる（`(osv_id, ecosystem, package_name)`が
+自然キーのため、同一`osv_id`が複数パッケージに影響する場合は複数行がリストで返る）。
+`?format=stix`を付けるとSTIX 2.1 Bundle形式で返す（Issue #134）:
+
+```bash
+curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
+  "https://168.138.213.240.nip.io/api/osv/GHSA-78mq-xcr3-xm33?format=stix"
+```
+
 ---
 
 ### スキル 6: OSV 統計情報を取得する
@@ -236,6 +245,14 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | `sort_by` | string | ソート基準（`modified`（デフォルト） / `cvss`） |
 | `days` | int | 取得対象の直近日数（デフォルト: 30） |
 | `updated_since` | string (ISO 8601) | この日時以降に内容が更新されたレコードのみ返す（差分取得・増分同期用） |
+
+JVNDB IDを直接指定して1件取得することもできる。`?format=stix`を付けるとSTIX 2.1の
+Vulnerability SDO形式で返す（Issue #134）:
+
+```bash
+curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
+  "https://168.138.213.240.nip.io/api/jvn/JVNDB-2026-000001?format=stix"
+```
 
 ---
 
@@ -568,21 +585,21 @@ $METRICS_API_KEY`で保護、未設定時は503）から直接取得すること
 
 ---
 
-### スキル 17: KEVデータをTAXII 2.1で購読する（Issue #134）
+### スキル 17: KEV/OSV/JVNデータをTAXII 2.1で購読する（Issue #134）
 
-**用途:** MISP等の既存CTI共有基盤・SIEM/TIPからKEVデータを継続的に購読する
-（最小構成のTAXII 2.1サーバー。配信対象は現状KEVのみ）。
+**用途:** MISP等の既存CTI共有基盤・SIEM/TIPからKEV/OSV/JVNデータを継続的に購読する
+（最小構成のTAXII 2.1サーバー。単一API root配下にKEV/OSV/JVNの3コレクションを持つ）。
 
 ```bash
 # Discovery（利用可能なAPI rootを確認）
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
   "https://168.138.213.240.nip.io/taxii2/"
 
-# コレクション一覧
+# コレクション一覧（KEV/OSV/JVNの3件が返る）
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
   "https://168.138.213.240.nip.io/taxii2/cyberattack-info-api/collections/"
 
-# コレクション内のSTIXオブジェクト（KEVレコード）を取得
+# コレクション内のSTIXオブジェクトを取得（コレクションIDで対象ドメインを指定）
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
   "https://168.138.213.240.nip.io/taxii2/cyberattack-info-api/collections/d4d8f0c0-3f5f-5b1e-9c1a-6f6f6a6b6a6a/objects/"
 
@@ -590,6 +607,14 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
   "https://168.138.213.240.nip.io/taxii2/cyberattack-info-api/collections/d4d8f0c0-3f5f-5b1e-9c1a-6f6f6a6b6a6a/objects/?added_after=2026-06-01T00:00:00Z"
 ```
+
+**コレクションID一覧**（固定値）:
+
+| ドメイン | コレクションID |
+|---------|----------------|
+| CISA KEV | `d4d8f0c0-3f5f-5b1e-9c1a-6f6f6a6b6a6a` |
+| OSV | `84be1117-7e69-58ed-a0dc-d2f2bb7f60ca` |
+| JVN | `1c34f413-fd30-56cc-bf87-daf79113b5a8` |
 
 > 認証はTAXII固有の方式ではなく、既存APIと同じ`X-API-KEY`/`Authorization: Bearer
 > <PUBLIC_API_KEY>`を使う。manifestエンドポイント・フルのTAXIIページネーション

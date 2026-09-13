@@ -102,6 +102,8 @@ pip-audit -r requirements.txt --desc
 ```
 app/
 ├── main.py                 # FastAPI アプリ・lifespan・スケジューラ登録・ルーター include のみに専念する。
+│                           # lifespan本体は_register_scheduled_jobs（ジョブ登録）・
+│                           # _drop_scan_results_table（旧スキャン機能テーブル削除）を呼ぶだけの薄い関数
 │                           # /admin/* トリガーエンドポイントは持たない（各ドメインの router.py の
 │                           # admin_router に定義する。詳細は「/admin/*-crawl はバックグラウンド実行」節）
 ├── auth/                   # GitHub ログイン（DEPSCAN ダッシュボードのアクセス制御）ドメイン。models 無し
@@ -124,6 +126,12 @@ app/
 │   ├── pagination.py       # paginate()（件数カウント・並び替え・offset/limit の定型処理を一元化。
 │   │                       # KEV/OSV/JVN/DEPSCAN/DEPSOPS の各一覧APIから利用。フィルタ構築自体は
 │   │                       # ドメインごとに異なるため対象外）
+│   ├── stix.py             # STIX 2.1共通ヘルパー（STIX_ID_NAMESPACE・stix_timestamp。KEV/OSV/JVN
+│   │                       # の各stix.pyが共通利用。Issue #134でKEV専用実装として導入後、OSV/JVN
+│   │                       # 拡張時にDRY目的で切り出した）
+│   ├── taxii.py            # TAXII 2.1配信（/taxii2/）。コレクションレジストリパターンでKEV/OSV/JVN
+│   │                       # 3コレクションに対応（元は app/kev/taxii.py だったが、KEV固有ではなく
+│   │                       # 複数ドメインを跨ぐ配信機構のため app/core/ へ移動した）
 │   ├── types.py            # CrawlerType（"KEV"/"OSV"/"JVN"/"DEPSCAN"/"DEPSOPS" の Literal 型）
 │   └── schemas.py          # 横断スキーマ（HealthResponse・MonthlyStat・SeverityStat・
 │                           # OrmDatetimeModel: ORM オブジェクトの datetime 属性をフィールド列挙なしで
@@ -134,8 +142,8 @@ app/
 │   ├── schemas.py          # VulnerabilityOut 等
 │   ├── crawler.py          # CISA KEV クローラー・Upsert ロジック（fetch_and_store_kev は
 │   │                       # app.core.crawler_runner.run_crawler 経由で実行される）
-│   ├── stix.py             # STIX 2.1 Vulnerability SDO変換（Issue #134）
-│   ├── taxii.py            # TAXII 2.1配信（/taxii2/、Issue #134）
+│   ├── stix.py             # STIX 2.1 Vulnerability SDO変換（Issue #134。app.core.stixの共通
+│   │                       # ヘルパーを利用）
 │   └── router.py           # router: /api/vulnerabilities エンドポイント（一覧・個別・統計。
 │                           # ?format=stix でSTIX 2.1形式も返せる）
 │                           # admin_router: POST /admin/crawl（手動トリガー）
@@ -144,19 +152,34 @@ app/
 │   ├── schemas.py          # OsvVulnerabilityOut 等
 │   ├── crawler.py          # OSV クローラー（REST API 方式・10 エコシステム対応、Upsert ロジック）
 │   ├── packages.py         # POPULAR_PACKAGES（監視対象パッケージ一覧、ロジックから分離したデータ）
-│   └── router.py           # router: /api/osv エンドポイント（一覧・統計）
+│   ├── stix.py             # STIX 2.1 Vulnerability SDO変換（Issue #134拡張分）。OSVは
+│   │                       # (osv_id, ecosystem, package_name)の複合キーが自然キーのため、
+│   │                       # オブジェクトIDもこの3値から生成する
+│   └── router.py           # router: /api/osv エンドポイント（一覧・統計）・
+│                           # GET /api/osv/{osv_id}（同一osv_idの全行をリスト/STIX Bundleで返す。
+│                           # ?format=stix対応）
 │                           # admin_router: POST /admin/osv-crawl（手動トリガー）
 ├── jvn/                    # JVN ドメイン
 │   ├── models.py           # JvnVulnerability
 │   ├── schemas.py          # JvnVulnerabilityOut 等
 │   ├── crawler.py          # JVN クローラー（MyJVN API / RDF-RSS）
-│   └── router.py           # router: /api/jvn エンドポイント（一覧・統計）
+│   ├── stix.py             # STIX 2.1 Vulnerability SDO変換（Issue #134拡張分）
+│   └── router.py           # router: /api/jvn エンドポイント（一覧・統計）・
+│                           # GET /api/jvn/{jvndb_id}（KEVのget_vulnerabilityと同型。?format=stix対応）
 │                           # admin_router: POST /admin/jvn-crawl（手動トリガー）
 ├── depscan/                # 依存ライブラリ脆弱性スキャン（DEPSCAN）ドメイン
 │   ├── models.py           # DependencyFinding・UserScan（GitHub ログイン経由のオンデマンドスキャン状況）・
 │   │                       # RepoAssetContext（資産コンテキスト、Issue #131）
 │   ├── schemas.py          # DependencyFindingOut 等
-│   ├── crawler.py          # GitHub 全リポジトリのロックファイルを OSV API とリアルタイム照合
+│   ├── crawler.py          # GitHub 全リポジトリのロックファイルを OSV API とリアルタイム照合する
+│   │                       # オーケストレーション（discover/collect/build/upsert/reachability適用/
+│   │                       # 保持期間超過削除）。GitHub Issue起票・クローズはissue_management.pyへ分離済み
+│   ├── issue_management.py # DEPSCANの新規検知に対するGitHub Issue自動起票・解消時クローズ
+│   │                       # （_file_github_issues・_close_resolved_repo_issues。元はcrawler.py内に
+│   │                       # あったが、責務分離のため切り出した）
+│   ├── priority.py         # 説明可能な優先度推薦ロジック（_compute_priority_reasons・KEV/EPSS突合の
+│   │                       # _fetch_kev_map、Issue #135）。元はrouter.py内にあったが、HTTPルーティングと
+│   │                       # 純粋なビジネスロジックを分離するため切り出した
 │   ├── user_scan.py        # run_depscan_for_user/get_user_scan_status/should_rescan_for_user
 │   │                       # （GitHub ログイン経由のオンデマンドスキャン）
 │   ├── router.py           # router: /api/depscan エンドポイント（一覧・統計。X-API-KEY またはセッション
@@ -170,8 +193,10 @@ app/
 ├── depsops/                # Dependabot PR 自動運用（DEPSOPS）ドメイン
 │   ├── models.py           # DependabotPrLog（判定した PR 1件1行の履歴。action=merged/flagged・reason）
 │   ├── schemas.py          # DependabotPrLogOut 等
-│   ├── runner.py           # crawler.py 相当。run_dependabot_ops（判定・マージ・Slack通知・
-│   │                       # DependabotPrLog への永続化・保持期間超過分の削除）
+│   ├── runner.py           # crawler.py 相当。run_dependabot_ops はオーケストレーションのみに専念し、
+│   │                       # リポジトリ単位の判定・マージは_process_repo・対象リポジトリ走査は
+│   │                       # _scan_target_reposへ分解済み（判定・マージ・Slack通知・DependabotPrLog
+│   │                       # への永続化・保持期間超過分の削除）
 │   ├── router.py           # router: GET /api/depsops（判定履歴一覧。リポジトリ・action でフィルタ可能）
 │   │                       # admin_router: POST /admin/dependabot-ops（手動トリガー）
 │   ├── github_client.py    # GitHub API クライアント（PR一覧・詳細・マージ・rebase依頼・CI有無判定）
@@ -403,37 +428,60 @@ SQLiteは`CURRENT_TIMESTAMP`が秒精度（マイクロ秒無し）のため、`
 同一秒内のinsertがcutoff比較に負けるレースコンディションに注意（`updated_at`を明示的な
 固定値へ強制更新してから検証する。`test_*_updated_since_filter`参照）。
 
-### KEVのSTIX 2.1 / TAXII 2.1配信（Issue #134）
+### KEV/OSV/JVNのSTIX 2.1 / TAXII 2.1配信（Issue #134）
 複数の脆弱性DB・APIを跨いで情報を収集する際、標準フォーマットの欠如が相互運用の
 障害となっているという社内技術報告書の指摘に基づき、MISP等の既存CTI共有基盤や
-SIEM/TIPとの連携を想定した配信フォーマットに対応した。**対応範囲はKEVのみ**
-（Issue本文の具体例`GET /api/vulnerabilities/{cve_id}?format=stix`に準拠。OSV/JVNへの
-拡張は必要になったタイミングで別途対応する）。配信（読み取り専用）のみで、
-STIXオブジェクトのPUSH・TAXII固有の認証方式（OAuth2等）はスコープ外とした。
+SIEM/TIPとの連携を想定した配信フォーマットに対応した。当初はKEVのみ（Issue本文の
+具体例`GET /api/vulnerabilities/{cve_id}?format=stix`）を実装し、その後OSV/JVNへ
+拡張した。配信（読み取り専用）のみで、STIXオブジェクトのPUSH・TAXII固有の認証方式
+（OAuth2等）はスコープ外とした。
 
+- **`app/core/stix.py`**: KEV/OSV/JVN共通のSTIXヘルパー（`STIX_ID_NAMESPACE`・
+  `stix_timestamp`）。当初`app/kev/stix.py`にKEV専用実装として存在したが、OSV/JVN
+  拡張時にDRY目的で切り出した（`STIX_ID_NAMESPACE`の値自体は移行前後で不変。
+  既存KEVオブジェクトのIDが変わらないことをテストで担保している）
 - **`app/kev/stix.py`**: `build_stix_vulnerability`がKEVレコード1件をSTIX 2.1の
   Vulnerability SDOに変換する。オブジェクトIDは`uuid5(namespace, f"cisa-kev:{cve_id}")`
   による決定論的な値とし、同じCVEに対して常に同じIDを生成する（TAXIIクライアント側の
   差分取得・重複排除が正しく機能するために必要）。EPSSスコアはSTIXコア仕様に無い概念
   のため`x_epss_score`/`x_epss_percentile`というカスタムプロパティ（`x_`接頭辞、
   STIX 2.1が許容する拡張方法）として付与する
+- **`app/osv/stix.py`**: OSVは`(osv_id, ecosystem, package_name)`の複合キーが自然キー
+  （1つのOSV IDが複数パッケージに影響する場合、行ごとに異なるSTIXオブジェクトになる）
+  のため、オブジェクトIDは`uuid5(namespace, f"osv:{osv_id}:{ecosystem}:{package_name}")`
+  で生成する。`x_ecosystem`/`x_package_name`/`x_cvss_score`をカスタムプロパティとして付与
+- **`app/jvn/stix.py`**: オブジェクトIDは`uuid5(namespace, f"jvn:{jvndb_id}")`
+  （JVNDB IDは一意キーのためCVE単位ではなくJVNDB ID単位）。`x_cvss_score`/
+  `x_cvss_vector`をカスタムプロパティとして付与
 - **`GET /api/vulnerabilities/{cve_id}?format=stix`**: 既存の個別取得エンドポイントに
-  `format`パラメータを追加。`response_model`を指定した状態で戻り値の型を
-  `VulnerabilityOut | Response`とし、`format=stix`時は`Response`を直接返すことで
-  FastAPIの自動シリアライズをバイパスする。**このFastAPIバージョンでは
-  `response_model=None`の明示指定も必要**（型アノテーションのUnionだけでは
-  `FastAPIError: Invalid args for response field`になる）
-- **`app/kev/taxii.py`**: 最小構成のTAXII 2.1サーバー（`/taxii2/`配下、
+  `format`パラメータを追加。戻り値の型を`VulnerabilityOut | Response`とし、
+  `format=stix`時は`Response`を直接返すことでFastAPIの自動シリアライズをバイパスする。
+  **このFastAPIバージョンでは`response_model=None`の明示指定も必要**
+  （型アノテーションのUnionだけでは`FastAPIError: Invalid args for response field`になる）
+- **`GET /api/jvn/{jvndb_id}?format=stix`**: KEVの`get_vulnerability`と全く同じ設計
+  （JVNDB IDは一意キーのため単体取得が自然）
+- **`GET /api/osv/{osv_id}?format=json|stix`**: OSVは`osv_id`だけでは一意でないため、
+  該当`osv_id`の全行を**リスト**（`format=json`）または**STIX Bundle**
+  （`format=stix`）で返す設計にした（KEVやJVNの「単一オブジェクトを返す」設計とは
+  意図的に異なる。json/stix両形式の対称性を優先した設計判断）
+- **`app/core/taxii.py`**: 最小構成のTAXII 2.1サーバー（`/taxii2/`配下、
   `require_public_api_key`で保護）。discovery・api-root情報・collections一覧・
   collection詳細・objects一覧（`added_after`/`limit`で簡易フィルタ）・object単体取得
-  を実装。単一API root・単一コレクション（KEV用、IDは固定値のため変更不可）構成。
+  を実装。元は`app/kev/taxii.py`（KEV専用）だったが、複数ドメインを跨ぐ配信機構という
+  実態に合わせて`app/core/`へ移動し、コレクションレジストリパターン（コレクションID・
+  クエリ関数・単体取得関数を紐づけるマッピング）で一般化した。単一API root・
+  複数コレクション（KEV/OSV/JVN、各IDは固定値のため変更不可）構成。
   manifestエンドポイント（TAXII 2.1では任意〈MAY〉）・フルのページネーション
   （`Content-Range`・`X-TAXII-Date-Added-*`ヘッダー）は省略した簡易実装
-- **object単体取得の実装上の制約**: STIXオブジェクトIDはCVE IDの一方向ハッシュ
-  （uuid5）のため、`GET .../objects/{object_id}/`は全CVE IDに対して`stix_vulnerability_id`
-  を再計算して照合する線形走査になる。KEVカタログの規模（数千件程度）では実用上
-  問題ないが、より大規模なデータセットに拡張する場合は`stix_id`列を追加し
-  インデックス検索に切り替える必要がある
+- **コレクションID（固定値、変更禁止。TAXIIクライアント側の購読設定が壊れるため）**:
+  KEV=`d4d8f0c0-3f5f-5b1e-9c1a-6f6f6a6b6a6a`・OSV=`84be1117-7e69-58ed-a0dc-d2f2bb7f60ca`・
+  JVN=`1c34f413-fd30-56cc-bf87-daf79113b5a8`
+- **object単体取得の実装上の制約**: STIXオブジェクトIDは自然キーの一方向ハッシュ
+  （uuid5）のため、`GET .../objects/{object_id}/`は全レコードに対して
+  `stix_vulnerability_id`を再計算して照合する線形走査になる（KEVはCVE ID全件、
+  OSVは`(osv_id, ecosystem, package_name)`全組み合わせ、JVNはJVNDB ID全件に対して
+  走査）。各カタログの規模（数千件程度）では実用上問題ないが、より大規模な
+  データセットに拡張する場合は`stix_id`列を追加しインデックス検索に切り替える必要がある
 
 ### OSV クローラーの 2 ステップ取得
 OSV REST API の `/v1/querybatch` は `{id, modified}` しか返さないため、完全情報の取得は 2 ステップ:
