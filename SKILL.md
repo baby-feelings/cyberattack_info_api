@@ -297,12 +297,15 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 各検知結果には `repo_visibility`（`"public"`/`"private"`、GitHub APIから自動取得）と
 `asset_context`（本番デプロイ済みか・インターネット公開か・重要度。未設定なら`null`。
-スキル11参照）も含まれる（Issue #131）。
+スキル12参照）も含まれる（Issue #131）。
 
 さらに `priority_reasons`（文字列配列。`kev_listed`/`epss_high`/`reachable`/
 `public_repo`/`internet_facing_asset`/`production_asset`/`high_importance_asset`の
 いずれか0件以上）も含まれ、なぜその検知結果の優先度が高いと判断されるかを
 機械可読な形で確認できる（Issue #135）。
+
+パッケージ識別には `purl`（Package URL、`pkg:pypi/cryptography@3.4.7` 形式）も
+含まれ、他のSBOM/SCAツールとの相互運用に使える（Issue #133、スキル11参照）。
 
 ---
 
@@ -331,7 +334,41 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 ---
 
-### スキル 11: リポジトリの資産コンテキストを設定・確認する（Issue #131）
+### スキル 11: DEPSCAN検知結果をSBOM形式でエクスポートする（Issue #133）
+
+**用途:** 指定リポジトリの検知結果をCycloneDX 1.5またはSPDX 2.3形式でエクスポートし、
+他のSBOM/SCAツール（Dependency-Track・Grype等）に取り込む。パッケージ識別には
+purl（Package URL）を使用する。
+
+```bash
+# CycloneDX形式（既定。脆弱性情報を含む）
+curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
+  "https://168.138.213.240.nip.io/api/depscan/export?repo=baby-feelings/baby_grow" \
+  -o baby_grow.cdx.json
+
+# SPDX形式（パッケージ一覧のみ。コア仕様に脆弱性を表現する概念が無いため）
+curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
+  "https://168.138.213.240.nip.io/api/depscan/export?repo=baby-feelings/baby_grow&format=spdx" \
+  -o baby_grow.spdx.json
+
+# 未解決の検知結果のみに絞り込む
+curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
+  "https://168.138.213.240.nip.io/api/depscan/export?repo=baby-feelings/baby_grow&resolved=false"
+```
+
+| パラメータ | 型 | 説明 |
+|-----------|-----|------|
+| `repo` | string | 対象リポジトリ（必須。例: `owner/repo`） |
+| `format` | string | 出力形式（`cyclonedx` / `spdx`、デフォルト: `cyclonedx`） |
+| `resolved` | bool | 解決状態で絞り込み（未指定なら全件） |
+
+> `Content-Type`はSBOM専用のメディアタイプ（`application/vnd.cyclonedx+json` /
+> `application/spdx+json`）を返す。外部SBOMの入力受け付け・VEX
+> （Vulnerability Exploitability eXchange）状態拡張は現時点では未対応。
+
+---
+
+### スキル 12: リポジトリの資産コンテキストを設定・確認する（Issue #131）
 
 **用途:** DEPSCANの検知結果に「本番デプロイ済みか」「インターネット公開サービスか」
 「資産重要度」を紐付けるための設定を行う。GitHub APIから自動判定できない情報のため
@@ -360,7 +397,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 ---
 
-### スキル 12: Dependabot PR 自動運用（DEPSOPS）の判定履歴を確認する
+### スキル 13: Dependabot PR 自動運用（DEPSOPS）の判定履歴を確認する
 
 **用途:** `POST /admin/dependabot-ops` が判定した Dependabot PR の履歴（自動マージ済み・
 要確認いずれも）を確認する。Slack 通知は実行時点のスナップショットのみで履歴を持たないため、
@@ -438,7 +475,7 @@ DEPSCAN スキャンが実行され（直近24時間以内にスキャン済み�
 
 ---
 
-### スキル 13: クローラーの実行ログを確認する
+### スキル 14: クローラーの実行ログを確認する
 
 **用途:** KEV / OSV / JVN / DEPSCAN クローラーが正常に動作しているか、最新の実行結果（件数・所要時間・エラー）を確認する。
 
@@ -482,7 +519,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 ---
 
-### スキル 14: サービス状態を確認する
+### スキル 15: サービス状態を確認する
 
 **用途:** API サーバーと DB が正常稼働しているか確認する。
 
@@ -501,7 +538,7 @@ curl -s "https://168.138.213.240.nip.io/health"
 
 ---
 
-### スキル 15: 運用監視ダッシュボード（Grafana）を確認する
+### スキル 16: 運用監視ダッシュボード（Grafana）を確認する
 
 **用途:** クローラー（KEV/OSV/JVN/DEPSCAN/DEPSOPS）が実際に成功し続けているか、OCIホストの
 CPU/メモリ/ディスク使用率を可視化されたダッシュボードで確認する。`curl`ではなくブラウザで
@@ -659,6 +696,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | `summary` | string | 脆弱性の概要 |
 | `fixed_versions` | string[] | 修正済みバージョン |
 | `cve_ids` | string[] | OSVエントリのaliasesから抽出したCVE ID一覧（無ければ空配列） |
+| `purl` | string \| null | パッケージURL（例: `pkg:pypi/cryptography@3.4.7`）。他のSBOM/SCAツールとの相互運用用（Issue #133） |
 | `manifest_path` | string | 検知元のロックファイルパス（例: `dashboard/package-lock.json`） |
 | `reachability` | string \| null | 到達可能性のヒューリスティック判定（`reachable` / `unreachable` / `unknown`）。脆弱なパッケージがソースコード内で import/require/use されているかを判定（関数呼び出しレベルの解析は行わない best-effort） |
 | `repo_visibility` | string \| null | 対象リポジトリの公開範囲（`public` / `private`）。GitHub APIから自動取得（Issue #131） |

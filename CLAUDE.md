@@ -157,9 +157,11 @@ app/
 │   ├── user_scan.py        # run_depscan_for_user/get_user_scan_status/should_rescan_for_user
 │   │                       # （GitHub ログイン経由のオンデマンドスキャン）
 │   ├── router.py           # router: /api/depscan エンドポイント（一覧・統計。X-API-KEY またはセッション
-│   │                       # トークンの二重認証）・/api/depscan/assets（資産コンテキスト一覧）
+│   │                       # トークンの二重認証）・/api/depscan/assets（資産コンテキスト一覧）・
+│   │                       # /api/depscan/export（SBOMエクスポート、Issue #133）
 │   │                       # admin_router: POST /admin/depscan-crawl（手動トリガー）・
 │   │                       # PUT /admin/depscan/assets/{owner}/{repo}（資産コンテキスト設定）
+│   ├── sbom.py             # CycloneDX/SPDX SBOM構築・purl生成（Issue #133）
 │   ├── github_client.py    # GitHub API クライアント（リポジトリ一覧・ツリー・ファイル取得）
 │   └── parsers/            # 10 エコシステム分のロックファイルパーサー
 ├── depsops/                # Dependabot PR 自動運用（DEPSOPS）ドメイン
@@ -524,6 +526,34 @@ Packagist・Hexは最も精度が低いbest-effort。`get_source_files`が対象
 - ダッシュボード（`DepscanGroupRow.tsx`）では、グループ内のいずれかのCVEが
   `kev_listed`の場合に赤い「KEV」バッジを行レベルで表示し（最も緊急度が高い
   シグナルのため）、それ以外の理由は展開時のCVE単位の内訳でバッジ表示する
+
+### DEPSCAN のSBOMエクスポート（Issue #133：CycloneDX/SPDX）
+OWASP Top 10:2025「ソフトウェアサプライチェーンの失敗」対策として、標準的な
+SBOM（Software Bill of Materials）フォーマットでの検知結果エクスポートに対応した。
+**対応範囲はエクスポート（読み取り専用）のみ**で、外部SBOMの入力受け付け・VEX
+（Vulnerability Exploitability eXchange）状態拡張はIssue #133本文の別提案として
+スコープ外とした（必要になったタイミングで別途対応する）。
+
+- **`app.depscan.sbom.build_purl`**: パッケージ情報からpurl（Package URL、
+  package-url/purl-spec）文字列をbest-effortで組み立てる。Maven（`groupId:artifactId`
+  形式）・Packagist（`vendor/name`形式）・npm（`@scope/name`形式）はnamespace/nameに
+  分解し、それ以外のエコシステムはパッケージ名をそのまま`name`として扱う（reachability
+  ヒューリスティックと同様、エコシステムにより精度差がある前提のbest-effort）。
+  `GET /api/depscan`のレスポンスにも`purl`フィールドとして含める（SBOM専用ではなく
+  他ツールとの相互運用に汎用的に使えるようにするため）
+- **`GET /api/depscan/export`**: `repo`（必須）・`format`（`cyclonedx`/`spdx`、既定
+  `cyclonedx`）・`resolved`で絞り込み、CycloneDX 1.5またはSPDX 2.3形式のJSONを返す。
+  認証・アクセス制御は`GET /api/depscan`と同じ`_resolve_access`を使う
+- **CycloneDX**: パッケージ（`components`）は`(ecosystem, package_name,
+  installed_version)`単位で重複排除し、脆弱性（`vulnerabilities`）は元のfindingごとに
+  1件、`affects`で該当componentの`bom-ref`（purlを流用）を参照する。1パッケージに
+  複数CVEが紐づく場合、componentは1つにまとまり`vulnerabilities`だけが複数件になる
+- **SPDX**: **コア仕様（2.3）には脆弱性を表現する概念が無い**（SPDX 3.0のSecurity
+  プロファイルや別建てのVEX文書で扱うのが標準的で、スコープ外としたVEX拡張の実装が
+  前提になる）ため、`packages`（パッケージ一覧、`externalRefs`にpurlを含む）のみを
+  返す。脆弱性検知結果自体はCycloneDX形式か`GET /api/depscan`で確認する
+- レスポンスの`Content-Type`は標準JSONではなく`application/vnd.cyclonedx+json`・
+  `application/spdx+json`を明示し、各ツールが形式を判別できるようにする
 
 ### DEPSCAN の解決済みレコードは保持期間超過で自動削除する（未解決は対象外）
 `app.depscan.crawler._delete_old_depscan_records` が、`resolved_at` が
