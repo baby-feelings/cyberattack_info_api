@@ -96,8 +96,8 @@ Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
 ## API リファレンス
 
 全エンドポイント（`/health` を除く）で `X-API-KEY` ヘッダーが必要です。curlの実行例・
-パラメータ詳細・レスポンス例は **[SKILL.md](SKILL.md)** に集約しているのでそちらを参照
-（本READMEでは重複を避け、エンドポイント一覧のみ示す）。ローカル開発時は
+パラメータ詳細・レスポンス例は **[.claude/skills/api-usage/SKILL.md](.claude/skills/api-usage/SKILL.md)**
+に集約しているのでそちらを参照（本READMEでは重複を避け、エンドポイント一覧のみ示す）。ローカル開発時は
 `http://localhost:8000/docs` でOpenAPI仕様（Swagger UI）も参照できる（本番は無効化）。
 
 | メソッド | パス | 説明 |
@@ -387,7 +387,8 @@ Slack 通知に加えて、DEPSCAN の新規検知は検知されたリポジト
 
 ## Claude Code での活用例
 
-Claude Code や他のAIエージェントからの利用パターン・実行例は **[SKILL.md](SKILL.md)** を参照。
+Claude Code や他のAIエージェントからの利用パターン・実行例は
+**[.claude/skills/api-usage/SKILL.md](.claude/skills/api-usage/SKILL.md)** を参照。
 
 ---
 
