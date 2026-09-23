@@ -60,6 +60,14 @@ class Settings(BaseSettings):
     # この日数を超えて経過したレコードのみ定期削除する（未解決レコードは対象外）
     DEPSCAN_RETENTION_DAYS: int = 180
 
+    # 自アプリコード脆弱性診断（CODESCAN）設定
+    # DEPSCAN の後段に配置: JST 7:30 = UTC 22:30
+    CODESCAN_CRON_HOUR_UTC: int = 22
+    CODESCAN_CRON_MINUTE_UTC: int = 30
+    # CODESCAN データの保持期間（日数）: 解決済み（resolved_at 設定済み）のまま
+    # この日数を超えて経過したレコードのみ定期削除する（未解決レコードは対象外）
+    CODESCAN_RETENTION_DAYS: int = 180
+
     # Dependabot PR 自動運用（DEPSOPS）設定
     # JST 8:00 = UTC 23:00（DEPSCAN の後段。Dependabot が新規検知に反応する時間を確保）
     DEPSOPS_CRON_HOUR_UTC: int = 23

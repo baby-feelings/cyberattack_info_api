@@ -28,6 +28,7 @@ _CRAWLER_LABELS: dict[str, tuple[str, str]] = {
     "JVN": (":jigsaw:", "JVN 脆弱性データ"),
     "DEPSCAN": (":rotating_light:", "依存ライブラリ脆弱性"),
     "DEPSOPS": (":robot_face:", "Dependabot PR 自動運用"),
+    "CODESCAN": (":mag:", "自アプリコード脆弱性"),
 }
 
 # Slack Incoming Webhook の text フィールド上限（40,000文字）に対する安全マージン

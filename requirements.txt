@@ -14,6 +14,9 @@ PyJWT>=2.14.0
 PyYAML>=6.0.3
 tomli>=2.0.1; python_version < "3.11"
 prometheus-client>=0.26.0
+# CODESCAN（自アプリのコード脆弱性診断）用の静的解析エンジン。aarch64向けmanylinux
+# ホイールが公式提供されているため、OCI本番（ARM64）でも動作する
+semgrep>=1.100.0
 
 # ── セキュリティピン留め（間接依存の脆弱性対策） ──────────────────
 cryptography>=50.0.1

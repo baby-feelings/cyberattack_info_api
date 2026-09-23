@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { ShieldAlert, Shield, Package, FileWarning, Bug } from 'lucide-react'
+import { ShieldAlert, Shield, Package, FileWarning, Bug, ScanSearch } from 'lucide-react'
 import { HealthStatus } from './components/HealthStatus'
 import { KevPanel } from './components/KevPanel'
 import { OsvPanel } from './components/OsvPanel'
 import { JvnPanel } from './components/JvnPanel'
 import { DepscanAuthGate } from './components/DepscanAuthGate'
+import { CodescanPanel } from './components/CodescanPanel'
 
 // セクション見出しコンポーネント
 function SectionHeader({
@@ -30,13 +31,14 @@ function SectionHeader({
 }
 
 // タブ種別
-type TabKey = 'kev' | 'osv' | 'jvn' | 'depscan'
+type TabKey = 'kev' | 'osv' | 'jvn' | 'depscan' | 'codescan'
 
 const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   { key: 'kev', label: 'KEV', icon: <Shield size={20} className="text-blue-400" /> },
   { key: 'osv', label: 'OSV', icon: <Package size={20} className="text-emerald-400" /> },
   { key: 'jvn', label: 'JVN', icon: <FileWarning size={20} className="text-amber-400" /> },
   { key: 'depscan', label: 'DEPSCAN', icon: <Bug size={20} className="text-rose-400" /> },
+  { key: 'codescan', label: 'CODESCAN', icon: <ScanSearch size={20} className="text-cyan-400" /> },
 ]
 
 export default function App() {
@@ -155,19 +157,39 @@ export default function App() {
           </section>
         )}
 
+        {/* ══ CODESCAN タブ ══════════════════════════════════════════ */}
+        {activeTab === 'codescan' && (
+          <section
+            id="tabpanel-codescan"
+            role="tabpanel"
+            aria-labelledby="tab-codescan"
+            className="flex flex-col gap-4 sm:gap-6 lg:gap-8"
+          >
+            <SectionHeader
+              icon={<ScanSearch size={18} className="text-cyan-400" />}
+              title="CODESCAN — 自アプリのコード脆弱性診断"
+              subtitle="GitHub上の自作リポジトリのソースコードを Semgrep で静的解析"
+              borderColor="border-cyan-800/40"
+            />
+
+            {/* CODESCAN パネル（サマリー・一覧を内包） */}
+            <CodescanPanel />
+          </section>
+        )}
+
       </main>
 
       {/* フッター（下部固定タブバーに隠れないよう下部余白を確保） */}
       <footer className="w-full border-t border-slate-800/60 pb-20">
         <div className="max-w-screen-xl mx-auto px-4 sm:px-8 lg:px-12 py-5 flex flex-col sm:flex-row items-center justify-between gap-1 text-xs text-slate-600">
-          <span>データソース: CISA KEV / Open Source Vulnerabilities (OSV) / JVN (JVNDB) / DEPSCAN</span>
-          <span>KEV → OSV → JVN → DEPSCAN: JST 04:05 一括自動更新</span>
+          <span>データソース: CISA KEV / Open Source Vulnerabilities (OSV) / JVN (JVNDB) / DEPSCAN / CODESCAN</span>
+          <span>KEV → OSV → JVN → DEPSCAN → CODESCAN: JST 04:05 一括自動更新</span>
         </div>
       </footer>
 
       {/* 下部固定タブバー */}
       <nav className="fixed bottom-0 inset-x-0 z-20 border-t border-slate-800/60 bg-[#0a0e1a]/95 backdrop-blur-md">
-        <div role="tablist" className="max-w-screen-xl mx-auto grid grid-cols-4">
+        <div role="tablist" className="max-w-screen-xl mx-auto grid grid-cols-5">
           {TABS.map((tab) => {
             const isActive = activeTab === tab.key
             return (

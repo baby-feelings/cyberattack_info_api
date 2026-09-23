@@ -487,6 +487,74 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 ---
 
+### スキル 13.5: 自アプリのコード脆弱性を確認する（CODESCAN）
+
+**用途:** GitHub上の自作アプリ全リポジトリのソースコードをSemgrep（`p/security-audit`
++ `p/secrets`）で静的解析した結果を確認する。DEPSCAN（依存ライブラリの既知脆弱性）
+とは異なり、SQLi・ハードコード認証情報・XSS等、自アプリのコード自体に潜む脆弱性
+パターンを検知する。CVSSスコアはベストエフォート推定であり精度は保証しない
+（詳細は `.claude/skills/codescan/SKILL.md` 参照）。認証は KEV/OSV/JVN と同じ
+`X-API-KEY`（`API_KEY` または `PUBLIC_API_KEY`）で、DEPSCANのようなGitHubログイン
+によるオーナー制限は無い。
+
+```bash
+# 未解決かつCVSS 7.0以上（要対応優先度が高いもの）
+curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
+  "https://168.138.213.240.nip.io/api/codescan?resolved=false&min_cvss=7.0"
+
+# 特定リポジトリのみ絞り込み
+curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
+  "https://168.138.213.240.nip.io/api/codescan?repo=baby-feelings/baby_grow"
+
+# 統計情報（リポジトリ別・重要度別件数、未解決分のみ）
+curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
+  "https://168.138.213.240.nip.io/api/codescan/stats"
+```
+
+| パラメータ | 型 | 説明 |
+|-----------|-----|------|
+| `page` | int | ページ番号（デフォルト: 1） |
+| `per_page` | int | 件数（デフォルト: 50、最大: 200） |
+| `repo` | string | リポジトリ名で絞り込み（完全一致。例: `owner/repo`） |
+| `owner` | string | リポジトリオーナーで絞り込み（例: `baby-feelings`） |
+| `severity` | string | Semgrepの重要度で絞り込み（`ERROR` / `WARNING` / `INFO`） |
+| `resolved` | bool | 解決状態で絞り込み（未指定なら全件） |
+| `min_cvss` | float | CVSS基本値の下限値で絞り込み（0〜10） |
+
+**レスポンス例:**
+```json
+{
+  "total": 1,
+  "page": 1,
+  "per_page": 50,
+  "data": [
+    {
+      "repo_full_name": "baby-feelings/baby_grow",
+      "file_path": "app/main.py",
+      "line_start": 10,
+      "line_end": 10,
+      "rule_id": "python.lang.security.audit.hardcoded-password",
+      "message": "Hardcoded password detected",
+      "severity": "ERROR",
+      "cwe_ids": ["CWE-798: Use of Hard-coded Credentials"],
+      "owasp_categories": ["A07:2021 - Identification and Authentication Failures"],
+      "code_snippet": "PASSWORD = \"hunter2\"",
+      "cvss_score": 7.4,
+      "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
+      "detected_at": "2026-09-24T00:00:00+00:00",
+      "resolved_at": null
+    }
+  ]
+}
+```
+
+> 新規検知は検知されたリポジトリ自身に GitHub Issue として自動起票される（1リポジトリ
+> につき常に1つのOpen Issueに集約。タイトル `🔎 自アプリのコード脆弱性が検出されました
+> (CODESCAN)`。DEPSCANのIssueとはタイトルで区別できる）。`POST /admin/codescan-crawl`
+> （`X-API-KEY`必須）で手動実行できる。
+
+---
+
 ## 参考: GitHub ログイン API（DEPSCAN ダッシュボード用・ブラウザ専用）
 
 React ダッシュボードの DEPSCAN タブ向けの GitHub OAuth ログイン機能。ブラウザでの
@@ -775,6 +843,24 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | `detected_at` | string (ISO 8601) | 初回検知日時 |
 | `resolved_at` | string \| null (ISO 8601) | 解決日時（未解決なら `null`） |
 
+### CodeFindingOut（CODESCAN 検知結果）
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| `repo_full_name` | string | 検知元リポジトリ（例: `baby-feelings/baby_grow`） |
+| `file_path` | string | リポジトリルートからの相対パス |
+| `line_start` / `line_end` | int | 該当コードの開始行・終了行 |
+| `rule_id` | string | Semgrepのルールid（例: `python.lang.security.audit.hardcoded-password`） |
+| `message` | string | 検知内容の説明 |
+| `severity` | string | Semgrepの重要度（`ERROR` / `WARNING` / `INFO`） |
+| `cwe_ids` | string[] | CWE ID一覧（無ければ空配列） |
+| `owasp_categories` | string[] | OWASPカテゴリ一覧（無ければ空配列） |
+| `code_snippet` | string | 該当コード抜粋 |
+| `cvss_score` | float \| null | CVSS 3.1基本値。Semgrepのseverity・CWEからのベストエフォート推定値であり、精度は保証しない（`.claude/skills/codescan/SKILL.md`参照） |
+| `cvss_vector` | string \| null | CVSS 3.1ベクター文字列（同上、ベストエフォート） |
+| `detected_at` | string (ISO 8601) | 初回検知日時 |
+| `resolved_at` | string \| null (ISO 8601) | 解決日時（未解決なら `null`） |
+
 ### DependabotPrLogOut（DEPSOPS の PR 判定履歴）
 
 | フィールド | 型 | 説明 |
@@ -793,14 +879,14 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | フィールド | 型 | 説明 |
 |-----------|-----|------|
 | `id` | int | ログ ID |
-| `crawler_type` | string | クローラー種別（`KEV` / `OSV` / `JVN` / `DEPSCAN` / `DEPSOPS`） |
+| `crawler_type` | string | クローラー種別（`KEV` / `OSV` / `JVN` / `DEPSCAN` / `DEPSOPS` / `CODESCAN`） |
 | `status` | string | 実行結果（`success` / `error`） |
 | `started_at` | string (ISO 8601) | 開始日時 |
 | `finished_at` | string (ISO 8601) | 終了日時 |
 | `duration_seconds` | float | 所要時間（秒） |
 | `inserted` | int | 新規挿入件数 |
-| `updated` | int | 更新件数（KEV/OSV/JVN）。DEPSCAN では保持期間超過による削除件数を表す |
-| `deleted` | int | 削除件数（KEV/OSV/JVN）。DEPSCAN では解決済みにした件数を表す |
+| `updated` | int | 更新件数（KEV/OSV/JVN）。DEPSCAN/CODESCAN では保持期間超過による削除件数を表す |
+| `deleted` | int | 削除件数（KEV/OSV/JVN）。DEPSCAN/CODESCAN では解決済みにした件数を表す |
 | `error_message` | string \| null | エラーメッセージ（エラー時のみ） |
 
 ---
@@ -820,12 +906,13 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 | タイミング | 処理 |
 |----------|------|
-| 毎日 JST 04:05（UTC 19:05） | GitHub Actions 単一 cron で KEV → OSV → JVN → DEPSCAN → DEPSOPS を順次実行（Upsert・古いレコード削除） |
+| 毎日 JST 04:05（UTC 19:05） | GitHub Actions 単一 cron で KEV → OSV → JVN → DEPSCAN → CODESCAN → DEPSOPS を順次実行（Upsert・古いレコード削除） |
 | アプリ起動時 | DB テーブルの自動作成 |
 | `POST /admin/crawl` 実行時 | KEV バックグラウンド取得（202 即時返却） |
 | `POST /admin/osv-crawl` 実行時 | OSV バックグラウンド取得（202 即時返却・`?days=N` 対応） |
 | `POST /admin/jvn-crawl` 実行時 | JVN バックグラウンド取得（202 即時返却・`?days=N` 対応） |
 | `POST /admin/depscan-crawl` 実行時 | DEPSCAN バックグラウンド取得（202 即時返却・GitHub 全リポジトリ再スキャン） |
+| `POST /admin/codescan-crawl` 実行時 | CODESCAN バックグラウンド取得（202 即時返却・GitHub 全リポジトリをSemgrepで再スキャン） |
 | `POST /admin/dependabot-ops` 実行時 | DEPSOPS バックグラウンド実行（202 即時返却・毎日 JST 08:00 自動実行 + 手動トリガー可） |
 
 Upsertロジックの概要:
