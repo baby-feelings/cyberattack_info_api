@@ -17,7 +17,7 @@ prometheus-client>=0.26.0
 
 # ── セキュリティピン留め（間接依存の脆弱性対策） ──────────────────
 cryptography>=50.0.1
-urllib3>=2.7.0
+urllib3>=2.8.0
 idna>=3.19
 starlette>=1.6.0
 Mako>=1.4.1
