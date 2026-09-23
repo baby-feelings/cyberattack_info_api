@@ -21,3 +21,6 @@ urllib3>=2.8.0
 idna>=3.19
 starlette>=1.6.0
 Mako>=1.4.1
+# httpx/starlette経由の間接依存。GHSA-5p39-cfhj-2xmp・GHSA-82r6-8w77-94w6
+# （anyio<4.14.2の複数CVE、うち1件はCritical）対策
+anyio>=4.14.2
