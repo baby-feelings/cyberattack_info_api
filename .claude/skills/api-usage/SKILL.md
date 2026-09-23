@@ -1,3 +1,8 @@
+---
+name: api-usage
+description: サイバー攻撃情報API（本番稼働中のREST API）の使い方リファレンス。KEV/OSV/JVN脆弱性検索、DEPSCAN依存ライブラリスキャン、DEPSOPS判定履歴、STIX/TAXII配信、クローラーログ、Grafana監視など、curlでAPIを叩いて何かを調べたい・分析したい時に読む。フィールド定義・エラーレスポンス・データ更新スケジュールも含む。
+---
+
 # Cyberattack Info API — スキルガイド
 
 Claude Code や AI エージェントがこの API を「スキル（道具）」として活用するためのリファレンスです。
@@ -477,8 +482,8 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 >
 > `action=closed` は、過去に `flagged`（要確認）と記録した PR が、Dependabotの自動
 > クローズや手動マージ等 DEPSOPS の関知しないところで解消されたことを検知した記録
-> （詳細は [CLAUDE.md](CLAUDE.md) の「DEPSOPS」節参照）。ダッシュボードの「未解決」
-> 件数計算はこれを`flagged`と区別して除外するため、実態に合った件数になる。
+> （詳細は `.claude/skills/depscan-depsops/SKILL.md` の「DEPSOPS」節参照）。ダッシュボードの
+> 「未解決」件数計算はこれを`flagged`と区別して除外するため、実態に合った件数になる。
 
 ---
 
@@ -833,4 +838,4 @@ Upsertロジックの概要:
   以外はSlack通知のみで人の判断に委ねる。毎日JST 08:00に自動実行、手動実行も可能
 
 Upsertロジック・自動化の実装詳細（フィールド単位の判定条件・GitHub権限要件等）は
-リポジトリの`CLAUDE.md`を参照。
+`.claude/skills/crawler-internals/SKILL.md`・`.claude/skills/depscan-depsops/SKILL.md`を参照。
