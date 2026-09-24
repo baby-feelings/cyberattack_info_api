@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { LogIn, LogOut, Loader2, AlertTriangle } from 'lucide-react'
 import { fetchScanStatus, UnauthorizedError, githubLoginUrl, type ScanStatusResponse } from '../api/client'
 import { useGithubSession } from '../hooks/useGithubSession'
@@ -9,12 +9,17 @@ const POLL_INTERVAL_MS = 4000
 export function DepscanAuthGate() {
   const [scanStatus, setScanStatus] = useState<ScanStatusResponse | null>(null)
 
+  // useGithubSessionへ渡すonLogoutはuseCallbackで参照を安定させること。
+  // インライン関数のままだと毎レンダリングでhandleLogoutの参照も変わり、
+  // 下記のポーリングuseEffect（依存配列に handleLogout を含む）が
+  // レンダリングのたびに再実行されてtick()が多重に走ってしまう
+  // （テストで断続的にscanStatusがundefinedになりクラッシュする形で顕在化した）。
+  const handleScanLogout = useCallback(() => setScanStatus(null), [])
+
   // セッション管理（ログイン状態・トークン・OAuthコールバック処理）は
   // DEPSCAN/CODESCAN 共通の useGithubSession に切り出してある（Issue #219）。
   // ログアウト時にはスキャン進捗表示もクリアする（DEPSCAN固有の関心事）
-  const { session, checked, handleLogout, handleLogoutClick } = useGithubSession(
-    () => setScanStatus(null),
-  )
+  const { session, checked, handleLogout, handleLogoutClick } = useGithubSession(handleScanLogout)
 
   // ログイン中は、オンデマンドスキャンが完了する（またはエラーになる）まで進捗をポーリングする
   useEffect(() => {
