@@ -15,6 +15,7 @@ export interface CodeFindingOut {
   code_snippet: string
   cvss_score: number | null
   cvss_vector: string | null
+  tool: string
   detected_at: string
   resolved_at: string | null
 }
@@ -50,6 +51,7 @@ export async function fetchCodescanList(params: {
   severity?: string | null
   resolved?: boolean | null
   minCvss?: number | null
+  authToken?: string
 }): Promise<CodescanListResponse> {
   const p = new URLSearchParams()
   p.set('page', String(params.page ?? 1))
@@ -63,9 +65,9 @@ export async function fetchCodescanList(params: {
   if (params.minCvss !== null && params.minCvss !== undefined) {
     p.set('min_cvss', String(params.minCvss))
   }
-  return apiFetch<CodescanListResponse>(`/api/codescan?${p}`)
+  return apiFetch<CodescanListResponse>(`/api/codescan?${p}`, params.authToken)
 }
 
-export async function fetchCodescanStats(): Promise<CodescanStatsResponse> {
-  return apiFetch<CodescanStatsResponse>('/api/codescan/stats')
+export async function fetchCodescanStats(authToken?: string): Promise<CodescanStatsResponse> {
+  return apiFetch<CodescanStatsResponse>('/api/codescan/stats', authToken)
 }

@@ -10,6 +10,27 @@ const SEVERITY_CLS: Record<string, string> = {
   INFO: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
 }
 
+// 検知ツール種別を示す小さなバッジ（Semgrep / Gitleaks、Issue #219）
+const TOOL_LABEL: Record<string, string> = {
+  semgrep: 'Semgrep',
+  gitleaks: 'Gitleaks',
+}
+
+function ToolBadge({ tool }: { tool: string }) {
+  const isGitleaks = tool === 'gitleaks'
+  return (
+    <span
+      className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium border ${
+        isGitleaks
+          ? 'bg-orange-500/15 text-orange-300 border-orange-500/30'
+          : 'bg-slate-700/40 text-slate-400 border-slate-600/50'
+      }`}
+    >
+      {TOOL_LABEL[tool] ?? tool}
+    </span>
+  )
+}
+
 // CVSS 7.0以上を視覚的に強調するバッジ（Issue #203 の要件）
 function CvssBadge({ score }: { score: number | null }) {
   if (score == null) {
@@ -56,9 +77,12 @@ export function CodescanRow({ item }: { item: CodeFindingOut }) {
           </p>
         </td>
         <td className="py-2.5 pr-3">
-          <p className="text-slate-500 font-mono text-[10px] truncate max-w-[220px]">
-            {item.rule_id}
-          </p>
+          <div className="flex items-center gap-1.5">
+            <ToolBadge tool={item.tool} />
+            <p className="text-slate-500 font-mono text-[10px] truncate max-w-[180px]">
+              {item.rule_id}
+            </p>
+          </div>
         </td>
         <td className="py-2.5 text-xs text-slate-600 tabular-nums whitespace-nowrap">
           {detectedDate}

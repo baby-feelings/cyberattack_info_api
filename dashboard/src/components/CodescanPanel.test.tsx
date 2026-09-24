@@ -33,6 +33,7 @@ function item(overrides: Partial<CodeFindingOut> = {}): CodeFindingOut {
     code_snippet: 'PASSWORD = "hunter2"',
     cvss_score: 7.4,
     cvss_vector: 'CVSS:3.1/AV:L/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N',
+    tool: 'semgrep',
     detected_at: '2026-06-15T00:00:00Z',
     resolved_at: null,
     ...overrides,
@@ -131,5 +132,42 @@ describe('CodescanPanel', () => {
     await waitFor(() =>
       expect(mockedList).toHaveBeenCalledWith(expect.objectContaining({ resolved: false })),
     )
+  })
+
+  it('shows a tool badge distinguishing semgrep and gitleaks findings', async () => {
+    mockedList.mockResolvedValue({
+      total: 1, page: 1, per_page: 30, data: [item({ tool: 'gitleaks', rule_id: 'gitleaks:aws-access-token' })],
+    })
+    mockedStats.mockResolvedValue(EMPTY_STATS)
+
+    render(<CodescanPanel />)
+    await waitFor(() => expect(screen.getByText('Gitleaks')).toBeInTheDocument())
+  })
+
+  it('reloads the current filters when the reload button is clicked', async () => {
+    mockedList.mockResolvedValue({ total: 1, page: 1, per_page: 30, data: [item()] })
+    mockedStats.mockResolvedValue({
+      total: 1,
+      repos: [{ repo_full_name: 'baby-feelings/baby_grow', count: 1 }],
+      severities: [{ severity: 'ERROR', count: 1 }],
+    })
+    const user = userEvent.setup()
+
+    render(<CodescanPanel />)
+    await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(1))
+
+    await user.click(screen.getByTitle('再読み込み'))
+    await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2))
+  })
+
+  it('passes authToken through to fetchCodescanList/fetchCodescanStats (Bearer auth, Issue #219)', async () => {
+    mockedList.mockResolvedValue(EMPTY_LIST)
+    mockedStats.mockResolvedValue(EMPTY_STATS)
+
+    render(<CodescanPanel authToken="tok-abc" />)
+    await waitFor(() =>
+      expect(mockedList).toHaveBeenCalledWith(expect.objectContaining({ authToken: 'tok-abc' })),
+    )
+    expect(mockedStats).toHaveBeenCalledWith('tok-abc')
   })
 })

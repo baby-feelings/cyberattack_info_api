@@ -1,104 +1,20 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { LogIn, LogOut, Loader2, AlertTriangle } from 'lucide-react'
-import {
-  githubLoginUrl, fetchScanStatus, exchangeAuthCode, UnauthorizedError,
-  type ScanStatusResponse,
-} from '../api/client'
+import { fetchScanStatus, UnauthorizedError, githubLoginUrl, type ScanStatusResponse } from '../api/client'
+import { useGithubSession } from '../hooks/useGithubSession'
 import { DepscanPanel } from './DepscanPanel'
 
-const STORAGE_TOKEN_KEY = 'depscan_session_token'
-const STORAGE_USER_KEY = 'depscan_session_user'
 const POLL_INTERVAL_MS = 4000
 
-interface Session {
-  token: string
-  username: string
-}
-
-function readStoredSession(): Session | null {
-  try {
-    const token = localStorage.getItem(STORAGE_TOKEN_KEY)
-    const username = localStorage.getItem(STORAGE_USER_KEY)
-    return token && username ? { token, username } : null
-  } catch {
-    return null
-  }
-}
-
-function storeSession(session: Session): void {
-  try {
-    localStorage.setItem(STORAGE_TOKEN_KEY, session.token)
-    localStorage.setItem(STORAGE_USER_KEY, session.username)
-  } catch {
-    // localStorageが使えない環境（プライベートモード等）ではセッションを保持しないだけで動作は継続する
-  }
-}
-
-function clearStoredSession(): void {
-  try {
-    localStorage.removeItem(STORAGE_TOKEN_KEY)
-    localStorage.removeItem(STORAGE_USER_KEY)
-  } catch {
-    // 上記と同様、失敗しても無視してよい
-  }
-}
-
-// OAuthコールバックのリダイレクト先（/?depscan_code=...）から交換コードを読み取り、
-// URLからは取り除く（リロード時の再送信を防ぐ）。コードは数十秒で失効し一度しか
-// 使えないため、URLに残っていても実害は小さいが、念のため即座に取り除く。
-function consumeCallbackCode(): string | null {
-  const params = new URLSearchParams(window.location.search)
-  const code = params.get('depscan_code')
-  if (!code) return null
-
-  params.delete('depscan_code')
-  const newSearch = params.toString()
-  const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : '') + window.location.hash
-  window.history.replaceState({}, '', newUrl)
-
-  return code
-}
-
 export function DepscanAuthGate() {
-  const [session, setSession] = useState<Session | null>(null)
-  const [checked, setChecked] = useState(false)
   const [scanStatus, setScanStatus] = useState<ScanStatusResponse | null>(null)
 
-  // 初回マウント時のみ: OAuthコールバックからの復帰（交換コードをセッションJWTと
-  // 交換する）、または localStorage の既存セッションを読み込む
-  useEffect(() => {
-    async function init() {
-      const code = consumeCallbackCode()
-      if (code) {
-        try {
-          const { token, username } = await exchangeAuthCode(code)
-          storeSession({ token, username })
-          setSession({ token, username })
-        } catch {
-          // コード期限切れ・二重使用等は未ログイン状態のまま（ログイン画面を再表示）
-        }
-      } else {
-        const restored = readStoredSession()
-        if (restored) setSession(restored)
-      }
-      setChecked(true)
-    }
-    void init()
-  }, [])
-
-  // トークン失効時の自動ログアウト等、内部的な処理から呼ぶ（確認ダイアログなし）
-  const handleLogout = useCallback(() => {
-    clearStoredSession()
-    setSession(null)
-    setScanStatus(null)
-  }, [])
-
-  // ログアウトボタン押下時のみ呼ぶ（誤クリック防止の確認ダイアログを挟む）
-  function handleLogoutClick() {
-    if (window.confirm('ログアウトしますか？')) {
-      handleLogout()
-    }
-  }
+  // セッション管理（ログイン状態・トークン・OAuthコールバック処理）は
+  // DEPSCAN/CODESCAN 共通の useGithubSession に切り出してある（Issue #219）。
+  // ログアウト時にはスキャン進捗表示もクリアする（DEPSCAN固有の関心事）
+  const { session, checked, handleLogout, handleLogoutClick } = useGithubSession(
+    () => setScanStatus(null),
+  )
 
   // ログイン中は、オンデマンドスキャンが完了する（またはエラーになる）まで進捗をポーリングする
   useEffect(() => {
