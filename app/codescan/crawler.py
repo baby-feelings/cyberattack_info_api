@@ -13,8 +13,22 @@ archived 除外）ため `app.depscan.github_client.list_target_repos` を再利
 複雑なため）のとは異なり、CODESCANは通知を`notify_success`/`notify_error`の
 汎用フォーマットのみで済ませる設計とした（要件どおり）。
 
+Semgrep（コードパターン検知）に加え、専用のシークレット検知ツール gitleaks
+（https://github.com/gitleaks/gitleaks）も同じ tarball 展開先に対して実行する
+（Issue #219）。両ツールは互いに独立して try/except し、一方が失敗・タイムアウト
+してももう一方の結果は活かす（`_scan_repo` 参照）。
+
+【重要・セキュリティ】gitleaks の JSON 出力には検知したシークレットの実際の値
+（`Secret` フィールド）が平文で含まれる。これを DB に保存したり API レスポンス
+として返したりすると、自アプリの脆弱性診断 API が実際の認証情報を漏洩させる
+という本末転倒な事故になる。そのため `_parse_gitleaks_results` は `Secret`
+フィールドを一切参照せず、`code_snippet` 相当のフィールドには gitleaks の
+`Description`（ルールの説明。例:「AWS Access Key」等）のみを固定文言
+「検知内容: {Description}」として格納する（詳細は `.claude/skills/codescan/SKILL.md`）。
+
 APScheduler から毎日呼び出される。
 """
+import contextlib
 import io
 import json
 import logging
@@ -52,6 +66,11 @@ _SEMGREP_SUBPROCESS_TIMEOUT_SECONDS = 300
 _SEMGREP_RULE_TIMEOUT_SECONDS = "120"
 # コードスニペットの保存上限文字数（生成物混入等の異常ケースでDBが肥大化しないため）
 _MAX_SNIPPET_LEN = 2000
+
+# 1リポジトリあたりのgitleaksサブプロセス全体のタイムアウト（秒）。gitleaksは
+# 正規表現ベースのシークレット検知で一般にSemgrepより高速だが、大きなリポジトリも
+# 考慮し余裕を持たせる（Semgrepの300秒より短めでよい）
+_GITLEAKS_SUBPROCESS_TIMEOUT_SECONDS = 120
 
 
 def _extract_tarball(tarball_bytes: bytes, dest_dir: str) -> str:
@@ -155,6 +174,109 @@ def _parse_semgrep_results(
             "code_snippet": snippet,
             "cvss_score": cvss_score,
             "cvss_vector": cvss_vector,
+            "tool": "semgrep",
+            "detected_at": now,
+        })
+
+    return records
+
+
+def _run_gitleaks(target_dir: str) -> list[dict[str, Any]]:
+    """gitleaks を実行し JSON レポートをパースして返す薄いラッパー。
+
+    Semgrep と同じ方針で、実際のバイナリ呼び出しをこの関数に閉じ込めることで
+    Windows 開発環境（gitleaks バイナリが無い）でもこのラッパー自体をモックして
+    テストできるようにする。`--no-git`（tarball 展開のため Git 履歴が無い）・
+    `--exit-code 0`（シークレット検知時の非ゼロ終了を防ぎ、Semgrep と同様に
+    「検知があっても正常終了として扱い JSON 出力をパースする」設計に統一する）
+    が必須。1リポジトリあたりのタイムアウトを必ず設定する（超過時は
+    `subprocess.TimeoutExpired` を送出し、呼び出し元 `_scan_repo` の try/except
+    により gitleaks の結果のみスキップされ、Semgrep の結果は活かされる）。
+    """
+    with tempfile.NamedTemporaryFile(
+        suffix=".json", delete=False,
+    ) as report_file:
+        report_path = report_file.name
+
+    try:
+        subprocess.run(  # noqa: S603
+            [
+                "gitleaks",
+                "detect",
+                "--source", target_dir,
+                "--no-git",
+                "--report-format", "json",
+                "--report-path", report_path,
+                "--exit-code", "0",
+            ],
+            capture_output=True,
+            timeout=_GITLEAKS_SUBPROCESS_TIMEOUT_SECONDS,
+            text=True,
+            check=False,
+        )
+        with open(report_path, encoding="utf-8") as f:
+            content = f.read().strip()
+        # 検知0件の場合 gitleaks は `[]` を書くが、念のため空文字列もフォールバックする
+        parsed = json.loads(content) if content else []
+        return list(parsed) if isinstance(parsed, list) else []
+    finally:
+        with contextlib.suppress(OSError):
+            os.remove(report_path)
+
+
+def _parse_gitleaks_results(
+    full_name: str, gitleaks_results: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """gitleaks の JSON 出力を `CodeFinding` 相当のレコード辞書リストへ変換する。
+
+    【重要・セキュリティ】gitleaks の各エントリには検知したシークレットの実際の
+    値（`Secret` フィールド）が平文で含まれるが、このフィールドは一切参照しない。
+    `code_snippet` には `Description`（ルールの説明）のみを固定文言として格納し、
+    シークレット値そのものを DB へ保存しない（モジュール docstring 参照）。
+
+    gitleaks のハードコード認証情報検知は CWE-798 に相当するため、CVSS ベクター
+    推定は既存の `app.codescan.cvss_mapping` の CWE-798 マッピングをそのまま
+    再利用する（severity の概念が gitleaks には無いため、常に "ERROR" 相当として
+    扱う）。
+    """
+    now = now_utc()
+    records: list[dict[str, Any]] = []
+
+    for item in gitleaks_results:
+        rel_path = str(item.get("File", "")).replace("\\", "/")
+        line_start = int(item.get("StartLine") or 0)
+        line_end = int(item.get("EndLine") or line_start)
+        # Semgrepのrule_id（"python.lang.security...."）との衝突を避けるため
+        # gitleaks由来には明示的にプレフィックスを付与する
+        rule_id = f"gitleaks:{item.get('RuleID', 'unknown')}"
+        description = str(item.get("Description") or "Secret detected")
+
+        cvss_score: float | None = None
+        cvss_vector: str | None = None
+        try:
+            cvss_vector = estimate_cvss_vector("ERROR", ["CWE-798"])
+            cvss_score = calculate_base_score(cvss_vector)
+        except ValueError as exc:
+            logger.warning(
+                "CODESCAN: failed to estimate CVSS for gitleaks finding %s: %s",
+                rule_id, exc,
+            )
+
+        records.append({
+            "repo_full_name": full_name,
+            "file_path": rel_path,
+            "line_start": line_start,
+            "line_end": line_end,
+            "rule_id": rule_id,
+            "message": description,
+            "severity": "ERROR",
+            "cwe_ids": ["CWE-798"],
+            "owasp_categories": [],
+            # シークレットの実際の値（Secret）は絶対に保存しない
+            "code_snippet": f"検知内容: {description}"[:_MAX_SNIPPET_LEN],
+            "cvss_score": cvss_score,
+            "cvss_vector": cvss_vector,
+            "tool": "gitleaks",
             "detected_at": now,
         })
 
@@ -162,18 +284,41 @@ def _parse_semgrep_results(
 
 
 def _scan_repo(full_name: str, branch: str, token: str) -> list[dict[str, Any]]:
-    """1リポジトリを tarball 取得 → 展開 → Semgrep 実行 → パースする。
+    """1リポジトリを tarball 取得 → 展開 → Semgrep + gitleaks 実行 → パースする。
 
     tempfile.TemporaryDirectory() でスキャン用の一時ディレクトリを作成し、
-    スキャン完了後（例外発生時含む）に確実に削除する。
+    スキャン完了後（例外発生時含む）に確実に削除する。Semgrep と gitleaks は
+    それぞれ独立した try/except で囲み、どちらか一方が失敗・タイムアウトしても
+    もう片方の結果は活かす（1つの try/except で両方を囲むと、片方の障害で
+    両ツールの検知結果を丸ごと失ってしまうため）。tarball 取得・展開の失敗は
+    リポジトリ単位の障害として呼び出し元 `_run_codescan_body` に伝播させる。
     """
     owner, repo = full_name.split("/", 1)
     tarball_bytes = download_repo_tarball(owner, repo, token, branch)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         repo_root = _extract_tarball(tarball_bytes, tmpdir)
-        semgrep_json = _run_semgrep(repo_root)
-        return _parse_semgrep_results(full_name, semgrep_json, repo_root)
+        records: list[dict[str, Any]] = []
+
+        try:
+            semgrep_json = _run_semgrep(repo_root)
+            records.extend(_parse_semgrep_results(full_name, semgrep_json, repo_root))
+        except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError) as exc:
+            logger.warning(
+                "CODESCAN: semgrep failed for %s, skipping semgrep results: %s",
+                full_name, exc,
+            )
+
+        try:
+            gitleaks_results = _run_gitleaks(repo_root)
+            records.extend(_parse_gitleaks_results(full_name, gitleaks_results))
+        except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError) as exc:
+            logger.warning(
+                "CODESCAN: gitleaks failed for %s, skipping gitleaks results: %s",
+                full_name, exc,
+            )
+
+        return records
 
 
 def _upsert_repo_findings(
@@ -229,6 +374,10 @@ def _upsert_repo_findings(
             existing.code_snippet = rec["code_snippet"]
             existing.cvss_score = rec["cvss_score"]
             existing.cvss_vector = rec["cvss_vector"]
+            # "tool"キーは既存テストの一部で省略されうるため .get で後方互換を保つ
+            # （省略時は既存値を変更しない方が安全だが、Semgrep/gitleaksの実装では
+            # 常に付与されるため実運用上は必ず更新される）
+            existing.tool = rec.get("tool", existing.tool)
 
     db.commit()
     return inserted, new_snapshots

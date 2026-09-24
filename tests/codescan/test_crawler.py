@@ -18,9 +18,11 @@ os.environ.setdefault("GITHUB_USERNAME", "test-github-user")
 from app.codescan.crawler import (  # noqa: E402
     _delete_old_codescan_records,
     _extract_tarball,
+    _parse_gitleaks_results,
     _parse_semgrep_results,
     _resolve_stale_repo_findings,
     _run_codescan_body,
+    _run_gitleaks,
     _run_semgrep,
     _scan_repo,
     _upsert_repo_findings,
@@ -51,6 +53,21 @@ _SAMPLE_SEMGREP_JSON = {
         },
     ],
 }
+
+# gitleaks のJSON出力サンプル。"Secret"フィールドに実際のシークレット値が
+# 平文で含まれることに注意（_parse_gitleaks_resultsがこれを一切保存しないことを
+# TestParseGitleaksResultsで検証する）
+_SAMPLE_GITLEAKS_JSON = [
+    {
+        "Description": "AWS Access Key",
+        "StartLine": 5,
+        "EndLine": 5,
+        "RuleID": "aws-access-token",
+        "File": "app/config.py",
+        "Secret": "AKIAABCDEFGHIJKLMNOP",  # pragma: allowlist secret
+        "Match": 'AWS_KEY = "AKIAABCDEFGHIJKLMNOP"',
+    },
+]
 
 
 def _make_finding(db_session, **kwargs) -> CodeFinding:
@@ -184,14 +201,121 @@ class TestParseSemgrepResults:
         assert len(records[0]["code_snippet"]) <= 2000
 
 
+class TestRunGitleaks:
+    def test_parses_report_file(self, tmp_path):
+        fake_result = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+
+        def _fake_run(cmd, **kwargs):
+            # gitleaksは --report-path に指定されたファイルへJSONを書き出す
+            report_path = cmd[cmd.index("--report-path") + 1]
+            with open(report_path, "w", encoding="utf-8") as f:
+                f.write('[{"RuleID": "aws-access-token"}]')
+            return fake_result
+
+        with patch("subprocess.run", side_effect=_fake_run) as mock_run:
+            output = _run_gitleaks(str(tmp_path))
+        assert output == [{"RuleID": "aws-access-token"}]
+        call_args = mock_run.call_args
+        assert call_args.args[0][0] == "gitleaks"
+        assert "--no-git" in call_args.args[0]
+        assert "--exit-code" in call_args.args[0]
+        assert call_args.kwargs["timeout"] == 120
+
+    def test_empty_report_returns_empty_list(self, tmp_path):
+        fake_result = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+
+        def _fake_run(cmd, **kwargs):
+            report_path = cmd[cmd.index("--report-path") + 1]
+            with open(report_path, "w", encoding="utf-8"):
+                pass  # 空ファイル（検知0件）
+            return fake_result
+
+        with patch("subprocess.run", side_effect=_fake_run):
+            output = _run_gitleaks(str(tmp_path))
+        assert output == []
+
+    def test_report_file_is_removed_after_run(self, tmp_path):
+        captured_path = {}
+
+        def _fake_run(cmd, **kwargs):
+            report_path = cmd[cmd.index("--report-path") + 1]
+            captured_path["path"] = report_path
+            with open(report_path, "w", encoding="utf-8") as f:
+                f.write("[]")
+            return subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=_fake_run):
+            _run_gitleaks(str(tmp_path))
+        assert not os.path.exists(captured_path["path"])
+
+
+class TestParseGitleaksResults:
+    def test_extracts_fields_without_leaking_secret_value(self):
+        records = _parse_gitleaks_results("owner/repo", _SAMPLE_GITLEAKS_JSON)
+        assert len(records) == 1
+        rec = records[0]
+        assert rec["repo_full_name"] == "owner/repo"
+        assert rec["file_path"] == "app/config.py"
+        assert rec["line_start"] == 5
+        assert rec["line_end"] == 5
+        assert rec["rule_id"] == "gitleaks:aws-access-token"
+        assert rec["message"] == "AWS Access Key"
+        assert rec["severity"] == "ERROR"
+        assert rec["cwe_ids"] == ["CWE-798"]
+        assert rec["tool"] == "gitleaks"
+        assert rec["cvss_score"] is not None
+        assert rec["cvss_vector"] is not None
+        # 【重要】実際のシークレット値（Secret/Match）が一切保存されていないことを確認
+        assert "AKIAABCDEFGHIJKLMNOP" not in rec["code_snippet"]
+        assert "AKIAABCDEFGHIJKLMNOP" not in str(rec.values())
+        assert "検知内容: AWS Access Key" == rec["code_snippet"]
+
+    def test_no_results_returns_empty_list(self):
+        assert _parse_gitleaks_results("owner/repo", []) == []
+
+    def test_missing_description_falls_back_to_generic_message(self):
+        records = _parse_gitleaks_results(
+            "owner/repo",
+            [{"RuleID": "generic-api-key", "File": "a.py", "StartLine": 1, "EndLine": 1}],
+        )
+        assert records[0]["message"] == "Secret detected"
+
+
 class TestScanRepo:
-    def test_downloads_extracts_runs_semgrep_and_parses(self):
+    def test_downloads_extracts_runs_semgrep_and_gitleaks_and_parses(self):
         tarball = _make_tarball({"app/main.py": "x = 1"}, top_dir="owner-repo-sha")
         with patch("app.codescan.crawler.download_repo_tarball", return_value=tarball), \
-             patch("app.codescan.crawler._run_semgrep", return_value=_SAMPLE_SEMGREP_JSON):
+             patch("app.codescan.crawler._run_semgrep", return_value=_SAMPLE_SEMGREP_JSON), \
+             patch("app.codescan.crawler._run_gitleaks", return_value=_SAMPLE_GITLEAKS_JSON):
+            records = _scan_repo("owner/repo", "main", "token")
+        assert len(records) == 2
+        tools = {r["tool"] for r in records}
+        assert tools == {"semgrep", "gitleaks"}
+        assert all(r["repo_full_name"] == "owner/repo" for r in records)
+
+    def test_gitleaks_failure_does_not_lose_semgrep_results(self):
+        tarball = _make_tarball({"app/main.py": "x = 1"}, top_dir="owner-repo-sha")
+        with patch("app.codescan.crawler.download_repo_tarball", return_value=tarball), \
+             patch("app.codescan.crawler._run_semgrep", return_value=_SAMPLE_SEMGREP_JSON), \
+             patch(
+                 "app.codescan.crawler._run_gitleaks",
+                 side_effect=subprocess.TimeoutExpired(cmd="gitleaks", timeout=120),
+             ):
             records = _scan_repo("owner/repo", "main", "token")
         assert len(records) == 1
-        assert records[0]["repo_full_name"] == "owner/repo"
+        assert records[0]["tool"] == "semgrep"
+
+    def test_semgrep_failure_does_not_lose_gitleaks_results(self):
+        tarball = _make_tarball({"app/main.py": "x = 1"}, top_dir="owner-repo-sha")
+        with patch("app.codescan.crawler.download_repo_tarball", return_value=tarball), \
+             patch(
+                 "app.codescan.crawler._run_semgrep",
+                 side_effect=subprocess.TimeoutExpired(cmd="semgrep", timeout=300),
+             ), \
+             patch("app.codescan.crawler._run_gitleaks", return_value=_SAMPLE_GITLEAKS_JSON):
+            records = _scan_repo("owner/repo", "main", "token")
+        assert len(records) == 1
+        assert records[0]["tool"] == "gitleaks"
 
 
 class TestUpsertRepoFindings:

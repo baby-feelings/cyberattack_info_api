@@ -45,7 +45,9 @@ class CodeFinding(Base):
     line_start: Mapped[int] = mapped_column(Integer, nullable=False)
     line_end: Mapped[int] = mapped_column(Integer, nullable=False)
 
-    # Semgrep のルールID（例: python.lang.security.audit.hardcoded-password）
+    # Semgrep のルールID（例: python.lang.security.audit.hardcoded-password）。
+    # gitleaks 由来のレコードは Semgrep とのルールID衝突を避けるため
+    # "gitleaks:<RuleID>" のプレフィックスを付与する（app.codescan.crawler._parse_gitleaks_results）
     rule_id: Mapped[str] = mapped_column(String(500), nullable=False)
 
     # 検知内容の説明（Semgrepの extra.message）
@@ -69,6 +71,13 @@ class CodeFinding(Base):
 
     # CVSS 3.1 ベクター文字列（同上、ベストエフォート）
     cvss_vector: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    # 検知したツール（"semgrep" / "gitleaks"）。既存レコードとの後方互換のため
+    # server_default で "semgrep" を設定する（gitleaks 導入以前のレコードは全て
+    # Semgrep 由来のため）
+    tool: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default="semgrep",
+    )
 
     # 初回検知日時
     detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
