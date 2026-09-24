@@ -1,12 +1,12 @@
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 
 # 全ドメインの models モジュールを import し、Base.metadata に登録させる
 # （autogenerate がテーブル定義を検出できるようにするため）
+from app.codescan import models as _codescan_models  # noqa: F401
 from app.core.config import settings
 from app.core.database import Base
 from app.crawler_logs import models as _crawler_logs_models  # noqa: F401

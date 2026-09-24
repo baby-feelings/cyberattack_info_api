@@ -10,10 +10,17 @@ python-dotenv>=1.2.3
 httpx>=0.28.1
 apscheduler>=3.10.4
 defusedxml>=0.7.1
-PyJWT>=2.14.0
+# semgrep（下記）が pyjwt~=2.13.0（2.13.x系のみ）に固定して依存しているため、
+# 2.14.0（元々は#206のdependabot更新で引き上げられていただけで、既知脆弱性
+# PYSEC-2025-183等の修正自体は2.13.0時点で完了済み）まで上げると解決不能になる。
+# 2.13.x系を許容する範囲に戻し、semgrepとの依存関係を解決可能にする
+PyJWT>=2.13.0,<2.14.0
 PyYAML>=6.0.3
 tomli>=2.0.1; python_version < "3.11"
 prometheus-client>=0.26.0
+# CODESCAN（自アプリのコード脆弱性診断）用の静的解析エンジン。aarch64向けmanylinux
+# ホイールが公式提供されているため、OCI本番（ARM64）でも動作する
+semgrep>=1.100.0
 
 # ── セキュリティピン留め（間接依存の脆弱性対策） ──────────────────
 cryptography>=50.0.1

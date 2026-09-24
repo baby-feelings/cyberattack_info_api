@@ -15,6 +15,9 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.auth.router import router as auth_router
+from app.codescan.crawler import fetch_and_scan_code
+from app.codescan.router import admin_router as codescan_admin_router
+from app.codescan.router import router as codescan_router
 from app.core.config import settings
 from app.core.database import Base, engine, get_db
 from app.core.metrics import router as metrics_router
@@ -68,7 +71,7 @@ def _drop_scan_results_table(db_engine) -> None:
 
 
 def _register_scheduled_jobs(job_scheduler: BackgroundScheduler) -> None:
-    """5種のクローラー（KEV/OSV/JVN/DEPSCAN/DEPSOPS）を APScheduler に登録し起動する。"""
+    """6種のクローラー（KEV/OSV/JVN/DEPSCAN/DEPSOPS/CODESCAN）を APScheduler に登録し起動する。"""
     # CISA KEV クローラー: 毎日 UTC 19:00（JST 翌日 4:00）
     job_scheduler.add_job(
         fetch_and_store_kev,
@@ -105,6 +108,15 @@ def _register_scheduled_jobs(job_scheduler: BackgroundScheduler) -> None:
         id="depscan_crawler",
         replace_existing=True,
     )
+    # 自アプリコード脆弱性診断（CODESCAN）: DEPSCAN の後段に配置
+    job_scheduler.add_job(
+        fetch_and_scan_code,
+        trigger="cron",
+        hour=settings.CODESCAN_CRON_HOUR_UTC,
+        minute=settings.CODESCAN_CRON_MINUTE_UTC,
+        id="codescan_crawler",
+        replace_existing=True,
+    )
     # Dependabot PR 自動運用（DEPSOPS）
     job_scheduler.add_job(
         run_dependabot_ops,
@@ -117,10 +129,12 @@ def _register_scheduled_jobs(job_scheduler: BackgroundScheduler) -> None:
     job_scheduler.start()
     logger.info(
         "Scheduler started: KEV UTC %02d:%02d / OSV UTC %02d:00 / JVN UTC %02d:00 / "
-        "DEPSCAN UTC %02d:00 / DEPSOPS UTC %02d:00",
+        "DEPSCAN UTC %02d:00 / CODESCAN UTC %02d:%02d / DEPSOPS UTC %02d:00",
         settings.CRON_HOUR_UTC, settings.CRON_MINUTE_UTC,
         settings.OSV_CRON_HOUR_UTC, settings.JVN_CRON_HOUR_UTC,
-        settings.DEPSCAN_CRON_HOUR_UTC, settings.DEPSOPS_CRON_HOUR_UTC,
+        settings.DEPSCAN_CRON_HOUR_UTC,
+        settings.CODESCAN_CRON_HOUR_UTC, settings.CODESCAN_CRON_MINUTE_UTC,
+        settings.DEPSOPS_CRON_HOUR_UTC,
     )
 
 
@@ -181,11 +195,13 @@ app.include_router(jvn_router)
 app.include_router(crawler_logs_router)
 app.include_router(depscan_router)
 app.include_router(depsops_router)
+app.include_router(codescan_router)
 app.include_router(kev_admin_router)
 app.include_router(osv_admin_router)
 app.include_router(jvn_admin_router)
 app.include_router(depscan_admin_router)
 app.include_router(depsops_admin_router)
+app.include_router(codescan_admin_router)
 app.include_router(metrics_router)
 app.include_router(taxii_router)
 

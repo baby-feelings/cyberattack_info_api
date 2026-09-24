@@ -57,6 +57,7 @@ def clean_db():
         conn.execute(text("DELETE FROM repo_asset_contexts"))
         conn.execute(text("DELETE FROM depscan_user_scans"))
         conn.execute(text("DELETE FROM dependabot_pr_logs"))
+        conn.execute(text("DELETE FROM code_findings"))
         conn.commit()
 
 
