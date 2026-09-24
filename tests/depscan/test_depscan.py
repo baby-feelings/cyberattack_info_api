@@ -166,7 +166,7 @@ class TestListDepscan:
         """セッショントークン認証時、owner指定に関わらずログインユーザー本人のみに絞り込まれる。"""
         _make_finding(db_session, repo_full_name="octocat/repo-a", osv_id="GHSA-mine")
         _make_finding(db_session, repo_full_name="baby-feelings/baby_grow", osv_id="GHSA-others")
-        with patch("app.depscan.router.settings.SESSION_SECRET_KEY", "test-secret"):
+        with patch("app.auth.session.settings.SESSION_SECRET_KEY", "test-secret"):
             token = create_session_token("octocat")
             res = client.get(
                 "/api/depscan?owner=baby-feelings",
@@ -177,7 +177,7 @@ class TestListDepscan:
         assert body["data"][0]["repo_full_name"] == "octocat/repo-a"
 
     def test_session_token_rejects_mismatched_repo_param(self, client, db_session):
-        with patch("app.depscan.router.settings.SESSION_SECRET_KEY", "test-secret"):
+        with patch("app.auth.session.settings.SESSION_SECRET_KEY", "test-secret"):
             token = create_session_token("octocat")
             res = client.get(
                 "/api/depscan?repo=baby-feelings/baby_grow",
@@ -247,7 +247,7 @@ class TestDepscanStats:
     def test_session_token_forces_owner_scope(self, client, db_session):
         _make_finding(db_session, repo_full_name="octocat/repo-a", osv_id="GHSA-mine")
         _make_finding(db_session, repo_full_name="baby-feelings/baby_grow", osv_id="GHSA-others")
-        with patch("app.depscan.router.settings.SESSION_SECRET_KEY", "test-secret"):
+        with patch("app.auth.session.settings.SESSION_SECRET_KEY", "test-secret"):
             token = create_session_token("octocat")
             res = client.get(
                 "/api/depscan/stats", headers={"Authorization": f"Bearer {token}"},
@@ -529,7 +529,7 @@ class TestExportDepscanSbom:
 
     def test_session_token_forces_owner_scope(self, client, db_session):
         _make_finding(db_session, repo_full_name="octocat/repo-a", osv_id="GHSA-mine")
-        with patch("app.depscan.router.settings.SESSION_SECRET_KEY", "test-secret"):
+        with patch("app.auth.session.settings.SESSION_SECRET_KEY", "test-secret"):
             token = create_session_token("octocat")
             res = client.get(
                 "/api/depscan/export?repo=octocat/repo-a",
@@ -539,7 +539,7 @@ class TestExportDepscanSbom:
 
     def test_session_token_rejects_other_owners_repo(self, client, db_session):
         _make_finding(db_session, repo_full_name="baby-feelings/baby_grow")
-        with patch("app.depscan.router.settings.SESSION_SECRET_KEY", "test-secret"):
+        with patch("app.auth.session.settings.SESSION_SECRET_KEY", "test-secret"):
             token = create_session_token("octocat")
             res = client.get(
                 "/api/depscan/export?repo=baby-feelings/baby_grow",

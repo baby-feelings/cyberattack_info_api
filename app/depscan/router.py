@@ -6,20 +6,16 @@ GET /api/depscan/stats  – リポジトリ別・重要度別の統計情報（�
 認証は `X-API-KEY`（フルアクセス）または `Authorization: Bearer <セッショントークン>`
 （GitHub ログイン経由。本人所有リポジトリのみに強制的に絞り込む）のいずれかを受け付ける。
 """
-import hmac
 import json
 import logging
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, Security, status
-from fastapi.security import APIKeyHeader
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.auth.session import decode_session_token
-from app.core.auth import require_api_key, require_public_api_key
+from app.core.auth import require_api_key, require_api_key_or_session, require_public_api_key
 from app.core.background import run_in_background
-from app.core.config import settings
 from app.core.database import get_db
 from app.core.pagination import paginate
 from app.core.schemas import SeverityStat
@@ -63,32 +59,11 @@ def trigger_depscan_crawl() -> dict:
     run_in_background("DEPSCAN", fetch_and_scan_dependencies)
     return {"message": "Dependency vulnerability scan started in background"}
 
-_api_key_header = APIKeyHeader(name="X-API-KEY", auto_error=False)
-_bearer_header = APIKeyHeader(name="Authorization", auto_error=False)
-
-
-def _resolve_access(
-    api_key: str | None = Depends(_api_key_header),
-    authorization: str | None = Depends(_bearer_header),
-) -> str | None:
-    """`X-API-KEY` または `Authorization: Bearer <session token>` を検証する。
-
-    Returns:
-        セッショントークン認証の場合はログイン中の GitHub ユーザー名
-        （呼び出し側でこの値に強制的に絞り込む）。API キー認証の場合は
-        None（絞り込みなし＝フルアクセス。Claude Code 等の既存クライアント向け）。
-    """
-    if api_key and hmac.compare_digest(api_key, settings.API_KEY):
-        return None
-    if authorization and authorization.lower().startswith("bearer "):
-        username = decode_session_token(authorization[len("bearer "):].strip())
-        if username is not None:
-            return username
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="Invalid or missing credentials. Provide X-API-KEY or "
-        "Authorization: Bearer <session token>.",
-    )
+# `X-API-KEY` または `Authorization: Bearer <session token>` を検証する。
+# 検証ロジック自体は app.core.auth.require_api_key_or_session に共通化されている
+# （DRY原則）。DEPSCAN はその戻り値（セッション認証時はログインユーザー名、API
+# キー認証時は None）を、呼び出し側で本人所有リポジトリへの絞り込みに使う。
+_resolve_access = require_api_key_or_session
 
 
 @router.get(
