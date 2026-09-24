@@ -70,13 +70,16 @@ export function Pagination({
 // ── 重要度フィルターボタン列 ────────────────────────────────────
 
 export function SeverityFilterButtons({
-  severities, active, onSelect, classMap, activeAllClass = 'bg-slate-700 text-white',
+  severities, active, onSelect, classMap, activeAllClass = 'bg-slate-700 text-white', labels,
 }: {
   severities: string[]
   active: string | null
   onSelect: (sev: string) => void
   classMap: Record<string, string>
   activeAllClass?: string
+  // 表示用ラベル（例: CODESCANのERROR/WARNING/INFOを日本語表記にする場合）。
+  // 未指定時は severities の値をそのまま表示する
+  labels?: Record<string, string>
 }) {
   return (
     <div className="flex gap-1">
@@ -93,7 +96,7 @@ export function SeverityFilterButtons({
             onClick={() => onSelect(sev)}
             className={`px-2 py-1 rounded text-xs font-medium transition-colors ${cls}`}
           >
-            {sev}
+            {labels?.[sev] ?? sev}
           </button>
         )
       })}

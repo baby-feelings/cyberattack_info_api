@@ -10,6 +10,13 @@ const SEVERITY_CLS: Record<string, string> = {
   INFO: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
 }
 
+// 重要度の表示ラベル。ERRORはシステムエラーと紛らわしいため日本語表記にする
+const SEVERITY_LABELS: Record<string, string> = {
+  ERROR: '重大',
+  WARNING: '警告',
+  INFO: '情報',
+}
+
 // 検知ツール種別を示す小さなバッジ（Semgrep / Gitleaks、Issue #219）
 const TOOL_LABEL: Record<string, string> = {
   semgrep: 'Semgrep',
@@ -63,7 +70,7 @@ export function CodescanRow({ item }: { item: CodeFindingOut }) {
         onClick={() => setOpen(o => !o)}
       >
         <td className="py-2.5 pr-3">
-          <SeverityBadge severity={item.severity} classMap={SEVERITY_CLS} />
+          <SeverityBadge severity={item.severity} classMap={SEVERITY_CLS} labels={SEVERITY_LABELS} />
         </td>
         <td className="py-2.5 pr-3">
           <CvssBadge score={item.cvss_score} />
