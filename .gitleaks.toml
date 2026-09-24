@@ -1,0 +1,21 @@
+# gitleaks（CODESCAN、Issue #219）向けallowlist設定。
+#
+# app/codescan/crawler.py の _run_gitleaks が、対象リポジトリのルートに
+# このファイルが存在する場合に自動的に --config で渡す。
+#
+# ここで除外するのは、tests/codescan/test_crawler.py 内の
+# gitleaks検知結果パース処理（_parse_gitleaks_results）をテストするために
+# 用意したダミーのAWSアクセスキー（実在の認証情報ではない）。gitleaksが
+# 自リポジトリを毎回のCODESCANスキャン対象に含めるたび、このテストデータを
+# 本物のシークレットとして検知しGitHub Issueを起票し続けていた（Issue #221）。
+
+title = "cyberattack_info_api gitleaks config"
+
+[extend]
+useDefault = true
+
+[[allowlist]]
+description = "CODESCANのgitleaks結果パース処理を検証するためのテスト用ダミーAWSキー（実データではない）"
+paths = [
+  '''tests/codescan/test_crawler\.py''',
+]

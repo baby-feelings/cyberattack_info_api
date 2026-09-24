@@ -248,6 +248,43 @@ class TestRunGitleaks:
             _run_gitleaks(str(tmp_path))
         assert not os.path.exists(captured_path["path"])
 
+    def test_omits_config_flag_when_repo_has_no_gitleaks_toml(self, tmp_path):
+        """対象リポジトリに.gitleaks.tomlが無い場合は--configを付与しない（デフォルトルールで検知）。"""
+        fake_result = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+
+        def _fake_run(cmd, **kwargs):
+            report_path = cmd[cmd.index("--report-path") + 1]
+            with open(report_path, "w", encoding="utf-8") as f:
+                f.write("[]")
+            return fake_result
+
+        with patch("subprocess.run", side_effect=_fake_run) as mock_run:
+            _run_gitleaks(str(tmp_path))
+        assert "--config" not in mock_run.call_args.args[0]
+
+    def test_uses_repo_gitleaks_toml_when_present(self, tmp_path):
+        """対象リポジトリのルートに.gitleaks.tomlがあれば--configで明示的に渡す（Issue #221）。
+
+        gitleaksは--source配下の設定ファイルを自動探索しないため、各リポジトリが
+        自身のallowlist（テストフィクスチャのダミーシークレット等の既知の誤検知除外）を
+        持てるようにするには、呼び出し側で明示的に検出して渡す必要がある。
+        """
+        config_path = tmp_path / ".gitleaks.toml"
+        config_path.write_text("[extend]\nuseDefault = true\n", encoding="utf-8")
+        fake_result = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+
+        def _fake_run(cmd, **kwargs):
+            report_path = cmd[cmd.index("--report-path") + 1]
+            with open(report_path, "w", encoding="utf-8") as f:
+                f.write("[]")
+            return fake_result
+
+        with patch("subprocess.run", side_effect=_fake_run) as mock_run:
+            _run_gitleaks(str(tmp_path))
+        cmd = mock_run.call_args.args[0]
+        assert "--config" in cmd
+        assert cmd[cmd.index("--config") + 1] == str(config_path)
+
 
 class TestParseGitleaksResults:
     def test_extracts_fields_without_leaking_secret_value(self):
