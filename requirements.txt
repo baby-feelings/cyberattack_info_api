@@ -31,3 +31,7 @@ Mako>=1.4.1
 # httpx/starlette経由の間接依存。GHSA-5p39-cfhj-2xmp・GHSA-82r6-8w77-94w6
 # （anyio<4.14.2の複数CVE、うち1件はCritical）対策
 anyio>=4.14.2
+# fastapi(python-multipart extra)経由の間接依存で明示的な下限指定が無かったため、
+# OSV-Scannerが理論上許容される最古のバージョン（0.0.9、DoS等16件のCVE対象）を
+# 検出していた。実際にpipが解決するバージョン（0.0.32）を下限として明示する
+python-multipart>=0.0.31
