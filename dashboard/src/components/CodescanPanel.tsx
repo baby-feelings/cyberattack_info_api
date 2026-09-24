@@ -14,6 +14,13 @@ const SEVERITY_CLS: Record<string, string> = {
 
 const SEVERITIES = ['ALL', 'ERROR', 'WARNING', 'INFO']
 
+// 重要度の表示ラベル。ERRORはシステムエラーと紛らわしいため日本語表記にする
+const SEVERITY_LABELS: Record<string, string> = {
+  ERROR: '重大',
+  WARNING: '警告',
+  INFO: '情報',
+}
+
 // authToken 指定時（GitHubログイン経由）は、サーバー側で require_api_key_or_session
 // によりログイン必須になる（Issue #219）。DepscanPanel と同じ props パターン。
 export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
@@ -40,7 +47,7 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
             <div className="flex items-center gap-2 text-xs tabular-nums">
               {errorCount > 0 && (
                 <span className="px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 font-semibold">
-                  ERROR {errorCount}
+                  重大 {errorCount}
                 </span>
               )}
               <span className="text-slate-500">未解決 {stats.total} 件</span>
@@ -75,6 +82,7 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
           active={severity}
           onSelect={handleSev}
           classMap={SEVERITY_CLS}
+          labels={SEVERITY_LABELS}
         />
         <div className="flex items-center gap-1 bg-slate-800/60 border border-slate-700 rounded-lg px-2.5 py-1.5">
           <span className="text-[10px] text-slate-500 whitespace-nowrap">状態:</span>

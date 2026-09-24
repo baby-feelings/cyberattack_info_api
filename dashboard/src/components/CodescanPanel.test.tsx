@@ -100,7 +100,7 @@ describe('CodescanPanel', () => {
     render(<CodescanPanel />)
     await waitFor(() => expect(mockedList).toHaveBeenCalled())
 
-    await user.click(screen.getByRole('button', { name: 'ERROR' }))
+    await user.click(screen.getByRole('button', { name: '重大' }))
     await waitFor(() =>
       expect(mockedList).toHaveBeenLastCalledWith(
         expect.objectContaining({ severity: 'ERROR' }),
