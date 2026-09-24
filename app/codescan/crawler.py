@@ -192,23 +192,35 @@ def _run_gitleaks(target_dir: str) -> list[dict[str, Any]]:
     が必須。1リポジトリあたりのタイムアウトを必ず設定する（超過時は
     `subprocess.TimeoutExpired` を送出し、呼び出し元 `_scan_repo` の try/except
     により gitleaks の結果のみスキップされ、Semgrep の結果は活かされる）。
+
+    対象リポジトリのルートに `.gitleaks.toml` が存在すれば `--config` で
+    明示的に渡す（gitleaksはデフォルトでは`--source`配下の設定ファイルを
+    自動探索しないため）。これにより各リポジトリが自身のallowlist
+    （テストフィクスチャのダミーシークレット等の既知の誤検知除外）を
+    持てるようにする（Issue #221: 本リポジトリ自身のテストコード内の
+    ダミーAWSキーが検知され続けていた問題への対応）。
     """
     with tempfile.NamedTemporaryFile(
         suffix=".json", delete=False,
     ) as report_file:
         report_path = report_file.name
 
+    cmd = [
+        "gitleaks",
+        "detect",
+        "--source", target_dir,
+        "--no-git",
+        "--report-format", "json",
+        "--report-path", report_path,
+        "--exit-code", "0",
+    ]
+    repo_config_path = os.path.join(target_dir, ".gitleaks.toml")
+    if os.path.isfile(repo_config_path):
+        cmd.extend(["--config", repo_config_path])
+
     try:
         subprocess.run(  # noqa: S603
-            [
-                "gitleaks",
-                "detect",
-                "--source", target_dir,
-                "--no-git",
-                "--report-format", "json",
-                "--report-path", report_path,
-                "--exit-code", "0",
-            ],
+            cmd,
             capture_output=True,
             timeout=_GITLEAKS_SUBPROCESS_TIMEOUT_SECONDS,
             text=True,
