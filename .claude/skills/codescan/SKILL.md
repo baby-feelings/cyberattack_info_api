@@ -159,3 +159,27 @@ GitHub Releasesから本番環境（OCI Ampere A1 = Linux ARM64）向けのプ�
 https://api.github.com/repos/gitleaks/gitleaks/releases/latest で最新版を確認し、
 Dockerfileの`ARG GITLEAKS_VERSION`を更新すること。Windows開発環境にはgitleaks
 バイナリが無い前提でテストは`_run_gitleaks`自体をモックして書く。
+
+**ファイルパスはrepo_root基準の相対パスへ正規化する（Issue #222で発覚したバグ）**:
+gitleaksのJSON出力の`File`フィールドは、環境によってはtarball展開先の絶対パス
+（`tempfile.TemporaryDirectory()`が毎回生成するランダムなディレクトリ名を含む）
+をそのまま返す。これをUpsertキーの`file_path`にそのまま使うと、
+`tempfile.TemporaryDirectory()`のパスがスキャンごとに変わるためUpsertの自然キー
+が毎回一致せず、findingが際限なく重複蓄積する実害があった（本番データで発覚）。
+`_parse_gitleaks_results(full_name, gitleaks_results, repo_root)`は`repo_root`
+引数を受け取り、`File`が絶対パスの場合のみ`os.path.relpath(raw_path, repo_root)`
+で相対パスへ正規化する（`_parse_semgrep_results`が元々行っていたのと同じパターン
+に合わせた）。
+
+**リポジトリ単位のgitleaks allowlist自動検出（Issue #221）**: gitleaksは
+`--source`配下の設定ファイルを自動探索しない（Semgrepとは異なる挙動）ため、
+明示的に`--config`で渡さない限りデフォルトルールのみが適用される。本リポジトリ
+自身がCODESCANのスキャン対象に含まれる場合、`tests/codescan/test_crawler.py`内の
+テスト用ダミーシークレットまで誤検知してしまい、スキャンのたびにGitHub Issueが
+再起票され続ける問題が実際に発生した。対応として`_run_gitleaks(target_dir)`が
+`target_dir`直下に`.gitleaks.toml`が存在するかを`os.path.isfile`で確認し、
+存在すれば`["--config", repo_config_path]`をコマンドに追加する。これにより
+CODESCANのスキャン対象となる各baby-feelingsリポジトリが、自分自身の
+`.gitleaks.toml`（`[[allowlist]] paths = [...]`）で既知の誤検知を個別に
+allowlist登録できる、リポジトリ非依存の汎用的な仕組みになっている（本リポジトリ
+ルートの`.gitleaks.toml`もこの仕組みで自分自身のテストフィクスチャを除外している）。

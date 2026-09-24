@@ -850,12 +850,13 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | `repo_full_name` | string | 検知元リポジトリ（例: `baby-feelings/baby_grow`） |
 | `file_path` | string | リポジトリルートからの相対パス |
 | `line_start` / `line_end` | int | 該当コードの開始行・終了行 |
-| `rule_id` | string | Semgrepのルールid（例: `python.lang.security.audit.hardcoded-password`） |
+| `rule_id` | string | 検知ルールid（Semgrep例: `python.lang.security.audit.hardcoded-password`。gitleaksは`gitleaks:`プレフィックス付き、例: `gitleaks:aws-access-token`） |
 | `message` | string | 検知内容の説明 |
-| `severity` | string | Semgrepの重要度（`ERROR` / `WARNING` / `INFO`） |
+| `severity` | string | 重要度（`ERROR` / `WARNING` / `INFO`。Semgrep検知はSemgrepのseverityそのまま、gitleaks検知は常に`ERROR`固定。ダッシュボードでは「重大/警告/情報」の日本語表示に変換される） |
+| `tool` | string | 検知したツール（`semgrep` / `gitleaks`。Issue #219） |
 | `cwe_ids` | string[] | CWE ID一覧（無ければ空配列） |
 | `owasp_categories` | string[] | OWASPカテゴリ一覧（無ければ空配列） |
-| `code_snippet` | string | 該当コード抜粋 |
+| `code_snippet` | string | 該当コード抜粋。gitleaks検知の場合はシークレットの実値を含めず、`検知内容: {ルールの説明}`という固定文言のみ（漏洩防止） |
 | `cvss_score` | float \| null | CVSS 3.1基本値。Semgrepのseverity・CWEからのベストエフォート推定値であり、精度は保証しない（`.claude/skills/codescan/SKILL.md`参照） |
 | `cvss_vector` | string \| null | CVSS 3.1ベクター文字列（同上、ベストエフォート） |
 | `detected_at` | string (ISO 8601) | 初回検知日時 |
