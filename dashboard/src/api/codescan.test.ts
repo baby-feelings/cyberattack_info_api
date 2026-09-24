@@ -51,6 +51,15 @@ describe('api/codescan', () => {
       expect(url).toContain('page=1')
       expect(url).toContain('per_page=30')
     })
+
+    it('sends the session token as Authorization when authToken is given (Issue #219)', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: true, json: () => Promise.resolve({ total: 0, page: 1, per_page: 30, data: [] }),
+      })
+      await fetchCodescanList({ authToken: 'session-token-abc' })
+      const [, opts] = fetchMock.mock.calls[0]
+      expect(opts.headers).toEqual({ Authorization: 'Bearer session-token-abc' })
+    })
   })
 
   describe('fetchCodescanStats', () => {
@@ -61,6 +70,15 @@ describe('api/codescan', () => {
       await fetchCodescanStats()
       const [url] = fetchMock.mock.calls[0]
       expect(url).toContain('/api/codescan/stats')
+    })
+
+    it('sends the session token as Authorization when authToken is given (Issue #219)', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: true, json: () => Promise.resolve({ total: 0, repos: [], severities: [] }),
+      })
+      await fetchCodescanStats('session-token-abc')
+      const [, opts] = fetchMock.mock.calls[0]
+      expect(opts.headers).toEqual({ Authorization: 'Bearer session-token-abc' })
     })
   })
 })

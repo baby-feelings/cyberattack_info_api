@@ -3,9 +3,12 @@
 GET /api/codescan        – 検知結果一覧（リポジトリ・重要度・解決状態・CVSS下限でフィルタ）
 GET /api/codescan/stats  – リポジトリ別・重要度別の統計情報（未解決分のみ集計）
 
-自アプリの内部コード脆弱性は特定ユーザーに紐づく情報ではないため、DEPSCAN の
-GitHub ログインによるオーナー制限は不要で、KEV/OSV/JVN と同じ
-`require_public_api_key`（読み取り専用）を使う。
+自アプリの内部コード脆弱性は特定ユーザーに紐づく情報ではないため、DEPSCAN のような
+「本人所有リポジトリのみ」へのオーナー絞り込みは行わない。一方でダッシュボードの
+DEPSCAN/CODESCAN タブ間でセッションを共有し、両方とも GitHub ログインを必須にする
+（Issue #219）ため、`app.core.auth.require_api_key_or_session`（`X-API-KEY` または
+GitHub ログインセッション JWT のいずれかを要求する共通認証。戻り値は絞り込みには
+使わず、ログイン済みかどうかのゲートとしてのみ使う）で保護する。
 """
 import logging
 from typing import Annotated
@@ -23,7 +26,7 @@ from app.codescan.schemas import (
     CodescanCrawlResponse,
     RepoStat,
 )
-from app.core.auth import require_api_key, require_public_api_key
+from app.core.auth import require_api_key, require_api_key_or_session
 from app.core.background import run_in_background
 from app.core.database import get_db
 from app.core.pagination import paginate
@@ -55,12 +58,13 @@ def trigger_codescan_crawl() -> CodescanCrawlResponse:
 @router.get(
     "",
     response_model=CodeFindingListResponse,
-    dependencies=[Security(require_public_api_key)],
     summary="自アプリコード脆弱性の検知結果一覧取得",
-    description="リポジトリ・重要度・解決状態・CVSS下限値でフィルタリング可能。",
+    description="リポジトリ・重要度・解決状態・CVSS下限値でフィルタリング可能。"
+    "GitHub ログイン必須（DEPSCAN とセッション共有）。",
 )
 def list_codescan(
     db: Annotated[Session, Depends(get_db)],
+    _access: Annotated[str | None, Depends(require_api_key_or_session)],
     page: int = Query(1, ge=1, description="ページ番号（1始まり）"),
     per_page: int = Query(50, ge=1, le=200, description="1ページあたりの件数"),
     repo: str | None = Query(None, description="リポジトリ名絞り込み（例: owner/repo）"),
@@ -101,11 +105,14 @@ def list_codescan(
 @router.get(
     "/stats",
     response_model=CodeFindingStatsResponse,
-    dependencies=[Security(require_public_api_key)],
     summary="自アプリコード脆弱性の統計情報",
-    description="未解決の検知結果について、リポジトリ別件数・重要度別件数を返す。",
+    description="未解決の検知結果について、リポジトリ別件数・重要度別件数を返す。"
+    "GitHub ログイン必須（DEPSCAN とセッション共有）。",
 )
-def get_codescan_stats(db: Annotated[Session, Depends(get_db)]) -> CodeFindingStatsResponse:
+def get_codescan_stats(
+    db: Annotated[Session, Depends(get_db)],
+    _access: Annotated[str | None, Depends(require_api_key_or_session)],
+) -> CodeFindingStatsResponse:
     """未解決の自アプリコード脆弱性を集計して返す。"""
     base = db.query(CodeFinding).filter(CodeFinding.resolved_at.is_(None))
     total = base.count()

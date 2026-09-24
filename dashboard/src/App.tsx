@@ -5,7 +5,7 @@ import { KevPanel } from './components/KevPanel'
 import { OsvPanel } from './components/OsvPanel'
 import { JvnPanel } from './components/JvnPanel'
 import { DepscanAuthGate } from './components/DepscanAuthGate'
-import { CodescanPanel } from './components/CodescanPanel'
+import { CodescanAuthGate } from './components/CodescanAuthGate'
 
 // セクション見出しコンポーネント
 function SectionHeader({
@@ -172,8 +172,8 @@ export default function App() {
               borderColor="border-cyan-800/40"
             />
 
-            {/* CODESCAN パネル（サマリー・一覧を内包） */}
-            <CodescanPanel />
+            {/* GitHub ログイン後、CODESCAN パネル（サマリー・一覧を内包）を表示 */}
+            <CodescanAuthGate />
           </section>
         )}
 

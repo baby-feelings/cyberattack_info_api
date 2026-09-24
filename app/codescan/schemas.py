@@ -29,6 +29,7 @@ class CodeFindingOut(OrmDatetimeModel):
         "静的解析結果からの機械的な近似値であり、精度は保証しない）",
     )
     cvss_vector: str | None = Field(None, description="CVSS 3.1 ベクター文字列（同上）")
+    tool: str = Field(description="検知したツール（semgrep / gitleaks）")
     detected_at: str = Field(description="初回検知日時（ISO 8601）")
     resolved_at: str | None = Field(None, description="解決日時（未解決なら null）")
 

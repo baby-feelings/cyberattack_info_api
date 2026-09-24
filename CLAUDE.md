@@ -79,8 +79,9 @@ app/
 ├── depscan/      # 依存ライブラリ脆弱性スキャン（+issue_management/priority/sbom/
 │                 #   user_scan/github_client/parsers/）
 ├── depsops/      # Dependabot PR 自動運用（runner/classify/github_client）
-├── codescan/     # 自アプリのコード脆弱性診断（Semgrep静的解析。+github_client/
-│                 #   issue_management/cvss_mapping。CVSS計算式自体はapp.core.cvss）
+├── codescan/     # 自アプリのコード脆弱性診断（Semgrep静的解析+gitleaksシークレット検知。GitHubログイン
+│                 #   必須〈DEPSCANとセッション共有〉。+github_client/issue_management/cvss_mapping。
+│                 #   CVSS計算式自体はapp.core.cvss）
 └── crawler_logs/ # クローラー実行ログ
 
 tests/        # app/ と同じドメイン構成でミラーリング
@@ -98,7 +99,7 @@ deploy/       # OCIデプロイ関連（deploy_to_oci.ps1・docker-compose.yml�
 | `api-usage` | 本番APIの使い方（curl例）・フィールド定義・エラーレスポンス |
 | `crawler-internals` | KEV/OSV/JVN共通基盤（retry/notifications/pagination等）・STIX/TAXII・Alembic |
 | `depscan-depsops` | DEPSCAN/DEPSOPSの検知・優先度推薦・SBOM・自動マージ判定・GitHub OAuth |
-| `codescan` | CODESCAN（Semgrep静的解析）の設計判断・tarball取得方式・CVSSベストエフォート推定 |
+| `codescan` | CODESCAN（Semgrep静的解析+gitleaks）の設計判断・tarball取得方式・CVSSベストエフォート推定・GitHubログイン必須化 |
 | `dashboard-frontend` | Reactダッシュボードのコンポーネント構成・集約ロジック |
 | `deployment-ops` | CI/CD・OCIデプロイ手順・環境変数・Prometheus/Grafana監視 |
 

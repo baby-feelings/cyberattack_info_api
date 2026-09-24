@@ -4,10 +4,26 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# psycopg2-binary 等のビルドに備えて最小限のビルドツールを用意
+# psycopg2-binary 等のビルドに備えて最小限のビルドツールを用意。curl は gitleaks
+# バイナリのダウンロードに使う
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    curl \
     && rm -rf /var/lib/apt/lists/*
+
+# gitleaks（CODESCAN のシークレット検知、Issue #219）: Go 製バイナリのため pip では
+# 導入できず、GitHub Releases から本番環境（OCI Ampere A1 = Linux ARM64）向けの
+# プリビルドバイナリを取得して配置する。latest タグは使わずバージョンを固定する
+# （https://github.com/gitleaks/gitleaks/releases）。バージョンを上げる場合は
+# https://api.github.com/repos/gitleaks/gitleaks/releases/latest で最新版を確認し、
+# このARGを更新すること
+ARG GITLEAKS_VERSION=8.30.1
+RUN curl -fsSL \
+    "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_arm64.tar.gz" \
+    -o /tmp/gitleaks.tar.gz \
+    && tar -xzf /tmp/gitleaks.tar.gz -C /usr/local/bin gitleaks \
+    && chmod +x /usr/local/bin/gitleaks \
+    && rm /tmp/gitleaks.tar.gz
 
 # 依存パッケージのインストール（レイヤーキャッシュを効かせるため先にコピー）
 COPY requirements.txt .

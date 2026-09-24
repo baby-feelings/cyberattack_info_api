@@ -8,7 +8,10 @@ const PER_PAGE = 30
 
 // CodescanPanel のデータ取得・フィルタ状態管理ロジック。OsvPanel の useOsvData と
 // 同じ構成パターン（Separation of Concerns: UIレンダリングとロジックを分離）。
-export function useCodescanData() {
+//
+// authToken 指定時（GitHubログイン経由、Issue #219）は X-API-KEY の代わりに
+// Authorization: Bearer ヘッダーを送る（DepscanPanel の useDepscanData と同じパターン）。
+export function useCodescanData(authToken?: string) {
   const [severity, setSeverity] = useState<string | null>(null)
   const [resolved, setResolved] = useState<boolean | null>(false)
   const [page, setPage] = useState(1)
@@ -22,8 +25,8 @@ export function useCodescanData() {
     setLoading(true)
     try {
       const [list, st] = await Promise.all([
-        fetchCodescanList({ severity: sev, resolved: res, page: p, perPage: PER_PAGE }),
-        fetchCodescanStats(),
+        fetchCodescanList({ severity: sev, resolved: res, page: p, perPage: PER_PAGE, authToken }),
+        fetchCodescanStats(authToken),
       ])
       setResult(list)
       setStats(st)
@@ -32,7 +35,7 @@ export function useCodescanData() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [authToken])
 
   useEffect(() => {
     load(severity, resolved, page)

@@ -198,9 +198,18 @@ Organization全体への一括デフォルト設定が無い）:
   `/auth/github/callback` が数十秒だけ有効な使い捨て交換コードを`?depscan_code=...`で
   フロントエンドへ渡し、フロントエンドが即座に`POST /auth/exchange`でセッションJWTと
   交換、以降`Authorization: Bearer <token>`を`localStorage`経由で使う
-- **`/api/depscan`系の認証**: `_resolve_access` が `X-API-KEY`（フルアクセス）または
-  `Authorization: Bearer <セッションJWT>` を検証。セッション認証時は`owner`を強制的に
-  ログインユーザー名で上書きし、`repo`パラメータで他人のリポジトリを直接指定しても403
+- **`/api/depscan`系の認証**: `_resolve_access`（`app.depscan.router`）が
+  `X-API-KEY`（フルアクセス）または `Authorization: Bearer <セッションJWT>` を検証。
+  セッション認証時は`owner`を強制的にログインユーザー名で上書きし、`repo`パラメータで
+  他人のリポジトリを直接指定しても403。**検証ロジック自体（`hmac.compare_digest`での
+  APIキー比較、`decode_session_token`でのBearerトークン検証）は
+  `app.core.auth.require_api_key_or_session`に共通化されている**（Issue #219。CODESCAN
+  もGitHubログインを必須にする際、DEPSCAN固有の「オーナー絞り込み」とコアの検証ロジック
+  を分離する必要があったため切り出した。DRY原則）。`_resolve_access = 
+  require_api_key_or_session` という単純なエイリアスで、DEPSCANの外部から見える
+  振る舞い・レスポンス形式は一切変えていない。CODESCAN（`app.codescan.router`）は
+  同じ共通関数を使うが、戻り値を絞り込みには使わず「ログイン済みかどうか」のみを
+  ゲートとして使う（詳細は`.claude/skills/codescan/SKILL.md`）
 - **オンデマンドスキャン**（`run_depscan_for_user`）: 毎日クロールは`GITHUB_USERNAME`
   専用のため、任意アカウントはログイン時にその場でスキャンする。Slack通知・Issue起票・
   `crawler_logs`記録は行わない。進捗は`UserScan`テーブルに記録し`/auth/scan-status`で

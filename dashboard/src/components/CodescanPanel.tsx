@@ -14,13 +14,15 @@ const SEVERITY_CLS: Record<string, string> = {
 
 const SEVERITIES = ['ALL', 'ERROR', 'WARNING', 'INFO']
 
-export function CodescanPanel() {
+// authToken 指定時（GitHubログイン経由）は、サーバー側で require_api_key_or_session
+// によりログイン必須になる（Issue #219）。DepscanPanel と同じ props パターン。
+export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
   const {
     severity, resolved, page, setPage,
     result, stats, loading,
     load, handleSev, handleResolvedToggle,
     totalPages, errorCount,
-  } = useCodescanData()
+  } = useCodescanData(authToken)
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg flex flex-col gap-5">
