@@ -3,6 +3,7 @@ import {
   TableLoadingSkeleton, EmptyState, Pagination, SeverityFilterButtons,
 } from './shared/VulnPanelParts'
 import { CodescanRow } from './codescan/CodescanRow'
+import { RepoBarChart } from './codescan/RepoBarChart'
 import { useCodescanData } from './codescan/useCodescanData'
 
 const SEVERITY_CLS: Record<string, string> = {
@@ -60,19 +61,8 @@ export function CodescanPanel() {
         正式なCVSS評価に代わるものではありません。7.0以上は赤バッジで強調表示します。
       </p>
 
-      {/* リポジトリ別統計（簡易サマリー） */}
-      {!loading && stats && stats.repos.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {stats.repos.slice(0, 8).map(r => (
-            <span
-              key={r.repo_full_name}
-              className="px-2 py-1 rounded-lg text-xs font-mono bg-slate-800 text-slate-400"
-            >
-              {r.repo_full_name} <span className="opacity-60">{r.count}</span>
-            </span>
-          ))}
-        </div>
-      )}
+      {/* リポジトリ別統計（棒グラフ、DEPSCANと同じ構成） */}
+      <RepoBarChart stats={stats} loading={loading} />
 
       {/* 重要度フィルター + 解決状態フィルター */}
       <div className="flex flex-wrap items-center gap-3">
