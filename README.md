@@ -153,6 +153,7 @@ pytest tests/kev/ -v
 pytest tests/osv/ -v
 pytest tests/jvn/ -v
 pytest tests/depscan/ -v
+pytest tests/codescan/ -v
 pytest tests/auth/ -v
 
 # HTML カバレッジレポートを生成して開く
@@ -160,7 +161,7 @@ pytest
 start htmlcov/index.html  # Mac/Linux: open htmlcov/index.html
 ```
 
-**テスト結果（最新）:** 463 テスト / カバレッジ 98%
+**テスト結果（最新）:** 738 テスト / カバレッジ 98%
 
 ---
 

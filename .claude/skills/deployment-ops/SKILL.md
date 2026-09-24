@@ -29,8 +29,8 @@ PR 作成・main/develop へのプッシュで自動実行。
 
 ## 毎日クロール（daily-crawl.yml）
 「ネットワーク障害等でAPSchedulerが不発火だった場合の二重バックアップ」として維持。
-**単一 cron（`5 19 * * *` / JST 翌 04:05）で KEV → OSV → JVN → DEPSCAN → DEPSOPS を順次実行**
-（GitHub Actions 無料プランでは複数 cron の発火が不安定なため単一 cron に統合）。
+**単一 cron（`5 19 * * *` / JST 翌 04:05）で KEV → OSV → JVN → DEPSCAN → CODESCAN → DEPSOPS
+を順次実行**（GitHub Actions 無料プランでは複数 cron の発火が不安定なため単一 cron に統合）。
 
 | 実行順 | ジョブ | 対象 |
 |--------|--------|------|
@@ -39,11 +39,13 @@ PR 作成・main/develop へのプッシュで自動実行。
 | 3 | `crawl-osv` | `POST /admin/osv-crawl`（timeout 600s） |
 | 4 | `crawl-jvn` | `POST /admin/jvn-crawl`（timeout 600s） |
 | 5 | `crawl-depscan` | `POST /admin/depscan-crawl`（timeout 600s） |
-| 6 | `dependabot-ops` | `POST /admin/dependabot-ops` |
+| 6 | `crawl-codescan` | `POST /admin/codescan-crawl`（timeout 600s） |
+| 7 | `dependabot-ops` | `POST /admin/dependabot-ops` |
 
 各ジョブは `always()` で前段の失敗に関わらず実行。`workflow_dispatch` で手動実行可能
-（`target: kev / osv / jvn / depscan / all`）。`API_BASE_URL`はOCIインスタンスのドメイン
-（インスタンスを作り直した場合はここも更新）。GitHub Secretsに`API_KEY`の設定が必要。
+（`target: kev / osv / jvn / depscan / codescan / dependabot-ops / all`）。`API_BASE_URL`は
+OCIインスタンスのドメイン（インスタンスを作り直した場合はここも更新）。GitHub Secretsに
+`API_KEY`の設定が必要。
 
 ## OCI本番デプロイ手順（手動、都度実行）
 1. **SCP転送**: `deploy/deploy_to_oci.ps1`相当の手順、または変更範囲に応じて個別に
@@ -76,12 +78,13 @@ IP `168.138.213.240`）。
 ### 環境変数（`.env.production`、OCIへ転送）
 `DATABASE_URL`・`API_KEY`・`ENVIRONMENT=production`・`GITHUB_USERNAME`
 （**未設定だとアプリが起動しない**）・`SLACK_WEBHOOK_URL`（任意）・`GITHUB_TOKEN`
-（DEPSCAN/DEPSOPS用PAT。Contents: Read-only + Issues: Write + Pull requests: Write推奨）・
-`GITHUB_OAUTH_CLIENT_ID`/`GITHUB_OAUTH_CLIENT_SECRET`/`SESSION_SECRET_KEY`（DEPSCANログイン用、
-未設定だと`/auth/*`が503を返すのみでDEPSCANタブが機能しない）・`FRONTEND_URL`・
-`API_BASE_URL_FOR_OAUTH`（GitHub OAuth Appのcallback URLとscheme含め一致させる必要あり。
-インスタンスを作り直した場合は`.env.production`・`app/core/config.py`のデフォルト値・
-GitHub OAuth Appのcallback URLの3箇所を同時に更新）・`METRICS_API_KEY`（運用監視、任意）。
+（DEPSCAN/DEPSOPS/CODESCAN共用PAT。Contents: Read-only + Issues: Write + Pull requests:
+Write推奨）・`GITHUB_OAUTH_CLIENT_ID`/`GITHUB_OAUTH_CLIENT_SECRET`/`SESSION_SECRET_KEY`
+（DEPSCAN/CODESCAN共有のダッシュボードログイン用、未設定だと`/auth/*`が503を返すのみで
+DEPSCAN・CODESCAN両タブが機能しない）・`FRONTEND_URL`・`API_BASE_URL_FOR_OAUTH`（GitHub
+OAuth Appのcallback URLとscheme含め一致させる必要あり。インスタンスを作り直した場合は
+`.env.production`・`app/core/config.py`のデフォルト値・GitHub OAuth Appのcallback URLの
+3箇所を同時に更新）・`METRICS_API_KEY`（運用監視、任意）。
 
 ### GitHub Secrets
 
@@ -140,6 +143,20 @@ GitHub OAuth Appのcallback URLの3箇所を同時に更新）・`METRICS_API_KE
 ## lifespan の scan_results テーブル削除はベストエフォート
 旧スキャン機能廃止に伴い、起動時に `DROP TABLE IF EXISTS scan_results` を実行しているが、
 DDL 競合や権限不足で失敗してもサービスを止めないよう `try/except SQLAlchemyError` で囲んである。
+
+## 依存パッケージの脆弱性スキャン（OSV-Scanner / pip-audit）とセキュリティピン留め
+`osv-scanner-pr.yml`（PRで新規導入された脆弱性のみ差分検出）・`osv-scanner-scheduled.yml`/
+`pip-audit.yml`（本リポジトリ自身の`requirements.txt`を週次・mainマージ時にスキャン）が
+CIで自動実行される。間接依存（他パッケージ経由で入る依存）に明示的なバージョン下限が無いと、
+スキャナーが「理論上インストールされ得る最古のバージョン」を対象に既知CVEを検出することがある
+（実際に`pip`が解決するバージョンがそれより新しくても指摘される）。対応方針は`requirements.txt`
+末尾の「セキュリティピン留め」セクションに、実際にpipが解決するバージョンを下限として明示的に
+追加し、なぜそのパッケージ・バージョンが必要かをコメントで残すこと（例: `anyio>=4.14.2`は
+`httpx`/`starlette`経由の間接依存でGHSA-5p39-cfhj-2xmp対策、`python-multipart>=0.0.31`は
+`fastapi`の`python-multipart`extra経由の間接依存対策）。`semgrep`（CODESCAN用）のように
+特定パッケージが他パッケージのバージョン範囲を狭く固定している場合（例: `pyjwt~=2.13.0`）、
+自プロジェクト側の同名パッケージのバージョン指定と競合して`pip install`が
+`ResolutionImpossible`になることがあるため、上げすぎず両立する範囲に収める。
 
 ## CORS・Swagger の本番制限
 - CORS: 本番は `["https://cyberattackinfoapi.vercel.app"]` のみ許可。開発時は localhost も追加

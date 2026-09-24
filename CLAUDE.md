@@ -21,11 +21,11 @@ code-review-graph watch
 | 項目 | 内容 |
 |------|------|
 | **言語** | Python 3.11 |
-| **フレームワーク** | FastAPI 0.115.x |
+| **フレームワーク** | FastAPI 0.141.x |
 | **ORM** | SQLAlchemy 2.x（`Mapped` / `mapped_column` スタイル） |
 | **スケジューラ** | APScheduler 3.x + GitHub Actions cron（補完） |
 | **開発 DB** | SQLite／**本番 DB** | PostgreSQL（Neon） |
-| **バリデーション** | Pydantic 2.11.x + pydantic-settings 2.9.x |
+| **バリデーション** | Pydantic 2.13.x + pydantic-settings 2.15.x |
 | **HTTP クライアント** | httpx／**XML パーサー** | defusedxml |
 | **デプロイ先** | OCI（Compute VM、Docker Compose） |
 | **GitHub** | `https://github.com/baby-feelings/cyberattack_info_api` |
