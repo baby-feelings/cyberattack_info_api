@@ -32,7 +32,7 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
         <div className="flex items-center gap-2">
           <ScanSearch size={16} className="text-slate-400" />
           <span className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
-            CODESCAN（Semgrep 静的解析）
+            CODESCAN（Semgrep + Gitleaks 静的解析）
           </span>
         </div>
         <div className="flex items-center gap-3">
@@ -59,8 +59,10 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
 
       {/* 注記: CVSSはベストエフォート推定であることを明記（Issue #203の要件） */}
       <p className="text-[11px] text-slate-600 leading-relaxed">
-        CVSSスコアはSemgrepの検知結果（重要度・CWE）からのベストエフォート推定値であり、
-        正式なCVSS評価に代わるものではありません。7.0以上は赤バッジで強調表示します。
+        Semgrep（コードパターン診断）とGitleaks（ハードコードされたシークレット検知）の
+        2つの静的解析ツールで検知します。CVSSスコアは検知結果（重要度・CWE）からの
+        ベストエフォート推定値であり、正式なCVSS評価に代わるものではありません。
+        7.0以上は赤バッジで強調表示します。
       </p>
 
       {/* リポジトリ別統計（棒グラフ、DEPSCANと同じ構成） */}

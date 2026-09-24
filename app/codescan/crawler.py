@@ -225,7 +225,7 @@ def _run_gitleaks(target_dir: str) -> list[dict[str, Any]]:
 
 
 def _parse_gitleaks_results(
-    full_name: str, gitleaks_results: list[dict[str, Any]],
+    full_name: str, gitleaks_results: list[dict[str, Any]], repo_root: str,
 ) -> list[dict[str, Any]]:
     """gitleaks の JSON 出力を `CodeFinding` 相当のレコード辞書リストへ変換する。
 
@@ -243,7 +243,20 @@ def _parse_gitleaks_results(
     records: list[dict[str, Any]] = []
 
     for item in gitleaks_results:
-        rel_path = str(item.get("File", "")).replace("\\", "/")
+        # gitleaksの`File`フィールドは`--source`ディレクトリを基準にした相対パスの
+        # 場合と絶対パスの場合があり、バージョン・実行環境によって挙動が揺れる。
+        # Semgrepの_parse_semgrep_resultsと同じくos.path.relpathで確実に
+        # repo_root基準の相対パスへ正規化する（元が既に相対パスであっても
+        # os.path.relpathは冪等に動作するため問題ない）。これを怠ると
+        # tempfile.TemporaryDirectory()が生成するランダムなディレクトリ名が
+        # file_pathに残り、Upsertの自然キーが毎回変わって重複が際限なく
+        # 蓄積するバグになる（本番の初回実行で実際に発生し発覚した）。
+        raw_path = str(item.get("File", ""))
+        try:
+            rel_path = os.path.relpath(raw_path, repo_root) if os.path.isabs(raw_path) else raw_path
+        except ValueError:
+            rel_path = raw_path
+        rel_path = rel_path.replace("\\", "/")
         line_start = int(item.get("StartLine") or 0)
         line_end = int(item.get("EndLine") or line_start)
         # Semgrepのrule_id（"python.lang.security...."）との衝突を避けるため
@@ -311,7 +324,7 @@ def _scan_repo(full_name: str, branch: str, token: str) -> list[dict[str, Any]]:
 
         try:
             gitleaks_results = _run_gitleaks(repo_root)
-            records.extend(_parse_gitleaks_results(full_name, gitleaks_results))
+            records.extend(_parse_gitleaks_results(full_name, gitleaks_results, repo_root))
         except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError) as exc:
             logger.warning(
                 "CODESCAN: gitleaks failed for %s, skipping gitleaks results: %s",

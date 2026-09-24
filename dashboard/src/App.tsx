@@ -168,7 +168,7 @@ export default function App() {
             <SectionHeader
               icon={<ScanSearch size={18} className="text-cyan-400" />}
               title="CODESCAN — 自アプリのコード脆弱性診断"
-              subtitle="GitHub上の自作リポジトリのソースコードを Semgrep で静的解析"
+              subtitle="GitHub上の自作リポジトリのソースコードを Semgrep + Gitleaks で静的解析"
               borderColor="border-cyan-800/40"
             />
 
