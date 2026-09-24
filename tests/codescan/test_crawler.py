@@ -251,7 +251,7 @@ class TestRunGitleaks:
 
 class TestParseGitleaksResults:
     def test_extracts_fields_without_leaking_secret_value(self):
-        records = _parse_gitleaks_results("owner/repo", _SAMPLE_GITLEAKS_JSON)
+        records = _parse_gitleaks_results("owner/repo", _SAMPLE_GITLEAKS_JSON, "/tmp/repo_root")
         assert len(records) == 1
         rec = records[0]
         assert rec["repo_full_name"] == "owner/repo"
@@ -271,14 +271,34 @@ class TestParseGitleaksResults:
         assert "検知内容: AWS Access Key" == rec["code_snippet"]
 
     def test_no_results_returns_empty_list(self):
-        assert _parse_gitleaks_results("owner/repo", []) == []
+        assert _parse_gitleaks_results("owner/repo", [], "/tmp/repo_root") == []
 
     def test_missing_description_falls_back_to_generic_message(self):
         records = _parse_gitleaks_results(
             "owner/repo",
             [{"RuleID": "generic-api-key", "File": "a.py", "StartLine": 1, "EndLine": 1}],
+            "/tmp/repo_root",
         )
         assert records[0]["message"] == "Secret detected"
+
+    def test_normalizes_absolute_file_path_to_repo_relative(self):
+        """gitleaksが--sourceディレクトリ基準の絶対パスを返す実運用のケースを再現する。
+
+        本番の初回実行で実際に発生した不具合の回帰テスト: file_pathに
+        tempfile.TemporaryDirectory()が生成するランダムな一時ディレクトリ名が
+        残っていると、毎回のスキャンでUpsertの自然キーが変わってしまい
+        重複検知が際限なく蓄積する。
+        """
+        repo_root = "/tmp/tmpabcdef/owner-repo-somehash"
+        records = _parse_gitleaks_results(
+            "owner/repo",
+            [{
+                "RuleID": "gcp-api-key", "File": f"{repo_root}/lib/config.dart",
+                "StartLine": 3, "EndLine": 3, "Description": "GCP API key",
+            }],
+            repo_root,
+        )
+        assert records[0]["file_path"] == "lib/config.dart"
 
 
 class TestScanRepo:
