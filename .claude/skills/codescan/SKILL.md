@@ -89,9 +89,73 @@ DEPSCANの`"🚨 依存ライブラリの脆弱性が検出されました (DEPS
 オーケストレーションでは、DEPSCANが行う「全体再スキャン検証後」というクローズ
 タイミングの前提が成立しないため）。
 
-## API認証はDEPSCANと異なりオーナー制限なし（KEV/OSV/JVNと同じ扱い）
+## API認証: ログイン必須だがオーナー制限なし（Issue #219でrequire_public_api_keyから変更）
 自アプリの内部コード脆弱性は特定ユーザーに紐づく情報ではないため、DEPSCANの
-GitHubログインによる「本人所有リポジトリのみ」制限は不要。`GET /api/codescan`・
-`GET /api/codescan/stats`は`app.core.auth.require_public_api_key`（読み取り専用、
-`API_KEY`または`PUBLIC_API_KEY`）で保護する。`POST /admin/codescan-crawl`は
-他ドメインと同じ`require_api_key`（`API_KEY`のみ）。
+GitHubログインによる「本人所有リポジトリのみ」制限は不要。一方でダッシュボードの
+DEPSCAN/CODESCANタブ間でセッションを共有し、CODESCANも読み取りにGitHubログインを
+必須にする（要件変更、Issue #219）ため、当初の`require_public_api_key`から
+`app.core.auth.require_api_key_or_session`（`X-API-KEY`またはGitHubログイン
+セッションJWTのいずれかを要求する共通認証）に変更した。この関数はDEPSCANの
+`_resolve_access`と検証ロジックが同一（DRY原則で共通化）だが、CODESCANは戻り値
+（セッション認証時はログインユーザー名）を絞り込みには使わず「ログイン済みか」
+のみをゲートとして使う。`GET /api/codescan`・`GET /api/codescan/stats`はこの
+共通認証で保護する。`POST /admin/codescan-crawl`は他ドメインと同じ`require_api_key`
+（`API_KEY`のみ）で変更なし。
+
+フロントエンド側は`DepscanAuthGate.tsx`と共通の`useGithubSession`フック
+（`dashboard/src/hooks/useGithubSession.ts`）を使い、`localStorage`のキー
+（`depscan_session_token`/`depscan_session_user`）も共有する。これにより
+DEPSCAN/CODESCANのどちらのタブでログインしても両方閲覧できる。`CodescanAuthGate.tsx`
+はDEPSCANと異なりオンデマンドスキャンの概念が無いため、スキャン進捗ポーリングUIを
+持たず、ログイン確認ができたら即座に`CodescanPanel`を表示するシンプルな構成。
+
+## gitleaksによるシークレット検知の統合（Issue #219）
+Semgrep（`p/security-audit` + `p/secrets`）に加え、専用のシークレット検知ツール
+gitleaks（https://github.com/gitleaks/gitleaks )も同じtarball展開先に対して実行
+する。`app.codescan.crawler._run_gitleaks`が`subprocess.run(["gitleaks", "detect",
+"--source", ..., "--no-git", "--report-format", "json", "--report-path", ...,
+"--exit-code", "0"])`を呼ぶ薄いラッパー（Semgrepと同じ「ラッパー自体をモックして
+テストする」方針）。`--no-git`必須（tarball展開のためGit履歴が無く、gitleaksを
+ファイルシステムスキャンモードで動かす）。`--exit-code 0`でリーク検知時の非ゼロ
+終了を防ぎ、Semgrepと同様「検知があっても正常終了として扱いJSON出力をパースする」
+設計に統一している。gitleaksの結果はサブプロセス全体で120秒のタイムアウトを持つ
+（Semgrepの300秒より短い。正規表現ベースのシークレット検知は一般にSemgrepの
+パターンマッチよりも高速なため）。
+
+**Semgrepとgitleaksは独立したtry/exceptで囲む**（`_scan_repo`）。1つのtry/except
+で両方を囲むと、片方の障害（タイムアウト・パース失敗等）でもう片方の正常な検知結果
+まで丸ごと失ってしまうため、意図的に分離している。
+
+**Upsertキーの衝突回避**: `CodeFinding`のUpsert基準キー`(repo_full_name,
+file_path, rule_id, line_start)`は据え置きだが、gitleaks由来のfindingは
+`rule_id`に`"gitleaks:"`プレフィックスを付与する（`_parse_gitleaks_results`）。
+SemgrepのcheckID（`python.lang.security....`のような命名規則）との衝突リスクは
+低いが、明示的にツール由来を区別できるようにするため。`CodeFinding.tool`カラム
+（`"semgrep"` / `"gitleaks"`、既存レコードとの後方互換のため`server_default=
+"semgrep"`）でも区別でき、ダッシュボードの`CodescanRow.tsx`にはツール種別を示す
+小さなバッジを表示する。
+
+**【重要・セキュリティ】シークレット値は絶対にDB・APIレスポンスに含めない**:
+gitleaksのJSON出力には検知したシークレットの実際の値（`Secret`フィールド、
+マッチした認証情報そのもの）が平文で含まれる。これをそのまま保存・返却すると、
+自アプリの脆弱性診断APIが実際の認証情報を漏洩させるという本末転倒な事故になる。
+そのため`_parse_gitleaks_results`は`Secret`・`Match`フィールドを一切参照せず、
+`code_snippet`相当のフィールドには gitleaks の`Description`（ルールの説明。例:
+「AWS Access Key」）のみを固定文言「検知内容: {Description}」として格納する。
+`tests/codescan/test_crawler.py`の`TestParseGitleaksResults`に、実際のシークレット
+値がレコードのどのフィールドにも含まれないことを検証する専用テストがある。
+
+**CVSS推定**: gitleaksの検知はハードコードされた認証情報（CWE-798）に相当する
+ため、Semgrep実装時に用意済みの`app.codescan.cvss_mapping`のCWE-798マッピング
+（`AV:L/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N`）をそのまま再利用する（新規ロジック不要、
+DRY原則）。severityの概念がgitleaksには無いため、常に`estimate_cvss_vector("ERROR",
+["CWE-798"])`として扱う。
+
+**Dockerfileへのバイナリ導入**: gitleaksはGo製バイナリのためpipでは導入できず、
+GitHub Releasesから本番環境（OCI Ampere A1 = Linux ARM64）向けのプリビルド
+バイナリ（`gitleaks_<version>_linux_arm64.tar.gz`）を`curl`で取得し
+`/usr/local/bin/gitleaks`に配置する。`latest`タグは使わずARG（`GITLEAKS_VERSION`）
+でバージョンを固定する。バージョンを上げる場合は
+https://api.github.com/repos/gitleaks/gitleaks/releases/latest で最新版を確認し、
+Dockerfileの`ARG GITLEAKS_VERSION`を更新すること。Windows開発環境にはgitleaks
+バイナリが無い前提でテストは`_run_gitleaks`自体をモックして書く。

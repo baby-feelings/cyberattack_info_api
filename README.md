@@ -18,7 +18,7 @@ Claude Code や CI/CD ツールから「今まさに悪用されているサイ�
 | **JVN 自動クローラー** | 同上（MyJVN API から国内脆弱性を取得・Upsert） |
 | **依存ライブラリ脆弱性スキャン（DEPSCAN）** | 同上（GitHub 上の自作アプリ全リポジトリ〈プライベート含む〉のロックファイルを OSV API とリアルタイム照合。新規検知はリポジトリ自身に GitHub Issue も自動起票し、未解決 finding が0件になると自動クローズ。到達可能性〈import レベルのヒューリスティック〉も判定） |
 | **DEPSCAN ダッシュボードの GitHub ログイン** | 任意の GitHub アカウントで OAuth ログインし、本人が所有するリポジトリの検知結果のみ閲覧可能（サーバー側で強制するアクセス制御）。ログイン時にオンデマンドでスキャンを実行し、直近 24 時間以内にスキャン済みなら再スキャンせず結果を即座に表示 |
-| **自アプリコード脆弱性診断（CODESCAN）** | 同上（GitHub 上の自作アプリ全リポジトリのソースコードを tarball 取得し Semgrep〈p/security-audit + p/secrets〉で静的解析。SQLi・ハードコード認証情報・XSS等を検知し、CVSS 3.1基本値をベストエフォートで推定。新規検知はリポジトリ自身に GitHub Issue も自動起票） |
+| **自アプリコード脆弱性診断（CODESCAN）** | 同上（GitHub 上の自作アプリ全リポジトリのソースコードを tarball 取得し Semgrep〈p/security-audit + p/secrets〉で静的解析、さらに専用のシークレット検知ツール gitleaks も実行。SQLi・ハードコード認証情報・XSS・平文シークレット等を検知し、CVSS 3.1基本値をベストエフォートで推定。新規検知はリポジトリ自身に GitHub Issue も自動起票。ダッシュボードの閲覧には DEPSCAN と共有の GitHub ログインが必須〈オーナー絞り込みは無し〉） |
 | **OSV 古いデータ自動削除** | 180 日以上前のレコードをクロール時に自動削除（DB 容量管理） |
 | **運用監視** | Prometheus + Grafana によるクローラー実行結果・ホストリソースの可視化（OCI上、任意） |
 | **一覧取得 API** | ページネーション・キーワード検索・フィルタリング対応（KEV / OSV / JVN / DEPSCAN / CODESCAN） |
@@ -31,7 +31,7 @@ Claude Code や CI/CD ツールから「今まさに悪用されているサイ�
 | **手動クロール** | `POST /admin/crawl` / `POST /admin/osv-crawl` / `POST /admin/jvn-crawl` / `POST /admin/depscan-crawl` / `POST /admin/codescan-crawl` / `POST /admin/dependabot-ops`（バックグラウンド 202 即時返却・`?days=N` 対応） |
 | **API キー認証** | `X-API-KEY` ヘッダーによるシンプルな固定キー認証 |
 | **ヘルスチェック** | DB 接続確認付きの死活監視エンドポイント |
-| **React ダッシュボード** | CISA KEV・OSV（Pub 含む 10 エコシステム・180 日表示）・JVN・DEPSCAN（GitHub ログイン必須、本人所有リポジトリのみ表示。到達可能性の判定結果も表示）・CODESCAN（CVSSベストエフォート推定値を表示）を画面下部固定タブ（5つ）で切り替え表示。Dependabot 運用状況＝DEPSOPS の判定履歴は DEPSCAN タブ内のボタンから開く全画面モーダルとして統合（Vercel デプロイ） |
+| **React ダッシュボード** | CISA KEV・OSV（Pub 含む 10 エコシステム・180 日表示）・JVN・DEPSCAN（GitHub ログイン必須、本人所有リポジトリのみ表示。到達可能性の判定結果も表示）・CODESCAN（GitHub ログイン必須〈DEPSCANとセッション共有、オーナー絞り込みは無し〉、CVSSベストエフォート推定値・検知ツール種別バッジを表示）を画面下部固定タブ（5つ）で切り替え表示。Dependabot 運用状況＝DEPSOPS の判定履歴は DEPSCAN タブ内のボタンから開く全画面モーダルとして統合（Vercel デプロイ） |
 
 ---
 
@@ -117,7 +117,7 @@ Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
 | GET | `/api/depscan/stats` | DEPSCAN統計（リポジトリ別・重要度別） |
 | GET | `/api/depscan/assets` | リポジトリ資産コンテキスト一覧（Issue #131） |
 | GET | `/api/depscan/export` | DEPSCAN検知結果をCycloneDX/SPDX形式でエクスポート（`repo`必須、Issue #133） |
-| GET | `/api/codescan` | CODESCAN検知結果一覧（Semgrep静的解析。`cvss_score`はベストエフォート推定、Issue #203） |
+| GET | `/api/codescan` | CODESCAN検知結果一覧（Semgrep静的解析 + gitleaksシークレット検知。`cvss_score`はベストエフォート推定〈Issue #203〉。GitHubログイン必須〈`X-API-KEY`またはセッションJWT、Issue #219〉） |
 | GET | `/api/codescan/stats` | CODESCAN統計（リポジトリ別・重要度別） |
 | GET | `/api/depsops` | DEPSOPS判定履歴（`is_security_update`・`compatibility_badge_url`含む） |
 | GET | `/api/crawler-logs` | クローラー実行ログ |
@@ -129,7 +129,7 @@ Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
 | POST | `/admin/jvn-crawl` | JVN手動クロール（`?days=N`対応） |
 | POST | `/admin/depscan-crawl` | DEPSCAN手動実行 |
 | PUT | `/admin/depscan/assets/{owner}/{repo}` | リポジトリ資産コンテキスト設定（Upsert、Issue #131） |
-| POST | `/admin/codescan-crawl` | CODESCAN手動実行（GitHub全リポジトリをSemgrepで再スキャン） |
+| POST | `/admin/codescan-crawl` | CODESCAN手動実行（GitHub全リポジトリをSemgrep + gitleaksで再スキャン） |
 | POST | `/admin/dependabot-ops` | DEPSOPS手動実行（安全なPRのみ自動マージ） |
 | GET | `/taxii2/*` | TAXII 2.1配信（KEV/OSV/JVN 3コレクション購読用、最小実装。Issue #134） |
 | GET | `/health` | ヘルスチェック（認証不要） |
@@ -195,8 +195,8 @@ cyberattack_info_api/
 │   │   └── parsers/            # 10 エコシステム分のロックファイルパーサー
 │   ├── depsops/                # Dependabot PR 自動運用（DEPSOPS）ドメイン（models・schemas・router
 │   │                           # 〈router + admin_router〉。crawler.py 相当は runner.py）
-│   ├── codescan/                # 自アプリコード脆弱性診断（CODESCAN）ドメイン（Semgrep静的解析。
-│   │                           # github_client・issue_management・cvss_mapping含む）
+│   ├── codescan/                # 自アプリコード脆弱性診断（CODESCAN）ドメイン（Semgrep静的解析 + gitleaks
+│   │                           # シークレット検知。github_client・issue_management・cvss_mapping含む）
 │   └── crawler_logs/           # クローラー実行ログドメイン（models・schemas・writer・router）
 ├── tests/                      # app/ と同じドメイン構成
 │   ├── conftest.py             # テスト用フィクスチャ (SQLite テスト DB、全サブフォルダに自動継承)
@@ -204,7 +204,8 @@ cyberattack_info_api/
 │   ├── core/ kev/ osv/ jvn/ depscan/ depsops/ codescan/ crawler_logs/
 ├── dashboard/               # Vercel デプロイの React ダッシュボード（KEV・OSV（Pub 含む 10 エコシステム）・JVN・
 │                           # DEPSCAN〈GitHub ログイン必須。Dependabot運用状況＝DEPSOPS の判定履歴も統合〉・
-│                           # CODESCAN〈CVSSベストエフォート推定値を表示〉を5つの固定タブで切り替え表示）
+│                           # CODESCAN〈GitHub ログイン必須。DEPSCANとセッション共有。CVSSベストエフォート
+│                           # 推定値・検知ツールバッジを表示〉を5つの固定タブで切り替え表示）
 ├── alembic/                 # DBスキーマのマイグレーション管理（app.core.migrate から呼び出す）
 │   └── versions/            # マイグレーションスクリプト（Gitで追跡）
 ├── .github/
