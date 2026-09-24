@@ -92,6 +92,17 @@ class Settings(BaseSettings):
     # 未設定時は /metrics 自体を無効化する（他の外部連携機能と同じ opt-in パターン）
     METRICS_API_KEY: str = ""
 
+    # ユーザー別Slack通知登録（Issue #227）設定
+    # ログイン時に取得したGitHubアクセストークンをDBへ暗号化保存するためのFernet鍵
+    # （`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
+    # で生成）。未設定のまま本番運用しないこと（未設定時はトークンを保存できず、
+    # 登録済みユーザーの定期スキャン機能が動作しない）
+    TOKEN_ENCRYPTION_KEY: str = ""
+    # 登録済みユーザー（GITHUB_USERNAME以外）のリポジトリに対するDEPSCAN/CODESCAN/
+    # DEPSOPSの定期実行時刻（UTC）。DEPSOPSの後段: JST 8:30 = UTC 23:30
+    USER_CRAWL_CRON_HOUR_UTC: int = 23
+    USER_CRAWL_CRON_MINUTE_UTC: int = 30
+
     model_config = SettingsConfigDict(
         # 環境に応じて .env.development または .env.production を使用
         env_file=".env",

@@ -825,15 +825,13 @@ class TestListDepsops:
 class TestNotifyDependabotOps:
     def test_skips_when_no_webhook(self):
         merged = [{"repo_full_name": "u/r", "pr_number": 1, "title": "bump x"}]
-        with patch("app.core.notifications.settings.SLACK_WEBHOOK_URL", ""):
-            with patch("app.core.notifications._send_slack") as mock_send:
-                notify_dependabot_ops(merged, [])
+        with patch("app.core.notifications._send_slack") as mock_send:
+            notify_dependabot_ops(merged, [], recipients=[])
         mock_send.assert_not_called()
 
     def test_skips_when_both_empty(self):
-        with patch("app.core.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/x"):
-            with patch("app.core.notifications._send_slack") as mock_send:
-                notify_dependabot_ops([], [])
+        with patch("app.core.notifications._send_slack") as mock_send:
+            notify_dependabot_ops([], [], recipients=["https://hooks.slack.com/x"])
         mock_send.assert_not_called()
 
     def test_includes_merged_and_flagged_sections(self):
@@ -841,9 +839,8 @@ class TestNotifyDependabotOps:
         flagged = [
             {"repo_full_name": "u/r2", "pr_number": 2, "title": "bump y", "reason": "メジャー"},
         ]
-        with patch("app.core.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/x"):
-            with patch("app.core.notifications._send_slack") as mock_send:
-                notify_dependabot_ops(merged, flagged)
+        with patch("app.core.notifications._send_slack") as mock_send:
+            notify_dependabot_ops(merged, flagged, recipients=["https://hooks.slack.com/x"])
         message = mock_send.call_args[0][0]
         assert "u/r1" in message and "bump x" in message
         assert "u/r2" in message and "メジャー" in message

@@ -247,18 +247,24 @@ def _delete_old_depsops_records(db: Session) -> int:
 
 
 def _process_repo(
-    db: Session, full_name: str,
+    db: Session, full_name: str, token: str | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], int]:
     """1リポジトリ分の Open な Dependabot PR を取得・判定する。
 
     run_dependabot_ops のリポジトリループ本体（PR取得・解消済みflagged検知・
     CI有無判定・Dependabot alert取得・各PRの判定）を1リポジトリ単位に切り出したもの。
 
+    Args:
+        token: 省略時は`settings.GITHUB_TOKEN`（baby-feelings向け毎日クロールの
+            既定）。登録済み他ユーザー自身のリポジトリに対して実行する場合
+            （Issue #227）は、そのユーザー自身のOAuthアクセストークンを渡す。
+
     Returns:
         (merged, flagged, resolved, error_count) のタプル。
         PRリスト取得・個別PR処理のHTTPErrorはこのリポジトリ単位で握りつぶし、
         error_countとしてカウントする（他リポジトリの処理は継続する既存挙動を維持）。
     """
+    token = token if token is not None else settings.GITHUB_TOKEN
     owner, repo = full_name.split("/", 1)
     merged: list[dict[str, Any]] = []
     flagged: list[dict[str, Any]] = []
@@ -266,7 +272,7 @@ def _process_repo(
     error_count = 0
 
     try:
-        prs = list_open_dependabot_prs(owner, repo, settings.GITHUB_TOKEN)
+        prs = list_open_dependabot_prs(owner, repo, token)
     except httpx.HTTPError as exc:
         logger.warning("DEPSOPS: failed to list PRs for %s: %s", full_name, exc)
         return merged, flagged, resolved, error_count + 1
@@ -280,7 +286,7 @@ def _process_repo(
     if not prs:
         return merged, flagged, resolved, error_count
 
-    has_ci = has_ci_workflows(owner, repo, settings.GITHUB_TOKEN)
+    has_ci = has_ci_workflows(owner, repo, token)
     logger.info(
         "DEPSOPS: %s has %d open Dependabot PR(s), CI=%s",
         full_name, len(prs), has_ci,
@@ -291,7 +297,7 @@ def _process_repo(
     # 失敗しても DEPSOPS 本来のマージ判定は継続する（判定不能 = None のまま）
     alert_package_names: set[str] | None
     try:
-        alerts = list_open_dependabot_alerts(owner, repo, settings.GITHUB_TOKEN)
+        alerts = list_open_dependabot_alerts(owner, repo, token)
         alert_package_names = {a["dependency"]["package"]["name"] for a in alerts}
     except httpx.HTTPError as exc:
         logger.warning(
@@ -302,7 +308,7 @@ def _process_repo(
     for pr in prs:
         try:
             action, item = _process_pr(
-                full_name, owner, repo, pr, has_ci, settings.GITHUB_TOKEN,
+                full_name, owner, repo, pr, has_ci, token,
                 alert_package_names,
             )
         except httpx.HTTPError as exc:
@@ -321,7 +327,7 @@ def _process_repo(
 
 
 def _scan_target_repos(
-    db: Session, repos: list[dict[str, Any]],
+    db: Session, repos: list[dict[str, Any]], token: str | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], int]:
     """対象リポジトリ全件を走査し、判定結果を集約する。"""
     merged: list[dict[str, Any]] = []
@@ -331,7 +337,7 @@ def _scan_target_repos(
 
     for repo_info in repos:
         repo_merged, repo_flagged, repo_resolved, repo_errors = _process_repo(
-            db, repo_info["full_name"],
+            db, repo_info["full_name"], token,
         )
         merged.extend(repo_merged)
         flagged.extend(repo_flagged)
