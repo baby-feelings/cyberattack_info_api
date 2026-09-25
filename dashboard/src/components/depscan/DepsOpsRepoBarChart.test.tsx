@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import type { DepsOpsRepoStat } from '../../api/client'
 import { DepsOpsRepoBarChart, formatDepsOpsRepoTooltipValue } from './DepsOpsRepoBarChart'
-import type { RepoOpsStat } from './depsopsGrouping'
 
-const STATS: RepoOpsStat[] = [
+const STATS: DepsOpsRepoStat[] = [
   { repo_full_name: 'baby-feelings/baby_grow', count: 2 },
   { repo_full_name: 'baby-feelings/baby_immunity', count: 1 },
 ]

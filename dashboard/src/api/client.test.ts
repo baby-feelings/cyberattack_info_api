@@ -20,7 +20,7 @@ describe('api/client (barrel re-export)', () => {
     expect(client.fetchDepscanStats).toBeTypeOf('function')
     expect(client.fetchAllDepscanFindings).toBeTypeOf('function')
     expect(client.fetchDepsOpsList).toBeTypeOf('function')
-    expect(client.fetchAllDepsOpsEntries).toBeTypeOf('function')
+    expect(client.fetchDepsOpsStats).toBeTypeOf('function')
     expect(client.fetchCrawlerLogs).toBeTypeOf('function')
     expect(client.githubLoginUrl).toBeTypeOf('function')
     expect(client.fetchScanStatus).toBeTypeOf('function')
