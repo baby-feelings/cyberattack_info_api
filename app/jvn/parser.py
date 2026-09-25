@@ -3,8 +3,11 @@
 XML の <item> 要素から JVN 脆弱性データを抽出する純粋関数群。
 HTTP 通信・DB Upsert・保持期間管理は app.jvn.crawler が担当する。
 """
+# Element型のみ使用（defusedxmlは型を非公開のため）。実際のパースは
+# defusedxml.ElementTree.fromstring()（app.jvn.crawler）が行うため、この
+# importはXXE等の脆弱性を持たない（誤検知の抑制）
 import re
-import xml.etree.ElementTree as stdlib_ET  # Element 型のみ使用（defusedxml は型を非公開）
+import xml.etree.ElementTree as stdlib_ET  # nosemgrep
 from datetime import datetime
 
 # XML 名前空間マッピング
