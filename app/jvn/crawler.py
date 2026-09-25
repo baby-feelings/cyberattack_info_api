@@ -3,9 +3,12 @@ JVN DB (jvndb.jvn.jp) から脆弱性情報を取得し、jvn_vulnerabilities �
 MyJVN REST API の getVulnOverviewList メソッドを使用し、直近 JVN_DAYS 日分を取得する。
 XML の <item> 要素からのフィールド抽出（パース処理）は app.jvn.parser が担当する。
 """
+# Element/ParseError型のみ使用（defusedxmlは型を非公開のため）。実際のパースは
+# 直下のdefused_ET.fromstring()が行うため、このimportはXXE等の脆弱性を持たない
+# （誤検知の抑制）
 import logging
 import time
-import xml.etree.ElementTree as stdlib_ET  # Element 型のみ使用（defusedxml は型を非公開）
+import xml.etree.ElementTree as stdlib_ET  # nosemgrep
 from datetime import datetime, timedelta, timezone
 
 import defusedxml.ElementTree as defused_ET  # XXE / billion-laughs 攻撃防止
