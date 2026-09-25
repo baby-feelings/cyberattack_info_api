@@ -58,15 +58,20 @@ class TestFileGithubIssues:
         base.update(kwargs)
         return base
 
+    # 実際の GitHub API 呼び出し（find_open_issue/create_issue/add_issue_comment）は
+    # 共通処理として app.core.issue_filing に切り出されているため、モックはそちら側を
+    # 対象にする（app.depscan.issue_management はドメイン固有のタイトル・本文整形の
+    # みを担い、呼び出しは file_or_update_repo_issues 経由になったため）
+
     def test_does_nothing_when_no_new_findings(self):
-        with patch("app.depscan.issue_management.find_open_issue") as mock_find:
+        with patch("app.core.issue_filing.find_open_issue") as mock_find:
             _file_github_issues([])
         mock_find.assert_not_called()
 
     def test_creates_issue_when_none_open(self):
-        with patch("app.depscan.issue_management.find_open_issue", return_value=None), \
-             patch("app.depscan.issue_management.create_issue") as mock_create, \
-             patch("app.depscan.issue_management.add_issue_comment") as mock_comment:
+        with patch("app.core.issue_filing.find_open_issue", return_value=None), \
+             patch("app.core.issue_filing.create_issue") as mock_create, \
+             patch("app.core.issue_filing.add_issue_comment") as mock_comment:
             _file_github_issues([self._finding()])
         mock_create.assert_called_once()
         args = mock_create.call_args[0]
@@ -76,9 +81,9 @@ class TestFileGithubIssues:
         mock_comment.assert_not_called()
 
     def test_comments_on_existing_open_issue(self):
-        with patch("app.depscan.issue_management.find_open_issue", return_value=7), \
-             patch("app.depscan.issue_management.create_issue") as mock_create, \
-             patch("app.depscan.issue_management.add_issue_comment") as mock_comment:
+        with patch("app.core.issue_filing.find_open_issue", return_value=7), \
+             patch("app.core.issue_filing.create_issue") as mock_create, \
+             patch("app.core.issue_filing.add_issue_comment") as mock_comment:
             _file_github_issues([self._finding()])
         mock_comment.assert_called_once()
         assert mock_comment.call_args[0][2] == 7
@@ -89,16 +94,16 @@ class TestFileGithubIssues:
             self._finding(repo_full_name="u/a", osv_id="GHSA-a"),
             self._finding(repo_full_name="u/b", osv_id="GHSA-b"),
         ]
-        with patch("app.depscan.issue_management.find_open_issue", return_value=None), \
-             patch("app.depscan.issue_management.create_issue") as mock_create, \
-             patch("app.depscan.issue_management.add_issue_comment"):
+        with patch("app.core.issue_filing.find_open_issue", return_value=None), \
+             patch("app.core.issue_filing.create_issue") as mock_create, \
+             patch("app.core.issue_filing.add_issue_comment"):
             _file_github_issues(findings)
         assert mock_create.call_count == 2
 
     def test_http_error_does_not_raise(self):
         """権限不足等でIssue作成が失敗しても、DEPSCAN全体を失敗させない。"""
         with patch(
-            "app.depscan.issue_management.find_open_issue",
+            "app.core.issue_filing.find_open_issue",
             side_effect=httpx.HTTPStatusError("403", request=MagicMock(), response=MagicMock()),
         ):
             _file_github_issues([self._finding()])  # 例外を送出しないことを確認

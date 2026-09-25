@@ -22,13 +22,15 @@ Contents: Read-only + **Issues: Write** 推奨）を使用する。
 
 ## DEPSCAN の新規検知は GitHub Issue としても自動起票する（issue_management.py）
 `app.depscan.issue_management._file_github_issues` が、新規検知を検知されたリポジトリ自身に
-Issue として起票する（Slack通知と同じ `new_snapshots` を使用）。タイトル固定文字列で
-Open Issue を検索し、あれば `add_issue_comment` で追記、無ければ `create_issue` で新規作成する
-（1リポジトリにつき常に1つの Open Issue に集約するため）。本文の整形ロジック
-（`format_package_lines`）は Slack 通知（`app.core.notifications`）と共有するため
-`app.core.finding_format` に切り出してある。GitHub API 呼び出し失敗（`Issues: Write` 権限
-不足等）はリポジトリ単位で `except httpx.HTTPError` により握りつぶし、DEPSCAN 全体の
-成功可否には影響させない。
+Issue として起票する（Slack通知と同じ `new_snapshots` を使用）。「リポジトリ単位でグルーピング
+→ タイトル固定文字列でOpen Issueを検索 → あれば `add_issue_comment` で追記、無ければ
+`create_issue` で新規作成（1リポジトリにつき常に1つの Open Issue に集約）→ GitHub API 呼び出し
+失敗はリポジトリ単位で `except httpx.HTTPError` により握りつぶす」という手順自体は CODESCAN
+（`app.codescan.issue_management`）と完全に同一のため、`app.core.issue_filing
+.file_or_update_repo_issues` に共通化してある。各ドメインは Issue タイトル・本文整形関数
+（クロージャ）・ログ接頭辞のみを渡す（DRY原則。差分はここに集約する）。本文の整形ロジック
+（`format_package_lines`）自体は Slack 通知（`app.core.notifications`）と共有するため
+`app.core.finding_format` に切り出してある。
 
 `_close_resolved_repo_issues` が、DEPSCAN の再スキャンで「そのリポジトリの未解決 finding が
 実際に0件になったこと」を確認できたタイミングで Open な DEPSCAN Issue を自動的にクローズする。
@@ -258,6 +260,17 @@ DEPSCANのGitHubログインを土台に、任意のユーザーが自分専用�
   にいずれも`token`引数（省略時`settings.GITHUB_TOKEN`）を追加した。`GITHUB_TOKEN`
   （baby-feelings専用PAT）には他ユーザーのプライベートリポジトリへの書き込み権限が
   無いため、登録済み他ユーザー向けの実行では必ず本人のトークンを明示的に渡す
+- **per-user版クロールのファイル名は`user_scan.py`に統一**: DEPSCAN/CODESCANの
+  per-user版はもともと`user_scan.py`だったが、DEPSOPSのper-user版だけ`user_runner.py`
+  という別名だった（同じ「登録ユーザー自身のリポジトリに対する daily crawl のper-user版」
+  という設計にファイル名が揃っていなかった）。命名一貫性のため`app.depsops.user_runner`を
+  `app.depsops.user_scan`にリネームした（`run_dependabot_ops_for_user`関数自体は変更なし）
+- **`app.depscan.github_client`・`app.codescan.github_client`・`app.depsops.github_client`の
+  `_headers()`/APIベースURL共通化**: 3ファイルとも認証ヘッダーの組み立てとAPIベースURLの
+  定義が完全に同一のコピペだったため、`app.core.github_http`（`github_headers`/
+  `GITHUB_API_BASE`）に切り出した。各ファイルは`_headers`/`_GITHUB_API_BASE`という
+  ローカル名でインポートし直すエイリアスにしているため、既存の呼び出し箇所は変更不要
+  （3ファイルの高レベル関数群自体のドメイン分離は意図的な設計のため維持している）
 
 ## 公開ダッシュボード用キー（PUBLIC_API_KEY）と管理者用キー（API_KEY）の分離
 Vite の `VITE_` 接頭辞の環境変数はビルド時にJSバンドルへ平文で埋め込まれるため、
