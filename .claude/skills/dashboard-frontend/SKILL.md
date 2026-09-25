@@ -1,6 +1,6 @@
 ---
 name: dashboard-frontend
-description: Reactダッシュボード（dashboard/）のアーキテクチャ設計判断。タブ切り替えUI、KEV/OSV/JVN/DEPSCAN/CODESCAN共通パーツ（VulnPanelParts）、DepscanPanelの集約・オーナーフィルター、DEPSCAN/CODESCAN共有GitHubログイン（useGithubSession）、CSSカスケードレイヤーの注意点、環境表示の日本語化を扱う。dashboard/配下のコンポーネント変更時に読む。
+description: Reactダッシュボード（dashboard/）のアーキテクチャ設計判断。タブ切り替えUI、KEV/OSV/JVN/DEPSCAN/CODESCAN共通パーツ（VulnPanelParts）、DepscanPanelの集約・オーナーフィルター、DEPSCAN/CODESCAN共有GitHubログイン（useGithubSession）、ハンバーガーメニューからのユーザー別Slack通知登録画面（SettingsPanel、Issue #227）、CSSカスケードレイヤーの注意点、環境表示の日本語化を扱う。dashboard/配下のコンポーネント変更時に読む。
 ---
 
 # ダッシュボード（React）内部実装リファレンス
@@ -78,6 +78,14 @@ CODESCAN追加後もキー名はあえて変更せず両ドメインで共有す
 `tick()`が多重に走る不具合が実際に発生した（CIのテストで断続的なクラッシュとして顕在化）。
 `CodescanAuthGate.tsx`はオンデマンドスキャンの概念が無いため`useGithubSession()`を
 引数無しで呼び、ログイン確認後は即座に`CodescanPanel`を表示するだけのシンプルな構成。
+
+`SettingsPanel.tsx`（Issue #227: ユーザー別Slack通知登録画面）も同じ`useGithubSession()`
+を引数無しで呼ぶ第三の利用箇所。ヘッダー右上のハンバーガーメニュー（`App.tsx`の
+`menuOpen`/`settingsOpen` state）から開くモーダルとして実装しており、タブ切り替えとは
+独立した表示（下部固定タブバーとは別のUI階層）。`api/auth.ts`の
+`fetchNotificationSettings`/`putNotificationSettings`/`deleteNotificationSettings`を使い、
+登録（PUT）はバックエンド側で実際にテスト送信されるため、フォーム側は成功/失敗メッセージを
+そのまま表示するだけでよい（クライアント側でのURL妥当性検証はプレフィックスチェックのみ）。
 
 ## index.css の CSS カスケードレイヤーに関する注意
 `*, *::before, *::after` の余白リセットは必ず `@layer base` の中に書くこと。

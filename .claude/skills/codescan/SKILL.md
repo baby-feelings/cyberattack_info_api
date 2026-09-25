@@ -183,3 +183,15 @@ CODESCANのスキャン対象となる各baby-feelingsリポジトリが、自�
 `.gitleaks.toml`（`[[allowlist]] paths = [...]`）で既知の誤検知を個別に
 allowlist登録できる、リポジトリ非依存の汎用的な仕組みになっている（本リポジトリ
 ルートの`.gitleaks.toml`もこの仕組みで自分自身のテストフィクスチャを除外している）。
+
+**Semgrepの誤検知除外は`.semgrepignore`（コード側の実装不要）**: gitleaksとは異なり
+Semgrepは`--source`配下の`.semgrepignore`（`.gitignore`と同じgitignore構文）を
+標準機能として自動的に尊重するため、gitleaksの`.gitleaks.toml`自動検出のような
+コード側の対応は不要。誤検知1件を1行で除外したい場合は対象コード行に
+`# nosemgrep`（またはルールID指定で`# nosemgrep: <rule-id>`）を付与する方法もあり、
+ファイル全体を除外したい場合（Jekyllサイトの`_includes/*.html`のような、静的な
+テンプレート変数を汎用ルールが誤検知するケース等）は`.semgrepignore`にパスを
+1行追加する方法を使う。いずれもリポジトリ側の対応のみで完結し、CODESCAN本体の
+コード変更は不要（baby-feelings傘下の複数リポジトリで、Firebase/GCPクライアント
+APIキー〈`.gitleaks.toml`〉・Jekyllテンプレート変数〈`.semgrepignore`〉・自リポジトリの
+defusedxml誤検知〈`# nosemgrep`〉の3パターンで実際に運用している）。

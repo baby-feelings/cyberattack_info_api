@@ -83,11 +83,14 @@ counters の値を crawler_logs に反映する**（OSV はエコシステム単
 
 ## /admin/*-crawl はバックグラウンド実行（202 即時返却）
 `/admin/crawl`（KEV）・`/admin/osv-crawl`・`/admin/jvn-crawl`・`/admin/depscan-crawl`・
-`/admin/codescan-crawl`・`/admin/dependabot-ops` は即座に 202 Accepted を返し、
+`/admin/codescan-crawl`・`/admin/dependabot-ops`・`/admin/repo-cleanup`（Issue #228）・
+`/admin/user-crawl`（Issue #227）は即座に 202 Accepted を返し、
 `app.core.background.run_in_background`（daemon スレッドで実行し、例外はログに記録するだけで
 呼び出し元へは伝播させない共通ヘルパー）でバックグラウンド実行する。結果は
-`/api/crawler-logs` で確認する。OSV・JVN は `?days=N` クエリパラメータで取得対象日数を
-指定可能（初回バックフィル用）。
+`/api/crawler-logs` で確認する（`repo-cleanup`は`crawler_type="CLEANUP"`で記録し、
+`deleted`フィールドにパージしたリポジトリ数を格納する。`user-crawl`はユーザー単位の
+処理のため`crawler_logs`には記録しない）。OSV・JVN は `?days=N` クエリパラメータで
+取得対象日数を指定可能（初回バックフィル用）。
 
 各エンドポイントは対応するドメインの `app/{kev,osv,jvn,depscan,depsops,codescan}/router.py`
 に、`/api/xxx` prefix 付きの通常 `router` とは別に **prefix なし・`Security(require_api_key)`
