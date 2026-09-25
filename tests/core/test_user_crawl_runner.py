@@ -44,7 +44,9 @@ class TestRunUserCrawlsForAllAccounts:
 
         with patch("app.core.user_crawl_runner.run_depscan_for_user") as mock_depscan, \
              patch("app.core.user_crawl_runner.run_codescan_for_user") as mock_codescan, \
-             patch("app.core.user_crawl_runner.run_dependabot_ops_for_user") as mock_depsops:
+             patch("app.core.user_crawl_runner.run_dependabot_ops_for_user") as mock_depsops, \
+             patch("app.core.user_crawl_runner.list_target_repos", return_value=[]) as mock_list, \
+             patch("app.core.user_crawl_runner.purge_deleted_repos") as mock_purge:
             processed = run_user_crawls_for_all_accounts()
 
         assert processed == 1
@@ -53,6 +55,8 @@ class TestRunUserCrawlsForAllAccounts:
         mock_depsops.assert_called_once_with(
             "alice", "token-alice", "https://hooks.slack.com/services/alice",
         )
+        mock_list.assert_called_once_with("alice", "token-alice")
+        mock_purge.assert_called_once_with("alice", "token-alice", set())
 
     def test_one_user_failure_does_not_stop_others(self, db_session, monkeypatch):
         monkeypatch.setattr(
@@ -66,7 +70,9 @@ class TestRunUserCrawlsForAllAccounts:
             "app.core.user_crawl_runner.run_depscan_for_user",
             side_effect=[RuntimeError("boom"), None],
         ), patch("app.core.user_crawl_runner.run_codescan_for_user"), \
-           patch("app.core.user_crawl_runner.run_dependabot_ops_for_user"):
+           patch("app.core.user_crawl_runner.run_dependabot_ops_for_user"), \
+           patch("app.core.user_crawl_runner.list_target_repos", return_value=[]), \
+           patch("app.core.user_crawl_runner.purge_deleted_repos"):
             processed = run_user_crawls_for_all_accounts()
 
         assert processed == 1  # 失敗した1件を除く

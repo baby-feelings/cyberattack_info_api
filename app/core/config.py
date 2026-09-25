@@ -74,6 +74,11 @@ class Settings(BaseSettings):
     # DEPSOPS データの保持期間（日数）: この日数より古い processed_at レコードを定期削除する
     DEPSOPS_RETENTION_DAYS: int = 180
 
+    # 削除済みリポジトリのDEPSCAN/CODESCAN/DEPSOPSデータ削除（Issue #228）設定
+    # DEPSOPSの後段: JST 8:15 = UTC 23:15
+    REPO_CLEANUP_CRON_HOUR_UTC: int = 23
+    REPO_CLEANUP_CRON_MINUTE_UTC: int = 15
+
     # GitHub ログイン（DEPSCAN ダッシュボードのアクセス制御）設定
     # OAuth App の Client ID / Secret（未設定時は /auth/github/* がエラーを返すのみで
     # アプリ全体は起動する。GITHUB_TOKEN 同様のソフトフェイル方針）

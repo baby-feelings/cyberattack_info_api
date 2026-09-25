@@ -19,6 +19,8 @@ from app.auth.account_store import decrypt_account_token, list_other_registered_
 from app.codescan.user_scan import run_codescan_for_user
 from app.core.config import settings
 from app.core.database import SessionLocal
+from app.core.repo_cleanup import purge_deleted_repos
+from app.depscan.github_client import list_target_repos
 from app.depscan.user_scan import run_depscan_for_user
 from app.depsops.user_runner import run_dependabot_ops_for_user
 
@@ -62,6 +64,9 @@ def run_user_crawls_for_all_accounts() -> int:
             run_depscan_for_user(username, token)
             run_codescan_for_user(username, token)
             run_dependabot_ops_for_user(username, token, webhook_url)
+            # 削除済みリポジトリのデータ掃除（Issue #228）。本人のリポジトリのみ対象
+            current_names = {r["full_name"] for r in list_target_repos(username, token)}
+            purge_deleted_repos(username, token, current_names)
             processed += 1
         except Exception as exc:
             logger.error("User crawl: failed for %s: %s", username, exc, exc_info=True)

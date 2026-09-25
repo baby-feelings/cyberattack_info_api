@@ -32,6 +32,7 @@ from app.depscan.github_client import (  # noqa: E402
     get_file_content,
     get_repo_tree,
     list_target_repos,
+    repo_exists,
 )
 from app.depscan.models import DependencyFinding, RepoAssetContext, UserScan  # noqa: E402
 from app.depscan.user_scan import (  # noqa: E402
@@ -585,6 +586,39 @@ class TestListTargetRepos:
         call = mock_client.get.call_args
         assert call.args[0].endswith("/user/repos")
         assert call.kwargs["params"]["affiliation"] == "owner"
+
+
+class TestRepoExists:
+    def test_returns_true_when_repo_found(self):
+        mock_client = _mock_httpx_client(get_return=_mock_response({"full_name": "u/r"}))
+        with patch("app.depscan.github_client.httpx.Client", return_value=mock_client):
+            assert repo_exists("u", "r", "token") is True
+
+    def test_returns_false_on_404(self):
+        resp = MagicMock()
+        resp.status_code = 404
+        resp.raise_for_status = MagicMock(
+            side_effect=httpx.HTTPStatusError("404", request=MagicMock(), response=resp),
+        )
+        mock_client = _mock_httpx_client(get_return=resp)
+        with patch("app.depscan.github_client.httpx.Client", return_value=mock_client):
+            assert repo_exists("u", "deleted-repo", "token") is False
+
+    def test_returns_none_on_other_http_status_error(self):
+        resp = MagicMock()
+        resp.status_code = 401
+        resp.raise_for_status = MagicMock(
+            side_effect=httpx.HTTPStatusError("401", request=MagicMock(), response=resp),
+        )
+        mock_client = _mock_httpx_client(get_return=resp)
+        with patch("app.depscan.github_client.httpx.Client", return_value=mock_client):
+            assert repo_exists("u", "r", "token") is None
+
+    def test_returns_none_on_transport_error(self):
+        mock_client = _mock_httpx_client()
+        mock_client.get = MagicMock(side_effect=httpx.ConnectError("boom"))
+        with patch("app.depscan.github_client.httpx.Client", return_value=mock_client):
+            assert repo_exists("u", "r", "token") is None
 
 
 class TestGetRepoTree:
