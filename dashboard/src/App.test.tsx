@@ -18,6 +18,16 @@ vi.mock('./components/JvnPanel', () => ({
 vi.mock('./components/DepscanAuthGate', () => ({
   DepscanAuthGate: () => <div data-testid="depscan-auth-gate" />,
 }))
+vi.mock('./components/CodescanAuthGate', () => ({
+  CodescanAuthGate: () => <div data-testid="codescan-auth-gate" />,
+}))
+vi.mock('./components/SettingsPanel', () => ({
+  SettingsPanel: ({ onClose }: { onClose: () => void }) => (
+    <div data-testid="settings-panel">
+      <button onClick={onClose}>close-settings</button>
+    </div>
+  ),
+}))
 
 function setUrl(search: string) {
   window.history.pushState({}, '', `/${search}`)
@@ -64,5 +74,18 @@ describe('App', () => {
 
     await user.click(screen.getByRole('tab', { name: /OSV/ }))
     expect(screen.getByTestId('health-status')).toBeInTheDocument()
+  })
+
+  it('opens the settings panel from the hamburger menu', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    expect(screen.queryByTestId('settings-panel')).not.toBeInTheDocument()
+
+    await user.click(screen.getByLabelText('メニュー'))
+    await user.click(screen.getByText('設定'))
+    expect(screen.getByTestId('settings-panel')).toBeInTheDocument()
+
+    await user.click(screen.getByText('close-settings'))
+    expect(screen.queryByTestId('settings-panel')).not.toBeInTheDocument()
   })
 })
