@@ -18,18 +18,17 @@ export function useCodescanData(authToken?: string) {
   const [result, setResult] = useState<CodescanListResponse | null>(null)
   const [stats, setStats] = useState<CodescanStatsResponse | null>(null)
   const [loading, setLoading] = useState(true)
+  const [statsLoading, setStatsLoading] = useState(true)
 
-  const load = useCallback(async (
+  // 一覧（フィルタ・ページ）とグラフ用の統計は独立して取得する。統計はページ送り
+  // では変化しないため、ページ送りのたびにグラフが読み込み中表示に戻るのを防ぐ
+  const loadList = useCallback(async (
     sev: string | null, res: boolean | null, p: number,
   ) => {
     setLoading(true)
     try {
-      const [list, st] = await Promise.all([
-        fetchCodescanList({ severity: sev, resolved: res, page: p, perPage: PER_PAGE, authToken }),
-        fetchCodescanStats(authToken),
-      ])
+      const list = await fetchCodescanList({ severity: sev, resolved: res, page: p, perPage: PER_PAGE, authToken })
       setResult(list)
-      setStats(st)
     } catch {
       // エラーは握りつぶし（データなし状態として扱う。他パネルと同じ方針）
     } finally {
@@ -37,9 +36,32 @@ export function useCodescanData(authToken?: string) {
     }
   }, [authToken])
 
+  const loadStats = useCallback(async () => {
+    setStatsLoading(true)
+    try {
+      const st = await fetchCodescanStats(authToken)
+      setStats(st)
+    } catch {
+      // エラーは握りつぶし（データなし状態として扱う。他パネルと同じ方針）
+    } finally {
+      setStatsLoading(false)
+    }
+  }, [authToken])
+
+  const load = useCallback((
+    sev: string | null, res: boolean | null, p: number,
+  ) => {
+    loadList(sev, res, p)
+    loadStats()
+  }, [loadList, loadStats])
+
   useEffect(() => {
-    load(severity, resolved, page)
-  }, [load, severity, resolved, page])
+    loadList(severity, resolved, page)
+  }, [loadList, severity, resolved, page])
+
+  useEffect(() => {
+    loadStats()
+  }, [loadStats])
 
   function handleSev(sev: string) {
     setSeverity(sev === 'ALL' ? null : sev)
@@ -56,7 +78,7 @@ export function useCodescanData(authToken?: string) {
 
   return {
     severity, resolved, page, setPage,
-    result, stats, loading,
+    result, stats, loading, statsLoading,
     load, handleSev, handleResolvedToggle,
     totalPages, errorCount,
   }

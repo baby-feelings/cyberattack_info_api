@@ -35,16 +35,19 @@ export function EmptyState({ icon, message }: { icon: ReactNode; message: string
 // ── ページネーション ──────────────────────────────────────────
 
 export function Pagination({
-  page, totalPages, total, onPageChange,
+  page, totalPages, total, onPageChange, position = 'bottom',
 }: {
   page: number
   totalPages: number
   total: number
   onPageChange: (updater: (p: number) => number) => void
+  // 'top' はテーブル上部にも同じ操作を配置する場合に使う（区切り線を下側に出す）
+  position?: 'top' | 'bottom'
 }) {
   if (totalPages <= 1) return null
+  const borderCls = position === 'top' ? 'pb-2 border-b border-slate-800' : 'pt-2 border-t border-slate-800'
   return (
-    <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+    <div className={`flex items-center justify-between ${borderCls}`}>
       <button
         onClick={() => onPageChange(p => Math.max(1, p - 1))}
         disabled={page === 1}

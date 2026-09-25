@@ -20,18 +20,15 @@ export function KevPanel() {
   const [stats, setStats] = useState<StatsResponse | null>(null)
   const [recentCount, setRecentCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [statsLoading, setStatsLoading] = useState(true)
 
-  const load = useCallback(async (q: string, p: number) => {
+  // 一覧（検索・ページ）とグラフ用の統計は独立して取得する。統計はページ送り
+  // では変化しないため、ページ送りのたびにグラフが読み込み中表示に戻るのを防ぐ
+  const loadList = useCallback(async (q: string, p: number) => {
     setLoading(true)
     try {
-      const [list, st, recent] = await Promise.all([
-        fetchVulnerabilities({ search: q, page: p, perPage: PER_PAGE }),
-        fetchStats(),
-        fetchRecent(30),
-      ])
+      const list = await fetchVulnerabilities({ search: q, page: p, perPage: PER_PAGE })
       setResult(list)
-      setStats(st)
-      setRecentCount(recent.length)
     } catch {
       // エラーは握りつぶし（データなし状態として扱う）
     } finally {
@@ -39,9 +36,31 @@ export function KevPanel() {
     }
   }, [])
 
+  const loadStats = useCallback(async () => {
+    setStatsLoading(true)
+    try {
+      const [st, recent] = await Promise.all([fetchStats(), fetchRecent(30)])
+      setStats(st)
+      setRecentCount(recent.length)
+    } catch {
+      // エラーは握りつぶし（データなし状態として扱う）
+    } finally {
+      setStatsLoading(false)
+    }
+  }, [])
+
+  const load = useCallback((q: string, p: number) => {
+    loadList(q, p)
+    loadStats()
+  }, [loadList, loadStats])
+
   useEffect(() => {
-    load(search, page)
-  }, [load, search, page])
+    loadList(search, page)
+  }, [loadList, search, page])
+
+  useEffect(() => {
+    loadStats()
+  }, [loadStats])
 
   function clearSearch() {
     setSearch('')
@@ -64,14 +83,14 @@ export function KevPanel() {
           </div>
           <button
             onClick={() => load(search, page)}
-            disabled={loading}
+            disabled={loading || statsLoading}
             className="text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40 p-1 rounded"
             title="再読み込み"
           >
-            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+            <RefreshCw size={13} className={loading || statsLoading ? 'animate-spin' : ''} />
           </button>
         </div>
-        {!loading && stats && stats.total_vulnerabilities > 0 && (
+        {!statsLoading && stats && stats.total_vulnerabilities > 0 && (
           <div className="flex items-center gap-2 text-xs tabular-nums">
             {recentCount > 0 && (
               <span className="px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-400 font-semibold">
@@ -85,14 +104,14 @@ export function KevPanel() {
 
       {/* ビジュアライゼーション: ベンダー別・月別トレンド */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <VendorBarChart stats={stats} loading={loading} />
+        <VendorBarChart stats={stats} loading={statsLoading} />
         <MonthlyBarChart
           icon={<BarChart2 size={13} className="text-slate-400" />}
           title="月別 CVE 追加数トレンド"
           data={stats?.monthly_trend ?? []}
           barColor="#7c3aed"
           height={160}
-          loading={loading}
+          loading={statsLoading}
         />
       </div>
 
@@ -119,6 +138,8 @@ export function KevPanel() {
       /* テーブル */
       ) : result && (
         <>
+          <Pagination page={page} totalPages={totalPages} total={result.total} onPageChange={setPage} position="top" />
+
           <div className="overflow-x-auto -mx-1 px-1">
             <table className="w-full text-sm min-w-[700px]">
               <thead>

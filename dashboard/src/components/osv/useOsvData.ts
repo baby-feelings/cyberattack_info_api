@@ -18,19 +18,18 @@ export function useOsvData() {
   const [result, setResult] = useState<OsvListResponse | null>(null)
   const [stats, setStats] = useState<OsvStatsResponse | null>(null)
   const [loading, setLoading] = useState(true)
+  const [statsLoading, setStatsLoading] = useState(true)
 
-  const load = useCallback(async (
+  // 一覧（フィルタ・ページ）とグラフ用の統計は独立して取得する。統計はページ送り
+  // では変化しないため、ページ送りのたびにグラフが読み込み中表示に戻るのを防ぐ
+  const loadList = useCallback(async (
     eco: string | null, sev: string | null, q: string,
     p: number, sort: 'modified' | 'cvss',
   ) => {
     setLoading(true)
     try {
-      const [list, st] = await Promise.all([
-        fetchOsvList({ ecosystem: eco, severity: sev, search: q, page: p, perPage: PER_PAGE, sortBy: sort }),
-        fetchOsvStats(180),
-      ])
+      const list = await fetchOsvList({ ecosystem: eco, severity: sev, search: q, page: p, perPage: PER_PAGE, sortBy: sort })
       setResult(list)
-      setStats(st)
     } catch {
       // エラーは握りつぶし（データなし状態として扱う）
     } finally {
@@ -38,9 +37,33 @@ export function useOsvData() {
     }
   }, [])
 
+  const loadStats = useCallback(async () => {
+    setStatsLoading(true)
+    try {
+      const st = await fetchOsvStats(180)
+      setStats(st)
+    } catch {
+      // エラーは握りつぶし（データなし状態として扱う）
+    } finally {
+      setStatsLoading(false)
+    }
+  }, [])
+
+  const load = useCallback((
+    eco: string | null, sev: string | null, q: string,
+    p: number, sort: 'modified' | 'cvss',
+  ) => {
+    loadList(eco, sev, q, p, sort)
+    loadStats()
+  }, [loadList, loadStats])
+
   useEffect(() => {
-    load(ecosystem, severity, search, page, sortBy)
-  }, [load, ecosystem, severity, search, page, sortBy])
+    loadList(ecosystem, severity, search, page, sortBy)
+  }, [loadList, ecosystem, severity, search, page, sortBy])
+
+  useEffect(() => {
+    loadStats()
+  }, [loadStats])
 
   function handleEco(eco: string) {
     setEcosystem(eco === 'ALL' ? null : eco)
@@ -75,7 +98,7 @@ export function useOsvData() {
 
   return {
     ecosystem, severity, search, sortBy, page, setPage,
-    result, stats, loading,
+    result, stats, loading, statsLoading,
     load, handleEco, handleSev, handleSearch, clearSearch, handleSortBy,
     totalPages, critCount, highCount,
   }

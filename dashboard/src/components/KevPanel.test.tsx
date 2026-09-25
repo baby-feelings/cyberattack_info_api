@@ -170,7 +170,8 @@ describe('KevPanel', () => {
     mockedRecent.mockResolvedValue([])
 
     render(<KevPanel />)
-    await waitFor(() => expect(screen.getByText(/60 件/)).toBeInTheDocument())
-    expect(screen.getByText('1 / 2')).toBeInTheDocument()
+    // ページネーションは上部・下部の両方に表示されるため、件数表示は2箇所になる
+    await waitFor(() => expect(screen.getAllByText(/60 件/).length).toBe(2))
+    expect(screen.getAllByText('1 / 2').length).toBe(2)
   })
 })

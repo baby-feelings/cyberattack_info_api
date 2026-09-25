@@ -36,19 +36,18 @@ export function JvnPanel() {
   const [result, setResult] = useState<JvnListResponse | null>(null)
   const [stats, setStats] = useState<JvnStatsResponse | null>(null)
   const [loading, setLoading] = useState(true)
+  const [statsLoading, setStatsLoading] = useState(true)
 
-  const load = useCallback(async (
+  // 一覧（フィルタ・ページ）とグラフ用の統計は独立して取得する。統計はページ送り
+  // では変化しないため、ページ送りのたびにグラフが読み込み中表示に戻るのを防ぐ
+  const loadList = useCallback(async (
     sev: string | null, q: string,
     p: number, sort: 'modified' | 'cvss',
   ) => {
     setLoading(true)
     try {
-      const [list, st] = await Promise.all([
-        fetchJvnList({ severity: sev, search: q, page: p, perPage: PER_PAGE, sortBy: sort }),
-        fetchJvnStats(180),
-      ])
+      const list = await fetchJvnList({ severity: sev, search: q, page: p, perPage: PER_PAGE, sortBy: sort })
       setResult(list)
-      setStats(st)
     } catch {
       // エラーは握りつぶし（データなし状態として扱う）
     } finally {
@@ -56,9 +55,32 @@ export function JvnPanel() {
     }
   }, [])
 
+  const loadStats = useCallback(async () => {
+    setStatsLoading(true)
+    try {
+      const st = await fetchJvnStats(180)
+      setStats(st)
+    } catch {
+      // エラーは握りつぶし（データなし状態として扱う）
+    } finally {
+      setStatsLoading(false)
+    }
+  }, [])
+
+  const load = useCallback((
+    sev: string | null, q: string, p: number, sort: 'modified' | 'cvss',
+  ) => {
+    loadList(sev, q, p, sort)
+    loadStats()
+  }, [loadList, loadStats])
+
   useEffect(() => {
-    load(severity, search, page, sortBy)
-  }, [load, severity, search, page, sortBy])
+    loadList(severity, search, page, sortBy)
+  }, [loadList, severity, search, page, sortBy])
+
+  useEffect(() => {
+    loadStats()
+  }, [loadStats])
 
   function handleSev(sev: string) {
     setSeverity(sev === 'ALL' ? null : sev)
@@ -90,14 +112,14 @@ export function JvnPanel() {
           </div>
           <button
             onClick={() => load(severity, search, page, sortBy)}
-            disabled={loading}
+            disabled={loading || statsLoading}
             className="text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40 p-1 rounded"
             title="再読み込み"
           >
-            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+            <RefreshCw size={13} className={loading || statsLoading ? 'animate-spin' : ''} />
           </button>
         </div>
-        {!loading && stats && stats.total > 0 && (
+        {!statsLoading && stats && stats.total > 0 && (
           <div className="flex items-center gap-2 text-xs tabular-nums">
             {highCount > 0 && (
               <span className="px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-400 font-semibold">
@@ -120,7 +142,7 @@ export function JvnPanel() {
           icon={<FileWarning size={13} className="text-slate-400" />}
           data={stats?.severities ?? []}
           colorMap={SEVERITY_COLORS}
-          loading={loading}
+          loading={statsLoading}
         />
         <MonthlyBarChart
           icon={<FileWarning size={13} className="text-slate-400" />}
@@ -128,7 +150,7 @@ export function JvnPanel() {
           data={stats?.monthly_trend ?? []}
           barColor="#f59e0b"
           height={210}
-          loading={loading}
+          loading={statsLoading}
         />
       </div>
 
@@ -168,6 +190,8 @@ export function JvnPanel() {
       /* テーブル */
       ) : result && (
         <>
+          <Pagination page={page} totalPages={totalPages} total={result.total} onPageChange={setPage} position="top" />
+
           <div className="overflow-x-auto -mx-1 px-1">
             <table className="w-full text-sm min-w-[700px]">
               <thead>

@@ -26,7 +26,7 @@ const SEVERITY_LABELS: Record<string, string> = {
 export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
   const {
     severity, resolved, page, setPage,
-    result, stats, loading,
+    result, stats, loading, statsLoading,
     load, handleSev, handleResolvedToggle,
     totalPages, errorCount,
   } = useCodescanData(authToken)
@@ -45,14 +45,14 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
           </div>
           <button
             onClick={() => load(severity, resolved, page)}
-            disabled={loading}
+            disabled={loading || statsLoading}
             className="text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40 p-1 rounded"
             title="再読み込み"
           >
-            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+            <RefreshCw size={13} className={loading || statsLoading ? 'animate-spin' : ''} />
           </button>
         </div>
-        {!loading && stats && stats.total > 0 && (
+        {!statsLoading && stats && stats.total > 0 && (
           <div className="flex items-center gap-2 text-xs tabular-nums">
             {errorCount > 0 && (
               <span className="px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 font-semibold">
@@ -73,7 +73,7 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
       </p>
 
       {/* リポジトリ別統計（棒グラフ、DEPSCANと同じ構成） */}
-      <RepoBarChart stats={stats} loading={loading} />
+      <RepoBarChart stats={stats} loading={statsLoading} />
 
       {/* 重要度フィルター + 解決状態フィルター */}
       <div className="flex flex-wrap items-center gap-3">
@@ -117,6 +117,8 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
       /* テーブル */
       ) : result && (
         <>
+          <Pagination page={page} totalPages={totalPages} total={result.total} onPageChange={setPage} position="top" />
+
           <div className="overflow-x-auto -mx-1 px-1">
             <table className="w-full text-sm min-w-[700px]">
               <thead>
