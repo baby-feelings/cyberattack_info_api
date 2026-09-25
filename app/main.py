@@ -21,6 +21,8 @@ from app.codescan.router import router as codescan_router
 from app.core.config import settings
 from app.core.database import Base, engine, get_db
 from app.core.metrics import router as metrics_router
+from app.core.repo_cleanup import run_repo_cleanup
+from app.core.repo_cleanup_router import admin_router as repo_cleanup_admin_router
 from app.core.schemas import HealthResponse
 from app.core.taxii import taxii_router
 from app.core.user_crawl_router import admin_router as user_crawl_admin_router
@@ -128,8 +130,17 @@ def _register_scheduled_jobs(job_scheduler: BackgroundScheduler) -> None:
         id="dependabot_ops",
         replace_existing=True,
     )
+    # 削除済みリポジトリのDEPSCAN/CODESCAN/DEPSOPSデータ削除（Issue #228）: DEPSOPSの後段
+    job_scheduler.add_job(
+        run_repo_cleanup,
+        trigger="cron",
+        hour=settings.REPO_CLEANUP_CRON_HOUR_UTC,
+        minute=settings.REPO_CLEANUP_CRON_MINUTE_UTC,
+        id="repo_cleanup",
+        replace_existing=True,
+    )
     # 登録済みユーザー（GITHUB_USERNAME以外）向けDEPSCAN/CODESCAN/DEPSOPS（Issue #227）:
-    # DEPSOPSの後段に配置
+    # 削除済みリポジトリの掃除の後段に配置
     job_scheduler.add_job(
         run_user_crawls_for_all_accounts,
         trigger="cron",
@@ -142,12 +153,13 @@ def _register_scheduled_jobs(job_scheduler: BackgroundScheduler) -> None:
     logger.info(
         "Scheduler started: KEV UTC %02d:%02d / OSV UTC %02d:00 / JVN UTC %02d:00 / "
         "DEPSCAN UTC %02d:00 / CODESCAN UTC %02d:%02d / DEPSOPS UTC %02d:00 / "
-        "USER_CRAWL UTC %02d:%02d",
+        "REPO_CLEANUP UTC %02d:%02d / USER_CRAWL UTC %02d:%02d",
         settings.CRON_HOUR_UTC, settings.CRON_MINUTE_UTC,
         settings.OSV_CRON_HOUR_UTC, settings.JVN_CRON_HOUR_UTC,
         settings.DEPSCAN_CRON_HOUR_UTC,
         settings.CODESCAN_CRON_HOUR_UTC, settings.CODESCAN_CRON_MINUTE_UTC,
         settings.DEPSOPS_CRON_HOUR_UTC,
+        settings.REPO_CLEANUP_CRON_HOUR_UTC, settings.REPO_CLEANUP_CRON_MINUTE_UTC,
         settings.USER_CRAWL_CRON_HOUR_UTC, settings.USER_CRAWL_CRON_MINUTE_UTC,
     )
 
@@ -217,6 +229,7 @@ app.include_router(depscan_admin_router)
 app.include_router(depsops_admin_router)
 app.include_router(codescan_admin_router)
 app.include_router(user_crawl_admin_router)
+app.include_router(repo_cleanup_admin_router)
 app.include_router(metrics_router)
 app.include_router(taxii_router)
 

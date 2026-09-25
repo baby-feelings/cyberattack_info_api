@@ -63,6 +63,37 @@ def list_target_repos(username: str, token: str) -> list[dict[str, Any]]:
     return [repo for repo in repos if not repo.get("fork") and not repo.get("archived")]
 
 
+def repo_exists(owner: str, repo: str, token: str) -> bool | None:
+    """指定リポジトリがGitHub上に実在するかを確認する（Issue #228）。
+
+    `list_target_repos` の結果に含まれなくなったリポジトリが、本当に削除された
+    のか（DBデータをパージしてよい）、それとも一時的なAPI障害・アーカイブ化・
+    権限変更等の理由で除外されているだけなのか（パージすべきでない）を区別する
+    ために使う。`list_target_repos`はarchived/forkも除外するため、それらと
+    「本当に存在しない」を混同しないよう、`GET /repos/{owner}/{repo}`で直接
+    確認する必要がある。
+
+    Returns:
+        True: リポジトリは存在する（アーカイブ化・可視性変更等で一覧から
+            除外されているだけ）。
+        False: 404（確実に削除された、またはリネームで到達不能）。
+        None: 判定不能（一時的なエラー・レート制限等）。呼び出し元は安全側に
+            倒し、判定不能な間はDBデータを削除しないこと。
+    """
+    try:
+        with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
+            request_with_retry(lambda: client.get(f"{_GITHUB_API_BASE}/repos/{owner}/{repo}"))
+        return True
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            return False
+        logger.warning("repo_exists: unexpected status for %s/%s: %s", owner, repo, exc)
+        return None
+    except httpx.HTTPError as exc:
+        logger.warning("repo_exists: failed to check %s/%s: %s", owner, repo, exc)
+        return None
+
+
 def get_repo_tree(owner: str, repo: str, default_branch: str, token: str) -> list[str]:
     """リポジトリの全ファイルパス一覧を取得する（サブディレクトリを含む再帰取得）。
 
