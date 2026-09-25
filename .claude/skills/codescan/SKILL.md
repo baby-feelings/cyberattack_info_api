@@ -76,14 +76,16 @@ DEPSCANは詳細なSlackダイジェスト（`notify_dependency_findings`）・I
 `deleted`=今回解決済みにした件数、`updated`=保持期間超過（`CODESCAN_RETENTION_DAYS`、
 既定180日）の実削除件数。
 
-## GitHub Issue自動起票はDEPSCANと同じパターンだがタイトルを分離
-`app.codescan.issue_management._file_github_issues`は「1リポジトリにつき常に
-1つのOpen Issueに集約する」設計をDEPSCANから踏襲するが、Issueタイトルを
-`"🔎 自アプリのコード脆弱性が検出されました (CODESCAN)"`という固定文字列にし、
-DEPSCANの`"🚨 依存ライブラリの脆弱性が検出されました (DEPSCAN)"`と混同しないように
-している。Issue本文の整形は`_format_finding_lines`（severity降順→ファイルパス順）
-で行う（DEPSCANのパッケージ単位整形`app.core.finding_format.format_package_lines`
-とは検知の粒度が異なるため共有せず、`app.codescan.issue_management`内に個別実装）。
+## GitHub Issue自動起票はDEPSCANと共通処理を共有、タイトルと本文整形のみ分離
+「リポジトリ単位でグルーピング→Open Issue検索→追記または新規作成→API失敗は
+握りつぶす」という手順自体はDEPSCANの`app.depscan.issue_management`と完全に
+同一のため、`app.core.issue_filing.file_or_update_repo_issues`に共通化されている。
+`app.codescan.issue_management._file_github_issues`はこの共通処理へ、Issueタイトル
+`"🔎 自アプリのコード脆弱性が検出されました (CODESCAN)"`（DEPSCANの
+`"🚨 依存ライブラリの脆弱性が検出されました (DEPSCAN)"`と混同しないための固定文字列）と
+本文整形関数`_format_finding_lines`（severity降順→ファイルパス順）を渡すだけの
+薄い実装になっている。本文整形をDEPSCANの`app.core.finding_format.format_package_lines`
+と共有しないのは、検知の粒度（パッケージ単位 vs ファイル:行単位）が異なるため。
 現バージョンでは新規起票・追記のみを実装し、自動クローズ（DEPSCANの
 `_close_resolved_repo_issues`相当）は将来の拡張とした（`run_crawler`ベースの
 オーケストレーションでは、DEPSCANが行う「全体再スキャン検証後」というクローズ

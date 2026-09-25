@@ -10,21 +10,14 @@ from typing import Any
 
 import httpx
 
+from app.core.github_http import GITHUB_API_BASE as _GITHUB_API_BASE
+from app.core.github_http import github_headers as _headers
 from app.core.retry import request_with_retry
 
 logger = logging.getLogger(__name__)
 
-_GITHUB_API_BASE = "https://api.github.com"
 _TIMEOUT = 30.0
 _PER_PAGE = 100
-
-
-def _headers(token: str) -> dict[str, str]:
-    return {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
 
 
 def list_target_repos(username: str, token: str) -> list[dict[str, Any]]:

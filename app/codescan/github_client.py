@@ -15,21 +15,14 @@ import logging
 
 import httpx
 
+from app.core.github_http import GITHUB_API_BASE as _GITHUB_API_BASE
+from app.core.github_http import github_headers as _headers
 from app.core.retry import request_with_retry
 
 logger = logging.getLogger(__name__)
 
-_GITHUB_API_BASE = "https://api.github.com"
 # tarball はリポジトリ全体のダウンロードのため、ロックファイル取得等より長めに確保する
 _TIMEOUT = 60.0
-
-
-def _headers(token: str) -> dict[str, str]:
-    return {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
 
 
 def download_repo_tarball(owner: str, repo: str, token: str, branch: str = "HEAD") -> bytes:

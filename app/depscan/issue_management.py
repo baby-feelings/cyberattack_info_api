@@ -13,14 +13,10 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.finding_format import format_package_lines
+from app.core.issue_filing import file_or_update_repo_issues
 from app.core.notifications import DASHBOARD_URL
 from app.crawler_logs.writer import now_utc
-from app.depscan.github_client import (
-    add_issue_comment,
-    close_issue,
-    create_issue,
-    find_open_issue,
-)
+from app.depscan.github_client import add_issue_comment, close_issue, find_open_issue
 from app.depscan.models import DependencyFinding
 
 logger = logging.getLogger(__name__)
@@ -44,32 +40,17 @@ def _file_github_issues(new_snapshots: list[dict[str, Any]], token: str | None =
     if not new_snapshots:
         return
 
-    by_repo: dict[str, list[dict[str, Any]]] = {}
-    for finding in new_snapshots:
-        by_repo.setdefault(finding["repo_full_name"], []).append(finding)
-
     timestamp = now_utc().strftime("%Y-%m-%d %H:%M UTC")
     token = token if token is not None else settings.GITHUB_TOKEN
 
-    for full_name, findings in by_repo.items():
-        owner, repo = full_name.split("/", 1)
-        body = (
+    def format_body(findings: list[dict[str, Any]]) -> str:
+        return (
             f"DEPSCAN が依存ライブラリの脆弱性を検知しました（{timestamp}）。\n\n"
             + "\n".join(format_package_lines(findings))
             + f"\n\n---\n詳細: {DASHBOARD_URL}"
         )
-        try:
-            issue_number = find_open_issue(owner, repo, _ISSUE_TITLE, token)
-            if issue_number is not None:
-                add_issue_comment(owner, repo, issue_number, body, token)
-                logger.info(
-                    "DEPSCAN: added comment to existing issue #%d in %s", issue_number, full_name,
-                )
-            else:
-                issue = create_issue(owner, repo, _ISSUE_TITLE, body, token)
-                logger.info("DEPSCAN: created issue #%s in %s", issue.get("number"), full_name)
-        except httpx.HTTPError as exc:
-            logger.warning("DEPSCAN: failed to file GitHub issue for %s: %s", full_name, exc)
+
+    file_or_update_repo_issues(new_snapshots, _ISSUE_TITLE, format_body, token, "DEPSCAN")
 
 
 def _close_resolved_repo_issues(db: Session, candidate_repos: set[str]) -> None:
