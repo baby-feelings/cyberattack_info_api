@@ -135,6 +135,16 @@ DEPSCAN（検知）・Dependabot（修正PR作成）に続く3層目として、
 ダッシュボードにはDEPSOPS専用タブは作らず、DEPSCANタブ内のボタンから開く
 全画面モーダル（`DependabotOpsModal.tsx`）として統合している。
 
+**リポジトリ別未解決PR件数は`GET /api/depsops/stats`で集計済みの値を返す**。
+`DependabotPrLog`は実行のたびに同じPRへ1行追加するappend-onlyログのため、
+「未解決」の判定には`(repo_full_name, pr_number)`ごとの最新1件のみを見る必要がある。
+これをダッシュボード側で全件（本番で2000件超）をページングしながら取得して
+集計していたところ、履歴が増えるにつれて往復回数が増え表示に10秒近くかかる
+ようになった。集計自体を`ROW_NUMBER() OVER (PARTITION BY repo_full_name,
+pr_number ORDER BY processed_at DESC)`を使ったSQLに移し、1回のリクエストで
+返すようにした（`app.depsops.router.get_depsops_stats`）。旧来のクライアント側
+集計（`fetchAllDepsOpsEntries`/`computeUnresolvedRepoStats`）は削除済み。
+
 **`is_security_update`**: `list_open_dependabot_alerts`でリポジトリのOpenなDependabot
 alert対象パッケージ名を取得し、PRタイトルと単語境界一致で照合する。`GITHUB_TOKEN`に
 Dependabot alertsの読み取り権限が必要（classic PAT: `security_events` / fine-grained

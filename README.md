@@ -122,6 +122,7 @@ Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
 | GET | `/api/codescan` | CODESCAN検知結果一覧（Semgrep静的解析 + gitleaksシークレット検知。`cvss_score`はベストエフォート推定〈Issue #203〉。GitHubログイン必須〈`X-API-KEY`またはセッションJWT、Issue #219〉） |
 | GET | `/api/codescan/stats` | CODESCAN統計（リポジトリ別・重要度別） |
 | GET | `/api/depsops` | DEPSOPS判定履歴（`is_security_update`・`compatibility_badge_url`含む） |
+| GET | `/api/depsops/stats` | DEPSOPSのリポジトリ別未解決PR件数（`(repo, pr_number)`ごとの最新状態のみ集計） |
 | GET | `/api/crawler-logs` | クローラー実行ログ |
 | GET | `/auth/github/login` | DEPSCANダッシュボードのGitHubログイン開始（ブラウザ専用） |
 | POST | `/auth/exchange` | 交換コード→セッションJWT |
