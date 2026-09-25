@@ -3,12 +3,17 @@
 
 Issue #227 より前は固定の `SLACK_WEBHOOK_URL` 環境変数1本のみへ送信していたが、
 ダッシュボードから各ユーザーが自分の Slack Webhook を登録できるようになったのに
-伴い、通知先は `app.auth.account_store`（`UserAccount` テーブル）から動的に解決する
-方式へ移行した。KEV/OSV/JVN は特定リポジトリに紐づかないグローバルな脅威情報のため、
-通知を有効にしている**全登録ユーザー**へブロードキャストする。DEPSCAN/DEPSOPS/
-CODESCAN の毎日クロール（`GITHUB_USERNAME` 自身のリポジトリ対象）は、
-`GITHUB_USERNAME` 自身が登録した Webhook にのみ送る（無関係な他ユーザーに
+伴い、検知結果の通知先は `app.auth.account_store`（`UserAccount` テーブル）から
+動的に解決する方式へ移行した。KEV/OSV/JVN は特定リポジトリに紐づかないグローバルな
+脅威情報のため、通知を有効にしている**全登録ユーザー**へブロードキャストする。
+DEPSCAN/DEPSOPS/CODESCAN の毎日クロール（`GITHUB_USERNAME` 自身のリポジトリ対象）
+は、`GITHUB_USERNAME` 自身が登録した Webhook にのみ送る（無関係な他ユーザーに
 baby-feelings 自身のリポジトリの通知が届いてしまわないようにするため）。
+
+**エラー通知（`notify_error`）だけは例外**で、crawler_type に関わらず常に
+管理者（`GITHUB_USERNAME`）自身が登録した Webhook にのみ送る（全登録ユーザーへの
+ブロードキャストは行わない）。クローラーの内部エラーは運用担当者が対応すべき情報で
+あり、無関係なユーザーに通知してもノイズにしかならないため。
 """
 import logging
 import re
@@ -67,16 +72,35 @@ def _resolve_recipients(crawler_type: CrawlerType) -> list[str]:
     DEPSCAN/DEPSOPS/CODESCAN（baby-feelings＝GITHUB_USERNAME自身の毎日クロール）
     は GITHUB_USERNAME 自身が登録したWebhookにのみ送る。
     """
-    from app.auth.account_store import get_webhook_for_user, list_all_webhooks
+    from app.auth.account_store import list_all_webhooks
 
     db: Session = SessionLocal()
     try:
         if crawler_type in _GLOBAL_CRAWLER_TYPES:
             return list_all_webhooks(db)
+        return _resolve_admin_recipient(db)
+    finally:
+        db.close()
+
+
+def _resolve_admin_recipient(db: Session | None = None) -> list[str]:
+    """管理者（GITHUB_USERNAME）自身が登録したWebhookのみを返す。
+
+    エラー通知は、検知結果の通知（notify_success等）とは異なりKEV/OSV/JVNの
+    ようなグローバル種別でも全登録ユーザーへブロードキャストせず、常に運用担当
+    である管理者のSlackにのみ送る（クローラーの内部エラーは各ユーザーが対応
+    できる情報ではなく、無関係なユーザーに通知するとノイズ・情報漏洩になるため）。
+    """
+    from app.auth.account_store import get_webhook_for_user
+
+    owns_session = db is None
+    db = db if db is not None else SessionLocal()
+    try:
         webhook = get_webhook_for_user(db, settings.GITHUB_USERNAME)
         return [webhook] if webhook else []
     finally:
-        db.close()
+        if owns_session:
+            db.close()
 
 
 def notify_success(
@@ -115,8 +139,15 @@ def notify_success(
 def notify_error(
     crawler_type: CrawlerType, error: str, *, recipients: list[str] | None = None,
 ) -> None:
-    """クローラーエラー時の Slack 通知（共通）。"""
-    targets = _resolve_recipients(crawler_type) if recipients is None else recipients
+    """クローラーエラー時の Slack 通知（共通）。
+
+    検知結果の通知（notify_success等）とは異なり、crawler_typeに関わらず
+    常に管理者（GITHUB_USERNAME）自身が登録したWebhookにのみ送る
+    （従来のSLACK_WEBHOOK_URL環境変数1本での運用と同じ「管理者だけがエラーを
+    把握する」という位置づけを維持するため。KEV/OSV/JVNのエラーであっても
+    全登録ユーザーへはブロードキャストしない）。
+    """
+    targets = _resolve_admin_recipient() if recipients is None else recipients
     if not targets:
         return
     _, label = _CRAWLER_LABELS.get(crawler_type, (":bell:", crawler_type))

@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 
 from app.core.notifications import (
+    _resolve_admin_recipient,
     _resolve_recipients,
     _sanitize_error,
     is_valid_slack_webhook_url,
@@ -159,6 +160,51 @@ def test_resolve_recipients_repo_scoped_crawler_uses_github_username_only(
 
     recipients = _resolve_recipients("DEPSCAN")
     assert recipients == ["https://hooks.slack.com/services/owner"]
+
+
+# ── エラー通知は常に管理者のみに送る ──────────────────────────────
+
+
+def test_resolve_admin_recipient_returns_github_username_webhook_only(db_session, monkeypatch):
+    from app.auth.account_store import set_slack_webhook, upsert_user_token
+
+    monkeypatch.setattr("app.core.notifications.settings.GITHUB_USERNAME", "baby-feelings")
+    upsert_user_token(db_session, "baby-feelings", "dummy-token")
+    set_slack_webhook(db_session, "baby-feelings", "https://hooks.slack.com/services/owner")
+    upsert_user_token(db_session, "other-user", "dummy-token")
+    set_slack_webhook(db_session, "other-user", "https://hooks.slack.com/services/other")
+
+    assert _resolve_admin_recipient() == ["https://hooks.slack.com/services/owner"]
+
+
+def test_resolve_admin_recipient_empty_when_admin_not_registered(db_session, monkeypatch):
+    from app.auth.account_store import set_slack_webhook, upsert_user_token
+
+    monkeypatch.setattr("app.core.notifications.settings.GITHUB_USERNAME", "baby-feelings")
+    upsert_user_token(db_session, "other-user", "dummy-token")
+    set_slack_webhook(db_session, "other-user", "https://hooks.slack.com/services/other")
+
+    assert _resolve_admin_recipient() == []
+
+
+def test_notify_error_default_routing_is_admin_only_even_for_global_crawler_types(
+    db_session, monkeypatch,
+):
+    """KEVのようなグローバル種別のエラーでも、notify_successのように全登録ユーザーへ
+    ブロードキャストせず、管理者（GITHUB_USERNAME）のWebhookにのみ送る。"""
+    from app.auth.account_store import set_slack_webhook, upsert_user_token
+
+    monkeypatch.setattr("app.core.notifications.settings.GITHUB_USERNAME", "baby-feelings")
+    upsert_user_token(db_session, "baby-feelings", "dummy-token")
+    set_slack_webhook(db_session, "baby-feelings", "https://hooks.slack.com/services/owner")
+    upsert_user_token(db_session, "other-user", "dummy-token")
+    set_slack_webhook(db_session, "other-user", "https://hooks.slack.com/services/other")
+
+    with patch("app.core.notifications._send_slack") as mock_send:
+        notify_error("KEV", "boom")
+
+    mock_send.assert_called_once()
+    assert mock_send.call_args[0][1] == "https://hooks.slack.com/services/owner"
 
 
 # ── Webhook登録バリデーション・テスト送信 ────────────────────────────

@@ -52,6 +52,16 @@ GET・PUT（`merge_pull_request`）・PATCH（`close_issue`）等の冪等な操
 （`notify_new_vulnerabilities` 等のクローラー別ラッパーは廃止済み、DRY違反だったため削除）。
 エラーメッセージは `_sanitize_error()` で接続文字列マスク + 200 文字制限。
 
+**送信先の解決（Issue #227）**: 固定の`SLACK_WEBHOOK_URL`環境変数は廃止し、
+`app.auth.account_store`（`UserAccount`テーブル、ダッシュボードから登録するSlack
+Webhook）から動的に解決する。`notify_success`等の検知結果通知はKEV/OSV/JVNなら
+通知有効な全登録ユーザーへブロードキャスト、DEPSCAN/DEPSOPS/CODESCANなら
+`GITHUB_USERNAME`自身の登録Webhookにのみ送る。**`notify_error`だけは例外的に、
+crawler_typeに関わらず常に管理者（`GITHUB_USERNAME`）自身の登録Webhookにのみ送る**
+（`_resolve_admin_recipient`）。クローラー内部のエラーは運用担当者が対応すべき情報
+であり、KEV/OSV/JVNのようなグローバル種別であっても無関係な一般ユーザーへ
+ブロードキャストするとノイズ・情報漏洩になるため。
+
 ## DB ユーティリティの共通化（db_utils.py）
 `year_month_expr(column)` は SQLite / PostgreSQL 両対応の YYYY-MM フォーマット式を返す共通関数。
 3 つのルーター（vulnerabilities.py / osv.py / jvn.py）から共通利用する。
