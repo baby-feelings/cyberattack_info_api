@@ -31,7 +31,7 @@ const SEVERITIES = ['ALL', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
 export function OsvPanel() {
   const {
     ecosystem, severity, search, sortBy, page, setPage,
-    result, stats, loading,
+    result, stats, loading, statsLoading,
     load, handleEco, handleSev, handleSearch, clearSearch, handleSortBy,
     totalPages, critCount, highCount,
   } = useOsvData()
@@ -50,15 +50,15 @@ export function OsvPanel() {
           </div>
           <button
             onClick={() => load(ecosystem, severity, search, page, sortBy)}
-            disabled={loading}
+            disabled={loading || statsLoading}
             className="text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40 p-1 rounded"
             title="再読み込み"
           >
-            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+            <RefreshCw size={13} className={loading || statsLoading ? 'animate-spin' : ''} />
           </button>
         </div>
         {/* CRITICAL / HIGH カウント */}
-        {!loading && stats && stats.total > 0 && (
+        {!statsLoading && stats && stats.total > 0 && (
           <div className="flex items-center gap-2 text-xs tabular-nums">
             {critCount > 0 && (
               <span className="px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 font-semibold">
@@ -81,16 +81,16 @@ export function OsvPanel() {
           icon={<Shield size={13} className="text-slate-400" />}
           data={stats?.severities ?? []}
           colorMap={SEVERITY_COLORS}
-          loading={loading}
+          loading={statsLoading}
         />
-        <EcosystemBarChart stats={stats} loading={loading} />
+        <EcosystemBarChart stats={stats} loading={statsLoading} />
         <MonthlyBarChart
           icon={<BarChart2 size={13} className="text-slate-400" />}
           title="月別 OSV 更新トレンド"
           data={stats?.monthly_trend ?? []}
           barColor="#7c3aed"
           height={160}
-          loading={loading}
+          loading={statsLoading}
         />
       </div>
 
@@ -156,6 +156,8 @@ export function OsvPanel() {
       /* テーブル */
       ) : result && (
         <>
+          <Pagination page={page} totalPages={totalPages} total={result.total} onPageChange={setPage} position="top" />
+
           <div className="overflow-x-auto -mx-1 px-1">
             <table className="w-full text-sm min-w-[700px]">
               <thead>

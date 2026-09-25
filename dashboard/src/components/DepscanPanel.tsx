@@ -156,6 +156,8 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
       /* テーブル（パッケージ単位に集約） */
       ) : (
         <>
+          <Pagination page={page} totalPages={totalPages} total={groups.length} onPageChange={setPage} position="top" />
+
           <div className="overflow-x-auto -mx-1 px-1">
             <table className="w-full text-sm min-w-[760px]">
               <thead>
