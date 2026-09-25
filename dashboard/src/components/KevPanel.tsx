@@ -54,24 +54,14 @@ export function KevPanel() {
     <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg flex flex-col gap-5">
 
       {/* ヘッダー */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Shield size={16} className="text-slate-400" />
-          <span className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
-            CISA KEV — 悪用が確認された脆弱性
-          </span>
-        </div>
-        <div className="flex items-center gap-3">
-          {!loading && stats && stats.total_vulnerabilities > 0 && (
-            <div className="flex items-center gap-2 text-xs tabular-nums">
-              {recentCount > 0 && (
-                <span className="px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-400 font-semibold">
-                  直近30日 {recentCount}
-                </span>
-              )}
-              <span className="text-slate-500">/ {stats.total_vulnerabilities} 件</span>
-            </div>
-          )}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Shield size={16} className="text-slate-400" />
+            <span className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
+              CISA KEV — 悪用が確認された脆弱性
+            </span>
+          </div>
           <button
             onClick={() => load(search, page)}
             disabled={loading}
@@ -81,6 +71,16 @@ export function KevPanel() {
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
+        {!loading && stats && stats.total_vulnerabilities > 0 && (
+          <div className="flex items-center gap-2 text-xs tabular-nums">
+            {recentCount > 0 && (
+              <span className="px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-400 font-semibold">
+                直近30日 {recentCount}
+              </span>
+            )}
+            <span className="text-slate-500">/ {stats.total_vulnerabilities} 件</span>
+          </div>
+        )}
       </div>
 
       {/* ビジュアライゼーション: ベンダー別・月別トレンド */}

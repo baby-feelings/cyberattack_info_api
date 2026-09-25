@@ -40,30 +40,14 @@ export function OsvPanel() {
     <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg flex flex-col gap-5">
 
       {/* ヘッダー */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Shield size={16} className="text-slate-400" />
-          <span className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
-            OSV 脆弱性（過去 6 ヶ月）
-          </span>
-        </div>
-        <div className="flex items-center gap-3">
-          {/* CRITICAL / HIGH カウント */}
-          {!loading && stats && stats.total > 0 && (
-            <div className="flex items-center gap-2 text-xs tabular-nums">
-              {critCount > 0 && (
-                <span className="px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 font-semibold">
-                  CRIT {critCount}
-                </span>
-              )}
-              {highCount > 0 && (
-                <span className="px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-400 font-semibold">
-                  HIGH {highCount}
-                </span>
-              )}
-              <span className="text-slate-500">/ {stats.total} 件</span>
-            </div>
-          )}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Shield size={16} className="text-slate-400" />
+            <span className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
+              OSV 脆弱性（過去 6 ヶ月）
+            </span>
+          </div>
           <button
             onClick={() => load(ecosystem, severity, search, page, sortBy)}
             disabled={loading}
@@ -73,6 +57,22 @@ export function OsvPanel() {
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
+        {/* CRITICAL / HIGH カウント */}
+        {!loading && stats && stats.total > 0 && (
+          <div className="flex items-center gap-2 text-xs tabular-nums">
+            {critCount > 0 && (
+              <span className="px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 font-semibold">
+                CRIT {critCount}
+              </span>
+            )}
+            {highCount > 0 && (
+              <span className="px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-400 font-semibold">
+                HIGH {highCount}
+              </span>
+            )}
+            <span className="text-slate-500">/ {stats.total} 件</span>
+          </div>
+        )}
       </div>
 
       {/* ビジュアライゼーション: 重要度別グラフ・エコシステム別・月別トレンド */}

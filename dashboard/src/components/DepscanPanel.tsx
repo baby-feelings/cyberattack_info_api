@@ -47,45 +47,47 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
       )}
 
       {/* ヘッダー */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Bug size={16} className="text-slate-400" />
-          <span className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
-            自作アプリの依存ライブラリ脆弱性（未解決）
-          </span>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Bug size={16} className="text-slate-400" />
+            <span className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
+              自作アプリの依存ライブラリ脆弱性（未解決）
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setDepsOpsOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
+            >
+              <GitPullRequest size={13} />
+              Dependabot運用状況
+            </button>
+            <button
+              onClick={() => load(owner, severity, showResolved)}
+              disabled={loading}
+              className="text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40 p-1 rounded"
+              title="再読み込み"
+            >
+              <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          {!loading && stats && stats.total > 0 && (
-            <div className="flex items-center gap-2 text-xs tabular-nums">
-              {critCount > 0 && (
-                <span className="px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 font-semibold">
-                  CRIT {critCount}
-                </span>
-              )}
-              {highCount > 0 && (
-                <span className="px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-400 font-semibold">
-                  HIGH {highCount}
-                </span>
-              )}
-              <span className="text-slate-500">/ {stats.total} 件（{groups.length} パッケージ）</span>
-            </div>
-          )}
-          <button
-            onClick={() => setDepsOpsOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
-          >
-            <GitPullRequest size={13} />
-            Dependabot運用状況
-          </button>
-          <button
-            onClick={() => load(owner, severity, showResolved)}
-            disabled={loading}
-            className="text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40 p-1 rounded"
-            title="再読み込み"
-          >
-            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-          </button>
-        </div>
+        {!loading && stats && stats.total > 0 && (
+          <div className="flex items-center gap-2 text-xs tabular-nums">
+            {critCount > 0 && (
+              <span className="px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 font-semibold">
+                CRIT {critCount}
+              </span>
+            )}
+            {highCount > 0 && (
+              <span className="px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-400 font-semibold">
+                HIGH {highCount}
+              </span>
+            )}
+            <span className="text-slate-500">/ {stats.total} 件（{groups.length} パッケージ）</span>
+          </div>
+        )}
       </div>
 
       {/* ビジュアライゼーション: 重要度別グラフ・リポジトリ別件数 */}
