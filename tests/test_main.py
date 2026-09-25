@@ -43,3 +43,24 @@ def test_root(client: TestClient):
     response = client.get("/")
     assert response.status_code == 200
     assert "Cyberattack Info API" in response.json()["name"]
+
+
+def test_cors_preflight_allows_put_and_delete(client: TestClient):
+    """CORSプリフライト（OPTIONS）がPUT/DELETEを許可すること（Issue #227の回帰防止）。
+
+    /auth/notification-settings はPUT/DELETEを使うが、CORSミドルウェアの
+    allow_methodsにGET/POSTしか含まれておらずブラウザから呼び出せない不具合が
+    実際に本番で発生した。
+    """
+    response = client.options(
+        "/auth/notification-settings",
+        headers={
+            "Origin": "https://cyberattackinfoapi.vercel.app",
+            "Access-Control-Request-Method": "PUT",
+            "Access-Control-Request-Headers": "authorization,content-type",
+        },
+    )
+    assert response.status_code == 200
+    allowed_methods = response.headers["access-control-allow-methods"]
+    assert "PUT" in allowed_methods
+    assert "DELETE" in allowed_methods
