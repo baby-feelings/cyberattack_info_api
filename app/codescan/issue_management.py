@@ -51,13 +51,20 @@ def _format_finding_lines(findings: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
-def _file_github_issues(new_snapshots: list[dict[str, Any]]) -> None:
+def _file_github_issues(new_snapshots: list[dict[str, Any]], token: str | None = None) -> None:
     """新規検知を、検知されたリポジトリ自身に GitHub Issue として自動起票する。
 
     同名の Open な Issue が既にあればコメントを追記し、無ければ新規作成する。
     GitHub API 呼び出しが失敗しても（Issues 書き込み権限が無いトークン等）、
     CODESCAN 全体の成功を妨げないようリポジトリ単位で例外を握りつぶす
     （DEPSCAN と同じ方針）。
+
+    Args:
+        token: Issue作成に使うGitHub PAT。省略時は`settings.GITHUB_TOKEN`
+            （baby-feelings向け毎日クロールの既定）。登録済み他ユーザー自身の
+            リポジトリに対して起票する場合（Issue #227）は、そのユーザー自身の
+            OAuthアクセストークンを明示的に渡す必要がある
+            （GITHUB_TOKENには他ユーザーのプライベートリポジトリへの書き込み権限が無いため）。
     """
     if not new_snapshots:
         return
@@ -67,7 +74,7 @@ def _file_github_issues(new_snapshots: list[dict[str, Any]]) -> None:
         by_repo.setdefault(finding["repo_full_name"], []).append(finding)
 
     timestamp = now_utc().strftime("%Y-%m-%d %H:%M UTC")
-    token = settings.GITHUB_TOKEN
+    token = token if token is not None else settings.GITHUB_TOKEN
 
     for full_name, findings in by_repo.items():
         owner, repo = full_name.split("/", 1)

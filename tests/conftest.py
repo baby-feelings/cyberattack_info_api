@@ -15,6 +15,8 @@ os.environ.setdefault("API_KEY", "test-api-key-for-pytest")
 os.environ.setdefault("ENVIRONMENT", "development")
 os.environ.setdefault("GITHUB_USERNAME", "test-github-user")
 os.environ.setdefault("SESSION_SECRET_KEY", "test-session-secret-key-for-pytest")
+# UserAccount.github_access_token_encrypted の暗号化に使うFernet鍵（テスト固定値）
+os.environ.setdefault("TOKEN_ENCRYPTION_KEY", "c0eGxtqQBhGVNn9Fews4q_WLHX0gkNbLg0MbuS_bUIc=")
 
 from app.core.database import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402
@@ -58,6 +60,7 @@ def clean_db():
         conn.execute(text("DELETE FROM depscan_user_scans"))
         conn.execute(text("DELETE FROM dependabot_pr_logs"))
         conn.execute(text("DELETE FROM code_findings"))
+        conn.execute(text("DELETE FROM user_accounts"))
         conn.commit()
 
 

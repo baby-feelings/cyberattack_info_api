@@ -2,9 +2,14 @@
 
 `app.depscan.crawler` の毎日の定期実行（`GITHUB_USERNAME` 専用）とは独立した経路。
 DEPSCAN ダッシュボードにログインした任意の GitHub アカウント自身のリポジトリを
-その場でスキャンし、進捗を `UserScan` テーブルに記録する。第三者のログインの
-たびに Slack 通知・GitHub Issue 起票・crawler_logs への記録が発生しないよう、
-それらは一切行わない。
+その場でスキャンし、進捗を `UserScan` テーブルに記録する。crawler_logs への記録は
+（baby-feelings 向けの毎日クロールとは異なる経路のため）一切行わない。
+
+Slack 通知・GitHub Issue 起票は、Issue #227 でダッシュボードから Slack Webhook を
+登録できるようになったのに伴い、**そのユーザー自身が通知を有効にして登録している
+場合のみ**行うよう変更した（未登録のユーザーがログインしただけで無関係な通知や
+Issue が飛ぶと驚きになるため、Principle of Least Astonishment を優先し、
+登録済みユーザーにのみオプトインで有効化する）。
 """
 import logging
 from datetime import timedelta, timezone
@@ -12,7 +17,9 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.auth.account_store import get_webhook_for_user
 from app.core.database import SessionLocal
+from app.core.notifications import notify_dependency_findings
 from app.crawler_logs.writer import now_utc
 from app.depscan.crawler import (
     FindingKey,
@@ -21,6 +28,7 @@ from app.depscan.crawler import (
     _resolve_stale_findings,
     _upsert_findings,
 )
+from app.depscan.issue_management import _file_github_issues
 from app.depscan.models import UserScan
 
 logger = logging.getLogger(__name__)
@@ -108,9 +116,9 @@ def run_depscan_for_user(username: str, token: str) -> None:
     """GitHub ログインしたユーザー自身のリポジトリをオンデマンドでスキャンする。
 
     `fetch_and_scan_dependencies`（baby-feelings 向けの毎日の定期実行）とは独立した
-    エントリポイント。第三者のログインで Slack/GitHub Issue にノイズを出さないよう、
-    通知は一切行わない。進捗は `UserScan` テーブルに記録し、フロントエンドが
-    `GET /auth/scan-status` でポーリングできるようにする。
+    エントリポイント。進捗は `UserScan` テーブルに記録し、フロントエンドが
+    `GET /auth/scan-status` でポーリングできるようにする。`app.core.user_crawl_runner`
+    （登録済み他ユーザーの定期実行、Issue #227）からも同じ関数を再利用する。
     """
     logger.info("=== DEPSCAN (on-demand for %s) started ===", username)
     started_at = now_utc()
@@ -120,7 +128,7 @@ def run_depscan_for_user(username: str, token: str) -> None:
 
         dep_to_repos, repos_scanned, repo_visibility = _collect_dependencies(username, token)
         records = _build_findings(dep_to_repos, repo_visibility)
-        _upsert_findings(db, records)
+        new_count, new_snapshots = _upsert_findings(db, records)
 
         current_keys: set[FindingKey] = {
             (r["repo_full_name"], r["ecosystem"], r["package_name"], r["osv_id"])
@@ -128,11 +136,25 @@ def run_depscan_for_user(username: str, token: str) -> None:
         }
         _resolve_stale_findings(db, current_keys, repo_owner_prefix=username)
 
+        # Slack通知・GitHub Issue起票は、本人が通知を有効にして登録している場合のみ
+        # 行う（未登録ユーザーがログインしただけでは一切通知しない既存方針を維持）
+        webhook = get_webhook_for_user(db, username)
+        if webhook:
+            notify_dependency_findings(new_snapshots, recipients=[webhook])
+            try:
+                _file_github_issues(new_snapshots, token)
+            except Exception as exc:
+                logger.error(
+                    "DEPSCAN (on-demand for %s): failed to file GitHub issues: %s",
+                    username, exc, exc_info=True,
+                )
+
         _set_user_scan_status(
             db, username, "done", started_at=started_at, repos_scanned=repos_scanned,
         )
         logger.info(
-            "=== DEPSCAN (on-demand for %s) completed: repos=%d ===", username, repos_scanned,
+            "=== DEPSCAN (on-demand for %s) completed: repos=%d, new=%d ===",
+            username, repos_scanned, new_count,
         )
     except Exception as exc:
         logger.error("DEPSCAN (on-demand for %s) failed: %s", username, exc, exc_info=True)

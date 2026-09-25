@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { ShieldAlert, Shield, Package, FileWarning, Bug, ScanSearch } from 'lucide-react'
+import { ShieldAlert, Shield, Package, FileWarning, Bug, ScanSearch, Menu } from 'lucide-react'
 import { HealthStatus } from './components/HealthStatus'
 import { KevPanel } from './components/KevPanel'
 import { OsvPanel } from './components/OsvPanel'
 import { JvnPanel } from './components/JvnPanel'
 import { DepscanAuthGate } from './components/DepscanAuthGate'
 import { CodescanAuthGate } from './components/CodescanAuthGate'
+import { SettingsPanel } from './components/SettingsPanel'
 
 // セクション見出しコンポーネント
 function SectionHeader({
@@ -46,6 +47,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<TabKey>(() => (
     new URLSearchParams(window.location.search).has('depscan_code') ? 'depscan' : 'kev'
   ))
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   return (
     <div className="min-h-screen bg-[#0a0e1a] text-slate-100 flex flex-col items-center">
@@ -68,8 +71,35 @@ export default function App() {
             </div>
           </div>
 
+          {/* ハンバーガーメニュー（Issue #227: 設定画面への導線） */}
+          <div className="relative">
+            <button
+              onClick={() => setMenuOpen((v) => !v)}
+              aria-label="メニュー"
+              aria-expanded={menuOpen}
+              className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors"
+            >
+              <Menu size={18} />
+            </button>
+            {menuOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+                <div className="absolute right-0 top-full mt-1 z-20 w-40 rounded-lg border border-slate-800 bg-slate-900 shadow-xl py-1">
+                  <button
+                    onClick={() => { setMenuOpen(false); setSettingsOpen(true) }}
+                    className="w-full text-left px-3 py-2 text-sm text-slate-300 hover:bg-slate-800 transition-colors"
+                  >
+                    設定
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
         </div>
       </header>
+
+      {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
 
       {/* メインコンテンツ（下部固定タブバーの高さ分、下に余白を確保） */}
       <main className="flex-1 max-w-screen-xl w-full px-4 sm:px-6 lg:px-12 py-6 sm:py-8 lg:py-10 pb-24 sm:pb-24 flex flex-col gap-6 sm:gap-8 lg:gap-10">

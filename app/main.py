@@ -23,6 +23,8 @@ from app.core.database import Base, engine, get_db
 from app.core.metrics import router as metrics_router
 from app.core.schemas import HealthResponse
 from app.core.taxii import taxii_router
+from app.core.user_crawl_router import admin_router as user_crawl_admin_router
+from app.core.user_crawl_runner import run_user_crawls_for_all_accounts
 from app.crawler_logs.router import router as crawler_logs_router
 from app.depscan.crawler import fetch_and_scan_dependencies
 from app.depscan.router import admin_router as depscan_admin_router
@@ -71,7 +73,7 @@ def _drop_scan_results_table(db_engine) -> None:
 
 
 def _register_scheduled_jobs(job_scheduler: BackgroundScheduler) -> None:
-    """6種のクローラー（KEV/OSV/JVN/DEPSCAN/DEPSOPS/CODESCAN）を APScheduler に登録し起動する。"""
+    """KEV/OSV/JVN/DEPSCAN/DEPSOPS/CODESCAN/USER_CRAWL を APScheduler に登録し起動する。"""
     # CISA KEV クローラー: 毎日 UTC 19:00（JST 翌日 4:00）
     job_scheduler.add_job(
         fetch_and_store_kev,
@@ -126,15 +128,27 @@ def _register_scheduled_jobs(job_scheduler: BackgroundScheduler) -> None:
         id="dependabot_ops",
         replace_existing=True,
     )
+    # 登録済みユーザー（GITHUB_USERNAME以外）向けDEPSCAN/CODESCAN/DEPSOPS（Issue #227）:
+    # DEPSOPSの後段に配置
+    job_scheduler.add_job(
+        run_user_crawls_for_all_accounts,
+        trigger="cron",
+        hour=settings.USER_CRAWL_CRON_HOUR_UTC,
+        minute=settings.USER_CRAWL_CRON_MINUTE_UTC,
+        id="user_crawl",
+        replace_existing=True,
+    )
     job_scheduler.start()
     logger.info(
         "Scheduler started: KEV UTC %02d:%02d / OSV UTC %02d:00 / JVN UTC %02d:00 / "
-        "DEPSCAN UTC %02d:00 / CODESCAN UTC %02d:%02d / DEPSOPS UTC %02d:00",
+        "DEPSCAN UTC %02d:00 / CODESCAN UTC %02d:%02d / DEPSOPS UTC %02d:00 / "
+        "USER_CRAWL UTC %02d:%02d",
         settings.CRON_HOUR_UTC, settings.CRON_MINUTE_UTC,
         settings.OSV_CRON_HOUR_UTC, settings.JVN_CRON_HOUR_UTC,
         settings.DEPSCAN_CRON_HOUR_UTC,
         settings.CODESCAN_CRON_HOUR_UTC, settings.CODESCAN_CRON_MINUTE_UTC,
         settings.DEPSOPS_CRON_HOUR_UTC,
+        settings.USER_CRAWL_CRON_HOUR_UTC, settings.USER_CRAWL_CRON_MINUTE_UTC,
     )
 
 
@@ -202,6 +216,7 @@ app.include_router(jvn_admin_router)
 app.include_router(depscan_admin_router)
 app.include_router(depsops_admin_router)
 app.include_router(codescan_admin_router)
+app.include_router(user_crawl_admin_router)
 app.include_router(metrics_router)
 app.include_router(taxii_router)
 

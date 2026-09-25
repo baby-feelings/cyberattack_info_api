@@ -7,6 +7,8 @@ GET  /auth/github/callback  – 認可コードを受け取り、短命・使い
                                セッションJWT自体はURLクエリに載せない）
 POST /auth/exchange         – 交換コードをセッションJWTに交換する（使い捨て）
 GET  /auth/scan-status      – ログイン中ユーザーのオンデマンドスキャン進捗を返す
+GET/PUT/DELETE /auth/notification-settings
+                            – ログイン中ユーザーのSlack Webhook通知登録（Issue #227）
 
 セッションJWTは `Authorization: Bearer <token>` ヘッダーで送る。バックエンド
 （Render）とフロントエンド（Vercel）はドメインが異なるクロスサイト構成のため、
@@ -30,6 +32,12 @@ from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.auth.account_store import (
+    clear_slack_webhook,
+    get_account,
+    set_slack_webhook,
+    upsert_user_token,
+)
 from app.auth.github_oauth import (
     build_authorize_url,
     exchange_code_for_token,
@@ -38,6 +46,7 @@ from app.auth.github_oauth import (
 from app.auth.session import create_session_token, decode_session_token
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.notifications import is_valid_slack_webhook_url, send_test_notification
 from app.depscan.user_scan import get_user_scan_status, run_depscan_for_user, should_rescan_for_user
 
 logger = logging.getLogger(__name__)
@@ -148,6 +157,13 @@ def github_callback(
     username = get_authenticated_user_login(access_token)
     logger.info("DEPSCAN dashboard login: %s", username)
 
+    # ログインのたびにアクセストークンを暗号化して保存する（Issue #227）。
+    # 登録済みユーザー自身のリポジトリに対するDEPSCAN/CODESCAN/DEPSOPSの定期実行
+    # （app.core.user_crawl_runner）が、ログイン中でなくてもこのトークンを使って
+    # 実行できるようにするため（従来はオンデマンドスキャン1回にしか使わず、
+    # 保存していなかった）
+    upsert_user_token(db, username, access_token)
+
     # 直近 RESCAN_INTERVAL_HOURS 時間以内にスキャン済みなら再スキャンせず DB の結果を
     # そのまま使う（毎回ログインの度にスキャンして待たせないようにするため）。
     # スキャンする場合はバックグラウンドスレッドで実行し、ここでは待たずセッション発行へ進む
@@ -207,3 +223,74 @@ def scan_status(
         "finished_at": scan.finished_at.isoformat() if scan.finished_at else None,
         "error_message": scan.error_message,
     }
+
+
+# ── Slack Webhook 通知登録（Issue #227） ─────────────────────────
+
+
+class NotificationSettingsIn(BaseModel):
+    slack_webhook_url: str
+
+
+class NotificationSettingsOut(BaseModel):
+    slack_webhook_url: str | None
+    notifications_enabled: bool
+
+
+@router.get(
+    "/notification-settings",
+    summary="ログイン中ユーザーのSlack通知登録状況を取得",
+)
+def get_notification_settings(
+    db: Annotated[Session, Depends(get_db)],
+    username: Annotated[str, Depends(get_current_username)],
+) -> NotificationSettingsOut:
+    account = get_account(db, username)
+    if account is None:
+        return NotificationSettingsOut(slack_webhook_url=None, notifications_enabled=True)
+    return NotificationSettingsOut(
+        slack_webhook_url=account.slack_webhook_url,
+        notifications_enabled=account.notifications_enabled,
+    )
+
+
+@router.put(
+    "/notification-settings",
+    summary="Slack Webhookを登録する（テスト送信に成功した場合のみ保存）",
+)
+def put_notification_settings(
+    body: NotificationSettingsIn,
+    db: Annotated[Session, Depends(get_db)],
+    username: Annotated[str, Depends(get_current_username)],
+) -> NotificationSettingsOut:
+    if not is_valid_slack_webhook_url(body.slack_webhook_url):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid Slack webhook URL (must start with https://hooks.slack.com/).",
+        )
+    if not send_test_notification(body.slack_webhook_url, username):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to send a test notification to this webhook URL. "
+            "Please check the URL and try again.",
+        )
+    try:
+        set_slack_webhook(db, username, body.slack_webhook_url)
+    except ValueError as exc:
+        # 通常到達しない防御的チェック（UserAccount行はログイン時に必ず作成される）
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return NotificationSettingsOut(
+        slack_webhook_url=body.slack_webhook_url, notifications_enabled=True,
+    )
+
+
+@router.delete(
+    "/notification-settings",
+    summary="Slack Webhook登録を解除する",
+)
+def delete_notification_settings(
+    db: Annotated[Session, Depends(get_db)],
+    username: Annotated[str, Depends(get_current_username)],
+) -> NotificationSettingsOut:
+    clear_slack_webhook(db, username)
+    return NotificationSettingsOut(slack_webhook_url=None, notifications_enabled=True)

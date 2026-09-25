@@ -6,6 +6,7 @@ from alembic import context
 
 # 全ドメインの models モジュールを import し、Base.metadata に登録させる
 # （autogenerate がテーブル定義を検出できるようにするため）
+from app.auth import models as _auth_models  # noqa: F401
 from app.codescan import models as _codescan_models  # noqa: F401
 from app.core.config import settings
 from app.core.database import Base

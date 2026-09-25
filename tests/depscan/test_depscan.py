@@ -1141,15 +1141,13 @@ class TestNotifyDependencyFindings:
         return base
 
     def test_skips_when_no_webhook(self):
-        with patch("app.core.notifications.settings.SLACK_WEBHOOK_URL", ""):
-            with patch("app.core.notifications._send_slack") as mock_send:
-                notify_dependency_findings([self._finding_dict()])
+        with patch("app.core.notifications._send_slack") as mock_send:
+            notify_dependency_findings([self._finding_dict()], recipients=[])
         mock_send.assert_not_called()
 
     def test_skips_when_empty(self):
-        with patch("app.core.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/x"):
-            with patch("app.core.notifications._send_slack") as mock_send:
-                notify_dependency_findings([])
+        with patch("app.core.notifications._send_slack") as mock_send:
+            notify_dependency_findings([], recipients=["https://hooks.slack.com/x"])
         mock_send.assert_not_called()
 
     def test_sends_digest_grouped_by_repo(self):
@@ -1157,9 +1155,8 @@ class TestNotifyDependencyFindings:
             self._finding_dict(repo_full_name="u/a", osv_id="GHSA-a"),
             self._finding_dict(repo_full_name="u/b", osv_id="GHSA-b"),
         ]
-        with patch("app.core.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/x"):
-            with patch("app.core.notifications._send_slack") as mock_send:
-                notify_dependency_findings(findings)
+        with patch("app.core.notifications._send_slack") as mock_send:
+            notify_dependency_findings(findings, recipients=["https://hooks.slack.com/x"])
         mock_send.assert_called_once()
         message = mock_send.call_args[0][0]
         assert "u/a" in message
@@ -1173,9 +1170,8 @@ class TestNotifyDependencyFindings:
             self._finding_dict(osv_id="GHSA-b", severity="CRITICAL", fixed_versions=["3.5.0"]),
             self._finding_dict(osv_id="GHSA-c", severity="HIGH", fixed_versions=["3.4.8"]),
         ]
-        with patch("app.core.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/x"):
-            with patch("app.core.notifications._send_slack") as mock_send:
-                notify_dependency_findings(findings)
+        with patch("app.core.notifications._send_slack") as mock_send:
+            notify_dependency_findings(findings, recipients=["https://hooks.slack.com/x"])
         message = mock_send.call_args[0][0]
         # 3件のCVEが1行（1パッケージ）に集約されている
         assert message.count("cryptography 3.4.7") == 1
@@ -1191,9 +1187,8 @@ class TestNotifyDependencyFindings:
             self._finding_dict(package_name="critical-pkg", severity="CRITICAL", osv_id="GHSA-c"),
             self._finding_dict(package_name="high-pkg", severity="HIGH", osv_id="GHSA-h"),
         ]
-        with patch("app.core.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/x"):
-            with patch("app.core.notifications._send_slack") as mock_send:
-                notify_dependency_findings(findings)
+        with patch("app.core.notifications._send_slack") as mock_send:
+            notify_dependency_findings(findings, recipients=["https://hooks.slack.com/x"])
         message = mock_send.call_args[0][0]
         assert (
             message.index("critical-pkg")
@@ -1207,9 +1202,8 @@ class TestNotifyDependencyFindings:
             self._finding_dict(repo_full_name=f"u/repo{i}", osv_id=f"GHSA-{i}")
             for i in range(20)
         ]
-        with patch("app.core.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/x"):
-            with patch("app.core.notifications._send_slack") as mock_send:
-                notify_dependency_findings(findings)
+        with patch("app.core.notifications._send_slack") as mock_send:
+            notify_dependency_findings(findings, recipients=["https://hooks.slack.com/x"])
         message = mock_send.call_args[0][0]
         for i in range(20):
             assert f"u/repo{i}" in message
@@ -1223,9 +1217,8 @@ class TestNotifyDependencyFindings:
             )
             for i in range(2000)
         ]
-        with patch("app.core.notifications.settings.SLACK_WEBHOOK_URL", "https://hooks.slack.com/x"):
-            with patch("app.core.notifications._send_slack") as mock_send:
-                notify_dependency_findings(findings)
+        with patch("app.core.notifications._send_slack") as mock_send:
+            notify_dependency_findings(findings, recipients=["https://hooks.slack.com/x"])
         message = mock_send.call_args[0][0]
         assert len(message) <= 39000 + 100
         assert message.endswith(
@@ -1292,6 +1285,66 @@ class TestRunDepscanForUser:
         scan = db_session.query(UserScan).filter_by(username="octocat").first()
         assert scan.status == "error"
         assert "GitHub API down" in scan.error_message
+
+    def test_notifies_and_files_issues_when_webhook_registered(self, db_session):
+        """通知を有効にしてWebhookを登録済みのユーザーには、新規検知時にSlack通知と
+        GitHub Issue起票の両方を行う（Issue #227）。"""
+        from app.auth.account_store import set_slack_webhook, upsert_user_token
+
+        upsert_user_token(db_session, "octocat", "gho_token")
+        set_slack_webhook(db_session, "octocat", "https://hooks.slack.com/services/octocat")
+
+        with patch(
+            "app.depscan.user_scan._collect_dependencies",
+            return_value=(
+                {("PyPI", "pkg", "1.0.0"): [("octocat/repo", "requirements.txt")]},
+                1,
+                {"octocat/repo": "public"},
+            ),
+        ), patch(
+            "app.depscan.user_scan._build_findings",
+            return_value=[{
+                "repo_full_name": "octocat/repo", "ecosystem": "PyPI", "package_name": "pkg",
+                "installed_version": "1.0.0", "osv_id": "GHSA-001", "severity": "HIGH",
+                "cvss_score": 7.5, "summary": "vuln", "fixed_versions": [],
+                "manifest_path": "requirements.txt", "detected_at": _NOW,
+            }],
+        ), patch("app.depscan.user_scan.SessionLocal", return_value=db_session), \
+           patch("app.depscan.user_scan.notify_dependency_findings") as mock_notify, \
+           patch("app.depscan.user_scan._file_github_issues") as mock_file_issues:
+            run_depscan_for_user("octocat", "gho_token")
+
+        mock_notify.assert_called_once()
+        assert mock_notify.call_args.kwargs["recipients"] == [
+            "https://hooks.slack.com/services/octocat",
+        ]
+        mock_file_issues.assert_called_once()
+        assert mock_file_issues.call_args[0][1] == "gho_token"
+
+    def test_no_notification_when_webhook_not_registered(self, db_session):
+        """Webhook未登録のユーザーには従来通り一切通知しない。"""
+        with patch(
+            "app.depscan.user_scan._collect_dependencies",
+            return_value=(
+                {("PyPI", "pkg", "1.0.0"): [("octocat/repo", "requirements.txt")]},
+                1,
+                {"octocat/repo": "public"},
+            ),
+        ), patch(
+            "app.depscan.user_scan._build_findings",
+            return_value=[{
+                "repo_full_name": "octocat/repo", "ecosystem": "PyPI", "package_name": "pkg",
+                "installed_version": "1.0.0", "osv_id": "GHSA-001", "severity": "HIGH",
+                "cvss_score": 7.5, "summary": "vuln", "fixed_versions": [],
+                "manifest_path": "requirements.txt", "detected_at": _NOW,
+            }],
+        ), patch("app.depscan.user_scan.SessionLocal", return_value=db_session), \
+           patch("app.depscan.user_scan.notify_dependency_findings") as mock_notify, \
+           patch("app.depscan.user_scan._file_github_issues") as mock_file_issues:
+            run_depscan_for_user("octocat", "gho_token")
+
+        mock_notify.assert_not_called()
+        mock_file_issues.assert_not_called()
 
     def test_second_run_updates_existing_status_row(self, db_session):
         with patch(
