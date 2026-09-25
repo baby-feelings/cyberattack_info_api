@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { X, GitPullRequest, ExternalLink } from 'lucide-react'
 import {
-  fetchDepsOpsList, fetchAllDepsOpsEntries, type DependabotPrLogOut,
+  fetchDepsOpsList, fetchDepsOpsStats, type DependabotPrLogOut, type DepsOpsRepoStat,
 } from '../../api/client'
 import { TableLoadingSkeleton, EmptyState, Pagination } from '../shared/VulnPanelParts'
 import { DepsOpsRepoBarChart } from './DepsOpsRepoBarChart'
-import { computeUnresolvedRepoStats, type RepoOpsStat } from './depsopsGrouping'
 
 const PER_PAGE = 20
 
@@ -80,7 +79,7 @@ export function DependabotOpsModal({ open, onClose }: { open: boolean; onClose: 
   const [total, setTotal] = useState(0)
   const [items, setItems] = useState<DependabotPrLogOut[]>([])
   const [loading, setLoading] = useState(false)
-  const [repoStats, setRepoStats] = useState<RepoOpsStat[]>([])
+  const [repoStats, setRepoStats] = useState<DepsOpsRepoStat[]>([])
   const [statsLoading, setStatsLoading] = useState(false)
 
   const loadTable = useCallback(async (act: typeof action, p: number) => {
@@ -101,8 +100,8 @@ export function DependabotOpsModal({ open, onClose }: { open: boolean; onClose: 
   const loadStats = useCallback(async () => {
     setStatsLoading(true)
     try {
-      const all = await fetchAllDepsOpsEntries()
-      setRepoStats(computeUnresolvedRepoStats(all))
+      const res = await fetchDepsOpsStats()
+      setRepoStats(res.repos)
     } catch {
       // エラーは握りつぶし（データなし状態として扱う）
     } finally {
@@ -188,6 +187,8 @@ export function DependabotOpsModal({ open, onClose }: { open: boolean; onClose: 
             <EmptyState icon={<GitPullRequest size={24} />} message="該当する PR はありません" />
           ) : (
             <>
+              <Pagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} position="top" />
+
               <div className="overflow-x-auto -mx-1 px-1">
                 <table className="w-full text-sm min-w-[860px]">
                   <thead>

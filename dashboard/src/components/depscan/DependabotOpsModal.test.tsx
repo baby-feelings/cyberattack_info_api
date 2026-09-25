@@ -3,17 +3,17 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { DependabotOpsModal } from './DependabotOpsModal'
 import {
-  fetchDepsOpsList, fetchAllDepsOpsEntries,
+  fetchDepsOpsList, fetchDepsOpsStats,
   type DependabotPrLogOut, type DepsOpsListResponse,
 } from '../../api/client'
 
 vi.mock('../../api/client', async () => {
   const actual = await vi.importActual<typeof import('../../api/client')>('../../api/client')
-  return { ...actual, fetchDepsOpsList: vi.fn(), fetchAllDepsOpsEntries: vi.fn() }
+  return { ...actual, fetchDepsOpsList: vi.fn(), fetchDepsOpsStats: vi.fn() }
 })
 
 const mockedList = vi.mocked(fetchDepsOpsList)
-const mockedAll = vi.mocked(fetchAllDepsOpsEntries)
+const mockedStats = vi.mocked(fetchDepsOpsStats)
 
 function item(overrides: Partial<DependabotPrLogOut> = {}): DependabotPrLogOut {
   return {
@@ -40,7 +40,7 @@ afterEach(() => {
 describe('DependabotOpsModal', () => {
   it('renders nothing when closed', () => {
     mockedList.mockResolvedValue(listResponse([]))
-    mockedAll.mockResolvedValue([])
+    mockedStats.mockResolvedValue({ repos: [] })
     render(<DependabotOpsModal open={false} onClose={vi.fn()} />)
     expect(screen.queryByText('Dependabot 運用状況（DEPSOPS）')).not.toBeInTheDocument()
     expect(mockedList).not.toHaveBeenCalled()
@@ -48,7 +48,7 @@ describe('DependabotOpsModal', () => {
 
   it('fetches and shows PR entries once opened', async () => {
     mockedList.mockResolvedValue(listResponse([item()]))
-    mockedAll.mockResolvedValue([item()])
+    mockedStats.mockResolvedValue({ repos: [] })
     render(<DependabotOpsModal open onClose={vi.fn()} />)
 
     await waitFor(() => {
@@ -59,7 +59,7 @@ describe('DependabotOpsModal', () => {
 
   it('shows the empty state when there are no matching PRs', async () => {
     mockedList.mockResolvedValue(listResponse([]))
-    mockedAll.mockResolvedValue([])
+    mockedStats.mockResolvedValue({ repos: [] })
     render(<DependabotOpsModal open onClose={vi.fn()} />)
 
     await waitFor(() => {
@@ -71,7 +71,7 @@ describe('DependabotOpsModal', () => {
     mockedList.mockResolvedValue(listResponse([
       item({ pr_number: 7, action: 'flagged', reason: 'メジャーバージョンアップ' }),
     ]))
-    mockedAll.mockResolvedValue([])
+    mockedStats.mockResolvedValue({ repos: [] })
     render(<DependabotOpsModal open onClose={vi.fn()} />)
     await waitFor(() => expect(screen.getByText('メジャーバージョンアップ')).toBeInTheDocument())
 
@@ -91,7 +91,7 @@ describe('DependabotOpsModal', () => {
       item({ pr_number: 2, is_security_update: false }),
       item({ pr_number: 3, is_security_update: null }),
     ]))
-    mockedAll.mockResolvedValue([])
+    mockedStats.mockResolvedValue({ repos: [] })
     render(<DependabotOpsModal open onClose={vi.fn()} />)
 
     await waitFor(() => expect(screen.getByText('セキュリティ更新')).toBeInTheDocument())
@@ -106,7 +106,7 @@ describe('DependabotOpsModal', () => {
         compatibility_badge_url: 'https://dependabot-badges.githubapp.com/badges/x',
       }),
     ]))
-    mockedAll.mockResolvedValue([])
+    mockedStats.mockResolvedValue({ repos: [] })
     render(<DependabotOpsModal open onClose={vi.fn()} />)
 
     await waitFor(() => {
@@ -118,7 +118,7 @@ describe('DependabotOpsModal', () => {
 
   it('shows a placeholder when no compatibility score badge is available', async () => {
     mockedList.mockResolvedValue(listResponse([item({ pr_number: 1 })]))
-    mockedAll.mockResolvedValue([])
+    mockedStats.mockResolvedValue({ repos: [] })
     render(<DependabotOpsModal open onClose={vi.fn()} />)
 
     await waitFor(() => expect(screen.getByText(/Bump lucide-react/)).toBeInTheDocument())
@@ -127,7 +127,7 @@ describe('DependabotOpsModal', () => {
 
   it('calls onClose when the close button is clicked', async () => {
     mockedList.mockResolvedValue(listResponse([]))
-    mockedAll.mockResolvedValue([])
+    mockedStats.mockResolvedValue({ repos: [] })
     const onClose = vi.fn()
     render(<DependabotOpsModal open onClose={onClose} />)
     await waitFor(() => expect(mockedList).toHaveBeenCalled())
@@ -138,7 +138,7 @@ describe('DependabotOpsModal', () => {
 
   it('calls onClose when Escape is pressed', async () => {
     mockedList.mockResolvedValue(listResponse([]))
-    mockedAll.mockResolvedValue([])
+    mockedStats.mockResolvedValue({ repos: [] })
     const onClose = vi.fn()
     render(<DependabotOpsModal open onClose={onClose} />)
     await waitFor(() => expect(mockedList).toHaveBeenCalled())
@@ -149,22 +149,20 @@ describe('DependabotOpsModal', () => {
 
   it('renders the unresolved repo chart from all fetched entries', async () => {
     mockedList.mockResolvedValue(listResponse([item()]))
-    mockedAll.mockResolvedValue([
-      item({ repo_full_name: 'u/r1', pr_number: 1, action: 'flagged' }),
-    ])
+    mockedStats.mockResolvedValue({ repos: [{ repo_full_name: 'u/r1', count: 1 }] })
     render(<DependabotOpsModal open onClose={vi.fn()} />)
 
     await waitFor(() => {
       expect(screen.getByText('リポジトリ別 要確認PR件数（未解決）')).toBeInTheDocument()
     })
-    expect(mockedAll).toHaveBeenCalled()
+    expect(mockedStats).toHaveBeenCalled()
   })
 
   it('shows a neutral "resolved" badge for PRs closed outside DEPSOPS', async () => {
     mockedList.mockResolvedValue(listResponse([
       item({ pr_number: 1, action: 'closed', reason: 'Dependabotの自動クローズ等で解消済み' }),
     ]))
-    mockedAll.mockResolvedValue([])
+    mockedStats.mockResolvedValue({ repos: [] })
     render(<DependabotOpsModal open onClose={vi.fn()} />)
 
     // "解消済み" はフィルターボタンとバッジの両方に表示されるため getAllByText で確認する

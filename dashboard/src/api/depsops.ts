@@ -36,20 +36,20 @@ export async function fetchDepsOpsList(params: {
   return apiFetch<DepsOpsListResponse>(`/api/depsops?${p}`)
 }
 
-// リポジトリ別件数の集計（未解決PRのチャート表示）には全件が必要なため、
-// DEPSCANの fetchAllDepscanFindings と同じくページングしながら全件取得する
-const DEPSOPS_MAX_PER_PAGE = 200
+export interface DepsOpsRepoStat {
+  repo_full_name: string
+  count: number
+}
 
-export async function fetchAllDepsOpsEntries(params: {
-  repo?: string | null
-  action?: 'merged' | 'flagged' | null
-} = {}): Promise<DependabotPrLogOut[]> {
-  const first = await fetchDepsOpsList({ ...params, page: 1, perPage: DEPSOPS_MAX_PER_PAGE })
-  const all = [...first.data]
-  const totalPages = Math.ceil(first.total / DEPSOPS_MAX_PER_PAGE)
-  for (let page = 2; page <= totalPages; page++) {
-    const next = await fetchDepsOpsList({ ...params, page, perPage: DEPSOPS_MAX_PER_PAGE })
-    all.push(...next.data)
-  }
-  return all
+export interface DepsOpsStatsResponse {
+  repos: DepsOpsRepoStat[]
+}
+
+// リポジトリ別の未解決PR件数（棒グラフ表示用）。以前はページングしながら
+// 全件（2000件超）をクライアントに転送して集計していたが、履歴が増えるたびに
+// 往復回数が増えて表示が遅くなっていた（10秒近くかかっていた）ため、
+// 「(repo, pr_number) ごとの最新状態のみ数える」集計自体をサーバー側（SQL の
+// ROW_NUMBER()）に移し、1回のリクエストで済むようにした
+export async function fetchDepsOpsStats(): Promise<DepsOpsStatsResponse> {
+  return apiFetch<DepsOpsStatsResponse>('/api/depsops/stats')
 }

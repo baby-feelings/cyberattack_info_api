@@ -41,3 +41,16 @@ class DependabotPrLogListResponse(BaseModel):
     page: int = Field(description="現在のページ番号")
     per_page: int = Field(description="1ページあたりの件数")
     data: list[DependabotPrLogOut] = Field(description="PR 履歴一覧")
+
+
+class RepoStat(BaseModel):
+    """リポジトリ別の未解決PR件数（ダッシュボードの棒グラフ表示用）。"""
+
+    repo_full_name: str = Field(description="対象リポジトリ")
+    count: int = Field(description="未解決（最新状態がflagged）のPR件数")
+
+
+class DepsOpsStatsResponse(BaseModel):
+    """DEPSOPS の未解決PRをリポジトリ別に集計したレスポンス。"""
+
+    repos: list[RepoStat] = Field(description="リポジトリ別の未解決PR件数（降順）")

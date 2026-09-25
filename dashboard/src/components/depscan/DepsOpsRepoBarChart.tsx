@@ -1,7 +1,7 @@
 import { BarChart2 } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip as ReTooltip, XAxis, YAxis } from 'recharts'
+import type { DepsOpsRepoStat } from '../../api/client'
 import { ChartCard } from '../shared/VulnPanelParts'
-import type { RepoOpsStat } from './depsopsGrouping'
 
 const CHART_COLORS = [
   '#f59e0b', '#f97316', '#f43f5e', '#8b5cf6',
@@ -13,9 +13,9 @@ export function formatDepsOpsRepoTooltipValue(value: unknown): [string, string] 
   return [String(value) + ' 件', '件数']
 }
 
-// リポジトリ別「要確認」PR件数の棒グラフ（上位8件。同一PRの重複日数分は
-// computeUnresolvedRepoStats 側で最新状態のみに集約済みのデータを受け取る）
-export function DepsOpsRepoBarChart({ stats, loading }: { stats: RepoOpsStat[]; loading: boolean }) {
+// リポジトリ別「要確認」PR件数の棒グラフ（上位8件。同一PRの重複日数分はAPI
+// 側（GET /api/depsops/stats）で最新状態のみに集約済みのデータを受け取る）
+export function DepsOpsRepoBarChart({ stats, loading }: { stats: DepsOpsRepoStat[]; loading: boolean }) {
   const data = stats.slice(0, 8).map(s => ({
     // "owner/repo" だとラベルが長くなるため repo 名のみ表示
     name: s.repo_full_name.split('/')[1] ?? s.repo_full_name,

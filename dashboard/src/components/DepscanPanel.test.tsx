@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { DepscanPanel } from './DepscanPanel'
 import {
   fetchAllDepscanFindings, fetchDepscanStats, fetchCrawlerLogs,
-  fetchDepsOpsList, fetchAllDepsOpsEntries,
+  fetchDepsOpsList, fetchDepsOpsStats,
   type DependencyFindingOut, type DepscanStatsResponse,
 } from '../api/client'
 
@@ -16,7 +16,7 @@ vi.mock('../api/client', async () => {
     fetchDepscanStats: vi.fn(),
     fetchCrawlerLogs: vi.fn(),
     fetchDepsOpsList: vi.fn(),
-    fetchAllDepsOpsEntries: vi.fn(),
+    fetchDepsOpsStats: vi.fn(),
   }
 })
 
@@ -24,7 +24,7 @@ const mockedFindings = vi.mocked(fetchAllDepscanFindings)
 const mockedStats = vi.mocked(fetchDepscanStats)
 const mockedLogs = vi.mocked(fetchCrawlerLogs)
 const mockedDepsOpsList = vi.mocked(fetchDepsOpsList)
-const mockedDepsOpsAll = vi.mocked(fetchAllDepsOpsEntries)
+const mockedDepsOpsStats = vi.mocked(fetchDepsOpsStats)
 
 function finding(overrides: Partial<DependencyFindingOut> = {}): DependencyFindingOut {
   return {
@@ -57,7 +57,7 @@ describe('DepscanPanel', () => {
       duration_seconds: 60, inserted: 0, updated: 0, deleted: 0, error_message: null,
     }])
     mockedDepsOpsList.mockResolvedValue({ total: 0, page: 1, per_page: 20, data: [] })
-    mockedDepsOpsAll.mockResolvedValue([])
+    mockedDepsOpsStats.mockResolvedValue({ repos: [] })
   })
 
   afterEach(() => {

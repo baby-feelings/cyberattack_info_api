@@ -818,6 +818,53 @@ class TestListDepsops:
 
 
 # ──────────────────────────────────────────────────────────────
+# GET /api/depsops/stats
+# ──────────────────────────────────────────────────────────────
+
+
+class TestDepsopsStats:
+    def test_requires_auth(self, client):
+        res = client.get("/api/depsops/stats")
+        assert res.status_code == 403
+
+    def test_counts_only_latest_flagged_per_pr(self, client, db_session):
+        """同じPRについて複数回判定記録があっても、最新の状態のみを数える。"""
+        db_session.add_all([
+            # u/r1#1: 古い判定はflagged、最新はmerged → 未解決に数えない
+            DependabotPrLog(
+                repo_full_name="u/r1", pr_number=1, title="bump a", action="flagged",
+                reason="メジャー", processed_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+            ),
+            DependabotPrLog(
+                repo_full_name="u/r1", pr_number=1, title="bump a", action="merged",
+                processed_at=datetime(2026, 6, 2, tzinfo=timezone.utc),
+            ),
+            # u/r1#2: 最新がflagged → 未解決として数える
+            DependabotPrLog(
+                repo_full_name="u/r1", pr_number=2, title="bump b", action="flagged",
+                reason="メジャー", processed_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+            ),
+            # u/r2#1: 最新がflagged → 別リポジトリとして数える
+            DependabotPrLog(
+                repo_full_name="u/r2", pr_number=1, title="bump c", action="flagged",
+                reason="メジャー", processed_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+            ),
+        ])
+        db_session.commit()
+
+        res = client.get("/api/depsops/stats", headers=HEADERS)
+
+        assert res.status_code == 200
+        repos = {r["repo_full_name"]: r["count"] for r in res.json()["repos"]}
+        assert repos == {"u/r1": 1, "u/r2": 1}
+
+    def test_empty_when_no_records(self, client):
+        res = client.get("/api/depsops/stats", headers=HEADERS)
+        assert res.status_code == 200
+        assert res.json()["repos"] == []
+
+
+# ──────────────────────────────────────────────────────────────
 # app.core.notifications.notify_dependabot_ops
 # ──────────────────────────────────────────────────────────────
 
