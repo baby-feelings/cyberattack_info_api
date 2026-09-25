@@ -196,14 +196,17 @@ cyberattack_info_api/
 │   ├── core/                   # 横断的インフラ（config・database・auth・background・crawler_runner・
 │   │                           # crypto〈トークン暗号化〉・db_utils・notifications・pagination・
 │   │                           # repo_cleanup〈削除済みリポジトリのデータ削除、Issue #228〉・
-│   │                           # user_crawl_runner〈登録済み他ユーザー向け定期実行、Issue #227〉・共通 schemas）
+│   │                           # user_crawl_runner〈登録済み他ユーザー向け定期実行、Issue #227〉・
+│   │                           # github_http〈GitHub API認証ヘッダーの共通化〉・
+│   │                           # issue_filing〈DEPSCAN/CODESCANのIssue起票共通処理〉・共通 schemas）
 │   ├── kev/                    # CISA KEV ドメイン（models・schemas・crawler・router〈router + admin_router〉）
 │   ├── osv/                    # OSV ドメイン（models・schemas・crawler・router〈router + admin_router〉）
 │   ├── jvn/                    # JVN ドメイン（models・schemas・crawler・router〈router + admin_router〉）
 │   ├── depscan/                # 依存ライブラリ脆弱性スキャン（DEPSCAN）ドメイン
 │   │   └── parsers/            # 10 エコシステム分のロックファイルパーサー
 │   ├── depsops/                # Dependabot PR 自動運用（DEPSOPS）ドメイン（models・schemas・router
-│   │                           # 〈router + admin_router〉。crawler.py 相当は runner.py）
+│   │                           # 〈router + admin_router〉。crawler.py 相当は runner.py。
+│   │                           # 登録済み他ユーザー向けのper-user実行はuser_scan.py）
 │   ├── codescan/                # 自アプリコード脆弱性診断（CODESCAN）ドメイン（Semgrep静的解析 + gitleaks
 │   │                           # シークレット検知。github_client・issue_management・cvss_mapping含む）
 │   └── crawler_logs/           # クローラー実行ログドメイン（models・schemas・writer・router）

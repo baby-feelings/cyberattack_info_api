@@ -73,13 +73,14 @@ app/
 ├── auth/         # GitHubログイン・ユーザー別Slack通知登録（UserAccount/account_store）
 ├── core/         # 横断的インフラ: config/database/auth/background/crawler_runner/crypto/
 │                 #   db_utils/notifications/osv_client/pagination/repo_cleanup/
-│                 #   user_crawl_runner/stix/taxii/schemas
+│                 #   user_crawl_runner/stix/taxii/schemas/github_http（GitHub API認証
+│                 #   ヘッダー共通化）/issue_filing（DEPSCAN/CODESCANのIssue起票共通化）
 ├── kev/          # CISA KEV（models/schemas/crawler/stix/router）
 ├── osv/          # OSV（10エコシステム対応、+packages.py）
 ├── jvn/          # JVN（MyJVN API / RDF-RSS）
 ├── depscan/      # 依存ライブラリ脆弱性スキャン（+issue_management/priority/sbom/
 │                 #   user_scan/github_client/parsers/）
-├── depsops/      # Dependabot PR 自動運用（runner/classify/github_client）
+├── depsops/      # Dependabot PR 自動運用（runner/classify/github_client/user_scan）
 ├── codescan/     # 自アプリのコード脆弱性診断（Semgrep静的解析+gitleaksシークレット検知。GitHubログイン
 │                 #   必須〈DEPSCANとセッション共有〉。+github_client/issue_management/cvss_mapping。
 │                 #   CVSS計算式自体はapp.core.cvss）
