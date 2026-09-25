@@ -35,24 +35,14 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
     <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg flex flex-col gap-5">
 
       {/* ヘッダー */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <ScanSearch size={16} className="text-slate-400" />
-          <span className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
-            CODESCAN（Semgrep + Gitleaks 静的解析）
-          </span>
-        </div>
-        <div className="flex items-center gap-3">
-          {!loading && stats && stats.total > 0 && (
-            <div className="flex items-center gap-2 text-xs tabular-nums">
-              {errorCount > 0 && (
-                <span className="px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 font-semibold">
-                  重大 {errorCount}
-                </span>
-              )}
-              <span className="text-slate-500">未解決 {stats.total} 件</span>
-            </div>
-          )}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <ScanSearch size={16} className="text-slate-400" />
+            <span className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
+              CODESCAN（Semgrep + Gitleaks 静的解析）
+            </span>
+          </div>
           <button
             onClick={() => load(severity, resolved, page)}
             disabled={loading}
@@ -62,6 +52,16 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
+        {!loading && stats && stats.total > 0 && (
+          <div className="flex items-center gap-2 text-xs tabular-nums">
+            {errorCount > 0 && (
+              <span className="px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 font-semibold">
+                重大 {errorCount}
+              </span>
+            )}
+            <span className="text-slate-500">未解決 {stats.total} 件</span>
+          </div>
+        )}
       </div>
 
       {/* 注記: CVSSはベストエフォート推定であることを明記（Issue #203の要件） */}
