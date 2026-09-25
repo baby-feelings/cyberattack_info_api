@@ -77,14 +77,18 @@ IP `168.138.213.240`）。
 
 ### 環境変数（`.env.production`、OCIへ転送）
 `DATABASE_URL`・`API_KEY`・`ENVIRONMENT=production`・`GITHUB_USERNAME`
-（**未設定だとアプリが起動しない**）・`SLACK_WEBHOOK_URL`（任意）・`GITHUB_TOKEN`
+（**未設定だとアプリが起動しない**）・`GITHUB_TOKEN`
 （DEPSCAN/DEPSOPS/CODESCAN共用PAT。Contents: Read-only + Issues: Write + Pull requests:
 Write推奨）・`GITHUB_OAUTH_CLIENT_ID`/`GITHUB_OAUTH_CLIENT_SECRET`/`SESSION_SECRET_KEY`
 （DEPSCAN/CODESCAN共有のダッシュボードログイン用、未設定だと`/auth/*`が503を返すのみで
-DEPSCAN・CODESCAN両タブが機能しない）・`FRONTEND_URL`・`API_BASE_URL_FOR_OAUTH`（GitHub
+DEPSCAN・CODESCAN両タブが機能しない）・`TOKEN_ENCRYPTION_KEY`（ユーザー別Slack通知登録
+〈Issue #227〉用、GitHubアクセストークンをDBへ暗号化保存するFernet鍵。未設定時は登録済み
+ユーザーの定期実行が機能しない）・`FRONTEND_URL`・`API_BASE_URL_FOR_OAUTH`（GitHub
 OAuth Appのcallback URLとscheme含め一致させる必要あり。インスタンスを作り直した場合は
 `.env.production`・`app/core/config.py`のデフォルト値・GitHub OAuth Appのcallback URLの
-3箇所を同時に更新）・`METRICS_API_KEY`（運用監視、任意）。
+3箇所を同時に更新）・`METRICS_API_KEY`（運用監視、任意）。`SLACK_WEBHOOK_URL`は
+Issue #227でダッシュボードからのユーザー別登録方式（`UserAccount`テーブル）に移行済みで、
+もはや参照されない（設定していても無害だが不要）。
 
 ### GitHub Secrets
 
@@ -161,3 +165,10 @@ CIで自動実行される。間接依存（他パッケージ経由で入る依
 ## CORS・Swagger の本番制限
 - CORS: 本番は `["https://cyberattackinfoapi.vercel.app"]` のみ許可。開発時は localhost も追加
 - Swagger UI / ReDoc: `settings.ENVIRONMENT != "production"` の場合のみ有効
+- **`allow_methods`に新しいHTTPメソッドを使うエンドポイントを追加したら必ず更新する**:
+  `PUT/DELETE /auth/notification-settings`（Issue #227）追加時、CORSミドルウェアの
+  `allow_methods`に`GET`/`POST`しか含まれておらず、ブラウザからのプリフライト
+  （OPTIONS）が失敗しダッシュボードから呼び出せない不具合が本番で実際に発生した
+  （`app/main.py`）。新しいメソッドを使うエンドポイントを追加する際は、ローカルの
+  `pytest`だけでは検知できない（`TestClient`はブラウザのCORS制約を再現しないため）
+  ことに注意し、`allow_methods`/`allow_headers`も忘れず更新すること

@@ -20,6 +20,8 @@ Claude Code や CI/CD ツールから「今まさに悪用されているサイ�
 | **DEPSCAN ダッシュボードの GitHub ログイン** | 任意の GitHub アカウントで OAuth ログインし、本人が所有するリポジトリの検知結果のみ閲覧可能（サーバー側で強制するアクセス制御）。ログイン時にオンデマンドでスキャンを実行し、直近 24 時間以内にスキャン済みなら再スキャンせず結果を即座に表示 |
 | **自アプリコード脆弱性診断（CODESCAN）** | 同上（GitHub 上の自作アプリ全リポジトリのソースコードを tarball 取得し Semgrep〈p/security-audit + p/secrets〉で静的解析、さらに専用のシークレット検知ツール gitleaks も実行。SQLi・ハードコード認証情報・XSS・平文シークレット等を検知し、CVSS 3.1基本値をベストエフォートで推定。新規検知はリポジトリ自身に GitHub Issue も自動起票。ダッシュボードの閲覧には DEPSCAN と共有の GitHub ログインが必須〈オーナー絞り込みは無し〉） |
 | **OSV 古いデータ自動削除** | 180 日以上前のレコードをクロール時に自動削除（DB 容量管理） |
+| **削除済みリポジトリの自動データ削除** | 毎日クロールの後段で、GitHub上で実際に削除されたことを個別確認できたリポジトリのみ DEPSCAN/CODESCAN/DEPSOPS のデータを削除（アーカイブ化・一時的なAPI障害と誤判定しないよう安全側に倒す設計、Issue #228） |
+| **ユーザー別 Slack 通知登録** | ダッシュボードのハンバーガーメニュー「設定」から、任意の GitHub アカウントで自分専用の Slack Webhook を登録可能（Issue #227）。登録は実際にテスト送信し成功した場合のみ保存。KEV/OSV/JVN の脅威情報は登録済みの全ユーザーへ、DEPSCAN/CODESCAN/DEPSOPS は本人自身の GitHub リポジトリの検知結果のみ本人へ通知。Webhook を登録した他ユーザー（`GITHUB_USERNAME` 以外）は自身のリポジトリに対する DEPSCAN/CODESCAN/DEPSOPS が定期的に実行され、本人のトークンで GitHub Issue 起票・Dependabot PR マージも行われる |
 | **運用監視** | Prometheus + Grafana によるクローラー実行結果・ホストリソースの可視化（OCI上、任意） |
 | **一覧取得 API** | ページネーション・キーワード検索・フィルタリング対応（KEV / OSV / JVN / DEPSCAN / CODESCAN） |
 | **直近脅威 API** | 過去 N 日以内に追加された脆弱性を即座に取得（KEV） |
@@ -27,8 +29,8 @@ Claude Code や CI/CD ツールから「今まさに悪用されているサイ�
 | **統計 API** | ベンダー別ランキング・月別トレンド・重要度別集計（KEV / OSV / JVN / DEPSCAN / CODESCAN） |
 | **クローラー実行ログ API** | KEV / OSV / JVN / DEPSCAN / CODESCAN クローラーの実行履歴（成否・件数・所要時間）を取得 |
 | **Dependabot PR 自動運用（DEPSOPS）** | 安全性の高い Dependabot PR（マイナー/パッチ更新・CI あり・コンフリクトなし）のみ自動マージ。判定履歴（自動マージ・要確認いずれも、セキュリティ更新かのヒューリスティック判定・Compatibility score バッジ含む）は `GET /api/depsops` で後から確認可能 |
-| **Slack 通知** | 新規追加・更新時・エラー時に Slack へ自動通知（KEV / OSV / JVN / DEPSCAN / DEPSOPS / CODESCAN） |
-| **手動クロール** | `POST /admin/crawl` / `POST /admin/osv-crawl` / `POST /admin/jvn-crawl` / `POST /admin/depscan-crawl` / `POST /admin/codescan-crawl` / `POST /admin/dependabot-ops`（バックグラウンド 202 即時返却・`?days=N` 対応） |
+| **Slack 通知** | 新規追加・更新時に登録済みユーザーの Webhook へ自動通知（KEV / OSV / JVN / DEPSCAN / DEPSOPS / CODESCAN）。エラー通知のみ crawler_type に関わらず常に管理者（`GITHUB_USERNAME`）自身の Webhook にのみ送る |
+| **手動クロール** | `POST /admin/crawl` / `POST /admin/osv-crawl` / `POST /admin/jvn-crawl` / `POST /admin/depscan-crawl` / `POST /admin/codescan-crawl` / `POST /admin/dependabot-ops` / `POST /admin/repo-cleanup` / `POST /admin/user-crawl`（バックグラウンド 202 即時返却・`?days=N` 対応） |
 | **API キー認証** | `X-API-KEY` ヘッダーによるシンプルな固定キー認証 |
 | **ヘルスチェック** | DB 接続確認付きの死活監視エンドポイント |
 | **React ダッシュボード** | CISA KEV・OSV（Pub 含む 10 エコシステム・180 日表示）・JVN・DEPSCAN（GitHub ログイン必須、本人所有リポジトリのみ表示。到達可能性の判定結果も表示）・CODESCAN（GitHub ログイン必須〈DEPSCANとセッション共有、オーナー絞り込みは無し〉、CVSSベストエフォート推定値・検知ツール種別バッジを表示）を画面下部固定タブ（5つ）で切り替え表示。Dependabot 運用状況＝DEPSOPS の判定履歴は DEPSCAN タブ内のボタンから開く全画面モーダルとして統合（Vercel デプロイ） |
@@ -124,6 +126,7 @@ Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
 | GET | `/auth/github/login` | DEPSCANダッシュボードのGitHubログイン開始（ブラウザ専用） |
 | POST | `/auth/exchange` | 交換コード→セッションJWT |
 | GET | `/auth/scan-status` | オンデマンドスキャン進捗（Bearer認証） |
+| GET/PUT/DELETE | `/auth/notification-settings` | ログイン中ユーザーのSlack Webhook通知登録・解除（Bearer認証、Issue #227）。PUTは実際にテスト送信し成功した場合のみ保存 |
 | POST | `/admin/crawl` | KEV手動クロール |
 | POST | `/admin/osv-crawl` | OSV手動クロール（`?days=N`対応） |
 | POST | `/admin/jvn-crawl` | JVN手動クロール（`?days=N`対応） |
@@ -131,6 +134,8 @@ Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
 | PUT | `/admin/depscan/assets/{owner}/{repo}` | リポジトリ資産コンテキスト設定（Upsert、Issue #131） |
 | POST | `/admin/codescan-crawl` | CODESCAN手動実行（GitHub全リポジトリをSemgrep + gitleaksで再スキャン） |
 | POST | `/admin/dependabot-ops` | DEPSOPS手動実行（安全なPRのみ自動マージ） |
+| POST | `/admin/repo-cleanup` | 削除済みリポジトリのDEPSCAN/CODESCAN/DEPSOPSデータ削除を手動実行（Issue #228） |
+| POST | `/admin/user-crawl` | 登録済み他ユーザー（`GITHUB_USERNAME`以外、Webhook登録済み）向けDEPSCAN/CODESCAN/DEPSOPSを手動実行（Issue #227） |
 | GET | `/taxii2/*` | TAXII 2.1配信（KEV/OSV/JVN 3コレクション購読用、最小実装。Issue #134） |
 | GET | `/health` | ヘルスチェック（認証不要） |
 
@@ -161,7 +166,7 @@ pytest
 start htmlcov/index.html  # Mac/Linux: open htmlcov/index.html
 ```
 
-**テスト結果（最新）:** 738 テスト / カバレッジ 98%
+**テスト結果（最新）:** 805 テスト / カバレッジ 98%
 
 ---
 
@@ -186,9 +191,12 @@ cyberattack_info_api/
 ├── app/
 │   ├── main.py                 # FastAPI アプリ本体・APScheduler 設定・ルーター include のみに専念
 │   │                           # （/admin/* は持たない。各ドメインの router.py の admin_router に定義）
-│   ├── auth/                   # GitHub ログイン（DEPSCAN ダッシュボードのアクセス制御）ドメイン
+│   ├── auth/                   # GitHub ログイン・ユーザー別Slack通知登録ドメイン（models・account_store・
+│   │                           # session・github_oauth・router。Issue #227でUserAccountテーブル追加）
 │   ├── core/                   # 横断的インフラ（config・database・auth・background・crawler_runner・
-│   │                           # db_utils・notifications・pagination・共通 schemas）
+│   │                           # crypto〈トークン暗号化〉・db_utils・notifications・pagination・
+│   │                           # repo_cleanup〈削除済みリポジトリのデータ削除、Issue #228〉・
+│   │                           # user_crawl_runner〈登録済み他ユーザー向け定期実行、Issue #227〉・共通 schemas）
 │   ├── kev/                    # CISA KEV ドメイン（models・schemas・crawler・router〈router + admin_router〉）
 │   ├── osv/                    # OSV ドメイン（models・schemas・crawler・router〈router + admin_router〉）
 │   ├── jvn/                    # JVN ドメイン（models・schemas・crawler・router〈router + admin_router〉）
@@ -206,7 +214,8 @@ cyberattack_info_api/
 ├── dashboard/               # Vercel デプロイの React ダッシュボード（KEV・OSV（Pub 含む 10 エコシステム）・JVN・
 │                           # DEPSCAN〈GitHub ログイン必須。Dependabot運用状況＝DEPSOPS の判定履歴も統合〉・
 │                           # CODESCAN〈GitHub ログイン必須。DEPSCANとセッション共有。CVSSベストエフォート
-│                           # 推定値・検知ツールバッジを表示〉を5つの固定タブで切り替え表示）
+│                           # 推定値・検知ツールバッジを表示〉を5つの固定タブで切り替え表示。ヘッダーの
+│                           # ハンバーガーメニュー「設定」からSlack Webhook通知を登録可能、Issue #227）
 ├── alembic/                 # DBスキーマのマイグレーション管理（app.core.migrate から呼び出す）
 │   └── versions/            # マイグレーションスクリプト（Gitで追跡）
 ├── .github/
@@ -273,11 +282,11 @@ Ampere A1）上でDocker Composeにより稼働する（旧Renderから移行済
    | `PUBLIC_API_KEY` | 公開ダッシュボード用の読み取り専用キー（任意・別途 `openssl rand -hex 32`）。Vercel の `VITE_PUBLIC_API_KEY` と同じ値を設定する |
    | `ENVIRONMENT` | `production` |
    | `GITHUB_USERNAME` | DEPSCAN/CODESCAN のスキャン対象アカウント（必須。未設定だとアプリが起動しない） |
-   | `SLACK_WEBHOOK_URL` | Slack Webhook URL（任意） |
    | `GITHUB_TOKEN` | DEPSCAN/DEPSOPS/CODESCAN 用 GitHub PAT（任意。未設定時は DEPSCAN/DEPSOPS/CODESCAN のみエラー終了） |
    | `GITHUB_OAUTH_CLIENT_ID` / `GITHUB_OAUTH_CLIENT_SECRET` | DEPSCAN ダッシュボードの GitHub ログイン用（任意。[GitHub Developer Settings](https://github.com/settings/developers) で OAuth App を作成して取得。Authorization callback URL は `https://<BACKEND_DOMAIN>/auth/github/callback`） |
    | `SESSION_SECRET_KEY` | セッションJWT署名鍵（任意。`python -c "import secrets; print(secrets.token_urlsafe(32))"` で生成） |
    | `API_BASE_URL_FOR_OAUTH` | 本API自身の公開URL（`https://<BACKEND_DOMAIN>`）。GitHub OAuth Appのcallback URLと一致させる |
+   | `TOKEN_ENCRYPTION_KEY` | ユーザー別Slack通知登録（Issue #227）用、GitHubアクセストークン暗号化のFernet鍵（任意だが実質必須。`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` で生成。未設定だと登録済みユーザーの定期実行が機能しない） |
    | `METRICS_API_KEY` | Prometheus用メトリクスエンドポイント（`/metrics`）保護キー（任意。`openssl rand -hex 24`） |
 
 3. `deploy/prometheus.yml.example` を `deploy/prometheus.yml` にコピーし、
@@ -333,35 +342,47 @@ SCPでコード一式を転送し、OCI上で `docker compose up -d --build` を
 | `CODESCAN_CRON_HOUR_UTC` / `CODESCAN_CRON_MINUTE_UTC` | - | CODESCAN 実行時刻（時・分・UTC）（デフォルト: `22`時`30`分。DEPSCANの後段） |
 | `CODESCAN_RETENTION_DAYS` | - | CODESCAN データの保持期間（日数・デフォルト: `180`）。解決済みのままこの日数を超えたレコードのみ自動削除（未解決レコードは対象外） |
 | `DEPSOPS_CRON_HOUR_UTC` | - | DEPSOPS 実行時刻（時・UTC）（デフォルト: `23`） |
-| `SLACK_WEBHOOK_URL` | - | Slack Incoming Webhook URL（未設定時は通知スキップ） |
+| `REPO_CLEANUP_CRON_HOUR_UTC` / `REPO_CLEANUP_CRON_MINUTE_UTC` | - | 削除済みリポジトリのデータ削除実行時刻（時・分・UTC）（デフォルト: `23`時`15`分。DEPSOPSの後段、Issue #228） |
+| `USER_CRAWL_CRON_HOUR_UTC` / `USER_CRAWL_CRON_MINUTE_UTC` | - | 登録済み他ユーザー向けDEPSCAN/CODESCAN/DEPSOPS実行時刻（時・分・UTC）（デフォルト: `23`時`30`分。削除済みリポジトリ掃除の後段、Issue #227） |
 | `GITHUB_OAUTH_CLIENT_ID` | - | DEPSCAN ダッシュボードの GitHub ログイン用 OAuth App の Client ID。未設定時は `/auth/github/login` が `503` を返すのみ |
 | `GITHUB_OAUTH_CLIENT_SECRET` | - | 同 OAuth App の Client Secret |
 | `SESSION_SECRET_KEY` | - | セッショントークン（JWT・HS256）の署名鍵。未設定のまま本番運用しないこと |
+| `TOKEN_ENCRYPTION_KEY` | - | ユーザー別Slack通知登録（Issue #227）用、GitHubアクセストークンをDBへ暗号化保存するFernet鍵。未設定時は登録済みユーザーの定期実行（DEPSCAN/CODESCAN/DEPSOPS）が機能しない |
 | `FRONTEND_URL` | - | OAuth コールバック後にリダイレクトするダッシュボード URL（デフォルト: Vercel の本番URL） |
 | `API_BASE_URL_FOR_OAUTH` | - | OAuth の `redirect_uri` 組み立てに使う本 API 自身の公開 URL。GitHub OAuth App の Authorization callback URL と一致させる必要がある（デフォルト・現在値: OCI インスタンスの URL） |
 | `METRICS_API_KEY` | - | 運用監視（Prometheus）用の `/metrics` エンドポイント保護キー（`Authorization: Bearer` で認証）。未設定時は `/metrics` 自体が `503` を返すのみ |
 
 ---
 
-## Slack 通知の設定
+## Slack 通知の設定（Issue #227：ユーザー別登録制）
 
-1. [Slack App Directory](https://your-workspace.slack.com/apps/A0F7XDUAZ-incoming-webhooks) で「Incoming WebHooks」を追加
-2. 通知先チャンネルを選択して Webhook URL を取得
-3. OCI の `.env.production` に `SLACK_WEBHOOK_URL` として設定
+固定の `SLACK_WEBHOOK_URL` 環境変数は廃止し、**各ユーザーがダッシュボードから自分の Slack Webhook を登録する方式**に変更した。
 
-通知が届くタイミング:
+1. [Slack App Directory](https://your-workspace.slack.com/apps/A0F7XDUAZ-incoming-webhooks) で「Incoming WebHooks」を追加し、通知先チャンネルを選択して Webhook URL を取得
+2. ダッシュボードのヘッダー右上のハンバーガーメニュー →「設定」から GitHub アカウントでログインし、取得した Webhook URL を貼り付けて「テスト送信して保存」を押す（実際にテスト通知を送信し、成功した場合のみ登録される）
+3. `GITHUB_USERNAME`（`baby-feelings`）自身の毎日クロールの通知を引き続き受け取りたい場合も、`GITHUB_USERNAME` と同じ GitHub アカウントでログインしてこの画面から登録が必要（過去の `SLACK_WEBHOOK_URL` の値は自動移行されない）
+
+### 通知先の解決ルール
+
+| クローラー種別 | 送信先 |
+|---------------|--------|
+| KEV / OSV / JVN（リポジトリに紐づかないグローバルな脅威情報） | 通知を有効にしている**全登録ユーザー**へブロードキャスト |
+| DEPSCAN / DEPSOPS / CODESCAN の毎日クロール（`GITHUB_USERNAME` 自身のリポジトリ対象） | `GITHUB_USERNAME` 自身が登録した Webhook にのみ送信 |
+| DEPSCAN / DEPSOPS / CODESCAN の登録済み他ユーザー向け定期実行 | 本人が登録した Webhook にのみ送信 |
+| **クローラーエラー発生時**（`:warning:`、KEV/OSV/JVN/DEPSCAN/DEPSOPS/CODESCAN 共通） | crawler_type に関わらず**常に管理者（`GITHUB_USERNAME`）自身の Webhook にのみ**送信（全登録ユーザーへはブロードキャストしない） |
+
+通知内容:
 
 | タイミング | 通知内容 |
 |-----------|---------|
 | CISA KEV クロール完了（新規追加・更新あり） | `:shield: CISA KEV 更新通知`（新規・更新件数） |
 | OSV クロール完了（新規・更新あり） | `:package: OSV 脆弱性データ更新通知`（新規・更新・削除件数） |
 | JVN クロール完了（新規・更新あり） | `:jigsaw: JVN 脆弱性データ更新通知`（新規・更新件数） |
-| DEPSCAN（毎日クロール）で新規検知あり | `:rotating_light: 依存ライブラリ脆弱性を検知`（リポジトリ別グルーピング・パッケージ単位に集約したダイジェスト1通） |
-| CODESCAN（毎日クロール）で新規追加・更新・削除あり | `:mag: 自アプリコード脆弱性更新通知`（新規・更新・削除件数。汎用フォーマット） |
-| `POST /admin/dependabot-ops` 実行完了（自動マージ・要確認いずれかが1件以上） | `:robot_face: Dependabot PR 自動運用`（自動マージ済みPR一覧・要確認PR一覧と理由） |
-| クローラーエラー発生時 | `:warning:` エラー内容（KEV / OSV / JVN / DEPSCAN / DEPSOPS / CODESCAN それぞれ） |
+| DEPSCAN（毎日クロール・登録済み他ユーザー向け実行）で新規検知あり | `:rotating_light: 依存ライブラリ脆弱性を検知`（リポジトリ別グルーピング・パッケージ単位に集約したダイジェスト1通） |
+| CODESCAN（毎日クロール・登録済み他ユーザー向け実行）で新規追加・更新・削除あり | `:mag: 自アプリコード脆弱性更新通知`（新規・更新・削除件数。汎用フォーマット） |
+| DEPSOPS実行完了（自動マージ・要確認いずれかが1件以上） | `:robot_face: Dependabot PR 自動運用`（自動マージ済みPR一覧・要確認PR一覧と理由） |
 
-> **Note:** DEPSCAN ダッシュボードの GitHub ログイン経由のオンデマンドスキャン（`GITHUB_USERNAME` 以外の任意アカウントでのログインを含む）では、誰がログインしても Slack 通知・GitHub Issue 起票は一切行われない。Slack 通知が飛ぶのは `GITHUB_USERNAME`（`baby-feelings`）向けの毎日クロールのみ。
+> **Note:** Webhook未登録のユーザーがダッシュボードにログインしただけでは、従来通り一切通知・GitHub Issue起票を行わない（Principle of Least Astonishment）。登録済み他ユーザー（`GITHUB_USERNAME`以外）向けのDEPSCAN/CODESCAN/DEPSOPSは、Webhook登録をopt-inのゲートとして使い、`USER_CRAWL_CRON_HOUR_UTC`で毎日定期実行される（本人のGitHubトークンでスキャン・Issue起票・Dependabot PRマージを行う）。
 
 ### GitHub Issue 自動起票（DEPSCAN / CODESCAN）
 
@@ -389,12 +410,17 @@ Slack 通知に加えて、DEPSCAN・CODESCAN の新規検知は検知された�
 | `POST /admin/osv-crawl` 実行時 | OSV バックグラウンド取得（`?days=N` で日数指定可） |
 | `POST /admin/jvn-crawl` 実行時 | JVN バックグラウンド取得（`?days=N` で日数指定可） |
 | `POST /admin/depscan-crawl` 実行時 | DEPSCAN バックグラウンド取得（GitHub 全リポジトリを再スキャン） |
-| `POST /admin/codescan-crawl` 実行時 | CODESCAN バックグラウンド取得（GitHub 全リポジトリを Semgrep で再スキャン） |
+| `POST /admin/codescan-crawl` 実行時 | CODESCAN バックグラウンド取得（GitHub 全リポジトリを Semgrep + gitleaks で再スキャン） |
 | `POST /admin/dependabot-ops` 実行時 | DEPSOPS バックグラウンド実行（Dependabot PR の自動マージ判定） |
+| `POST /admin/repo-cleanup` 実行時 | 削除済みリポジトリのDEPSCAN/CODESCAN/DEPSOPSデータ削除（Issue #228） |
+| `POST /admin/user-crawl` 実行時 | 登録済み他ユーザー向けDEPSCAN/CODESCAN/DEPSOPS（Webhook登録済みユーザーのみ、Issue #227） |
 
-> **Note:** APScheduler（アプリ内スケジューラ）も UTC 19:00 / 20:00 / 21:00 / 22:00 / 22:30 / 23:00 に設定されており、
-> OCI移行後はこちらが主経路として機能する（OCIは常時稼働のためスリープしない）。GitHub Actions の
-> 単一 cron は、ネットワーク障害等で APScheduler が不発火だった場合の二重バックアップとして維持している。
+> **Note:** APScheduler（アプリ内スケジューラ）は UTC 19:00 / 20:00 / 21:00 / 22:00 / 22:30 / 23:00 /
+> 23:15 / 23:30（KEV/OSV/JVN/DEPSCAN/CODESCAN/DEPSOPS/削除済みリポジトリ掃除/登録済み他ユーザー向け
+> の順）に設定されており、OCI移行後はこちらが主経路として機能する（OCIは常時稼働のためスリープしない）。
+> GitHub Actions の単一 cron（KEV〜DEPSOPSのみ）は、ネットワーク障害等で APScheduler が不発火だった
+> 場合の二重バックアップとして維持している（削除済みリポジトリ掃除・登録済み他ユーザー向け実行は
+> APScheduler側のみ）。
 
 ---
 

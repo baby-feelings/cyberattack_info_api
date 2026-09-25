@@ -1,6 +1,6 @@
 ---
 name: depscan-depsops
-description: DEPSCAN（GitHub全リポジトリの依存ライブラリ脆弱性スキャン）とDEPSOPS（Dependabot PR自動運用）の内部設計。到達可能性判定・資産コンテキスト・優先度推薦・SBOMエクスポート・GitHub Issue自動起票/クローズ・DEPSOPSの自動マージ判定ロジック・GitHub OAuthログインを扱う。app/depscan/・app/depsops/・app/auth/配下の変更時に読む。
+description: DEPSCAN（GitHub全リポジトリの依存ライブラリ脆弱性スキャン）とDEPSOPS（Dependabot PR自動運用）の内部設計。到達可能性判定・資産コンテキスト・優先度推薦・SBOMエクスポート・GitHub Issue自動起票/クローズ・DEPSOPSの自動マージ判定ロジック・GitHub OAuthログイン・ユーザー別Slack通知登録（UserAccount、Issue #227）と登録済みユーザー向け定期実行を扱う。app/depscan/・app/depsops/・app/auth/・app/core/user_crawl_runner.py配下の変更時に読む。
 ---
 
 # DEPSCAN / DEPSOPS 内部実装リファレンス
@@ -211,15 +211,53 @@ Organization全体への一括デフォルト設定が無い）:
   同じ共通関数を使うが、戻り値を絞り込みには使わず「ログイン済みかどうか」のみを
   ゲートとして使う（詳細は`.claude/skills/codescan/SKILL.md`）
 - **オンデマンドスキャン**（`run_depscan_for_user`）: 毎日クロールは`GITHUB_USERNAME`
-  専用のため、任意アカウントはログイン時にその場でスキャンする。Slack通知・Issue起票・
-  `crawler_logs`記録は行わない。進捗は`UserScan`テーブルに記録し`/auth/scan-status`で
-  ポーリング取得。直近24時間以内に完了済みなら再スキャンをスキップ
+  専用のため、任意アカウントはログイン時にその場でスキャンする。`crawler_logs`記録は
+  行わない。進捗は`UserScan`テーブルに記録し`/auth/scan-status`でポーリング取得。
+  直近24時間以内に完了済みなら再スキャンをスキップ。Slack通知・GitHub Issue起票は、
+  本人がSlack Webhookを登録して通知を有効にしている場合のみ行う（Issue #227、詳細は
+  下記セクション）。未登録のまま単にログインしただけでは一切通知・起票しない
 - **`_resolve_stale_findings`のクロスユーザー事故防止**: `repo_owner_prefix`引数で
   そのユーザーのリポジトリのみに絞り込む（無絞り込みだと他ユーザーのfindingを誤って
   解決済み扱いにする）
 - **フロントエンド**（`DepscanAuthGate.tsx`）: ネットワーク瞬断等の一時的エラーでは
   ログアウトさせず、セッションが実際に無効（401）な場合のみログアウト扱いにする
   （`UnauthorizedError`で区別）
+
+## ユーザー別Slack通知登録とDEPSCAN/CODESCAN/DEPSOPSの定期実行（Issue #227、app/auth/、app/core/user_crawl_runner.py）
+DEPSCANのGitHubログインを土台に、任意のユーザーが自分専用のSlack Webhookを登録し、
+自分自身のリポジトリに対するDEPSCAN/CODESCAN/DEPSOPSの検知結果を受け取れる機能。
+
+- **`UserAccount`テーブル**（`app.auth.models`）: `github_username`を主キーに、
+  `github_access_token_encrypted`（Fernet暗号化、`app.core.crypto`。
+  `TOKEN_ENCRYPTION_KEY`未設定時は暗号化に失敗しトークン保存自体をスキップする
+  ソフトフェイル方針）・`slack_webhook_url`・`notifications_enabled`を持つ。
+  **ログインのたびに**`upsert_user_token`（`app.auth.account_store`）でトークンを
+  最新化する（従来はログイン直後のオンデマンドスキャン1回にしか使わず保存して
+  いなかったが、登録済みユーザー向けの定期実行に使うため永続化するよう変更した）
+- **`GET/PUT/DELETE /auth/notification-settings`**: Webhook登録・解除API。
+  `PUT`は`send_test_notification`で実際にテスト送信し、成功した場合のみDBへ保存する
+  （不正なURLを誤登録する事故を防ぐ）。バリデーションは`https://hooks.slack.com/`
+  プレフィックスの簡易チェックのみ（本物かどうかはテスト送信の成否で判断する）
+- **通知先の解決**（`app.core.notifications._resolve_recipients`）: `SLACK_WEBHOOK_URL`
+  環境変数は廃止し、`UserAccount`から動的解決する方式に移行した。KEV/OSV/JVN
+  （リポジトリに紐づかないグローバルな脅威情報）は通知有効な全登録ユーザーへ
+  ブロードキャスト、DEPSCAN/DEPSOPS/CODESCANの`GITHUB_USERNAME`向け毎日クロールは
+  `GITHUB_USERNAME`自身の登録Webhookにのみ送る。**`notify_error`だけは例外**で、
+  crawler_typeに関わらず常に管理者（`GITHUB_USERNAME`）自身のWebhookにのみ送る
+  （`_resolve_admin_recipient`。クローラー内部エラーは運用担当者向けの情報であり、
+  グローバル種別でも全登録ユーザーへ通知するとノイズ・情報漏洩になるため）
+- **`app.core.user_crawl_runner.run_user_crawls_for_all_accounts`**:
+  `GITHUB_USERNAME`以外で、かつSlack Webhookを登録・有効化しているユーザーのみを
+  対象に、本人のトークンでDEPSCAN→CODESCAN→DEPSOPSを順に実行し、削除済みリポジトリの
+  掃除（`app.core.repo_cleanup`）も行う。Webhook未登録者は対象外とする設計（通知先が
+  無いままDEPSOPSの自動マージのようなリポジトリ変更操作を行うのは想定外の驚きになる
+  ため、Webhook登録をopt-inのゲートとして使う）。`USER_CRAWL_CRON_HOUR_UTC`/
+  `MINUTE_UTC`で毎日実行、`POST /admin/user-crawl`で手動実行も可能
+- **Issue起票・PRマージの権限分離**: `app.depscan.issue_management._file_github_issues`・
+  `app.codescan.issue_management._file_github_issues`・`app.depsops.runner._process_repo`
+  にいずれも`token`引数（省略時`settings.GITHUB_TOKEN`）を追加した。`GITHUB_TOKEN`
+  （baby-feelings専用PAT）には他ユーザーのプライベートリポジトリへの書き込み権限が
+  無いため、登録済み他ユーザー向けの実行では必ず本人のトークンを明示的に渡す
 
 ## 公開ダッシュボード用キー（PUBLIC_API_KEY）と管理者用キー（API_KEY）の分離
 Vite の `VITE_` 接頭辞の環境変数はビルド時にJSバンドルへ平文で埋め込まれるため、

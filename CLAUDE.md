@@ -70,9 +70,10 @@ pip-audit -r requirements.txt --desc                   # 依存脆弱性確認�
 ```
 app/
 ├── main.py       # FastAPI アプリ・lifespan・スケジューラ登録・ルーター include
-├── auth/         # GitHub ログイン（DEPSCAN ダッシュボードのアクセス制御）
-├── core/         # 横断的インフラ: config/database/auth/background/crawler_runner/
-│                 #   db_utils/notifications/osv_client/pagination/stix/taxii/schemas
+├── auth/         # GitHubログイン・ユーザー別Slack通知登録（UserAccount/account_store）
+├── core/         # 横断的インフラ: config/database/auth/background/crawler_runner/crypto/
+│                 #   db_utils/notifications/osv_client/pagination/repo_cleanup/
+│                 #   user_crawl_runner/stix/taxii/schemas
 ├── kev/          # CISA KEV（models/schemas/crawler/stix/router）
 ├── osv/          # OSV（10エコシステム対応、+packages.py）
 ├── jvn/          # JVN（MyJVN API / RDF-RSS）
@@ -98,7 +99,7 @@ deploy/       # OCIデプロイ関連（deploy_to_oci.ps1・docker-compose.yml�
 |--------|------|
 | `api-usage` | 本番APIの使い方（curl例）・フィールド定義・エラーレスポンス |
 | `crawler-internals` | KEV/OSV/JVN共通基盤（retry/notifications/pagination等）・STIX/TAXII・Alembic |
-| `depscan-depsops` | DEPSCAN/DEPSOPSの検知・優先度推薦・SBOM・自動マージ判定・GitHub OAuth |
+| `depscan-depsops` | DEPSCAN/DEPSOPSの検知・優先度推薦・SBOM・自動マージ判定・GitHub OAuth・ユーザー別Slack通知登録 |
 | `codescan` | CODESCAN（Semgrep静的解析+gitleaks）の設計判断・tarball取得方式・CVSSベストエフォート推定・GitHubログイン必須化 |
 | `dashboard-frontend` | Reactダッシュボードのコンポーネント構成・集約ロジック |
 | `deployment-ops` | CI/CD・OCIデプロイ手順・環境変数・Prometheus/Grafana監視 |
