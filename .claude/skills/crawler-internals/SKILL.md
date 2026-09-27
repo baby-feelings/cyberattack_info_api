@@ -166,6 +166,25 @@ EPSS API 呼び出し失敗は他の保持期間削除処理と同様 try/except
 自体の成功可否には影響させない。`GET /api/vulnerabilities` の `min_epss` パラメータで
 絞り込み可能。
 
+## KEVの削除は「date_added基準の age-based」ではなく「現在のフィードに存在するか」で判定する（Issue #239で発覚した重大バグの修正）
+`_delete_stale_kev_records(db, current_cve_ids)` は、今回の `_fetch_cisa_kev()` で
+実在確認できた `cve_id` 集合に含まれないレコードのみを削除する。**以前は
+`date_added < cutoff`（`KEV_RETENTION_DAYS`=180日、OSV/JVNと同じ age-based 実装）
+だったが、これはKEVの特性と根本的に噛み合わない重大バグだった**: CISA KEVは
+追加専用の恒久的カタログで `date_added` は「カタログに追加された日」という不変の
+歴史的事実であり古さそのものには意味が無い。一方 `_fetch_cisa_kev()` はOSV/JVNの
+ような日数フィルタが無く**毎回カタログ全件（2021年以降の全履歴）を再取得**する。
+このためage-based削除は「毎晩180日超のエントリを大量削除 → 翌日の全件再取得で
+`_upsert_vulnerabilities` がそのまま新規INSERTとして復活」という無限ループを
+引き起こし、本番では実際に180日超のKEV履歴（2021〜2026年前半の大半）が失われ、
+Slack通知の新規追加・削除件数が毎回ほぼ同数（例: 新規1554/削除1555）という
+症状として現れた。`KEV_RETENTION_DAYS`設定自体も削除済み（未使用になったため）。
+OSV/JVNの`_delete_old_*_records`は日数フィルタ付きフェッチ（`OSV_DAYS`/`JVN_DAYS`
+=30日 < `*_RETENTION_DAYS`=180日）のため同種のバグは無い（削除対象は元々
+再フェッチ対象外の範囲）。DEPSCAN/CODESCAN/DEPSOPSも`resolved_at`基準
+（未解決レコードは対象外）またはappend-onlyログの`processed_at`基準で、
+外部フィードの再フェッチと衝突しないため安全（Issue #239の同一調査で確認済み）。
+
 ## 来歴・鮮度・差分API（Issue #129・KEV/OSV/JVN共通）
 - **`fetched_at`**: クローラーが取得元で最後に存在確認した日時。既存の`updated_at`
   （内容が実際に変わった時だけ更新）とは異なり、**変更が無かった回のクロールでも毎回

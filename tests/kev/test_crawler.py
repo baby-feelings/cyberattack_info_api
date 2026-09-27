@@ -199,7 +199,7 @@ def test_fetch_and_store_kev_integration():
         patch("app.kev.crawler._fetch_cisa_kev", return_value=SAMPLE_ENTRIES),
         patch("app.kev.crawler._upsert_vulnerabilities", return_value=(2, 0)),
         patch("app.kev.crawler._apply_epss_scores", return_value=0),
-        patch("app.kev.crawler._delete_old_kev_records", return_value=0),
+        patch("app.kev.crawler._delete_stale_kev_records", return_value=0),
         patch("app.core.crawler_runner.SessionLocal") as mock_session_cls,
         patch("app.core.crawler_runner.already_succeeded_today", return_value=False),
     ):
@@ -228,10 +228,19 @@ def test_fetch_and_store_kev_raises_http_error():
         mock_db.close.assert_called_once()
 
 
-# ── _delete_old_kev_records ──────────────────────────────────────
+# ── _delete_stale_kev_records ──────────────────────────────────────
 
 
-class TestDeleteOldKevRecords:
+class TestDeleteStaleKevRecords:
+    """Issue #239調査で発覚した、age-based削除（date_added基準）の重大バグの修正確認。
+
+    CISA KEVは追加専用の恒久的カタログで、date_addedが古いことは削除の理由にならない
+    （旧実装は毎晩フィード全体を再取得するKEVの特性と噛み合わず、180日超の履歴を
+    削除→翌日の全件再取得で復活、を無限に繰り返し本番データを実際に失っていた）。
+    正しい削除条件は「今回のCISAフィードに含まれない（=CISAがカタログから取り下げた）」
+    ことであり、date_addedの新旧では判定しない。
+    """
+
     def _make_vuln(self, cve_id: str, date_added: date) -> Vulnerability:
         return Vulnerability(
             cve_id=cve_id,
@@ -243,43 +252,55 @@ class TestDeleteOldKevRecords:
             date_added=date_added,
         )
 
-    def test_deletes_old_records(self, db_session: Session):
-        """保持期間（KEV_RETENTION_DAYS）を超えた古いレコードが削除されること。"""
-        from app.kev.crawler import _delete_old_kev_records
-
-        db_session.add(self._make_vuln("CVE-2000-0001", date(2000, 1, 1)))
-        db_session.commit()
-
-        deleted = _delete_old_kev_records(db_session)
-
-        assert deleted == 1
-        assert db_session.query(Vulnerability).count() == 0
-
-    def test_keeps_recent_records(self, db_session: Session):
-        """保持期間内の新しいレコードは削除されないこと。"""
-        from app.kev.crawler import _delete_old_kev_records
+    def test_deletes_records_not_in_current_feed(self, db_session: Session):
+        """現在のCISAフィードに存在しないレコードは、date_addedが最近でも削除される。"""
+        from app.kev.crawler import _delete_stale_kev_records
 
         db_session.add(self._make_vuln("CVE-2026-0001", date.today()))
         db_session.commit()
 
-        deleted = _delete_old_kev_records(db_session)
+        deleted = _delete_stale_kev_records(db_session, {"CVE-2026-9999"})
+
+        assert deleted == 1
+        assert db_session.query(Vulnerability).count() == 0
+
+    def test_keeps_records_still_in_current_feed_even_if_old(self, db_session: Session):
+        """date_addedが何年前でも、現在のCISAフィードに含まれていれば削除されない。"""
+        from app.kev.crawler import _delete_stale_kev_records
+
+        db_session.add(self._make_vuln("CVE-2000-0001", date(2000, 1, 1)))
+        db_session.commit()
+
+        deleted = _delete_stale_kev_records(db_session, {"CVE-2000-0001"})
 
         assert deleted == 0
         assert db_session.query(Vulnerability).count() == 1
 
     def test_empty_db_returns_zero(self, db_session: Session):
-        from app.kev.crawler import _delete_old_kev_records
+        from app.kev.crawler import _delete_stale_kev_records
 
-        assert _delete_old_kev_records(db_session) == 0
+        assert _delete_stale_kev_records(db_session, {"CVE-2026-0001"}) == 0
+
+    def test_empty_current_cve_ids_skips_deletion(self, db_session: Session):
+        """フィードが空を返した場合（API障害等）は、誤って全件削除しないようスキップする。"""
+        from app.kev.crawler import _delete_stale_kev_records
+
+        db_session.add(self._make_vuln("CVE-2026-0001", date.today()))
+        db_session.commit()
+
+        deleted = _delete_stale_kev_records(db_session, set())
+
+        assert deleted == 0
+        assert db_session.query(Vulnerability).count() == 1
 
     def test_delete_failure_does_not_fail_crawler(self):
-        """_delete_old_kev_records が失敗してもクローラー全体はエラーにならないこと。"""
+        """_delete_stale_kev_records が失敗してもクローラー全体はエラーにならないこと。"""
         with (
             patch("app.kev.crawler._fetch_cisa_kev", return_value=SAMPLE_ENTRIES),
             patch("app.kev.crawler._upsert_vulnerabilities", return_value=(2, 0)),
             patch("app.kev.crawler._apply_epss_scores", return_value=0),
             patch(
-                "app.kev.crawler._delete_old_kev_records",
+                "app.kev.crawler._delete_stale_kev_records",
                 side_effect=Exception("delete failed"),
             ),
             patch("app.core.crawler_runner.SessionLocal") as mock_session_cls,
@@ -301,7 +322,7 @@ class TestDeleteOldKevRecords:
                 "app.kev.crawler._apply_epss_scores",
                 side_effect=Exception("EPSS API down"),
             ),
-            patch("app.kev.crawler._delete_old_kev_records", return_value=0),
+            patch("app.kev.crawler._delete_stale_kev_records", return_value=0),
             patch("app.core.crawler_runner.SessionLocal") as mock_session_cls,
             patch("app.core.crawler_runner.already_succeeded_today", return_value=False),
         ):
