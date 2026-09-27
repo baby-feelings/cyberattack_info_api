@@ -89,6 +89,7 @@ app/
 tests/        # app/ と同じドメイン構成でミラーリング
 dashboard/    # Vercel デプロイの React ダッシュボード（KEV/OSV/JVN/DEPSCAN/CODESCAN の5タブ切替）
 alembic/      # DBスキーマのマイグレーション（env.py に新規モデルimportが必須）
+docs/         # README.mdから分離した詳細ドキュメント（API一覧・環境変数・デプロイ手順等）
 .github/workflows/  # ci.yml / deploy.yml / daily-crawl.yml / osv-scanner-*.yml / pip-audit.yml
 deploy/       # OCIデプロイ関連（deploy_to_oci.ps1・docker-compose.yml・Caddyfile・grafana/）
 ```
