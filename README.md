@@ -30,7 +30,7 @@ Claude Code や CI/CD ツールから「今まさに悪用されているサイ�
 | **クローラー実行ログ API** | KEV / OSV / JVN / DEPSCAN / CODESCAN クローラーの実行履歴（成否・件数・所要時間）を取得 |
 | **Dependabot PR 自動運用（DEPSOPS）** | 安全性の高い Dependabot PR（マイナー/パッチ更新・CI あり・コンフリクトなし）のみ自動マージ。判定履歴（自動マージ・要確認いずれも、セキュリティ更新かのヒューリスティック判定・Compatibility score バッジ含む）は `GET /api/depsops` で後から確認可能 |
 | **Slack 通知** | 新規追加・更新時に登録済みユーザーの Webhook へ自動通知（KEV / OSV / JVN / DEPSCAN / DEPSOPS / CODESCAN）。エラー通知のみ crawler_type に関わらず常に管理者（`GITHUB_USERNAME`）自身の Webhook にのみ送る |
-| **手動クロール** | `POST /admin/crawl` / `POST /admin/osv-crawl` / `POST /admin/jvn-crawl` / `POST /admin/depscan-crawl` / `POST /admin/codescan-crawl` / `POST /admin/dependabot-ops` / `POST /admin/repo-cleanup` / `POST /admin/user-crawl`（バックグラウンド 202 即時返却・`?days=N` 対応） |
+| **手動クロール** | `POST /admin/crawl` / `POST /admin/osv-crawl` / `POST /admin/jvn-crawl` / `POST /admin/depscan-crawl` / `POST /admin/codescan-crawl` / `POST /admin/dependabot-ops` / `POST /admin/repo-cleanup` / `POST /admin/user-crawl`（バックグラウンド 202 即時返却・`?days=N` 対応・KEV/OSV/JVN/DEPSCAN/CODESCAN/DEPSOPSは`?force=true`で同日重複実行スキップをバイパス可能） |
 | **API キー認証** | `X-API-KEY` ヘッダーによるシンプルな固定キー認証 |
 | **ヘルスチェック** | DB 接続確認付きの死活監視エンドポイント |
 | **React ダッシュボード** | CISA KEV・OSV（Pub 含む 10 エコシステム・180 日表示）・JVN・DEPSCAN（GitHub ログイン必須、本人所有リポジトリのみ表示。到達可能性の判定結果も表示）・CODESCAN（GitHub ログイン必須〈DEPSCANとセッション共有、オーナー絞り込みは無し〉、CVSSベストエフォート推定値・検知ツール種別バッジを表示）を画面下部固定タブ（5つ）で切り替え表示。Dependabot 運用状況＝DEPSOPS の判定履歴は DEPSCAN タブ内のボタンから開く全画面モーダルとして統合（Vercel デプロイ） |

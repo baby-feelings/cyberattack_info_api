@@ -183,10 +183,13 @@ def _delete_old_kev_records(db: Session) -> int:
     return deleted
 
 
-def fetch_and_store_kev() -> tuple[int, int, int]:
+def fetch_and_store_kev(*, force: bool = False) -> tuple[int, int, int]:
     """CISA KEV フィードを取得し DB に保存するメインエントリポイント。
     APScheduler および /admin/crawl から呼び出される。
     実行結果（成功・失敗・件数・所要時間）は crawler_logs テーブルに記録する。
+
+    Args:
+        force: True の場合、今日すでに成功実行済みでも強制的に再実行する（Issue #239）
 
     Returns:
         (inserted, updated, deleted) のタプル
@@ -209,4 +212,4 @@ def fetch_and_store_kev() -> tuple[int, int, int]:
         except Exception as exc:
             logger.error("Failed to delete old KEV records: %s", exc, exc_info=True)
 
-    return run_crawler("KEV", _body)
+    return run_crawler("KEV", _body, force=force)

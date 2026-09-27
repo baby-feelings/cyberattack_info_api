@@ -16,6 +16,7 @@ import httpx  # noqa: E402
 import pytest  # noqa: E402
 
 from app.core.notifications import notify_dependabot_ops  # noqa: E402
+from app.crawler_logs.models import CrawlerLog  # noqa: E402
 from app.depsops.classify import classify_bump  # noqa: E402
 from app.depsops.github_client import (  # noqa: E402
     get_pull_request,
@@ -424,6 +425,42 @@ class TestProcessPr:
             action, item = _process_pr("u/r", "u", "r", self._pr(), True, "token")
         assert action == "merged"
         assert item["compatibility_badge_url"] is None
+
+
+class TestRunDependabotOpsDeduplication:
+    """Issue #239: APScheduler・GitHub Actionsの二重トリガー対策。"""
+
+    def test_skips_when_already_succeeded_today(self, db_session):
+        db_session.add(DependabotPrLog(
+            repo_full_name="u/r", pr_number=1, title="t", action="merged",
+            processed_at=datetime.now(timezone.utc),
+        ))
+        db_session.add(CrawlerLog(
+            crawler_type="DEPSOPS", status="success",
+            started_at=datetime.now(timezone.utc), finished_at=datetime.now(timezone.utc),
+            duration_seconds=1.0,
+        ))
+        db_session.commit()
+
+        with patch("app.depsops.runner.list_target_repos") as mock_list_repos:
+            result = run_dependabot_ops()
+
+        assert result == (0, 0, 0)
+        mock_list_repos.assert_not_called()
+
+    def test_force_bypasses_the_skip(self, db_session):
+        db_session.add(CrawlerLog(
+            crawler_type="DEPSOPS", status="success",
+            started_at=datetime.now(timezone.utc), finished_at=datetime.now(timezone.utc),
+            duration_seconds=1.0,
+        ))
+        db_session.commit()
+
+        with patch("app.depsops.runner.list_target_repos", return_value=[]), \
+             patch("app.depsops.runner.notify_dependabot_ops"):
+            merged_count, flagged_count, error_count = run_dependabot_ops(force=True)
+
+        assert (merged_count, flagged_count, error_count) == (0, 0, 0)
 
 
 class TestRunDependabotOps:
@@ -908,3 +945,14 @@ class TestAdminDependabotOps:
             res = client.post("/admin/dependabot-ops", headers=HEADERS)
         assert res.status_code == 202
         assert "background" in res.json()["message"].lower()
+
+    def test_force_query_param_is_passed_through(self, client):
+        """?force=true が run_dependabot_ops(force=True) に渡ること（Issue #239）。"""
+        with patch(
+            "app.depsops.router.run_in_background", side_effect=lambda name, fn: fn(),
+        ), patch(
+            "app.depsops.router.run_dependabot_ops", return_value=(0, 0, 0),
+        ) as mock_run:
+            res = client.post("/admin/dependabot-ops?force=true", headers=HEADERS)
+        assert res.status_code == 202
+        mock_run.assert_called_once_with(force=True)

@@ -46,10 +46,14 @@ admin_router = APIRouter(tags=["admin"])
     "結果は /api/crawler-logs（crawler_type=DEPSOPS）および /api/depsops で確認。",
     status_code=202,
 )
-def trigger_dependabot_ops() -> dict:
+def trigger_dependabot_ops(
+    force: bool = Query(
+        False, description="今日すでに成功実行済みでも強制的に再実行する（Issue #239）",
+    ),
+) -> dict:
     """Dependabot PR 自動運用（DEPSOPS）をバックグラウンドで実行する。"""
-    logger.info("Manual DEPSOPS triggered via /admin/dependabot-ops")
-    run_in_background("DEPSOPS", run_dependabot_ops)
+    logger.info("Manual DEPSOPS triggered via /admin/dependabot-ops (force=%s)", force)
+    run_in_background("DEPSOPS", lambda: run_dependabot_ops(force=force))
     return {"message": "Dependabot PR operations started in background"}
 
 

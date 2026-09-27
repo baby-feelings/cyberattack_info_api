@@ -47,6 +47,17 @@ PR 作成・main/develop へのプッシュで自動実行。
 OCIインスタンスのドメイン（インスタンスを作り直した場合はここも更新）。GitHub Secretsに
 `API_KEY`の設定が必要。
 
+**同日重複実行の防止（Issue #239）**: 「二重バックアップ」という設計意図どおり、この
+daily-crawl.ymlは無条件に毎日発火する。OCI移行後はAPSchedulerが確実に動作するため、
+実質的にバックアップではなく常に二重実行（1日2回）になっていた。KEV/OSV/JVN/DEPSCAN/
+CODESCANはUpsertのため二重実行の実害は薄いが、DEPSOPSは実行ごとに1PRにつき1行追記する
+ログ設計のため件数が二重に膨れ上がっていた（本番で総件数2388件中約半数が重複）。
+`app.core.crawler_runner.already_succeeded_today`（KEV/OSV/JVN/CODESCANは
+`run_crawler`経由、DEPSCAN/DEPSOPSは各エントリポイント内で直接呼ぶ）が、今日
+（UTC日付）すでに成功実行済みなら2回目の実行を自動的にスキップする。動作確認等で
+明示的に同日再実行したい場合は、各`/admin/*`エンドポイントに`?force=true`を付与する
+（GitHub Actions・APSchedulerの自動トリガーは常に`force`無し=Falseで呼ぶ）。
+
 ## OCI本番デプロイ手順（手動、都度実行）
 1. **SCP転送**: `deploy/deploy_to_oci.ps1`相当の手順、または変更範囲に応じて個別に
    `scp -i <key> -r .\app\* ubuntu@168.138.213.240:/home/ubuntu/cyberattack_info_api/app/`

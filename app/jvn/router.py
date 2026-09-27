@@ -48,10 +48,13 @@ def trigger_jvn_crawl(
     days: int | None = Query(
         None, ge=1, le=365, description="取得対象の直近日数（省略時は JVN_DAYS）"
     ),
+    force: bool = Query(
+        False, description="今日すでに成功実行済みでも強制的に再実行する（Issue #239）",
+    ),
 ) -> dict:
     """JVN クローラーをバックグラウンドで実行する。"""
-    logger.info("Manual JVN crawl triggered via /admin/jvn-crawl (days=%s)", days)
-    run_in_background("JVN", lambda: fetch_and_store_jvn(days=days))
+    logger.info("Manual JVN crawl triggered via /admin/jvn-crawl (days=%s, force=%s)", days, force)
+    run_in_background("JVN", lambda: fetch_and_store_jvn(days=days, force=force))
     return {"message": f"JVN crawl started in background (days={days or 'default'})"}
 
 

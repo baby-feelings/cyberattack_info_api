@@ -274,6 +274,17 @@ class TestAdminDepscanCrawl:
         res = client.post("/admin/depscan-crawl")
         assert res.status_code == 403
 
+    def test_force_query_param_is_passed_through(self, client):
+        """?force=true が fetch_and_scan_dependencies(force=True) に渡ること（Issue #239）。"""
+        with patch(
+            "app.depscan.router.run_in_background", side_effect=lambda name, fn: fn(),
+        ), patch(
+            "app.depscan.router.fetch_and_scan_dependencies", return_value=(0, 0, 0),
+        ) as mock_fetch:
+            res = client.post("/admin/depscan-crawl?force=true", headers=HEADERS)
+        assert res.status_code == 202
+        mock_fetch.assert_called_once_with(force=True)
+
 
 # ──────────────────────────────────────────────────────────────
 # GET /api/depscan/assets, PUT /admin/depscan/assets/{owner}/{repo}
@@ -1092,6 +1103,53 @@ class TestDeleteOldDepscanRecords:
         from app.depscan.crawler import _delete_old_depscan_records
 
         assert _delete_old_depscan_records(db_session) == 0
+
+
+class TestFetchAndScanDependenciesDeduplication:
+    """Issue #239: APScheduler・GitHub Actionsの二重トリガー対策。"""
+
+    def test_skips_when_already_succeeded_today(self, db_session):
+        from datetime import datetime, timezone
+
+        from app.crawler_logs.models import CrawlerLog
+
+        db_session.add(CrawlerLog(
+            crawler_type="DEPSCAN", status="success",
+            started_at=datetime.now(timezone.utc), finished_at=datetime.now(timezone.utc),
+            duration_seconds=1.0,
+        ))
+        db_session.commit()
+
+        with patch("app.depscan.crawler._collect_dependencies") as mock_collect:
+            result = fetch_and_scan_dependencies()
+
+        assert result == (0, 0, 0)
+        mock_collect.assert_not_called()
+
+    def test_force_bypasses_the_skip(self, db_session):
+        from datetime import datetime, timezone
+
+        from app.crawler_logs.models import CrawlerLog
+
+        db_session.add(CrawlerLog(
+            crawler_type="DEPSCAN", status="success",
+            started_at=datetime.now(timezone.utc), finished_at=datetime.now(timezone.utc),
+            duration_seconds=1.0,
+        ))
+        db_session.commit()
+
+        with patch(
+            "app.depscan.crawler._collect_dependencies", return_value=({}, 0, {}),
+        ), patch(
+            "app.depscan.crawler._build_findings", return_value=[],
+        ), patch("app.depscan.crawler.SessionLocal", return_value=db_session), \
+           patch("app.depscan.crawler._apply_reachability"), \
+           patch("app.depscan.crawler.notify_dependency_findings"), \
+           patch("app.depscan.crawler._file_github_issues"):
+            db_session.close = MagicMock()
+            new_count, resolved_count, repos_scanned = fetch_and_scan_dependencies(force=True)
+
+        assert repos_scanned == 0
 
 
 class TestFetchAndScanDependencies:

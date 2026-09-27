@@ -13,6 +13,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.crawler_runner import already_succeeded_today
 from app.core.database import SessionLocal
 from app.core.notifications import notify_dependency_findings, notify_error
 from app.core.osv_client import fetch_vuln_by_id, parse_severity, query_versions_batch
@@ -324,17 +325,24 @@ def _delete_old_depscan_records(db: Session) -> int:
     return deleted
 
 
-def fetch_and_scan_dependencies() -> tuple[int, int, int]:
+def fetch_and_scan_dependencies(*, force: bool = False) -> tuple[int, int, int]:
     """DEPSCAN のメインエントリポイント。
 
     GitHub 上の全対象リポジトリのロックファイルを収集し、OSV API と照合して
     脆弱な依存パッケージを検知する。結果は crawler_logs に記録し、
     新規検知があれば Slack に通知する。APScheduler から毎日呼び出される。
 
+    Args:
+        force: True の場合、今日すでに成功実行済みでも強制的に再実行する（Issue #239）
+
     Returns:
-        (new_findings, resolved, repos_scanned) のタプル
+        (new_findings, resolved, repos_scanned) のタプル（スキップ時は (0, 0, 0)）
     """
     logger.info("=== DEPSCAN started ===")
+    if not force and already_succeeded_today("DEPSCAN"):
+        logger.info("DEPSCAN already succeeded today (UTC), skipping duplicate run")
+        return 0, 0, 0
+
     started_at = now_utc()
     new_count = 0
     resolved_count = 0

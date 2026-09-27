@@ -48,10 +48,14 @@ admin_router = APIRouter(tags=["admin"])
     "バックグラウンドで開始する（X-API-KEY 必須）。結果は /api/crawler-logs で確認。",
     status_code=202,
 )
-def trigger_codescan_crawl() -> CodescanCrawlResponse:
+def trigger_codescan_crawl(
+    force: bool = Query(
+        False, description="今日すでに成功実行済みでも強制的に再実行する（Issue #239）",
+    ),
+) -> CodescanCrawlResponse:
     """自アプリコード脆弱性スキャナーをバックグラウンドで実行する。"""
-    logger.info("Manual CODESCAN triggered via /admin/codescan-crawl")
-    run_in_background("CODESCAN", fetch_and_scan_code)
+    logger.info("Manual CODESCAN triggered via /admin/codescan-crawl (force=%s)", force)
+    run_in_background("CODESCAN", lambda: fetch_and_scan_code(force=force))
     return CodescanCrawlResponse(message="Code vulnerability scan started in background")
 
 

@@ -53,10 +53,14 @@ admin_router = APIRouter(tags=["admin"])
     "バックグラウンドで開始する（X-API-KEY 必須）。結果は /api/crawler-logs で確認。",
     status_code=202,
 )
-def trigger_depscan_crawl() -> dict:
+def trigger_depscan_crawl(
+    force: bool = Query(
+        False, description="今日すでに成功実行済みでも強制的に再実行する（Issue #239）",
+    ),
+) -> dict:
     """依存ライブラリ脆弱性スキャナーをバックグラウンドで実行する。"""
-    logger.info("Manual DEPSCAN triggered via /admin/depscan-crawl")
-    run_in_background("DEPSCAN", fetch_and_scan_dependencies)
+    logger.info("Manual DEPSCAN triggered via /admin/depscan-crawl (force=%s)", force)
+    run_in_background("DEPSCAN", lambda: fetch_and_scan_dependencies(force=force))
     return {"message": "Dependency vulnerability scan started in background"}
 
 # `X-API-KEY` または `Authorization: Bearer <session token>` を検証する。

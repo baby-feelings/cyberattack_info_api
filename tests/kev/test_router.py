@@ -425,3 +425,19 @@ def test_admin_crawl_success(client: TestClient, monkeypatch):
     assert response.status_code == 202
     body = response.json()
     assert "background" in body["message"].lower()
+
+
+def test_admin_crawl_force_query_param_is_passed_through(client: TestClient, monkeypatch):
+    """?force=true が fetch_and_store_kev(force=True) に渡ること（Issue #239）。"""
+    monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+    with patch(
+        "app.kev.router.run_in_background", side_effect=lambda name, fn: fn(),
+    ), patch(
+        "app.kev.router.fetch_and_store_kev", return_value=(0, 0, 0),
+    ) as mock_fetch:
+        response = client.post(
+            "/admin/crawl?force=true",
+            headers={"X-API-KEY": TEST_API_KEY},
+        )
+    assert response.status_code == 202
+    mock_fetch.assert_called_once_with(force=True)

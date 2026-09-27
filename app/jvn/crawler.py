@@ -206,11 +206,12 @@ def _delete_old_jvn_records(db: Session) -> int:
     return deleted
 
 
-def fetch_and_store_jvn(days: int | None = None) -> tuple[int, int, int]:
+def fetch_and_store_jvn(days: int | None = None, *, force: bool = False) -> tuple[int, int, int]:
     """MyJVN API から脆弱性情報を取得して DB に保存する。
 
     Args:
         days: 取得対象の直近日数（None の場合は settings.JVN_DAYS を使用）
+        force: True の場合、今日すでに成功実行済みでも強制的に再実行する（Issue #239）
 
     Returns:
         (inserted, updated, deleted) のタプル
@@ -231,4 +232,4 @@ def fetch_and_store_jvn(days: int | None = None) -> tuple[int, int, int]:
         except Exception as exc:
             logger.error("Failed to delete old JVN records: %s", exc, exc_info=True)
 
-    return run_crawler("JVN", _body)
+    return run_crawler("JVN", _body, force=force)

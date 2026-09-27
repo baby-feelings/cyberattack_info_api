@@ -81,6 +81,16 @@ counters の値を crawler_logs に反映する**（OSV はエコシステム単
 クロージャとして渡すTemplate Methodのコールバックであり、直接の呼び出し元が見えない
 （静的解析で「呼び出し元なし」と誤検知されやすい）。削除しないこと。
 
+**同日重複実行の防止（Issue #239）**: `run_crawler`は本体処理の前に
+`already_succeeded_today(crawler_type)`を確認し、今日（UTC日付）既に`status="success"`の
+`crawler_logs`レコードがあれば`body`を呼ばずに`(0, 0, 0)`を返す。APSchedulerとGitHub
+Actions（daily-crawl.yml、「バックアップ」目的で無条件に毎日発火）の二重トリガーにより、
+全クローラーが実質1日2回実行されていた対策。`force: bool`引数（各`fetch_and_store_*`・
+`/admin/*-crawl`の`?force=true`クエリパラメータから伝播）でこのスキップを明示的に
+バイパスできる（動作確認等の手動再実行用）。DEPSCAN/DEPSOPSは`run_crawler`を使わない
+独自オーケストレーションのため、`already_succeeded_today`を各エントリポイント内で
+直接呼んでいる（詳細は`depscan-depsops`スキル参照）。
+
 ## /admin/*-crawl はバックグラウンド実行（202 即時返却）
 `/admin/crawl`（KEV）・`/admin/osv-crawl`・`/admin/jvn-crawl`・`/admin/depscan-crawl`・
 `/admin/codescan-crawl`・`/admin/dependabot-ops`・`/admin/repo-cleanup`（Issue #228）・

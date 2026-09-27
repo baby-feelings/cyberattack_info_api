@@ -507,7 +507,7 @@ def _run_codescan_body(db: Session, counters: CrawlCounters) -> None:
         logger.error("CODESCAN: failed to file GitHub issues: %s", exc, exc_info=True)
 
 
-def fetch_and_scan_code() -> tuple[int, int, int]:
+def fetch_and_scan_code(*, force: bool = False) -> tuple[int, int, int]:
     """CODESCAN のメインエントリポイント。
 
     GitHub 上の全対象リポジトリのソースコードを Semgrep で静的解析し、自アプリの
@@ -515,13 +515,16 @@ def fetch_and_scan_code() -> tuple[int, int, int]:
     あれば Slack に通知する（`app.core.crawler_runner.run_crawler` 経由）。
     APScheduler から毎日呼び出される。
 
+    Args:
+        force: True の場合、今日すでに成功実行済みでも強制的に再実行する（Issue #239）
+
     Returns:
         (inserted, updated, deleted) のタプル
         （inserted=新規検知件数, updated=保持期間超過の削除件数,
         deleted=今回解決済みにした件数）
     """
     logger.info("=== CODESCAN started ===")
-    result = run_crawler("CODESCAN", _run_codescan_body)
+    result = run_crawler("CODESCAN", _run_codescan_body, force=force)
     logger.info(
         "=== CODESCAN completed: inserted=%d, updated=%d, deleted=%d ===", *result,
     )

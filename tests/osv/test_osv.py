@@ -711,6 +711,17 @@ class TestAdminOsvCrawl:
         res = client.post("/admin/osv-crawl")
         assert res.status_code == 403
 
+    def test_force_query_param_is_passed_through(self, client):
+        """?force=true が fetch_and_store_osv(force=True) に渡ること（Issue #239）。"""
+        with patch(
+            "app.osv.router.run_in_background", side_effect=lambda name, fn: fn(),
+        ), patch(
+            "app.osv.router.fetch_and_store_osv", return_value=(0, 0, 0),
+        ) as mock_fetch:
+            res = client.post("/admin/osv-crawl?force=true", headers=HEADERS)
+        assert res.status_code == 202
+        mock_fetch.assert_called_once_with(days=None, force=True)
+
 
 # ──────────────────────────────────────────────────────────────
 # _upsert_osv_records — コミット失敗パス
@@ -826,8 +837,11 @@ class TestFetchAndStoreOsvAdditional:
             with patch("app.core.crawler_runner.notify_error") as mock_notify:
                 with patch("app.core.crawler_runner.SessionLocal") as mock_sl:
                     mock_sl.return_value = MagicMock()
-                    with _pytest.raises(RuntimeError, match="outer error"):
-                        fetch_and_store_osv()
+                    with patch(
+                        "app.core.crawler_runner.already_succeeded_today", return_value=False,
+                    ):
+                        with _pytest.raises(RuntimeError, match="outer error"):
+                            fetch_and_store_osv()
 
         mock_notify.assert_called_once()
         assert "outer error" in mock_notify.call_args[0][1]
