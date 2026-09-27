@@ -247,7 +247,7 @@ class TestCrawlerLogIntegration:
 
         with patch("app.kev.crawler._fetch_cisa_kev", return_value=mock_entries), \
              patch("app.kev.crawler._upsert_vulnerabilities", return_value=(1, 0)), \
-             patch("app.kev.crawler._delete_old_kev_records", return_value=0), \
+             patch("app.kev.crawler._delete_stale_kev_records", return_value=0), \
              patch("app.core.crawler_runner.notify_success"), \
              patch("app.core.crawler_runner.write_crawler_log") as mock_log, \
              patch("app.core.crawler_runner.SessionLocal"), \

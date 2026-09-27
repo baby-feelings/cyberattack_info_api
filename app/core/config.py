@@ -31,9 +31,6 @@ class Settings(BaseSettings):
     OSV_CRON_HOUR_UTC: int = 20   # OSV: JST 5:00 = UTC 20:00
     JVN_CRON_HOUR_UTC: int = 21   # JVN: JST 6:00 = UTC 21:00
 
-    # KEV データの保持期間（日数）: この日数より古い date_added レコードを定期削除する
-    KEV_RETENTION_DAYS: int = 180
-
     # Slack 通知用 Webhook URL（未設定時は通知をスキップ）
     SLACK_WEBHOOK_URL: str = ""
 

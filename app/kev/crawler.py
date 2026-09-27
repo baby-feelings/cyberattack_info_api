@@ -3,7 +3,7 @@
 脆弱性情報を取得し、DB に Upsert する定期バッチ処理を担う。
 """
 import logging
-from datetime import date, timedelta
+from datetime import date
 from typing import Any
 
 import httpx
@@ -164,22 +164,41 @@ def _apply_epss_scores(db: Session) -> int:
     return updated
 
 
-def _delete_old_kev_records(db: Session) -> int:
-    """保持期間（KEV_RETENTION_DAYS）を超えた KEV レコードを削除する。
+def _delete_stale_kev_records(db: Session, current_cve_ids: set[str]) -> int:
+    """CISA KEV フィードに現在含まれなくなったレコードを削除する。
 
-    date_added が cutoff より古いレコードを一括削除して DB 容量を管理する。
+    以前は `date_added` が `KEV_RETENTION_DAYS`（180日）より古いレコードを削除する
+    age-based 実装だったが、これは重大なバグだった。CISA KEV は基本的に追加専用の
+    恒久的なカタログで、`date_added`（カタログに追加された日）はエントリが古くなっても
+    削除される理由にならない。しかし `_fetch_cisa_kev` は毎回カタログ全件（2021年以降の
+    全履歴、時間フィルタなし）を再取得するため、age-based 削除は「毎晩180日超のエントリを
+    大量削除 → 翌日の全件再取得で `_upsert_vulnerabilities` がそのまま新規INSERTとして
+    復活」という無限ループを引き起こしていた。本番では実際にこれが発生し、180日を超える
+    KEV履歴（2021〜2026年前半の大半）が失われていた（Issue #239の調査中に発見）。
+
+    正しい削除条件は「CISAが実際にカタログから取り下げた（今回のフィードに含まれない）」
+    ことであり、`date_added` の新旧ではなく `current_cve_ids`（今回のフェッチで実在確認
+    できた cve_id 集合）に含まれるかどうかで判定する。
+
+    Args:
+        current_cve_ids: 今回のクロールで CISA フィードに実在した cve_id の集合
 
     Returns:
         削除件数
     """
-    cutoff = date.today() - timedelta(days=settings.KEV_RETENTION_DAYS)
+    if not current_cve_ids:
+        # フィード取得自体が空リストを返すのは CISA 側 API 障害等の異常系の可能性が高く、
+        # それを理由に全件削除してしまう事故を避ける（フェッチ失敗時は例外で detect される
+        # ため、ここに来るのは「取得は成功したが空だった」ケースのみ）
+        logger.warning("KEV: current_cve_ids is empty, skipping stale record deletion")
+        return 0
     deleted = (
         db.query(Vulnerability)
-        .filter(Vulnerability.date_added < cutoff)
+        .filter(Vulnerability.cve_id.notin_(current_cve_ids))
         .delete(synchronize_session=False)
     )
     db.commit()
-    logger.info("KEV old records deleted: %d (date_added < %s)", deleted, cutoff)
+    logger.info("KEV stale records deleted: %d (not in current CISA feed)", deleted)
     return deleted
 
 
@@ -199,6 +218,7 @@ def fetch_and_store_kev(*, force: bool = False) -> tuple[int, int, int]:
     def _body(db: Session, counters: CrawlCounters) -> None:
         entries = _fetch_cisa_kev()
         counters.inserted, counters.updated = _upsert_vulnerabilities(db, entries)
+        current_cve_ids = {e["cveID"] for e in entries if e.get("cveID")}
 
         # EPSS スコアの更新。失敗してもKEVクロール自体は成功扱いとする
         try:
@@ -206,10 +226,10 @@ def fetch_and_store_kev(*, force: bool = False) -> tuple[int, int, int]:
         except Exception as exc:
             logger.error("Failed to update EPSS scores: %s", exc, exc_info=True)
 
-        # 保持期間を超えた古いレコードを削除（DB 容量管理）。失敗してもクロール自体は成功扱いとする
+        # CISAフィードから取り下げられたレコードを削除。失敗してもクロール自体は成功扱いとする
         try:
-            counters.deleted = _delete_old_kev_records(db)
+            counters.deleted = _delete_stale_kev_records(db, current_cve_ids)
         except Exception as exc:
-            logger.error("Failed to delete old KEV records: %s", exc, exc_info=True)
+            logger.error("Failed to delete stale KEV records: %s", exc, exc_info=True)
 
     return run_crawler("KEV", _body, force=force)
