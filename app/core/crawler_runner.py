@@ -13,15 +13,48 @@ Slack 通知 → DB セッションクローズ」という定型処理を一元
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime, time, timezone
 
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
 from app.core.notifications import notify_error, notify_success
 from app.core.types import CrawlerType
+from app.crawler_logs.models import CrawlerLog
 from app.crawler_logs.writer import now_utc, write_crawler_log
 
 logger = logging.getLogger(__name__)
+
+
+def already_succeeded_today(crawler_type: CrawlerType) -> bool:
+    """指定クローラー種別が、今日（UTC日付）既に成功実行済みかを確認する（Issue #239）。
+
+    本アプリはクローラーの起動経路を2つ持つ: (1) アプリ内部の APScheduler（各
+    settings.*_CRON_HOUR_UTC で毎日発火）、(2) GitHub Actions の daily-crawl.yml
+    （「APSchedulerがネットワーク障害等で不発火だった場合のバックアップ」として
+    無条件に毎日発火）。OCI移行後はAPSchedulerが確実に動作するため、実質的に
+    バックアップではなく常に二重実行になっていた。KEV/OSV/JVN/DEPSCAN/CODESCANは
+    自然キーのUpsertのため二重実行の実害は小さいが、DEPSOPSは実行ごとに1行追記する
+    ログ設計のため件数が二重に膨れ上がっていた（本番で2388件中約半数が重複）。
+
+    どちらが先に発火しても「その日2回目の実行」を検知してスキップできるよう、
+    実行順ではなく「今日すでに成功記録があるか」で判定する。
+    """
+    db = SessionLocal()
+    try:
+        today_start_utc = datetime.combine(now_utc().date(), time.min, tzinfo=timezone.utc)
+        existing = (
+            db.query(CrawlerLog)
+            .filter(
+                CrawlerLog.crawler_type == crawler_type,
+                CrawlerLog.status == "success",
+                CrawlerLog.started_at >= today_start_utc,
+            )
+            .first()
+        )
+        return existing is not None
+    finally:
+        db.close()
 
 
 @dataclass
@@ -39,19 +72,30 @@ class CrawlCounters:
 def run_crawler(
     crawler_type: CrawlerType,
     body: Callable[[Session, CrawlCounters], None],
+    *,
+    force: bool = False,
 ) -> tuple[int, int, int]:
     """クローラーの共通実行ラッパー。
 
     Args:
         crawler_type: "KEV" / "OSV" / "JVN"
         body: (db, counters) を受け取り、counters を更新しながら本体処理を行う関数
+        force: True の場合、今日すでに成功実行済みでも強制的に再実行する
+            （動作確認等の明示的な手動再実行用。APScheduler・GitHub Actions の
+            自動トリガーは常に False で呼ぶ、Issue #239）
 
     Returns:
-        (inserted, updated, deleted) のタプル
+        (inserted, updated, deleted) のタプル（スキップ時は (0, 0, 0)）
 
     Raises:
         body 内で処理されず伝播した例外（crawler_logs への記録・Slack通知の後、再送出する）
     """
+    if not force and already_succeeded_today(crawler_type):
+        logger.info(
+            "%s crawler already succeeded today (UTC), skipping duplicate run", crawler_type,
+        )
+        return 0, 0, 0
+
     started_at = now_utc()
     counters = CrawlCounters()
     db: Session = SessionLocal()

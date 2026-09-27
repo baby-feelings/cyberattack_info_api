@@ -21,6 +21,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.crawler_runner import already_succeeded_today
 from app.core.database import SessionLocal
 from app.core.notifications import notify_dependabot_ops, notify_error
 from app.crawler_logs.writer import now_utc, write_crawler_log
@@ -347,13 +348,22 @@ def _scan_target_repos(
     return merged, flagged, resolved, error_count
 
 
-def run_dependabot_ops() -> tuple[int, int, int]:
+def run_dependabot_ops(*, force: bool = False) -> tuple[int, int, int]:
     """DEPSOPS のメインエントリポイント。
 
+    Args:
+        force: True の場合、今日すでに成功実行済みでも強制的に再実行する（Issue #239）。
+            DEPSOPSは実行ごとに1PRにつき1行追記するログ設計のため、二重実行が
+            そのまま件数の二重化に直結する（本番で総件数2388件中約半数が重複だった）。
+
     Returns:
-        (merged_count, flagged_count, error_count) のタプル
+        (merged_count, flagged_count, error_count) のタプル（スキップ時は (0, 0, 0)）
     """
     logger.info("=== DEPSOPS started ===")
+    if not force and already_succeeded_today("DEPSOPS"):
+        logger.info("DEPSOPS already succeeded today (UTC), skipping duplicate run")
+        return 0, 0, 0
+
     started_at = now_utc()
     merged: list[dict[str, Any]] = []
     flagged: list[dict[str, Any]] = []

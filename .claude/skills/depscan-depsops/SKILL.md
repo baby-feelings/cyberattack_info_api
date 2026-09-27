@@ -113,6 +113,16 @@ OWASP Top 10:2025「ソフトウェアサプライチェーンの失敗」対策
 スキャンで解決済みにした件数（削除ではない）、`updated`=保持期間超過の**実削除**件数
 （DEPSCANの`updated`は元々常に0だったため、新カラムを追加せずここへ格納している）。
 
+## DEPSCAN/DEPSOPSの同日重複実行防止（Issue #239、`app.core.crawler_runner.already_succeeded_today`）
+`fetch_and_scan_dependencies`・`run_dependabot_ops`は`run_crawler`を使わない独自
+オーケストレーションのため、それぞれのエントリポイント冒頭で直接`already_succeeded_today`
+を呼び、今日（UTC日付）既に成功実行済みなら`(0, 0, 0)`を返してスキップする（KEV/OSV/JVN/
+CODESCANは`run_crawler`内で同じ判定を共通で行う。詳細は`crawler-internals`スキル参照）。
+**DEPSOPSはこの対策が特に重要**: 実行ごとに1PRにつき1行追記するログ設計のため、APScheduler
+とGitHub Actions（daily-crawl.yml）の二重トリガーで1日2回実行されると件数がそのまま
+二重化する（本番で総件数2388件中約半数が重複していた）。`force=True`（`/admin/dependabot-ops
+?force=true`）で明示的にバイパス可能。
+
 ## DEPSOPS（app/depsops/）: Dependabot PR の安全な自動マージ運用層
 DEPSCAN（検知）・Dependabot（修正PR作成）に続く3層目として、**安全性が高いPRだけを
 自動マージする**運用層。`POST /admin/dependabot-ops`から`run_dependabot_ops`を呼ぶ

@@ -46,10 +46,14 @@ admin_router = APIRouter(tags=["admin"])
     "結果は /api/crawler-logs で確認。",
     status_code=202,
 )
-def trigger_crawl() -> dict:
+def trigger_crawl(
+    force: bool = Query(
+        False, description="今日すでに成功実行済みでも強制的に再実行する（Issue #239）",
+    ),
+) -> dict:
     """CISA KEV クローラーをバックグラウンドで実行する。"""
-    logger.info("Manual crawl triggered via /admin/crawl")
-    run_in_background("KEV", fetch_and_store_kev)
+    logger.info("Manual crawl triggered via /admin/crawl (force=%s)", force)
+    run_in_background("KEV", lambda: fetch_and_store_kev(force=force))
     return {"message": "KEV crawl started in background"}
 
 

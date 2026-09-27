@@ -141,3 +141,14 @@ class TestTriggerCodescanCrawl:
         assert resp.status_code == 202
         mock_bg.assert_called_once()
         assert mock_bg.call_args[0][0] == "CODESCAN"
+
+    def test_force_query_param_is_passed_through(self, client):
+        """?force=true が fetch_and_scan_code(force=True) に渡ること（Issue #239）。"""
+        with patch(
+            "app.codescan.router.run_in_background", side_effect=lambda name, fn: fn(),
+        ), patch(
+            "app.codescan.router.fetch_and_scan_code", return_value=(0, 0, 0),
+        ) as mock_fetch:
+            resp = client.post("/admin/codescan-crawl?force=true", headers=HEADERS)
+        assert resp.status_code == 202
+        mock_fetch.assert_called_once_with(force=True)

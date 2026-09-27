@@ -148,6 +148,26 @@ def test_list_jvn_requires_api_key(client):
     assert resp.status_code == 403
 
 
+def test_admin_jvn_crawl_requires_auth(client):
+    """POST /admin/jvn-crawl は API キーなしで 403 を返すこと。"""
+    resp = client.post("/admin/jvn-crawl")
+    assert resp.status_code == 403
+
+
+def test_admin_jvn_crawl_force_query_param_is_passed_through(client):
+    """?force=true が fetch_and_store_jvn(force=True) に渡ること（Issue #239）。"""
+    with patch(
+        "app.jvn.router.run_in_background", side_effect=lambda name, fn: fn(),
+    ), patch(
+        "app.jvn.router.fetch_and_store_jvn", return_value=(0, 0, 0),
+    ) as mock_fetch:
+        resp = client.post(
+            "/admin/jvn-crawl?force=true", headers={"X-API-KEY": TEST_API_KEY},
+        )
+    assert resp.status_code == 202
+    mock_fetch.assert_called_once_with(days=None, force=True)
+
+
 def test_get_jvn_stats_empty(client):
     """データなしの場合は統計が空で返る。"""
     resp = client.get("/api/jvn/stats", headers={"X-API-KEY": TEST_API_KEY})

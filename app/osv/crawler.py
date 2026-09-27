@@ -263,7 +263,7 @@ def _process_ecosystem(
         )
 
 
-def fetch_and_store_osv(days: int | None = None) -> tuple[int, int, int]:
+def fetch_and_store_osv(days: int | None = None, *, force: bool = False) -> tuple[int, int, int]:
     """OSV クローラーのメインエントリポイント。
 
     OSV REST API を使い、各エコシステムの主要パッケージに影響する脆弱性を
@@ -273,6 +273,7 @@ def fetch_and_store_osv(days: int | None = None) -> tuple[int, int, int]:
 
     Args:
         days: 取得対象の直近日数（None の場合は settings.OSV_DAYS を使用）
+        force: True の場合、今日すでに成功実行済みでも強制的に再実行する（Issue #239）
 
     Returns:
         (inserted, updated, deleted) のタプル
@@ -291,4 +292,4 @@ def fetch_and_store_osv(days: int | None = None) -> tuple[int, int, int]:
         except Exception as exc:
             logger.error("Failed to delete old OSV records: %s", exc, exc_info=True)
 
-    return run_crawler("OSV", _body)
+    return run_crawler("OSV", _body, force=force)
