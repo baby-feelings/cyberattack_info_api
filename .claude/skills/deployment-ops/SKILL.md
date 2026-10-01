@@ -90,6 +90,9 @@ CODESCANはUpsertのため二重実行の実害は薄いが、DEPSOPSは実行�
 **Dockerfileの外部CLI**: gitleaks（GitHub Releasesのバイナリ）とsemgrep（専用venv
 `/opt/semgrep-venv`、`semgrep-cli.txt`）はアプリの`requirements.txt`とは別に導入する。
 依存をアプリ本体と分けることで、PyJWT等を脆弱性修正版へ自由に上げられる（詳細は`codescan`スキル）。
+**`Dockerfile`に`COPY`するファイルを増やしたら、`deploy/deploy_to_oci.ps1`のscp転送対象にも
+追加すること**（`semgrep-cli.txt`の追加時に転送漏れでOCI上のビルドが失敗するところだった。
+スクリプトは`Dockerfile`/`requirements.txt`/`app/`/`alembic/`等を個別に転送する方式）。
 
 DBマイグレーションは`Dockerfile`の`CMD`（`python -m app.core.migrate && uvicorn ...`）で
 コンテナ起動時に自動適用される。ファイルが削除されたPRをデプロイする際は、SCPが削除を
@@ -189,10 +192,14 @@ CIで自動実行される。間接依存（他パッケージ経由で入る依
 末尾の「セキュリティピン留め」セクションに、実際にpipが解決するバージョンを下限として明示的に
 追加し、なぜそのパッケージ・バージョンが必要かをコメントで残すこと（例: `anyio>=4.14.2`は
 `httpx`/`starlette`経由の間接依存でGHSA-5p39-cfhj-2xmp対策、`python-multipart>=0.0.31`は
-`fastapi`の`python-multipart`extra経由の間接依存対策）。`semgrep`（CODESCAN用）のように
-特定パッケージが他パッケージのバージョン範囲を狭く固定している場合（例: `pyjwt~=2.13.0`）、
-自プロジェクト側の同名パッケージのバージョン指定と競合して`pip install`が
-`ResolutionImpossible`になることがあるため、上げすぎず両立する範囲に収める。
+`fastapi`の`python-multipart`extra経由の間接依存対策）。
+
+**他パッケージが依存を狭く固定していて上げられない場合**（実例: `semgrep`が`pyjwt~=2.13.0`・
+`mcp`・`click`を厳密に固定し、PyJWT 2.13.0の脆弱性26件を修正版2.15.1へ上げられなかった）。
+(1) 上限を付けて両立する範囲に収める → 修正版へ上げられず脆弱性が残る、(2) 固定する側を
+古い版へ下げる → 別の依存（`mcp`/`click`）の脆弱性に置き換わるだけ（`pip-audit`で実測）、
+(3) **固定する側が外部CLIなら専用venvへ隔離する**（採用。`semgrep-cli.txt`・`Dockerfile`）。
+まず`pip-audit -r requirements.txt`で修正前後を比較し、別の脆弱性が増えないか確認すること。
 
 ## CORS・Swagger の本番制限
 - CORS: 本番は `["https://cyberattackinfoapi.vercel.app"]` のみ許可。開発時は localhost も追加
