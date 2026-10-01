@@ -115,6 +115,8 @@ deploy/       # OCIデプロイ関連（deploy_to_oci.ps1・docker-compose.yml�
 - `Settings()` の呼び出しには `# type: ignore[call-arg]`
 - ヘルスチェック等で `db_gen` を使う場合は try の前で `None` 初期化（`UnboundLocalError` 対策）
 - `GITHUB_USERNAME` は必須環境変数（デフォルト値なし、未設定だとアプリ全体が起動しない）
+- dashboardに依存を追加する際はWindowsで`npm install`しない（Linux向け依存がロックから欠落し
+  CIの`npm ci`が失敗する）。手順は`deployment-ops`スキルのCI節を参照
 - Windows: `python3`は無効なストアスタブのため`python`を使う。日本語コメント絡みのcp932エラーは
   `PYTHONUTF8=1`で解消。テストDB削除は`test_engine.dispose()`してから`os.remove`する
 
