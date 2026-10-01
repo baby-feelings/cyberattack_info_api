@@ -19,6 +19,7 @@ export function KevRow({ item }: { item: VulnerabilityOut }) {
   return (
     <>
       <tr
+        aria-expanded={open}
         className="hover:bg-slate-800/40 transition-colors cursor-pointer"
         onClick={() => setOpen(o => !o)}
       >

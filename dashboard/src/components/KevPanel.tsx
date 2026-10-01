@@ -141,7 +141,7 @@ export function KevPanel() {
           <Pagination page={page} totalPages={totalPages} total={result.total} onPageChange={setPage} position="top" />
 
           <div className="overflow-x-auto -mx-1 px-1">
-            <table className="w-full text-sm min-w-[700px]">
+            <table aria-label="KEV 脆弱性一覧" className="w-full text-sm min-w-[700px]">
               <thead>
                 <tr className="border-b border-slate-800">
                   <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-36">CVE ID</th>

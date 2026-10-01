@@ -95,3 +95,44 @@ jobs:
       - name: Build (includes tsc type check)
         working-directory: dashboard
         run: npm run build
+
+  dashboard-e2e:
+    name: Dashboard E2E (Playwright)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Install dependencies
+        working-directory: dashboard
+        run: npm ci
+
+      - name: Install Playwright browser
+        working-directory: dashboard
+        run: npx playwright install --with-deps chromium
+
+      - name: Type check E2E code
+        working-directory: dashboard
+        run: npm run e2e:typecheck
+
+      # ── E2Eテスト（バックエンドAPIはモック）。シナリオ網羅率が90%未満なら失敗 ──
+      - name: Run E2E tests
+        working-directory: dashboard
+        run: npm run e2e
+
+      # HTMLレポート（playwright-report/index.html と scenario-coverage.html）。失敗時も保存する
+      - name: Upload Playwright HTML report as artifact
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: dashboard-e2e-html-report
+          path: dashboard/playwright-report/
+          retention-days: 30

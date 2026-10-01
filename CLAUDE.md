@@ -54,6 +54,7 @@ alembic upgrade head                                  # マイグレーション
 alembic revision --autogenerate -m "説明"               # マイグレーション生成
 uvicorn app.main:app --reload --env-file .env.development  # 開発サーバー起動
 pytest                                                 # テスト（カバレッジ付き）
+cd dashboard && npm run e2e                            # ダッシュボードE2E（Playwright。HTMLレポート付き）
 ruff check app/ tests/                                 # Lint
 mypy app/ --ignore-missing-imports                     # 型チェック
 pip install -r requirements-dev.txt                    # 開発依存インストール
@@ -87,7 +88,7 @@ app/
 └── crawler_logs/ # クローラー実行ログ
 
 tests/        # app/ と同じドメイン構成でミラーリング
-dashboard/    # Vercel デプロイの React ダッシュボード（KEV/OSV/JVN/DEPSCAN/CODESCAN の5タブ切替）
+dashboard/    # Vercel デプロイの React ダッシュボード（KEV/OSV/JVN/DEPSCAN/CODESCAN の5タブ切替。e2e/にPlaywright）
 alembic/      # DBスキーマのマイグレーション（env.py に新規モデルimportが必須）
 docs/         # README.mdから分離した詳細ドキュメント（API一覧・環境変数・デプロイ手順等）
 .github/workflows/  # ci.yml / deploy.yml / daily-crawl.yml / osv-scanner-*.yml / pip-audit.yml
@@ -103,7 +104,7 @@ deploy/       # OCIデプロイ関連（deploy_to_oci.ps1・docker-compose.yml�
 | `crawler-internals` | KEV/OSV/JVN共通基盤（retry/notifications/pagination等）・STIX/TAXII・Alembic |
 | `depscan-depsops` | DEPSCAN/DEPSOPSの検知・優先度推薦・SBOM・自動マージ判定・GitHub OAuth・ユーザー別Slack通知登録 |
 | `codescan` | CODESCAN（Semgrep静的解析+gitleaks）の設計判断・tarball取得方式・CVSSベストエフォート推定・GitHubログイン必須化 |
-| `dashboard-frontend` | Reactダッシュボードのコンポーネント構成・集約ロジック |
+| `dashboard-frontend` | Reactダッシュボードのコンポーネント構成・集約ロジック・E2E（Playwright）の設計 |
 | `deployment-ops` | CI/CD・OCIデプロイ手順・環境変数・Prometheus/Grafana監視 |
 
 ---

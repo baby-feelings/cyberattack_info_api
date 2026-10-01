@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ShieldAlert, Shield, Package, FileWarning, Bug, ScanSearch, Menu } from 'lucide-react'
 import { HealthStatus } from './components/HealthStatus'
 import { KevPanel } from './components/KevPanel'
@@ -49,6 +49,26 @@ export default function App() {
   ))
   const [menuOpen, setMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  // メニュー外のクリック・Escapeキーで閉じる。全画面の透明オーバーレイ方式だと、
+  // 親ヘッダーの backdrop-blur が fixed の基準になりヘッダー内しか覆えなかったため、
+  // ドキュメント全体のイベントで判定する
+  useEffect(() => {
+    if (!menuOpen) return
+    function handlePointerDown(e: PointerEvent) {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false)
+    }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [menuOpen])
 
   return (
     <div className="min-h-screen bg-[#0a0e1a] text-slate-100 flex flex-col items-center">
@@ -72,7 +92,7 @@ export default function App() {
           </div>
 
           {/* ハンバーガーメニュー（Issue #227: 設定画面への導線） */}
-          <div className="relative">
+          <div className="relative" ref={menuRef}>
             <button
               onClick={() => setMenuOpen((v) => !v)}
               aria-label="メニュー"
@@ -82,17 +102,14 @@ export default function App() {
               <Menu size={18} />
             </button>
             {menuOpen && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-                <div className="absolute right-0 top-full mt-1 z-20 w-40 rounded-lg border border-slate-800 bg-slate-900 shadow-xl py-1">
-                  <button
-                    onClick={() => { setMenuOpen(false); setSettingsOpen(true) }}
-                    className="w-full text-left px-3 py-2 text-sm text-slate-300 hover:bg-slate-800 transition-colors"
-                  >
-                    設定
-                  </button>
-                </div>
-              </>
+              <div className="absolute right-0 top-full mt-1 z-20 w-40 rounded-lg border border-slate-800 bg-slate-900 shadow-xl py-1">
+                <button
+                  onClick={() => { setMenuOpen(false); setSettingsOpen(true) }}
+                  className="w-full text-left px-3 py-2 text-sm text-slate-300 hover:bg-slate-800 transition-colors"
+                >
+                  設定
+                </button>
+              </div>
             )}
           </div>
 

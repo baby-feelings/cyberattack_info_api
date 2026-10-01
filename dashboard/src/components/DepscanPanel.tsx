@@ -103,13 +103,14 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
 
       {/* オーナーフィルター */}
       {owners.length > 1 && (
-        <div className="flex flex-wrap gap-1.5">
+        <div role="group" aria-label="オーナーフィルター" className="flex flex-wrap gap-1.5">
           {['ALL', ...owners].map(o => {
             const active = (o === 'ALL' && owner === null) || o === owner
             return (
               <button
                 key={o}
                 onClick={() => handleOwner(o)}
+                aria-pressed={active}
                 className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
                   active
                     ? 'bg-violet-600 text-white shadow'
@@ -134,6 +135,7 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
 
         <button
           onClick={toggleShowResolved}
+          aria-pressed={showResolved}
           className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
             showResolved
               ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
@@ -159,7 +161,7 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
           <Pagination page={page} totalPages={totalPages} total={groups.length} onPageChange={setPage} position="top" />
 
           <div className="overflow-x-auto -mx-1 px-1">
-            <table className="w-full text-sm min-w-[760px]">
+            <table aria-label="依存ライブラリ脆弱性一覧" className="w-full text-sm min-w-[760px]">
               <thead>
                 <tr className="border-b border-slate-800">
                   <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-20">深刻度</th>
