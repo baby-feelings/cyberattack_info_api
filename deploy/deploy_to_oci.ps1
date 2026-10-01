@@ -20,7 +20,7 @@ Invoke-Expression "$SshCmd ${OciUser}@${OciHost} 'mkdir -p $RemoteDir/app $Remot
 Write-Host "📦 2. 本番稼働に必要なファイルのみを転送中..." -ForegroundColor Cyan
 # -- アプリケーション本体と Dockerfile・依存パッケージ定義 --
 Invoke-Expression "$ScpCmd -r ../app/* ${OciUser}@${OciHost}:${RemoteDir}/app/"
-Invoke-Expression "$ScpCmd ../Dockerfile ../requirements.txt ${OciUser}@${OciHost}:${RemoteDir}/"
+Invoke-Expression "$ScpCmd ../Dockerfile ../requirements.txt ../semgrep-cli.txt ${OciUser}@${OciHost}:${RemoteDir}/"
 
 # -- Alembicマイグレーション定義 (DBスキーマ管理。DB自体は Neon を継続利用) --
 Invoke-Expression "$ScpCmd ../alembic.ini ${OciUser}@${OciHost}:${RemoteDir}/"
