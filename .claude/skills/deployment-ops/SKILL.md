@@ -87,6 +87,10 @@ CODESCANはUpsertのため二重実行の実害は薄いが、DEPSOPSは実行�
    （デプロイのたびにビルドキャッシュ・タグなしイメージが蓄積するため。自動クリーンアップの
    crontab/systemdタイマーは意図的に設置せず、手動デプロイのたびに掃除する方式に統一）
 
+**Dockerfileの外部CLI**: gitleaks（GitHub Releasesのバイナリ）とsemgrep（専用venv
+`/opt/semgrep-venv`、`semgrep-cli.txt`）はアプリの`requirements.txt`とは別に導入する。
+依存をアプリ本体と分けることで、PyJWT等を脆弱性修正版へ自由に上げられる（詳細は`codescan`スキル）。
+
 DBマイグレーションは`Dockerfile`の`CMD`（`python -m app.core.migrate && uvicorn ...`）で
 コンテナ起動時に自動適用される。ファイルが削除されたPRをデプロイする際は、SCPが削除を
 反映しないため、リモート側の不要ファイルを`ssh`で手動削除すること。

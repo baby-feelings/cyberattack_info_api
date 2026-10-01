@@ -26,6 +26,19 @@ Semgrepでスキャンし、`with`ブロックを抜ける際に確実に削除�
 （`app.codescan.crawler._extract_tarball`）。`git`コマンドはDockerイメージに
 追加していない（tarball方式なら不要）。
 
+## semgrep は専用venvに隔離して導入する（requirements.txtに入れない）
+semgrep は `subprocess` で呼ぶ外部CLIでありPythonからimportしないため、アプリの依存
+（`requirements.txt`）ではなく`semgrep-cli.txt`に置き、`Dockerfile`で専用venv
+（`/opt/semgrep-venv`）へ導入して`/usr/local/bin/semgrep`にsymlinkする。理由: semgrep は
+`pyjwt~=2.13.0`・`mcp`・`click`等を厳密にピン留めするため、同じ環境だとアプリのPyJWTを
+脆弱性修正済み（2.15以降）に上げられず、semgrepを古い版に固定すると`mcp`/`click`側の別の
+脆弱性が出た（2026-09の PyJWT 26件の対応時、pip-auditで確認）。venv内のPyJWTだけは
+Dockerfileで`>=2.15.1`に上書きしている（pip checkは警告するがsemgrep 1.178.0で動作確認済み）。
+`semgrep-cli.txt`を`requirements*.txt`にしない理由は、pip-audit/OSV-Scannerの走査対象を
+アプリ本体の依存に限定するため。semgrepを上げる際はDockerfileの上書きが不要になっていないか
+（semgrep側のpyjwtピンが2.15以降を許容したか）も確認する。Windowsにはsemgrepのホイールが無く、
+開発環境ではラッパーをモックする。
+
 ## Semgrep 実行は薄いラッパー関数に分離し、テストはそれをモックする
 `app.codescan.crawler._run_semgrep`が実際の`subprocess.run(["semgrep", ...])`
 呼び出しを閉じ込める薄いラッパー。1リポジトリあたりのタイムアウトを
