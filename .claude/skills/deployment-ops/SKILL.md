@@ -6,12 +6,29 @@ description: CI/CD（GitHub Actions）・OCI本番デプロイ手順・環境変
 # デプロイ・CI/CD・運用監視リファレンス
 
 ## CI（ci.yml）
-PR 作成・main/develop へのプッシュで自動実行。
+PR 作成・main/develop へのプッシュで自動実行。3つのジョブが並列に動く。
+
+**`test`（バックエンド、Python 3.10 / 3.11 の matrix）**
 1. `ruff check app/ tests/` — Linting
 2. `mypy app/ --ignore-missing-imports` — 型チェック
 3. `pytest --cov=app --cov-fail-under=90` — テスト（カバレッジ 90% 未満で失敗）
-4. `htmlcov/` を GitHub Actions Artifact として 30 日間保持（Python 3.11 のみ）
-5. Python 3.10 / 3.11 の matrix で並列実行
+4. `htmlcov/` を Artifact として 30 日間保持（Python 3.11 のみ）
+
+**`dashboard-test`（ダッシュボードのユニットテスト・ビルド）**
+`npm ci` → `npm run test:coverage`（Vitest。statements/lines 90%・functions/branches 85%
+未満で失敗、`vite.config.ts`の`thresholds`）→ `npm run build`（`tsc -b`の型チェック込み）。
+`dashboard/coverage/` を Artifact として 30 日間保持。
+
+**`dashboard-e2e`（Playwright のE2E、詳細は`dashboard-frontend`スキル）**
+`npm ci` → `npx playwright install --with-deps chromium` → `npm run e2e:typecheck` →
+`npm run e2e`（APIは全モック。シナリオ網羅率90%未満で失敗）。`dashboard/playwright-report/`
+（`index.html`と`scenario-coverage.html`）を失敗時も含め Artifact として 30 日間保持。
+
+**注意（dashboardの依存追加）:** Windowsで`npm install <pkg>`すると、Linux向けの
+`@emnapi/*`・`tslib`（wasm系optional依存）が`package-lock.json`から欠落し、CIの`npm ci`が
+`Missing: ... from lock file`で失敗する（Playwright追加時に実際に発生）。mainのロックを
+`git checkout origin/main -- dashboard/package-lock.json`で戻し、追加パッケージの
+エントリだけを手で足し込んで`npm ci --dry-run`で整合を確認すること。
 
 ## CD（deploy.yml）— ダッシュボードのみ自動デプロイ
 `dashboard/` 配下に変更がある場合のみ、main ブランチへのマージ後に自動実行。

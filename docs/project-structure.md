@@ -38,6 +38,7 @@ cyberattack_info_api/
 │                           # CODESCAN〈GitHub ログイン必須。DEPSCANとセッション共有。CVSSベストエフォート
 │                           # 推定値・検知ツールバッジを表示〉を5つの固定タブで切り替え表示。ヘッダーの
 │                           # ハンバーガーメニュー「設定」からSlack Webhook通知を登録可能、Issue #227）
+│   └── e2e/                 # Playwright E2Eテスト（specs・support/mockApi.ts・scenarios.ts〈網羅率カタログ〉・reporters/）
 ├── alembic/                 # DBスキーマのマイグレーション管理（app.core.migrate から呼び出す）
 │   └── versions/            # マイグレーションスクリプト（Gitで追跡）
 ├── docs/                    # README.mdから分離した詳細ドキュメント（本ファイル含む）

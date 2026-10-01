@@ -28,6 +28,7 @@
 | GET | `/api/depsops/stats` | DEPSOPSのリポジトリ別未解決PR件数（`(repo, pr_number)`ごとの最新状態のみ集計） |
 | GET | `/api/crawler-logs` | クローラー実行ログ |
 | GET | `/auth/github/login` | DEPSCANダッシュボードのGitHubログイン開始（ブラウザ専用） |
+| GET | `/auth/github/callback` | GitHub OAuthのコールバック（ブラウザ専用。使い捨て交換コード付きでダッシュボードへリダイレクト） |
 | POST | `/auth/exchange` | 交換コード→セッションJWT |
 | GET | `/auth/scan-status` | オンデマンドスキャン進捗（Bearer認証） |
 | GET/PUT/DELETE | `/auth/notification-settings` | ログイン中ユーザーのSlack Webhook通知登録・解除（Bearer認証、Issue #227）。PUTは実際にテスト送信し成功した場合のみ保存 |
@@ -41,6 +42,7 @@
 | POST | `/admin/repo-cleanup` | 削除済みリポジトリのDEPSCAN/CODESCAN/DEPSOPSデータ削除を手動実行（Issue #228） |
 | POST | `/admin/user-crawl` | 登録済み他ユーザー（`GITHUB_USERNAME`以外、Webhook登録済み）向けDEPSCAN/CODESCAN/DEPSOPSを手動実行（Issue #227） |
 | GET | `/taxii2/*` | TAXII 2.1配信（KEV/OSV/JVN 3コレクション購読用、最小実装。Issue #134） |
+| GET | `/metrics` | Prometheus用メトリクス（`Authorization: Bearer <METRICS_API_KEY>`。未設定時は503） |
 | GET | `/health` | ヘルスチェック（認証不要） |
 
 クロール系の`/admin/*`（`*-crawl`・`dependabot-ops`）はバックグラウンド実行で即座に202を
