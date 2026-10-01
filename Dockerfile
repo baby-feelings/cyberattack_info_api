@@ -29,6 +29,15 @@ RUN curl -fsSL \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# semgrep（CODESCAN の Semgrep 静的解析）: subprocess で呼ぶ外部 CLI のため、アプリの
+# 依存とは別の専用 venv に隔離して導入し、PATH 上（/usr/local/bin）へ symlink する。
+# semgrep は pyjwt~=2.13.0 を厳密にピン留めしており、同じ環境だとアプリの PyJWT を
+# 修正済みの 2.15 以降に上げられないため。semgrep が使う PyJWT は脆弱性修正済みの版へ
+# 上書きする（pip は依存の不整合を警告するが、semgrep CLI の動作には影響しない。
+# semgrep 1.178.0 + PyJWT 2.15.1 で動作確認済み）
+COPY semgrep-cli.txt .
+RUN python -m venv /opt/semgrep-venv     && /opt/semgrep-venv/bin/pip install --no-cache-dir -r semgrep-cli.txt     && /opt/semgrep-venv/bin/pip install --no-cache-dir "PyJWT>=2.15.1"     && ln -s /opt/semgrep-venv/bin/semgrep /usr/local/bin/semgrep     && semgrep --version
+
 # アプリケーション本体
 COPY app/ ./app/
 
