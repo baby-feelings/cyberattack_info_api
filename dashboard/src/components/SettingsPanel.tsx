@@ -19,13 +19,16 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-title"
         className="w-full max-w-lg mt-8 sm:mt-16 rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
             <Bell size={18} className="text-violet-400" />
-            <h2 className="text-base font-semibold text-white">設定</h2>
+            <h2 id="settings-title" className="text-base font-semibold text-white">設定</h2>
           </div>
           <button
             onClick={onClose}

@@ -165,11 +165,12 @@ export function DependabotOpsModal({ open, onClose }: { open: boolean; onClose: 
         <div className="max-w-5xl mx-auto flex flex-col gap-5">
           <DepsOpsRepoBarChart stats={repoStats} loading={statsLoading} />
 
-          <div className="flex flex-wrap gap-1.5">
+          <div role="group" aria-label="判定フィルター" className="flex flex-wrap gap-1.5">
             {ACTIONS.map(a => (
               <button
                 key={a.key}
                 onClick={() => handleAction(a.key)}
+                aria-pressed={action === a.key}
                 className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
                   action === a.key
                     ? 'bg-violet-600 text-white shadow'
@@ -190,7 +191,7 @@ export function DependabotOpsModal({ open, onClose }: { open: boolean; onClose: 
               <Pagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} position="top" />
 
               <div className="overflow-x-auto -mx-1 px-1">
-                <table className="w-full text-sm min-w-[860px]">
+                <table aria-label="Dependabot PR 判定履歴" className="w-full text-sm min-w-[860px]">
                   <thead>
                     <tr className="border-b border-slate-800">
                       <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-48">リポジトリ</th>

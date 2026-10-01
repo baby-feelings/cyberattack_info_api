@@ -76,6 +76,10 @@ mypy app/ --ignore-missing-imports    # 型チェック
 
 **テスト結果（最新）:** 828 テスト / カバレッジ 98%
 
+ダッシュボードのE2Eテスト（Playwright、API全モック）は `dashboard/` で `npm run e2e`。
+HTMLレポートは `npm run e2e:report`、画面・機能のシナリオ網羅率（90%未満で失敗）は
+`dashboard/playwright-report/scenario-coverage.html`。
+
 ---
 
 ## プロジェクト構成

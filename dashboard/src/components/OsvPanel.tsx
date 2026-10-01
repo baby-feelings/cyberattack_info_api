@@ -95,13 +95,14 @@ export function OsvPanel() {
       </div>
 
       {/* エコシステムフィルター */}
-      <div className="flex flex-wrap gap-1.5">
+      <div role="group" aria-label="エコシステムフィルター" className="flex flex-wrap gap-1.5">
         {ECOSYSTEMS.map(eco => {
           const active = (eco === 'ALL' && ecosystem === null) || eco === ecosystem
           return (
             <button
               key={eco}
               onClick={() => handleEco(eco)}
+              aria-pressed={active}
               className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
                 active
                   ? 'bg-violet-600 text-white shadow'
@@ -159,7 +160,7 @@ export function OsvPanel() {
           <Pagination page={page} totalPages={totalPages} total={result.total} onPageChange={setPage} position="top" />
 
           <div className="overflow-x-auto -mx-1 px-1">
-            <table className="w-full text-sm min-w-[700px]">
+            <table aria-label="OSV 脆弱性一覧" className="w-full text-sm min-w-[700px]">
               <thead>
                 <tr className="border-b border-slate-800">
                   <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-20">深刻度</th>

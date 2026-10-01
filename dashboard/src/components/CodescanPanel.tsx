@@ -84,7 +84,7 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
           classMap={SEVERITY_CLS}
           labels={SEVERITY_LABELS}
         />
-        <div className="flex items-center gap-1 bg-slate-800/60 border border-slate-700 rounded-lg px-2.5 py-1.5">
+        <div role="group" aria-label="状態フィルター" className="flex items-center gap-1 bg-slate-800/60 border border-slate-700 rounded-lg px-2.5 py-1.5">
           <span className="text-[10px] text-slate-500 whitespace-nowrap">状態:</span>
           {([
             { label: '未解決', value: false as boolean | null },
@@ -94,6 +94,7 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
             <button
               key={opt.label}
               onClick={() => handleResolvedToggle(opt.value)}
+              aria-pressed={resolved === opt.value}
               className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
                 resolved === opt.value
                   ? 'bg-rose-600 text-white'
@@ -120,7 +121,7 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
           <Pagination page={page} totalPages={totalPages} total={result.total} onPageChange={setPage} position="top" />
 
           <div className="overflow-x-auto -mx-1 px-1">
-            <table className="w-full text-sm min-w-[700px]">
+            <table aria-label="コード脆弱性一覧" className="w-full text-sm min-w-[700px]">
               <thead>
                 <tr className="border-b border-slate-800">
                   <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-20">重要度</th>

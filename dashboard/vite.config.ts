@@ -10,6 +10,8 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     globals: true,
     css: false,
+    // e2e/ 配下は Playwright のテスト（`npm run e2e`）。Vitest が拾わないよう src/ に限定する
+    include: ['src/**/*.test.{ts,tsx}'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],

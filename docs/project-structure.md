@@ -47,6 +47,7 @@ cyberattack_info_api/
 │       ├── ci.yml                    # CI: lint + type check + test (PR 時に自動実行)
 │       ├── deploy.yml                # CD: Vercel デプロイ (dashboard/変更時のmainマージ時のみ自動実行。バックエンドは手動デプロイ)
 │       ├── daily-crawl.yml           # 毎日クロール (単一 cron UTC 19:05 で KEV → OSV → JVN → DEPSCAN → CODESCAN → DEPSOPS 順次実行)
+│       │                             # （ci.ymlにはdashboard-e2e＝PlaywrightのE2Eジョブも含む）
 │       ├── osv-scanner-scheduled.yml # OSV-Scanner: 本リポジトリ自身の依存関係を週次・mainマージ時にスキャン
 │       ├── osv-scanner-pr.yml        # OSV-Scanner: PRで新規導入された脆弱性のみを差分検出
 │       └── pip-audit.yml             # pip-audit: requirements.txtを週次・mainマージ時にスキャン

@@ -103,3 +103,27 @@ CODESCAN追加後もキー名はあえて変更せず両ドメインで共有す
 `client.ts`自体はバーレル（re-export）として残している。既存の`import { xxx } from
 '../api/client'`は全て動き続ける。新しいAPI呼び出し関数を追加する場合は対応ドメインの
 ファイルに追加すること。
+
+## E2Eテスト（Playwright、dashboard/e2e/）
+`npm run e2e`（`dashboard/`で実行）。Vitest（`src/**/*.test.*`）とは別系統で、`vite.config.ts`の
+`test.include`を`src/`に限定してPlaywrightのspecを拾わないようにしている。
+
+- **バックエンドAPIは全てモック**。`playwright.config.ts`の`webServer`が`VITE_API_BASE_URL`を
+  同一オリジンの`/__api`に向けてviteを起動し、`e2e/support/mockApi.ts`が`page.route`で傍受する
+  （CORSプリフライトなし・本番API/キー不要）。クエリ（検索・フィルター・ページ）に実際に反応する。
+  上書きは`api.override(method, path, handler)`、リクエスト検証は`api.requestsTo`/`lastQuery`。
+- **`api`フィクスチャは`{ auto: true }`必須**。テストが引数に取らないとモックが有効化されず、
+  実サーバーのSPAフォールバックHTMLを`res.json()`して`UNREACHABLE`になる（実際にハマった）。
+- **シナリオ網羅率**: 網羅率の指標は「画面・機能・状態遷移のシナリオ」。`e2e/support/scenarios.ts`が
+  カタログで、各テストは`scenario('KEV-01', ...)`でIDに紐づく。`scenario-coverage-reporter.ts`が
+  合格数/総数を`playwright-report/scenario-coverage.html`に出力し、**90%未満なら全体を失敗**にする。
+  画面・機能を足したらまずカタログに行を追加してからテストを書く（`--grep`等の一部実行は判定しない）。
+- **セマンティクス**: ロケーターは`getByRole`/`getByLabel`中心。そのために本体側へ`aria-pressed`
+  （フィルター/ソート/切替ボタン）・`role="group"`（フィルター群）・`<nav aria-label>`（ページ送り上下）・
+  `<table aria-label>`・行の`aria-expanded`・設定ダイアログの`role="dialog"`を付与済み。新しい
+  フィルターUIにも同様に付けること。タブUIは`toMatchAriaSnapshot`でアクセシビリティツリーを検証する。
+- 開発モードはReact StrictModeで初回取得が2回走るため、「N回目だけ失敗」ではなくフラグで切り替える。
+- 時間依存（DEPSCANの2分ごとの新着確認）は`page.clock.install()`＋`runFor()`で進める。
+- E2Eで発見・修正した不具合: ハンバーガーメニューの外側クリックが効かなかった。透明オーバーレイ
+  （`fixed inset-0`）が親ヘッダーの`backdrop-blur`（containing blockになる）の影響でヘッダー内しか
+  覆えなかったため、`App.tsx`はドキュメントの`pointerdown`/Escapeで閉じる方式に変更した。

@@ -47,7 +47,10 @@ export function Pagination({
   if (totalPages <= 1) return null
   const borderCls = position === 'top' ? 'pb-2 border-b border-slate-800' : 'pt-2 border-t border-slate-800'
   return (
-    <div className={`flex items-center justify-between ${borderCls}`}>
+    <nav
+      aria-label={position === 'top' ? 'ページ送り（上部）' : 'ページ送り（下部）'}
+      className={`flex items-center justify-between ${borderCls}`}
+    >
       <button
         onClick={() => onPageChange(p => Math.max(1, p - 1))}
         disabled={page === 1}
@@ -66,7 +69,7 @@ export function Pagination({
       >
         次へ →
       </button>
-    </div>
+    </nav>
   )
 }
 
@@ -85,7 +88,7 @@ export function SeverityFilterButtons({
   labels?: Record<string, string>
 }) {
   return (
-    <div className="flex gap-1">
+    <div role="group" aria-label="深刻度フィルター" className="flex gap-1">
       {severities.map(sev => {
         const isActive = (sev === 'ALL' && active === null) || sev === active
         const cls = isActive
@@ -97,6 +100,7 @@ export function SeverityFilterButtons({
           <button
             key={sev}
             onClick={() => onSelect(sev)}
+            aria-pressed={isActive}
             className={`px-2 py-1 rounded text-xs font-medium transition-colors ${cls}`}
           >
             {labels?.[sev] ?? sev}
@@ -127,10 +131,11 @@ export function SearchBox({
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
+        aria-label={placeholder}
         className="bg-transparent text-xs text-slate-300 placeholder:text-slate-600 outline-none w-full"
       />
       {value && (
-        <button onClick={onClear} className="text-slate-500 hover:text-slate-300">
+        <button onClick={onClear} aria-label="検索をクリア" className="text-slate-500 hover:text-slate-300">
           {clearIcon}
         </button>
       )}
@@ -148,10 +153,11 @@ export function SortSelector({
   activeClass: string
 }) {
   return (
-    <div className="flex items-center gap-1 bg-slate-800/60 border border-slate-700 rounded-lg px-2.5 py-1.5">
+    <div role="group" aria-label="ソート" className="flex items-center gap-1 bg-slate-800/60 border border-slate-700 rounded-lg px-2.5 py-1.5">
       <span className="text-[10px] text-slate-500 whitespace-nowrap">ソート:</span>
       <button
         onClick={() => onChange('modified')}
+        aria-pressed={sortBy === 'modified'}
         className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
           sortBy === 'modified' ? activeClass : 'text-slate-400 hover:text-slate-300'
         }`}
@@ -160,6 +166,7 @@ export function SortSelector({
       </button>
       <button
         onClick={() => onChange('cvss')}
+        aria-pressed={sortBy === 'cvss'}
         className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
           sortBy === 'cvss' ? activeClass : 'text-slate-400 hover:text-slate-300'
         }`}
