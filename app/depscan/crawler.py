@@ -6,6 +6,7 @@ OSV API とリアルタイム照合して脆弱な依存パッケージを検知
 APScheduler から毎日呼び出される。
 """
 import logging
+import re
 from datetime import timedelta
 from typing import Any
 
@@ -17,6 +18,7 @@ from app.core.crawler_runner import already_succeeded_today
 from app.core.database import SessionLocal
 from app.core.notifications import notify_dependency_findings, notify_error
 from app.core.osv_client import fetch_vuln_by_id, parse_severity, query_versions_batch
+from app.core.registry_client import fetch_latest_version, is_newer_version
 from app.crawler_logs.writer import now_utc, write_crawler_log
 from app.depscan.github_client import (
     get_file_content,
@@ -98,6 +100,56 @@ def _collect_dependencies(
     return dep_to_repos, len(repos), repo_visibility
 
 
+def _normalize_package_name(name: str) -> str:
+    """OSV の package.name とロックファイル上の名前を突き合わせるための正規化。"""
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def _last_affected_versions(
+    vuln: dict[str, Any], ecosystem: str, package_name: str,
+) -> list[str]:
+    """OSV エントリのうち、対象パッケージの affected から last_affected を集める。"""
+    target = _normalize_package_name(package_name)
+    return [
+        event["last_affected"]
+        for affected in vuln.get("affected", [])
+        if (affected.get("package") or {}).get("ecosystem") == ecosystem
+        and _normalize_package_name((affected.get("package") or {}).get("name", "")) == target
+        for rng in affected.get("ranges", [])
+        for event in rng.get("events", [])
+        if "last_affected" in event
+    ]
+
+
+def _infer_fixed_versions(
+    vuln: dict[str, Any], ecosystem: str, package_name: str,
+    latest_cache: dict[tuple[str, str], str | None],
+) -> list[str]:
+    """OSV に `fixed` が無く `last_affected` だけある脆弱性の修正版をレジストリから補う。
+
+    OSV が影響範囲の上限しか載せていない場合（例: accelerate、影響は 1.14.0 まで）、
+    修正版が空のため「修正版なし」と誤表示されていた。レジストリの最新版が
+    last_affected より新しければ、それは影響を受けないため修正版の目安として返す。
+    判定できない場合（last_affected なし・最新版を取得できない・版の比較に確信が持てない）
+    は空リストを返し、従来どおり修正版なしとして扱う。
+    """
+    last_versions = _last_affected_versions(vuln, ecosystem, package_name)
+    if not last_versions:
+        return []
+
+    cache_key = (ecosystem, package_name)
+    if cache_key not in latest_cache:
+        latest_cache[cache_key] = fetch_latest_version(ecosystem, package_name)
+    latest = latest_cache[cache_key]
+    if latest is None:
+        return []
+
+    # 全ての last_affected より新しい場合のみ（一部の範囲だけ超えていても確信は持てない）
+    if all(is_newer_version(latest, last) for last in last_versions):
+        return [latest]
+    return []
+
+
 def _build_findings(
     dep_to_repos: dict[DepKey, list[tuple[str, str]]],
     repo_visibility: dict[str, str] | None = None,
@@ -109,6 +161,8 @@ def _build_findings(
 
     # 脆弱性 ID ごとの詳細情報をキャッシュ（複数パッケージが同じ脆弱性 ID を参照しうる）
     vuln_cache: dict[str, dict[str, Any] | None] = {}
+    # レジストリの最新版（修正版の補完用）。同じパッケージを何度も引かないよう共有する
+    latest_cache: dict[tuple[str, str], str | None] = {}
     records: list[dict[str, Any]] = []
     now = now_utc()
 
@@ -134,6 +188,10 @@ def _build_findings(
                 for event in rng.get("events", [])
                 if "fixed" in event
             })
+            if not fixed_versions:
+                fixed_versions = _infer_fixed_versions(
+                    vuln, ecosystem, package_name, latest_cache,
+                )
             # OSV IDだけではCVEと直接対応しないため、aliasesからCVE形式のみ抽出して
             # 保存しておく（Issue #135: KEV掲載有無・EPSSスコアとの突合に使う）
             cve_ids = sorted({
@@ -262,6 +320,10 @@ def _upsert_findings(
             existing.reachability = rec.get("reachability")
             existing.repo_visibility = rec.get("repo_visibility")
             existing.cve_ids = rec.get("cve_ids", [])
+            # 修正版は、新たに判明した（レジストリからの補完を含む）場合のみ反映する。
+            # 一時的にレジストリを引けなかった回に空で上書きしてしまわないようにするため
+            if rec.get("fixed_versions"):
+                existing.fixed_versions = rec["fixed_versions"]
 
     db.commit()
     return inserted, new_snapshots

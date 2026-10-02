@@ -73,7 +73,7 @@ app/
 ├── main.py       # FastAPI アプリ・lifespan・スケジューラ登録・ルーター include
 ├── auth/         # GitHubログイン・ユーザー別Slack通知登録（UserAccount/account_store）
 ├── core/         # 横断的インフラ: config/database/auth/background/crawler_runner/crypto/
-│                 #   db_utils/notifications/osv_client/pagination/repo_cleanup/
+│                 #   db_utils/notifications/osv_client/registry_client/pagination/repo_cleanup/
 │                 #   user_crawl_runner/stix/taxii/schemas/github_http（GitHub API認証
 │                 #   ヘッダー共通化）/issue_filing（DEPSCAN/CODESCANのIssue起票共通化）
 ├── kev/          # CISA KEV（models/schemas/crawler/stix/router）
