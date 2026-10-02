@@ -178,12 +178,22 @@ PAT: 「Dependabot alerts: Read-only」）。無い場合は`null`のまま記�
 **`compatibility_badge_url`**: DependabotがPR本文に埋め込む「Compatibility score」
 バッジ画像URLを正規表現で抽出し保存する（GitHub側に数値取得APIが無いため）。
 
-**`action="closed"`**: `flagged`記録したPRが、Dependabotの自動クローズや人手による
-マージ等DEPSOPSの関知しないところで解消されても記録する手段が無く、ダッシュボードの
-「未解決」件数が実態と乖離する不具合があった（parent_diaryリポジトリで発覚）。
-`_find_resolved_flagged_prs`が、直近`flagged`記録されたPRのうち今回のOpen PR一覧に
-含まれなくなったものを`action="closed"`として記録する。`CrawlerLog`
-（`crawler_type="DEPSOPS"`）の`deleted`フィールドはこの`closed`記録件数を表す。
+**解決済みPRは履歴ごと削除する**: `flagged`記録したPRが、Dependabotの自動クローズや
+人手によるマージ等DEPSOPSの関知しないところで解消されると、ダッシュボードの「未解決」件数が
+実態と乖離する不具合があった（parent_diaryリポジトリで発覚）。`_find_resolved_flagged_prs`が、
+直近`flagged`記録されたPRのうち今回のOpen PR一覧に含まれなくなったものを検出し、
+`_record_pr_logs`がそのPRの**全行を削除**する（旧実装は`action="closed"`行を追記していたが、
+解決済みは履歴に残す価値が低く行数が膨らむだけのため廃止。`action`は`merged`/`flagged`の2種のみ）。
+自動マージ`merged`の行は「システムが何を自動マージしたか」の唯一の事後記録なので残す。
+`CrawlerLog`（`crawler_type="DEPSOPS"`）の`deleted`フィールドはこの解決済みPR件数を表す。
+
+**行数の抑制（毎日追記しない）**: 同じ理由（`reason`・`is_security_update`）で`flagged`のまま
+続くPRは、`_record_pr_logs`が新しい行を足さず既存行の`processed_at`を更新する（以前は毎日1行
+追記され、解決済みを含め総件数が約2,700行まで膨らんでいた）。理由が変わった場合のみ履歴として
+新しい行を足す。`_cleanup_pr_logs`が実行のたびに(1)旧`closed`行の削除
+（`_purge_legacy_closed_pr_logs`）(2)連続する同一内容`flagged`行の最新1行への集約
+（`_collapse_duplicate_flagged_logs`）(3)保持期間超過分の削除を行い、既存データも
+マイグレーション無しで新方針へ収束する（いずれも冪等）。
 
 ## Dependabot の有効化（本リポジトリ + DEPSCAN対象の全リポジトリ）
 GitHub の Dependabot には独立した2つの機能があり、**`dependabot.yml` を置くだけでは

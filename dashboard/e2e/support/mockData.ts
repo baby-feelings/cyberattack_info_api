@@ -189,15 +189,16 @@ export function depscanStats() {
 
 // ── DEPSOPS ───────────────────────────────────────────────────────
 
-const DEPSOPS_ACTIONS = ['merged', 'flagged', 'closed'] as const
+// 解決済みPRは履歴ごと削除されるため、判定は自動マージと要確認の2種のみ
+const DEPSOPS_ACTIONS = ['merged', 'flagged'] as const
 export const DEPSOPS_TOTAL = 45
 
 export const depsopsItems = Array.from({ length: DEPSOPS_TOTAL }, (_, i) => ({
   repo_full_name: i % 2 === 0 ? 'baby-feelings/app-one' : 'baby-feelings/app-two',
   pr_number: 100 + i,
   title: `Bump dep-${i + 1} from 1.0.${i} to 1.0.${i + 1}`,
-  action: DEPSOPS_ACTIONS[i % 3],
-  reason: DEPSOPS_ACTIONS[i % 3] === 'flagged' ? `メジャーアップデートのため要確認 (#${100 + i})` : null,
+  action: DEPSOPS_ACTIONS[i % 2],
+  reason: DEPSOPS_ACTIONS[i % 2] === 'flagged' ? `メジャーアップデートのため要確認 (#${100 + i})` : null,
   // 3値（true/false/null）すべてを通す
   is_security_update: i % 3 === 0 ? true : i % 3 === 1 ? false : null,
   compatibility_badge_url: i % 2 === 0
