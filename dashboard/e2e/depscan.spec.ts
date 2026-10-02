@@ -182,7 +182,7 @@ scenario('DEP-08', 'Dependabot運用状況モーダルを開き一覧・フィ�
   await expect(table.getByRole('row').nth(2)).toContainText('要確認')
   await expect(table.getByRole('row').nth(2)).toContainText('バージョン更新')
   await expect(table.getByRole('row').nth(2)).toContainText('メジャーアップデートのため要確認 (#101)')
-  await expect(table.getByRole('row').nth(3)).toContainText('解消済み')
+  await expect(table.getByRole('row').nth(3)).toContainText('自動マージ')
   await expect(table.getByRole('row').nth(3)).toContainText('不明')
 
   // 判定フィルター
@@ -197,8 +197,8 @@ scenario('DEP-08', 'Dependabot運用状況モーダルを開き一覧・フィ�
 
   await filters.getByRole('button', { name: '自動マージ' }).click()
   expect(api.lastQuery('/api/depsops')?.get('action')).toBe('merged')
-  await filters.getByRole('button', { name: '解消済み' }).click()
-  expect(api.lastQuery('/api/depsops')?.get('action')).toBe('closed')
+  // 解決済みPRは履歴ごと削除されるため「解消済み」フィルターは存在しない
+  await expect(filters.getByRole('button', { name: '解消済み' })).toHaveCount(0)
   await filters.getByRole('button', { name: 'すべて' }).click()
   expect(api.lastQuery('/api/depsops')?.has('action')).toBe(false)
 })
@@ -336,8 +336,8 @@ scenario('DEP-16', 'モーダルのページ送りと該当なし状態', async 
 
   // 該当するPRがない判定フィルターでは空状態になる
   api.override('GET', '/api/depsops', (req) => (
-    req.query.get('action') === 'closed' ? { body: { total: 0, page: 1, per_page: 20, data: [] } } : undefined
+    req.query.get('action') === 'flagged' ? { body: { total: 0, page: 1, per_page: 20, data: [] } } : undefined
   ))
-  await dialog.getByRole('group', { name: '判定フィルター' }).getByRole('button', { name: '解消済み' }).click()
+  await dialog.getByRole('group', { name: '判定フィルター' }).getByRole('button', { name: '要確認' }).click()
   await expect(dialog.getByText('該当する PR はありません')).toBeVisible()
 })
