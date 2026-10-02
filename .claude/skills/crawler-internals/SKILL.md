@@ -182,7 +182,7 @@ Slack通知の新規追加・削除件数が毎回ほぼ同数（例: 新規1554
 OSV/JVNの`_delete_old_*_records`は日数フィルタ付きフェッチ（`OSV_DAYS`/`JVN_DAYS`
 =30日 < `*_RETENTION_DAYS`=180日）のため同種のバグは無い（削除対象は元々
 再フェッチ対象外の範囲）。DEPSCAN/CODESCAN/DEPSOPSも`resolved_at`基準
-（未解決レコードは対象外）またはappend-onlyログの`processed_at`基準で、
+（未解決レコードは対象外）またはDEPSOPS履歴ログの`processed_at`基準で、
 外部フィードの再フェッチと衝突しないため安全（Issue #239の同一調査で確認済み）。
 
 ## 来歴・鮮度・差分API（Issue #129・KEV/OSV/JVN共通）
