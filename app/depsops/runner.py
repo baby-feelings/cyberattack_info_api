@@ -150,7 +150,7 @@ def _record_pr_logs(
     processed_at: datetime,
     resolved: list[dict[str, Any]] | None = None,
 ) -> None:
-    """判定した PR を1件1行で DependabotPrLog に記録する。
+    """判定した PR を1件1行で DependabotPrLog に記録し、解決済みPRの履歴を削除する。
 
     ダッシュボードで「要確認」PR の一覧・理由を後から確認できるようにするための
     履歴テーブル。Slack 通知（実行時点のスナップショットのみ）とは別に保持する。
@@ -167,6 +167,27 @@ def _record_pr_logs(
             processed_at=processed_at,
         ))
     for item in flagged:
+        # 同じ理由で「要確認」のまま続くPRは毎日行を追記せず、既存行の判定日時を更新する
+        # （理由・セキュリティ判定が変わった場合のみ新しい行として履歴に残す）
+        latest = (
+            db.query(DependabotPrLog)
+            .filter(
+                DependabotPrLog.repo_full_name == item["repo_full_name"],
+                DependabotPrLog.pr_number == item["pr_number"],
+            )
+            .order_by(DependabotPrLog.processed_at.desc(), DependabotPrLog.id.desc())
+            .first()
+        )
+        if (
+            latest is not None
+            and latest.action == "flagged"
+            and latest.reason == item.get("reason")
+            and latest.is_security_update == item.get("is_security_update")
+        ):
+            latest.title = item["title"]
+            latest.compatibility_badge_url = item.get("compatibility_badge_url")
+            latest.processed_at = processed_at
+            continue
         db.add(DependabotPrLog(
             repo_full_name=item["repo_full_name"],
             pr_number=item["pr_number"],
@@ -177,17 +198,14 @@ def _record_pr_logs(
             compatibility_badge_url=item.get("compatibility_badge_url"),
             processed_at=processed_at,
         ))
+    # 解決済み（DEPSOPS外の要因で解消）のPRは履歴を残さず、そのPRの全行を削除する。
+    # 「未解決」件数は最新状態が"flagged"のPRのみを数えるため集計は変わらず、
+    # 毎日追記される"flagged"行の肥大化も解消できる（自動マージ"merged"の記録は残す）
     for item in resolved or []:
-        db.add(DependabotPrLog(
-            repo_full_name=item["repo_full_name"],
-            pr_number=item["pr_number"],
-            title=item["title"],
-            action="closed",
-            reason=item.get("reason"),
-            is_security_update=item.get("is_security_update"),
-            compatibility_badge_url=item.get("compatibility_badge_url"),
-            processed_at=processed_at,
-        ))
+        db.query(DependabotPrLog).filter(
+            DependabotPrLog.repo_full_name == item["repo_full_name"],
+            DependabotPrLog.pr_number == item["pr_number"],
+        ).delete(synchronize_session=False)
     db.commit()
 
 
@@ -245,6 +263,100 @@ def _delete_old_depsops_records(db: Session) -> int:
         "DEPSOPS old PR log records deleted: %d (processed_at < %s)", deleted, cutoff.date(),
     )
     return deleted
+
+
+def _purge_legacy_closed_pr_logs(db: Session) -> int:
+    """過去に"closed"として記録されたPRの履歴行を全削除する（解決済みの削除方針への移行用）。
+
+    以前は解消を検知すると"closed"行を追記していたが、現在は解消PRの全行を削除する。
+    既に記録されている"closed"行を毎回の実行時に掃除し、マイグレーション無しで
+    本番データを新方針へ収束させる。最新状態が"closed"のPRのみが対象で、
+    その後再び"flagged"/"merged"になったPRは削除しない。
+
+    Returns:
+        削除した行数
+    """
+    rows = (
+        db.query(
+            DependabotPrLog.id, DependabotPrLog.repo_full_name,
+            DependabotPrLog.pr_number, DependabotPrLog.action,
+        )
+        .order_by(DependabotPrLog.processed_at.desc(), DependabotPrLog.id.desc())
+        .all()
+    )
+    latest: dict[tuple[str, int], str] = {}
+    for _id, repo, number, action in rows:
+        latest.setdefault((repo, number), action)
+
+    deleted = 0
+    for (repo, number), action in latest.items():
+        if action != "closed":
+            continue
+        deleted += (
+            db.query(DependabotPrLog)
+            .filter(
+                DependabotPrLog.repo_full_name == repo,
+                DependabotPrLog.pr_number == number,
+            )
+            .delete(synchronize_session=False)
+        )
+    db.commit()
+    logger.info("DEPSOPS legacy closed PR log records deleted: %d", deleted)
+    return deleted
+
+
+def _collapse_duplicate_flagged_logs(db: Session) -> int:
+    """同一PRで同じ内容の"flagged"行が連続している重複を、最新の1行にまとめる。
+
+    以前は「要確認」のPRが毎回の実行で1行ずつ追記されていたため、既存データには
+    同じPRの同一内容の行が大量に残っている。直前の行（action問わず）と
+    (action="flagged", reason, is_security_update)が同一の"flagged"行について、
+    古い側を削除して最新の行だけを残す（冪等）。
+
+    Returns:
+        削除した行数
+    """
+    rows = (
+        db.query(DependabotPrLog)
+        .order_by(
+            DependabotPrLog.repo_full_name, DependabotPrLog.pr_number,
+            DependabotPrLog.processed_at.asc(), DependabotPrLog.id.asc(),
+        )
+        .all()
+    )
+    delete_ids: list[int] = []
+    previous: DependabotPrLog | None = None
+    for row in rows:
+        same_pr = (
+            previous is not None
+            and previous.repo_full_name == row.repo_full_name
+            and previous.pr_number == row.pr_number
+        )
+        if (
+            same_pr
+            and previous is not None
+            and previous.action == "flagged"
+            and row.action == "flagged"
+            and previous.reason == row.reason
+            and previous.is_security_update == row.is_security_update
+        ):
+            delete_ids.append(previous.id)
+        previous = row
+
+    for start in range(0, len(delete_ids), 500):
+        db.query(DependabotPrLog).filter(
+            DependabotPrLog.id.in_(delete_ids[start:start + 500])
+        ).delete(synchronize_session=False)
+    db.commit()
+    logger.info("DEPSOPS duplicate flagged log records collapsed: %d", len(delete_ids))
+    return len(delete_ids)
+
+
+def _cleanup_pr_logs(db: Session) -> None:
+    """PR判定履歴の整理（旧"closed"行の削除・重複"flagged"行の集約・保持期間超過分の削除）。"""
+    _purge_legacy_closed_pr_logs(db)
+    _collapse_duplicate_flagged_logs(db)
+    _delete_old_depsops_records(db)
 
 
 def _process_repo(
@@ -396,7 +508,7 @@ def run_dependabot_ops(*, force: bool = False) -> tuple[int, int, int]:
         # 失敗してもクロール自体は成功扱いとする
         try:
             _record_pr_logs(db, merged, flagged, started_at, resolved=resolved)
-            _delete_old_depsops_records(db)
+            _cleanup_pr_logs(db)
         except Exception as exc:
             logger.error("Failed to record DEPSOPS PR logs: %s", exc, exc_info=True)
     finally:

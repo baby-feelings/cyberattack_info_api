@@ -6,9 +6,7 @@ export interface DependabotPrLogOut {
   repo_full_name: string
   pr_number: number
   title: string
-  // "closed": 過去にflagged記録した後、DEPSOPS外の要因（Dependabotの自動クローズ・
-  // 手動マージ等）で解消済みと判定されたことを示す（バックエンド参照）
-  action: 'merged' | 'flagged' | 'closed'
+  action: 'merged' | 'flagged'
   reason: string | null
   is_security_update: boolean | null
   compatibility_badge_url: string | null
@@ -26,7 +24,7 @@ export async function fetchDepsOpsList(params: {
   page?: number
   perPage?: number
   repo?: string | null
-  action?: 'merged' | 'flagged' | 'closed' | null
+  action?: 'merged' | 'flagged' | null
 }): Promise<DepsOpsListResponse> {
   const p = new URLSearchParams()
   p.set('page', String(params.page ?? 1))

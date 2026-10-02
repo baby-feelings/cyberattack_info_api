@@ -25,7 +25,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | `page` | int | ページ番号（デフォルト: 1） |
 | `per_page` | int | 件数（デフォルト: 50、最大: 200） |
 | `repo` | string | リポジトリ名で絞り込み（完全一致。例: `owner/repo`） |
-| `action` | string | 判定結果で絞り込み（`merged` / `flagged` / `closed`） |
+| `action` | string | 判定結果で絞り込み（`merged` / `flagged`） |
 
 **レスポンス例:**
 ```json
@@ -55,10 +55,10 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 > alerts: Read-only」）が付与されていない可能性がある。付与後に実行された分から反映される
 > （過去に記録済みの履歴行は遡って再判定されない）。
 >
-> `action=closed` は、過去に `flagged`（要確認）と記録した PR が、Dependabotの自動
-> クローズや手動マージ等 DEPSOPS の関知しないところで解消されたことを検知した記録
-> （詳細は `.claude/skills/depscan-depsops/SKILL.md` の「DEPSOPS」節参照）。ダッシュボードの
-> 「未解決」件数計算はこれを`flagged`と区別して除外するため、実態に合った件数になる。
+> 解決済みPR（Dependabotの自動クローズや手動マージ等 DEPSOPS の関知しないところで解消）は
+> 履歴ごと削除されるため、`action` は `merged` / `flagged` の2種のみ。同じ理由で要確認のまま
+> 続くPRは1行に集約され、`processed_at` は最後に確認した日時になる（詳細は
+> `.claude/skills/depscan-depsops/SKILL.md` の「DEPSOPS」節参照）。
 
 ---
 

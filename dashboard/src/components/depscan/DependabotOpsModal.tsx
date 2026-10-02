@@ -8,28 +8,19 @@ import { DepsOpsRepoBarChart } from './DepsOpsRepoBarChart'
 
 const PER_PAGE = 20
 
-const ACTIONS: { key: 'ALL' | 'merged' | 'flagged' | 'closed'; label: string }[] = [
+const ACTIONS: { key: 'ALL' | 'merged' | 'flagged'; label: string }[] = [
   { key: 'ALL', label: 'すべて' },
   { key: 'merged', label: '自動マージ' },
   { key: 'flagged', label: '要確認' },
-  { key: 'closed', label: '解消済み' },
 ]
 
-// "closed": 過去にflagged記録した後、DEPSOPS外の要因（Dependabotの自動クローズ・
-// 手動マージ等）で解消済みと判定されたPR（app/depsops/runner.py の
-// _find_resolved_flagged_prs 参照）
-function ActionBadge({ action }: { action: 'merged' | 'flagged' | 'closed' }) {
+// 解決済みのPR（DEPSOPS外の要因で解消）は履歴ごと削除されるため、一覧に出るのは
+// 自動マージ済みと要確認（未解決）のみ（app/depsops/runner.py の _record_pr_logs 参照）
+function ActionBadge({ action }: { action: 'merged' | 'flagged' }) {
   if (action === 'merged') {
     return (
       <span className="inline-block px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
         自動マージ
-      </span>
-    )
-  }
-  if (action === 'closed') {
-    return (
-      <span className="inline-block px-1.5 py-0.5 rounded text-xs font-medium bg-slate-500/15 text-slate-400 border border-slate-500/30">
-        解消済み
       </span>
     )
   }
@@ -74,7 +65,7 @@ function CompatibilityScoreBadge({ badgeUrl }: { badgeUrl: string | null }) {
 // Dependabot PR 自動運用（DEPSOPS）の判定履歴を表示する全画面モーダル。
 // DEPSCAN タブ内のボタンから開く（5つ目の固定タブにはしない設計判断。詳細はCLAUDE.md参照）。
 export function DependabotOpsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [action, setAction] = useState<'ALL' | 'merged' | 'flagged' | 'closed'>('ALL')
+  const [action, setAction] = useState<'ALL' | 'merged' | 'flagged'>('ALL')
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [items, setItems] = useState<DependabotPrLogOut[]>([])

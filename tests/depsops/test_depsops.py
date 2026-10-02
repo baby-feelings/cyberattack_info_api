@@ -28,11 +28,14 @@ from app.depsops.github_client import (  # noqa: E402
 )
 from app.depsops.models import DependabotPrLog  # noqa: E402
 from app.depsops.runner import (  # noqa: E402
+    _cleanup_pr_logs,
+    _collapse_duplicate_flagged_logs,
     _delete_old_depsops_records,
     _extract_compatibility_badge_url,
     _find_resolved_flagged_prs,
     _matches_security_alert,
     _process_pr,
+    _purge_legacy_closed_pr_logs,
     _record_pr_logs,
     run_dependabot_ops,
 )
@@ -575,10 +578,10 @@ class TestRunDependabotOps:
         assert rows[0].reason is None
         assert "メジャー" in rows[1].reason
 
-    def test_detects_and_records_pr_resolved_outside_depsops(self, db_session):
+    def test_deletes_logs_of_pr_resolved_outside_depsops(self, db_session):
         """CI未設定等で過去にflagged記録したPRが、今回のスキャンでOpen PR一覧に
-        含まれなくなった場合（Dependabotの自動クローズ・手動マージ等）、"closed"
-        として記録され、以後「未解決」件数から除外されること。"""
+        含まれなくなった場合（Dependabotの自動クローズ・手動マージ等）、そのPRの
+        履歴行が全削除され、以後「未解決」件数から除外されること。"""
         db_session.add(DependabotPrLog(
             repo_full_name="u/r1", pr_number=99, title="bump old from 1.0.0 to 1.0.1",
             action="flagged", reason="CI未設定のリポジトリ",
@@ -592,12 +595,7 @@ class TestRunDependabotOps:
              patch("app.depsops.runner.notify_dependabot_ops"):
             run_dependabot_ops()
 
-        rows = db_session.query(DependabotPrLog).filter_by(pr_number=99).order_by(
-            DependabotPrLog.processed_at,
-        ).all()
-        assert len(rows) == 2
-        assert rows[0].action == "flagged"
-        assert rows[-1].action == "closed"
+        assert db_session.query(DependabotPrLog).filter_by(pr_number=99).count() == 0
 
     def test_does_not_resolve_pr_that_is_still_open(self, db_session):
         """過去にflagged記録したPRが今回もOpen一覧に含まれる場合は"closed"にしないこと。"""
@@ -679,18 +677,171 @@ class TestRecordPrLogs:
         row = db_session.query(DependabotPrLog).filter_by(pr_number=1).first()
         assert row.compatibility_badge_url == "https://dependabot-badges.githubapp.com/badges/x"
 
-    def test_writes_resolved_prs_as_closed_action(self, db_session):
-        """resolved（DEPSOPS外の要因で解消済みと判定したPR）は"closed"として記録されること。"""
-        resolved = [
-            {"repo_full_name": "u/r", "pr_number": 3, "title": "bump z", "reason": "解消済み"},
+    def test_resolved_prs_have_all_rows_deleted_but_merged_rows_are_kept(self, db_session):
+        """resolved（DEPSOPS外の要因で解消済みと判定したPR）は全行が削除され、
+        他PRの"merged"（自動マージの記録）は残ること。"""
+        old = datetime(2026, 5, 31, tzinfo=timezone.utc)
+        for n in (3, 3, 4):
+            db_session.add(DependabotPrLog(
+                repo_full_name="u/r", pr_number=n, title="bump", action="flagged",
+                reason="CI未設定", processed_at=old,
+            ))
+        db_session.add(DependabotPrLog(
+            repo_full_name="u/r", pr_number=5, title="bump", action="merged",
+            processed_at=old,
+        ))
+        db_session.commit()
+        resolved = [{"repo_full_name": "u/r", "pr_number": 3, "title": "bump z"}]
+
+        _record_pr_logs(
+            db_session, [], [], datetime(2026, 6, 1, tzinfo=timezone.utc), resolved=resolved,
+        )
+
+        assert db_session.query(DependabotPrLog).filter_by(pr_number=3).count() == 0
+        assert db_session.query(DependabotPrLog).filter_by(pr_number=4).count() == 1
+        assert db_session.query(DependabotPrLog).filter_by(pr_number=5).count() == 1
+        assert db_session.query(DependabotPrLog).filter_by(action="closed").count() == 0
+
+    def test_unchanged_flagged_pr_updates_existing_row_instead_of_appending(self, db_session):
+        """同じ理由で「要確認」のまま続くPRは、行を追記せず既存行の判定日時を更新すること。"""
+        flagged = [{
+            "repo_full_name": "u/r", "pr_number": 2, "title": "bump y", "reason": "メジャー",
+            "is_security_update": False,
+        }]
+        day1 = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        day2 = datetime(2026, 6, 2, tzinfo=timezone.utc)
+
+        _record_pr_logs(db_session, [], flagged, day1)
+        _record_pr_logs(db_session, [], flagged, day2)
+
+        rows = db_session.query(DependabotPrLog).filter_by(pr_number=2).all()
+        assert len(rows) == 1
+        assert rows[0].processed_at.replace(tzinfo=timezone.utc) == day2
+
+    def test_flagged_pr_with_changed_reason_appends_new_row(self, db_session):
+        """理由が変わった場合は状態変化の履歴として新しい行が追記されること。"""
+        base = {"repo_full_name": "u/r", "pr_number": 2, "title": "bump y"}
+        _record_pr_logs(
+            db_session, [], [{**base, "reason": "CI未設定"}],
+            datetime(2026, 6, 1, tzinfo=timezone.utc),
+        )
+        _record_pr_logs(
+            db_session, [], [{**base, "reason": "メジャーバージョンアップ"}],
+            datetime(2026, 6, 2, tzinfo=timezone.utc),
+        )
+
+        rows = db_session.query(DependabotPrLog).filter_by(pr_number=2).order_by(
+            DependabotPrLog.processed_at,
+        ).all()
+        assert [r.reason for r in rows] == ["CI未設定", "メジャーバージョンアップ"]
+
+    def test_flagged_after_merged_is_appended_not_merged_into_old_row(self, db_session):
+        """直近の行が"merged"のPRが再度flaggedになった場合は新しい行として追記されること。"""
+        base = {"repo_full_name": "u/r", "pr_number": 2, "title": "bump y"}
+        _record_pr_logs(db_session, [base], [], datetime(2026, 6, 1, tzinfo=timezone.utc))
+        _record_pr_logs(
+            db_session, [], [{**base, "reason": "CI失敗"}],
+            datetime(2026, 6, 2, tzinfo=timezone.utc),
+        )
+
+        actions = [
+            r.action for r in db_session.query(DependabotPrLog).filter_by(pr_number=2)
+            .order_by(DependabotPrLog.processed_at).all()
         ]
-        processed_at = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        assert actions == ["merged", "flagged"]
 
-        _record_pr_logs(db_session, [], [], processed_at, resolved=resolved)
 
-        row = db_session.query(DependabotPrLog).filter_by(pr_number=3).first()
-        assert row.action == "closed"
-        assert row.reason == "解消済み"
+class TestCleanupPrLogs:
+    @staticmethod
+    def _add(db, n, action, day, reason="CI未設定", repo="u/r", security=None):
+        db.add(DependabotPrLog(
+            repo_full_name=repo, pr_number=n, title="bump", action=action,
+            reason=reason if action != "merged" else None, is_security_update=security,
+            processed_at=datetime(2026, 9, day, tzinfo=timezone.utc),
+        ))
+
+    def test_purge_legacy_closed_deletes_all_rows_of_closed_prs_only(self, db_session):
+        self._add(db_session, 1, "flagged", 1)
+        self._add(db_session, 1, "flagged", 2)
+        self._add(db_session, 1, "closed", 3, reason="解消済み")
+        self._add(db_session, 2, "flagged", 1)
+        self._add(db_session, 3, "merged", 1)
+        db_session.commit()
+
+        deleted = _purge_legacy_closed_pr_logs(db_session)
+
+        assert deleted == 3
+        remaining = sorted(
+            (r.pr_number, r.action) for r in db_session.query(DependabotPrLog).all()
+        )
+        assert remaining == [(2, "flagged"), (3, "merged")]
+
+    def test_purge_legacy_closed_keeps_pr_that_became_flagged_again(self, db_session):
+        """closedの後に再びflaggedになったPRは最新状態がflaggedなので削除しないこと。"""
+        self._add(db_session, 1, "closed", 1, reason="解消済み")
+        self._add(db_session, 1, "flagged", 2)
+        db_session.commit()
+
+        assert _purge_legacy_closed_pr_logs(db_session) == 0
+        assert db_session.query(DependabotPrLog).count() == 2
+
+    def test_collapse_keeps_only_latest_of_identical_consecutive_flagged_rows(self, db_session):
+        for day in (1, 2, 3, 4):
+            self._add(db_session, 1, "flagged", day)
+        self._add(db_session, 2, "flagged", 1)
+        db_session.commit()
+
+        deleted = _collapse_duplicate_flagged_logs(db_session)
+
+        assert deleted == 3
+        rows = db_session.query(DependabotPrLog).filter_by(pr_number=1).all()
+        assert len(rows) == 1
+        assert rows[0].processed_at.replace(tzinfo=timezone.utc).day == 4
+        assert db_session.query(DependabotPrLog).filter_by(pr_number=2).count() == 1
+
+    def test_collapse_preserves_history_when_reason_changes_in_between(self, db_session):
+        """理由が変わった境目の行は履歴として残し、同一内容の連続分だけを集約すること。"""
+        self._add(db_session, 1, "flagged", 1, reason="CI未設定")
+        self._add(db_session, 1, "flagged", 2, reason="CI未設定")
+        self._add(db_session, 1, "flagged", 3, reason="メジャー")
+        self._add(db_session, 1, "flagged", 4, reason="メジャー")
+        db_session.commit()
+
+        assert _collapse_duplicate_flagged_logs(db_session) == 2
+        days = sorted(
+            r.processed_at.replace(tzinfo=timezone.utc).day
+            for r in db_session.query(DependabotPrLog).all()
+        )
+        assert days == [2, 4]
+
+    def test_collapse_does_not_merge_across_different_prs_or_repos(self, db_session):
+        self._add(db_session, 1, "flagged", 1, repo="u/a")
+        self._add(db_session, 1, "flagged", 1, repo="u/b")
+        self._add(db_session, 2, "flagged", 1, repo="u/a")
+        db_session.commit()
+
+        assert _collapse_duplicate_flagged_logs(db_session) == 0
+        assert db_session.query(DependabotPrLog).count() == 3
+
+    def test_collapse_does_not_touch_merged_rows(self, db_session):
+        self._add(db_session, 1, "merged", 1)
+        self._add(db_session, 1, "merged", 2)
+        db_session.commit()
+
+        assert _collapse_duplicate_flagged_logs(db_session) == 0
+
+    def test_cleanup_is_idempotent(self, db_session):
+        for day in (1, 2, 3):
+            self._add(db_session, 1, "flagged", day)
+        self._add(db_session, 2, "closed", 1, reason="解消済み")
+        db_session.commit()
+
+        _cleanup_pr_logs(db_session)
+        first = db_session.query(DependabotPrLog).count()
+        _cleanup_pr_logs(db_session)
+
+        assert first == 1
+        assert db_session.query(DependabotPrLog).count() == 1
 
 
 class TestFindResolvedFlaggedPrs:
