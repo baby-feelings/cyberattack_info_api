@@ -909,6 +909,97 @@ class TestBuildFindings:
         assert records[0]["repo_visibility"] is None
 
 
+class TestBuildFindingsInfersFixedVersion:
+    """OSVに`fixed`が無く`last_affected`だけの脆弱性は、レジストリの最新版で修正版を補う。"""
+
+    KEY = ("PyPI", "accelerate", "1.12.0")
+
+    @staticmethod
+    def _vuln(events, pkg="accelerate", ecosystem="PyPI") -> dict:
+        return {
+            "id": "PYSEC-2026-3804", "summary": "path traversal",
+            "affected": [{
+                "package": {"name": pkg, "ecosystem": ecosystem},
+                "ranges": [{"type": "ECOSYSTEM", "events": events}],
+            }],
+        }
+
+    def _run(self, vuln, latest, key=None, dep_to_repos=None):
+        key = key or self.KEY
+        dep_to_repos = dep_to_repos or {key: [("u/r", "requirements.txt")]}
+        with (
+            patch(
+                "app.depscan.crawler.query_versions_batch",
+                return_value={key: [vuln["id"]]},
+            ),
+            patch("app.depscan.crawler.fetch_vuln_by_id", return_value=vuln),
+            patch("app.depscan.crawler.fetch_latest_version", return_value=latest) as fetch,
+        ):
+            return _build_findings(dep_to_repos), fetch
+
+    def test_latest_newer_than_last_affected_becomes_fixed_version(self):
+        vuln = self._vuln([{"introduced": "0"}, {"last_affected": "1.14.0"}])
+        records, _ = self._run(vuln, "1.15.0")
+        assert records[0]["fixed_versions"] == ["1.15.0"]
+
+    def test_latest_not_newer_leaves_fixed_versions_empty(self):
+        """最新版がまだ影響範囲内（修正版が未公開）なら補わない。"""
+        vuln = self._vuln([{"introduced": "0"}, {"last_affected": "1.14.0"}])
+        records, _ = self._run(vuln, "1.14.0")
+        assert records[0]["fixed_versions"] == []
+
+    def test_registry_failure_leaves_fixed_versions_empty(self):
+        vuln = self._vuln([{"introduced": "0"}, {"last_affected": "1.14.0"}])
+        records, _ = self._run(vuln, None)
+        assert records[0]["fixed_versions"] == []
+
+    def test_prerelease_latest_is_not_trusted(self):
+        vuln = self._vuln([{"introduced": "0"}, {"last_affected": "1.14.0"}])
+        records, _ = self._run(vuln, "2.0.0rc1")
+        assert records[0]["fixed_versions"] == []
+
+    def test_explicit_fixed_event_is_never_replaced_or_looked_up(self):
+        vuln = self._vuln([{"introduced": "0"}, {"fixed": "1.13.0"}])
+        records, fetch = self._run(vuln, "9.9.9")
+        assert records[0]["fixed_versions"] == ["1.13.0"]
+        fetch.assert_not_called()
+
+    def test_no_last_affected_does_not_query_registry(self):
+        vuln = self._vuln([{"introduced": "0"}])
+        records, fetch = self._run(vuln, "9.9.9")
+        assert records[0]["fixed_versions"] == []
+        fetch.assert_not_called()
+
+    def test_only_last_affected_of_the_same_package_is_used(self):
+        """同じ脆弱性が別パッケージ/別エコシステムの last_affected を含んでいても無視する。"""
+        vuln = self._vuln([{"introduced": "0"}, {"last_affected": "99.0.0"}], pkg="other")
+        records, fetch = self._run(vuln, "1.15.0")
+        assert records[0]["fixed_versions"] == []
+        fetch.assert_not_called()
+
+    def test_package_name_matched_with_pypi_normalization(self):
+        vuln = self._vuln([{"introduced": "0"}, {"last_affected": "1.14.0"}], pkg="My_Pkg")
+        key = ("PyPI", "my-pkg", "1.0.0")
+        records, _ = self._run(vuln, "1.15.0", key=key)
+        assert records[0]["fixed_versions"] == ["1.15.0"]
+
+    def test_latest_must_exceed_every_last_affected(self):
+        vuln = self._vuln([{"introduced": "0"}, {"last_affected": "1.14.0"}])
+        vuln["affected"][0]["ranges"].append(
+            {"type": "ECOSYSTEM", "events": [{"introduced": "2.0.0"}, {"last_affected": "2.3.0"}]},
+        )
+        records, _ = self._run(vuln, "1.15.0")
+        assert records[0]["fixed_versions"] == []
+
+    def test_registry_is_queried_once_per_package(self):
+        """同じパッケージ×複数リポジトリ/複数脆弱性でもレジストリは1回だけ引く。"""
+        vuln = self._vuln([{"introduced": "0"}, {"last_affected": "1.14.0"}])
+        dep_to_repos = {self.KEY: [("u/r1", "requirements.txt"), ("u/r2", "requirements.txt")]}
+        records, fetch = self._run(vuln, "1.15.0", dep_to_repos=dep_to_repos)
+        assert len(records) == 2
+        assert fetch.call_count == 1
+
+
 class TestApplyReachability:
     def test_updates_records_using_fetched_source(self):
         records = [
@@ -1019,6 +1110,20 @@ class TestUpsertFindings:
         finding = db_session.query(DependencyFinding).filter_by(osv_id="GHSA-001").first()
         assert finding.reachability == "reachable"
         assert finding.summary == "old summary"  # 到達可能性以外は更新されない
+
+    def test_existing_open_finding_gets_newly_inferred_fixed_versions(self, db_session):
+        """以前は修正版が空だった未解決findingに、後から判明した修正版を反映する。"""
+        _make_finding(db_session, osv_id="GHSA-001", fixed_versions=[])
+        _upsert_findings(db_session, [self._rec(fixed_versions=["1.15.0"])])
+        finding = db_session.query(DependencyFinding).filter_by(osv_id="GHSA-001").first()
+        assert finding.fixed_versions == ["1.15.0"]
+
+    def test_existing_fixed_versions_not_wiped_when_lookup_returns_nothing(self, db_session):
+        """レジストリを一時的に引けず空になった回に、既知の修正版を消さない。"""
+        _make_finding(db_session, osv_id="GHSA-001", fixed_versions=["1.15.0"])
+        _upsert_findings(db_session, [self._rec(fixed_versions=[])])
+        finding = db_session.query(DependencyFinding).filter_by(osv_id="GHSA-001").first()
+        assert finding.fixed_versions == ["1.15.0"]
 
 
 class TestResolveStaleFindings:

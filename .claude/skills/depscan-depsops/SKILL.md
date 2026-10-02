@@ -20,6 +20,20 @@ Contents: Read-only + **Issues: Write** 推奨）を使用する。
 を使い、サブディレクトリ（monorepo）も含めて全ファイルパスを1回のAPI呼び出しで取得する。
 対応する10エコシステムのロックファイル名は `app.depscan.parsers.LOCKFILE_FILENAMES` で判定する。
 
+## OSVに`fixed`が無く`last_affected`だけの脆弱性は、レジストリの最新版で修正版を補う
+OSVは影響範囲の上限（`last_affected`）しか載せない脆弱性があり（例: accelerateの
+PYSEC-2026-3804は「〜1.14.0」）、`fixed`イベントだけを見ると`fixed_versions`が空になって
+「修正版なし」と誤表示される（実際はPyPIの1.15.0へ上げれば解消した）。`_build_findings`は
+`fixed`が空のときだけ`_infer_fixed_versions`で補う: 対象パッケージ（エコシステム一致・
+PyPI流の名前正規化）の`last_affected`を集め、`app.core.registry_client.fetch_latest_version`
+（PyPI・npm・RubyGems・crates.io・Pub）で最新版を引き、**全ての`last_affected`より新しい
+場合のみ**それを`fixed_versions`にする。版の大小は数値のみの表記（1.2.3）に限って比較し、
+プレリリース等は補わない（誤って「修正版」と示すより安全）。最新版は「影響を受けない版の目安」で
+最小の修正版とは限らない（npmはメジャーを跨ぐことがある）。レジストリ取得失敗・未対応
+エコシステム（Maven/Go/NuGet/Packagist/Hex）は従来どおり空。レジストリはパッケージ単位で
+1スキャン内キャッシュする。既存の未解決findingへも、補完できた回にのみ`fixed_versions`を
+反映する（一時的に引けなかった回に空で上書きして既知の修正版を消さないため）。
+
 ## DEPSCAN の新規検知は GitHub Issue としても自動起票する（issue_management.py）
 `app.depscan.issue_management._file_github_issues` が、新規検知を検知されたリポジトリ自身に
 Issue として起票する（Slack通知と同じ `new_snapshots` を使用）。「リポジトリ単位でグルーピング
