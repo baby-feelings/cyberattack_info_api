@@ -191,7 +191,7 @@ CIで自動実行される。間接依存（他パッケージ経由で入る依
 （実際に`pip`が解決するバージョンがそれより新しくても指摘される）。対応方針は`requirements.txt`
 末尾の「セキュリティピン留め」セクションに、実際にpipが解決するバージョンを下限として明示的に
 追加し、なぜそのパッケージ・バージョンが必要かをコメントで残すこと（例: `anyio>=4.14.2`は
-`httpx`/`starlette`経由の間接依存でGHSA-5p39-cfhj-2xmp対策、`python-multipart>=0.0.31`は
+`httpx`/`starlette`経由の間接依存でGHSA-5p39-cfhj-2xmp対策、`python-multipart>=0.0.32`は
 `fastapi`の`python-multipart`extra経由の間接依存対策）。
 
 **他パッケージが依存を狭く固定していて上げられない場合**（実例: `semgrep`が`pyjwt~=2.13.0`・
