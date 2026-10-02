@@ -24,7 +24,7 @@
 | `CODESCAN_CRON_HOUR_UTC` / `CODESCAN_CRON_MINUTE_UTC` | - | CODESCAN 実行時刻（時・分・UTC）（デフォルト: `22`時`30`分。DEPSCANの後段） |
 | `CODESCAN_RETENTION_DAYS` | - | CODESCAN データの保持期間（日数・デフォルト: `180`）。解決済みのままこの日数を超えたレコードのみ自動削除（未解決レコードは対象外） |
 | `DEPSOPS_CRON_HOUR_UTC` | - | DEPSOPS 実行時刻（時・UTC）（デフォルト: `23`） |
-| `DEPSOPS_RETENTION_DAYS` | - | DEPSOPS のPR判定履歴ログの保持期間（日数・デフォルト: `180`）。`processed_at`基準で削除 |
+| `DEPSOPS_RETENTION_DAYS` | - | DEPSOPS のPR判定履歴ログの保持期間（日数・デフォルト: `180`）。`processed_at`基準で削除（解決済みPRの履歴は保持期間を待たず実行時に削除される） |
 | `REPO_CLEANUP_CRON_HOUR_UTC` / `REPO_CLEANUP_CRON_MINUTE_UTC` | - | 削除済みリポジトリのデータ削除実行時刻（時・分・UTC）（デフォルト: `23`時`15`分。DEPSOPSの後段、Issue #228） |
 | `USER_CRAWL_CRON_HOUR_UTC` / `USER_CRAWL_CRON_MINUTE_UTC` | - | 登録済み他ユーザー向けDEPSCAN/CODESCAN/DEPSOPS実行時刻（時・分・UTC）（デフォルト: `23`時`30`分。削除済みリポジトリ掃除の後段、Issue #227） |
 | `GITHUB_OAUTH_CLIENT_ID` | - | DEPSCAN ダッシュボードの GitHub ログイン用 OAuth App の Client ID。未設定時は `/auth/github/login` が `503` を返すのみ |

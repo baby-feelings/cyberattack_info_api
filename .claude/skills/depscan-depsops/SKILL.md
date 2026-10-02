@@ -132,9 +132,9 @@ OWASP Top 10:2025「ソフトウェアサプライチェーンの失敗」対策
 オーケストレーションのため、それぞれのエントリポイント冒頭で直接`already_succeeded_today`
 を呼び、今日（UTC日付）既に成功実行済みなら`(0, 0, 0)`を返してスキップする（KEV/OSV/JVN/
 CODESCANは`run_crawler`内で同じ判定を共通で行う。詳細は`crawler-internals`スキル参照）。
-**DEPSOPSはこの対策が特に重要**: 実行ごとに1PRにつき1行追記するログ設計のため、APScheduler
-とGitHub Actions（daily-crawl.yml）の二重トリガーで1日2回実行されると件数がそのまま
-二重化する（本番で総件数2388件中約半数が重複していた）。`force=True`（`/admin/dependabot-ops
+**DEPSOPSはこの対策が特に重要**: 履歴テーブルへ実行ごとに記録するログ設計のため、APScheduler
+とGitHub Actions（daily-crawl.yml）の二重トリガーで1日2回実行されると件数が二重化する
+（本番で総件数2388件中約半数が重複していた。現在は同内容のflaggedは1行に集約される）。`force=True`（`/admin/dependabot-ops
 ?force=true`）で明示的にバイパス可能。
 
 ## DEPSOPS（app/depsops/）: Dependabot PR の安全な自動マージ運用層
@@ -160,7 +160,7 @@ DEPSCAN（検知）・Dependabot（修正PR作成）に続く3層目として、
 全画面モーダル（`DependabotOpsModal.tsx`）として統合している。
 
 **リポジトリ別未解決PR件数は`GET /api/depsops/stats`で集計済みの値を返す**。
-`DependabotPrLog`は実行のたびに同じPRへ1行追加するappend-onlyログのため、
+`DependabotPrLog`は同じPRに複数行（理由が変わった履歴・自動マージの記録）を持ち得るため、
 「未解決」の判定には`(repo_full_name, pr_number)`ごとの最新1件のみを見る必要がある。
 これをダッシュボード側で全件（本番で2000件超）をページングしながら取得して
 集計していたところ、履歴が増えるにつれて往復回数が増え表示に10秒近くかかる
