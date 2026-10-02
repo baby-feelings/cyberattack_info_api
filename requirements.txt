@@ -12,7 +12,7 @@ pydantic>=2.13.5
 pydantic-settings>=2.15.0
 python-dotenv>=1.2.3
 httpx>=0.28.1
-apscheduler>=3.10.4
+apscheduler>=3.11.3
 defusedxml>=0.7.1
 # PyJWT 2.13.0には2026-09公開の脆弱性が26件ある（アルゴリズム混同・DoS等、最大CVSS9.1）。
 # 2.14.0でも1件（GHSA-42vr-xj54-vc7v）が未修正で、全て解消されるのは2.15.0以降。
