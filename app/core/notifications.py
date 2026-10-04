@@ -17,6 +17,7 @@ baby-feelings 自身のリポジトリの通知が届いてしまわないよう
 """
 import logging
 import re
+from abc import ABC, abstractmethod
 from typing import Any
 
 import httpx
@@ -103,6 +104,99 @@ def _resolve_admin_recipient(db: Session | None = None) -> list[str]:
             db.close()
 
 
+class Notifier(ABC):
+    """Slack 通知の共通フロー（Template Method）。
+
+    「送るべき内容があるか判定 → 送信先を解決 → メッセージを組み立て → 全送信先へ送る」という
+    流れを `send` に集約し、サブクラスは次の3点だけを差し替える。
+
+    - `has_content`: 通知すべき内容があるか（変化なし・0件のときは送らない）
+    - `default_recipients`: `recipients` 省略時の送信先（既定経路）
+    - `build_message`: Slack に送る本文
+    """
+
+    def __init__(self, recipients: list[str] | None = None) -> None:
+        # 送信先を明示指定する場合（登録済み他ユーザーの個別クロール結果を本人にだけ送る等）
+        self._recipients = recipients
+
+    @abstractmethod
+    def has_content(self) -> bool:
+        """通知すべき内容があるか。False なら送信先の解決もせずに終了する。"""
+
+    @abstractmethod
+    def default_recipients(self) -> list[str]:
+        """`recipients` 未指定時の送信先URL一覧（毎日クロールが呼ぶ既定の経路）。"""
+
+    @abstractmethod
+    def build_message(self) -> str:
+        """Slack に送る本文を組み立てる。"""
+
+    def send(self) -> None:
+        if not self.has_content():
+            return
+        targets = self.default_recipients() if self._recipients is None else self._recipients
+        if not targets:
+            return
+        message = self.build_message()
+        for url in targets:
+            _send_slack(message, url)
+
+
+class CrawlerSuccessNotifier(Notifier):
+    """クローラー成功時の通知（KEV/OSV/JVN/CODESCAN 共通。変化がなければ通知しない）。"""
+
+    def __init__(
+        self, crawler_type: CrawlerType, inserted: int, updated: int, deleted: int = 0,
+        recipients: list[str] | None = None,
+    ) -> None:
+        super().__init__(recipients)
+        self._crawler_type = crawler_type
+        self._inserted = inserted
+        self._updated = updated
+        self._deleted = deleted
+
+    def has_content(self) -> bool:
+        return not (self._inserted == 0 and self._updated == 0 and self._deleted == 0)
+
+    def default_recipients(self) -> list[str]:
+        return _resolve_recipients(self._crawler_type)
+
+    def build_message(self) -> str:
+        emoji, label = _CRAWLER_LABELS.get(self._crawler_type, (":bell:", self._crawler_type))
+        lines = [
+            f"{emoji} *{label}更新通知*",
+            f">新規追加: *{self._inserted} 件*　更新: {self._updated} 件"
+            + (f"　削除: {self._deleted} 件" if self._deleted else ""),
+            f">詳細: {DASHBOARD_URL}",
+        ]
+        return "\n".join(lines)
+
+
+class CrawlerErrorNotifier(Notifier):
+    """クローラーエラー時の通知。
+
+    検知結果の通知とは異なり、crawler_type に関わらず常に管理者（GITHUB_USERNAME）自身が
+    登録した Webhook にのみ送る（KEV/OSV/JVN のエラーでも全登録ユーザーへは送らない）。
+    """
+
+    def __init__(
+        self, crawler_type: CrawlerType, error: str, recipients: list[str] | None = None,
+    ) -> None:
+        super().__init__(recipients)
+        self._crawler_type = crawler_type
+        self._error = error
+
+    def has_content(self) -> bool:
+        return True
+
+    def default_recipients(self) -> list[str]:
+        return _resolve_admin_recipient()
+
+    def build_message(self) -> str:
+        _, label = _CRAWLER_LABELS.get(self._crawler_type, (":bell:", self._crawler_type))
+        return f":warning: *{label}クローラーエラー*\n```{_sanitize_error(self._error)}```"
+
+
 def notify_success(
     crawler_type: CrawlerType,
     inserted: int,
@@ -118,42 +212,14 @@ def notify_success(
             個別クロール結果を、その本人にだけ送る場合等）に使う。省略時は
             `crawler_type` から自動解決する（毎日クロールが呼ぶ既定の経路）。
     """
-    if inserted == 0 and updated == 0 and deleted == 0:
-        return
-    targets = _resolve_recipients(crawler_type) if recipients is None else recipients
-    if not targets:
-        return
-
-    emoji, label = _CRAWLER_LABELS.get(crawler_type, (":bell:", crawler_type))
-    lines = [
-        f"{emoji} *{label}更新通知*",
-        f">新規追加: *{inserted} 件*　更新: {updated} 件"
-        + (f"　削除: {deleted} 件" if deleted else ""),
-        f">詳細: {DASHBOARD_URL}",
-    ]
-    message = "\n".join(lines)
-    for url in targets:
-        _send_slack(message, url)
+    CrawlerSuccessNotifier(crawler_type, inserted, updated, deleted, recipients).send()
 
 
 def notify_error(
     crawler_type: CrawlerType, error: str, *, recipients: list[str] | None = None,
 ) -> None:
-    """クローラーエラー時の Slack 通知（共通）。
-
-    検知結果の通知（notify_success等）とは異なり、crawler_typeに関わらず
-    常に管理者（GITHUB_USERNAME）自身が登録したWebhookにのみ送る
-    （従来のSLACK_WEBHOOK_URL環境変数1本での運用と同じ「管理者だけがエラーを
-    把握する」という位置づけを維持するため。KEV/OSV/JVNのエラーであっても
-    全登録ユーザーへはブロードキャストしない）。
-    """
-    targets = _resolve_admin_recipient() if recipients is None else recipients
-    if not targets:
-        return
-    _, label = _CRAWLER_LABELS.get(crawler_type, (":bell:", crawler_type))
-    message = f":warning: *{label}クローラーエラー*\n```{_sanitize_error(error)}```"
-    for url in targets:
-        _send_slack(message, url)
+    """クローラーエラー時の Slack 通知（共通）。常に管理者の Webhook にのみ送る。"""
+    CrawlerErrorNotifier(crawler_type, error, recipients).send()
 
 
 # ── DEPSCAN 専用通知 ─────────────────────────────────────────────
@@ -172,6 +238,42 @@ def _truncate_for_slack(message: str) -> str:
     )
 
 
+class DependencyFindingsNotifier(Notifier):
+    """依存ライブラリ脆弱性の新規検知を、リポジトリ別にグルーピングした1通のダイジェストで通知する。
+
+    findings は DependencyFinding 相当のフィールドを持つ辞書のリスト
+    （"repo_full_name"・"package_name"・"installed_version"・"severity"・"fixed_versions"・
+    "osv_id" を使用。ORM セッションクローズ後の DetachedInstanceError を避けるため、
+    ORM オブジェクトではなく辞書で受け取る）。
+    """
+
+    def __init__(
+        self, new_findings: list[dict[str, Any]], recipients: list[str] | None = None,
+    ) -> None:
+        super().__init__(recipients)
+        self._findings = new_findings
+
+    def has_content(self) -> bool:
+        return bool(self._findings)
+
+    def default_recipients(self) -> list[str]:
+        # 省略時は GITHUB_USERNAME 自身の登録済み Webhook へ送る（毎日クロールの既定経路）
+        return _resolve_recipients("DEPSCAN")
+
+    def build_message(self) -> str:
+        emoji, label = _CRAWLER_LABELS["DEPSCAN"]
+        by_repo: dict[str, list[dict[str, Any]]] = {}
+        for finding in self._findings:
+            by_repo.setdefault(finding["repo_full_name"], []).append(finding)
+
+        lines = [f"{emoji} *{label}を{len(self._findings)}件検知*", ""]
+        for repo in sorted(by_repo):
+            lines.append(f"*{repo}*")
+            lines.extend(format_package_lines(by_repo[repo]))
+            lines.append("")
+        return _truncate_for_slack("\n".join(lines).rstrip())
+
+
 def notify_dependency_findings(
     new_findings: list[dict[str, Any]], *, recipients: list[str] | None = None,
 ) -> None:
@@ -180,35 +282,56 @@ def notify_dependency_findings(
 
     Args:
         new_findings: DependencyFinding 相当のフィールドを持つ辞書のリスト
-            （"repo_full_name"・"package_name"・"installed_version"・"severity"・
-            "fixed_versions"・"osv_id" を使用。ORM セッションクローズ後の
-            DetachedInstanceError を避けるため、ORM オブジェクトではなく辞書で受け取る）
         recipients: 送信先を明示的に指定する場合に使う。省略時は
             GITHUB_USERNAME 自身の登録済みWebhookへ送る（毎日クロールの既定経路）。
     """
-    if not new_findings:
-        return
-    targets = _resolve_recipients("DEPSCAN") if recipients is None else recipients
-    if not targets:
-        return
-
-    emoji, label = _CRAWLER_LABELS["DEPSCAN"]
-    by_repo: dict[str, list[dict[str, Any]]] = {}
-    for finding in new_findings:
-        by_repo.setdefault(finding["repo_full_name"], []).append(finding)
-
-    lines = [f"{emoji} *{label}を{len(new_findings)}件検知*", ""]
-    for repo in sorted(by_repo):
-        lines.append(f"*{repo}*")
-        lines.extend(format_package_lines(by_repo[repo]))
-        lines.append("")
-
-    message = _truncate_for_slack("\n".join(lines).rstrip())
-    for url in targets:
-        _send_slack(message, url)
+    DependencyFindingsNotifier(new_findings, recipients).send()
 
 
 # ── DEPSOPS 専用通知 ─────────────────────────────────────────────
+
+
+class DependabotOpsNotifier(Notifier):
+    """DEPSOPS の実行結果（自動マージ・要確認）の通知。
+
+    自動マージした PR・人の確認が必要な PR の両方を毎回通知する（監査性重視。
+    merged/flagged が両方空の場合のみ送信をスキップする）。
+    """
+
+    def __init__(
+        self,
+        merged: list[dict[str, Any]],
+        flagged: list[dict[str, Any]],
+        recipients: list[str] | None = None,
+    ) -> None:
+        super().__init__(recipients)
+        self._merged = merged
+        self._flagged = flagged
+
+    def has_content(self) -> bool:
+        return bool(self._merged or self._flagged)
+
+    def default_recipients(self) -> list[str]:
+        return _resolve_recipients("DEPSOPS")
+
+    def build_message(self) -> str:
+        emoji, label = _CRAWLER_LABELS["DEPSOPS"]
+        lines = [f"{emoji} *{label}*", ""]
+
+        if self._merged:
+            lines.append(f"✅ *自動マージ（{len(self._merged)}件）*")
+            for item in self._merged:
+                lines.append(f"• `{item['repo_full_name']}` #{item['pr_number']} {item['title']}")
+            lines.append("")
+
+        if self._flagged:
+            lines.append(f"⚠️ *要確認（{len(self._flagged)}件）*")
+            for item in self._flagged:
+                lines.append(
+                    f"• `{item['repo_full_name']}` #{item['pr_number']} {item['title']}"
+                    f"（{item['reason']}）"
+                )
+        return _truncate_for_slack("\n".join(lines).rstrip())
 
 
 def notify_dependabot_ops(
@@ -219,44 +342,13 @@ def notify_dependabot_ops(
 ) -> None:
     """DEPSOPS（Dependabot PR 自動運用）の実行結果を Slack に通知する。
 
-    自動マージした PR・人の確認が必要な PR（メジャーバージョンアップ・CI 未設定・
-    CI 失敗等）の両方を毎回通知する（監査性重視。0 件でも実行自体はしたことが
-    分かるよう、merged/flagged が両方空の場合のみ送信をスキップする）。
-
     Args:
-        merged: 自動マージした PR の辞書リスト
-            （"repo_full_name"・"pr_number"・"title" を使用）
-        flagged: 自動マージしなかった PR の辞書リスト
-            （上記に加え "reason" を使用）
+        merged: 自動マージした PR の辞書リスト（"repo_full_name"・"pr_number"・"title"）
+        flagged: 自動マージしなかった PR の辞書リスト（上記に加え "reason"）
         recipients: 送信先を明示的に指定する場合に使う。省略時は
             GITHUB_USERNAME 自身の登録済みWebhookへ送る。
     """
-    if not merged and not flagged:
-        return
-    targets = _resolve_recipients("DEPSOPS") if recipients is None else recipients
-    if not targets:
-        return
-
-    emoji, label = _CRAWLER_LABELS["DEPSOPS"]
-    lines = [f"{emoji} *{label}*", ""]
-
-    if merged:
-        lines.append(f"✅ *自動マージ（{len(merged)}件）*")
-        for item in merged:
-            lines.append(f"• `{item['repo_full_name']}` #{item['pr_number']} {item['title']}")
-        lines.append("")
-
-    if flagged:
-        lines.append(f"⚠️ *要確認（{len(flagged)}件）*")
-        for item in flagged:
-            lines.append(
-                f"• `{item['repo_full_name']}` #{item['pr_number']} {item['title']}"
-                f"（{item['reason']}）"
-            )
-
-    message = _truncate_for_slack("\n".join(lines).rstrip())
-    for url in targets:
-        _send_slack(message, url)
+    DependabotOpsNotifier(merged, flagged, recipients).send()
 
 
 # ── ユーザー別Webhook登録（Issue #227） ──────────────────────────
