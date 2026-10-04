@@ -74,8 +74,10 @@ app/
 ├── auth/         # GitHubログイン・ユーザー別Slack通知登録（UserAccount/account_store）
 ├── core/         # 横断的インフラ: config/database/auth/background/crawler_runner/crypto/
 │                 #   db_utils/notifications/osv_client/registry_client/pagination/repo_cleanup/
-│                 #   user_crawl_runner/stix/taxii/schemas/github_http（GitHub API認証
-│                 #   ヘッダー共通化）/issue_filing（DEPSCAN/CODESCANのIssue起票共通化）
+│                 #   user_crawl_runner/stix/taxii/schemas/github_http（GitHub API認証・
+│                 #   `GitHubApi`）/issue_filing（Issue起票共通化）/list_filters（一覧の絞り込み
+│                 #   基底）/scheduler_jobs（定期ジョブ定義）。crawler_runner=`CrawlJob`・
+│                 #   notifications=`Notifier`（いずれもTemplate Method）
 ├── kev/          # CISA KEV（models/schemas/crawler/stix/router）
 ├── osv/          # OSV（10エコシステム対応、+packages.py）
 ├── jvn/          # JVN（MyJVN API / RDF-RSS）

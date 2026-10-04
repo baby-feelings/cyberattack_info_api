@@ -17,11 +17,14 @@ cyberattack_info_api/
 │   │                           # repo_cleanup〈削除済みリポジトリのデータ削除、Issue #228〉・
 │   │                           # user_crawl_runner〈登録済み他ユーザー向け定期実行、Issue #227〉・
 │   │                           # github_http〈GitHub API認証ヘッダー・`GitHubApi`クライアントの共通化〉・
-│   │                           # issue_filing〈DEPSCAN/CODESCANのIssue起票共通処理〉・scheduler_jobs〈定期ジョブの定義と登録〉・共通 schemas）
-│   ├── kev/                    # CISA KEV ドメイン（models・schemas・crawler・router〈router + admin_router〉）
-│   ├── osv/                    # OSV ドメイン（models・schemas・crawler・router〈router + admin_router〉）
-│   ├── jvn/                    # JVN ドメイン（models・schemas・crawler・router〈router + admin_router〉）
-│   ├── depscan/                # 依存ライブラリ脆弱性スキャン（DEPSCAN）ドメイン
+│   │                           # issue_filing〈DEPSCAN/CODESCANのIssue起票共通処理〉・
+│   │                           # list_filters〈一覧APIの絞り込み条件の基底クラス〉・
+│   │                           # scheduler_jobs〈定期ジョブの定義と登録〉・共通 schemas。
+│   │                           # crawler_runnerは`CrawlJob`、notificationsは`Notifier`の Template Method）
+│   ├── kev/                    # CISA KEV ドメイン（models・schemas・crawler・filters〈一覧の絞り込み条件〉・router〈router + admin_router〉）
+│   ├── osv/                    # OSV ドメイン（models・schemas・crawler・filters・router〈router + admin_router〉）
+│   ├── jvn/                    # JVN ドメイン（models・schemas・crawler・filters・router〈router + admin_router〉）
+│   ├── depscan/                # 依存ライブラリ脆弱性スキャン（DEPSCAN）ドメイン（filters含む）
 │   │   └── parsers/            # 10 エコシステム分のロックファイルパーサー
 │   ├── depsops/                # Dependabot PR 自動運用（DEPSOPS）ドメイン（models・schemas・router
 │   │                           # 〈router + admin_router〉。crawler.py 相当は runner.py〈走査の組み立て〉・pr_judge.py〈PR判定〉・pr_log_repository.py〈履歴DB操作〉。
@@ -33,7 +36,8 @@ cyberattack_info_api/
 │   ├── conftest.py             # テスト用フィクスチャ (SQLite テスト DB、全サブフォルダに自動継承)
 │   ├── test_main.py            # app.main（health/root）テスト
 │   ├── core/ kev/ osv/ jvn/ depscan/ depsops/ codescan/ crawler_logs/
-├── dashboard/               # Vercel デプロイの React ダッシュボード（KEV・OSV（Pub 含む 10 エコシステム）・JVN・
+├── dashboard/               # Vercel デプロイの React ダッシュボード（App.tsx は組み立てのみ。タブ定義と
+│                           # TabBar/TabPanel/HeaderMenu は components/layout/、ページ送りは shared/TableControls）（KEV・OSV（Pub 含む 10 エコシステム）・JVN・
 │                           # DEPSCAN〈GitHub ログイン必須。Dependabot運用状況＝DEPSOPS の判定履歴も統合〉・
 │                           # CODESCAN〈GitHub ログイン必須。DEPSCANとセッション共有。CVSSベストエフォート
 │                           # 推定値・検知ツールバッジを表示〉を5つの固定タブで切り替え表示。ヘッダーの
