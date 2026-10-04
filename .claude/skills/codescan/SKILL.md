@@ -79,10 +79,10 @@ CVSS 7.0以上はダッシュボード（`CodescanRow.tsx`のCvssBadge）で赤�
 解決判定を行う設計にした（あるリポジトリのスキャンが失敗してスキップされた場合、
 そのリポジトリの既存findingを誤って解決済みにしないため）。
 
-## オーケストレーションは KEV/OSV/JVN と同じ `run_crawler` を使う（DEPSCANとは異なる）
+## オーケストレーションは KEV/OSV/JVN と同じ `run_crawler` を使う
 DEPSCANは詳細なSlackダイジェスト（`notify_dependency_findings`）・Issue自動
-クローズ判定など独自の複雑なオーケストレーションを持つため`run_crawler`を
-使っていないが、CODESCANは`app.core.crawler_runner.run_crawler`（Template Method）
+クローズ判定など固有の通知・戻り値を持つため`CrawlJob`のサブクラス（`_DepscanJob`）で
+実装しているが、CODESCANは`app.core.crawler_runner.run_crawler`（`CrawlJob`のラッパー）
 + `CrawlCounters`をそのまま使い、通知は`notify_success`/`notify_error`の汎用
 フォーマットで済ませる設計にした（要件どおり、DRY原則を優先）。`CrawlCounters`
 への対応付けはDEPSCANのcrawler_logs記録方針を踏襲: `inserted`=新規検知件数、

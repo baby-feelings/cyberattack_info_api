@@ -548,7 +548,7 @@ class TestRunDependabotOps:
         import pytest
         with patch(
             "app.depsops.runner.list_target_repos", side_effect=RuntimeError("GitHub API down"),
-        ), patch("app.depsops.runner.notify_error") as mock_notify_error:
+        ), patch("app.core.crawler_runner.notify_error") as mock_notify_error:
             with pytest.raises(RuntimeError):
                 run_dependabot_ops()
         mock_notify_error.assert_called_once()

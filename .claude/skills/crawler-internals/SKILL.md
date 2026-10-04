@@ -67,11 +67,18 @@ crawler_typeに関わらず常に管理者（`GITHUB_USERNAME`）自身の登録
 3 つのルーター（vulnerabilities.py / osv.py / jvn.py）から共通利用する。
 
 ## クローラー実行の共通オーケストレーション（crawler_runner.py）
-KEV/OSV/JVN の `fetch_and_store_*` が個別に持っていた「started_at計測 → DBセッション生成 →
-本体処理 → crawler_logs記録 → Slack通知 → DBセッションクローズ」という定型処理を
-`app.core.crawler_runner.run_crawler`（Template Method）に一元化している。各クローラーは
-取得・Upsert・保持期間削除といったドメイン固有の処理のみを `body(db, counters)` 関数として
-`run_crawler` に渡す。進捗件数は `CrawlCounters`（dataclass）で受け渡し、`body` が処理の進行に
+KEV/OSV/JVN/DEPSCAN/CODESCAN/DEPSOPS の各エントリポイントが個別に持っていた「重複実行スキップ →
+started_at計測 → DBセッション生成 → 本体処理 → crawler_logs記録 → Slack通知 → DBセッション
+クローズ」という定型処理を、`app.core.crawler_runner.CrawlJob`（Template Method の抽象クラス）に
+一元化している。`CrawlJob.run(force=)`が共通の流れを担い、サブクラスは`execute`（本体）・
+`after_success`（成功後の通知。DBセッションを閉じた後・例外を握りつぶさず呼ばれる。既定は
+`notify_success`）・`result`（戻り値。既定は(inserted, updated, deleted)）・`skipped_result`
+（スキップ時の戻り値。既定は(0,0,0)）だけを差し替える。
+
+関数1つで済むクローラー（KEV/OSV/JVN/CODESCAN）は`run_crawler(type, body)`ラッパー
+（内部で`_CallableCrawlJob`を生成）を使い、取得・Upsert・保持期間削除といったドメイン固有の処理のみを
+`body(db, counters)` 関数として渡す。固有の状態・通知・戻り値を持つDEPSCAN/DEPSOPSは
+`CrawlJob`のサブクラス（`_DepscanJob`/`_DepsopsJob`）で実装する。進捗件数は `CrawlCounters`（dataclass）で受け渡し、`body` が処理の進行に
 応じて `counters.inserted`/`updated`/`deleted` を加算する。**エラー発生時もその時点までの
 counters の値を crawler_logs に反映する**（OSV はエコシステム単位で処理を継続する既存挙動が
 あり、途中で例外が発生してもそれまでに成功した件数を記録する。KEV/JVN はエラー時点で
@@ -87,9 +94,8 @@ counters の値を crawler_logs に反映する**（OSV はエコシステム単
 Actions（daily-crawl.yml、「バックアップ」目的で無条件に毎日発火）の二重トリガーにより、
 全クローラーが実質1日2回実行されていた対策。`force: bool`引数（各`fetch_and_store_*`・
 `/admin/*-crawl`の`?force=true`クエリパラメータから伝播）でこのスキップを明示的に
-バイパスできる（動作確認等の手動再実行用）。DEPSCAN/DEPSOPSは`run_crawler`を使わない
-独自オーケストレーションのため、`already_succeeded_today`を各エントリポイント内で
-直接呼んでいる（詳細は`depscan-depsops`スキル参照）。
+バイパスできる（動作確認等の手動再実行用）。この判定は`CrawlJob.run`に集約されており、
+DEPSCAN/DEPSOPSも同じ`CrawlJob`経由で判定する（詳細は`depscan-depsops`スキル参照）。
 
 ## /admin/*-crawl はバックグラウンド実行（202 即時返却）
 `/admin/crawl`（KEV）・`/admin/osv-crawl`・`/admin/jvn-crawl`・`/admin/depscan-crawl`・

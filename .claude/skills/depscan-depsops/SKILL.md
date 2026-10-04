@@ -128,10 +128,12 @@ OWASP Top 10:2025「ソフトウェアサプライチェーンの失敗」対策
 （DEPSCANの`updated`は元々常に0だったため、新カラムを追加せずここへ格納している）。
 
 ## DEPSCAN/DEPSOPSの同日重複実行防止（Issue #239、`app.core.crawler_runner.already_succeeded_today`）
-`fetch_and_scan_dependencies`・`run_dependabot_ops`は`run_crawler`を使わない独自
-オーケストレーションのため、それぞれのエントリポイント冒頭で直接`already_succeeded_today`
-を呼び、今日（UTC日付）既に成功実行済みなら`(0, 0, 0)`を返してスキップする（KEV/OSV/JVN/
-CODESCANは`run_crawler`内で同じ判定を共通で行う。詳細は`crawler-internals`スキル参照）。
+`fetch_and_scan_dependencies`・`run_dependabot_ops`は`CrawlJob`のサブクラス
+（`_DepscanJob`/`_DepsopsJob`）で、`CrawlJob.run`が`already_succeeded_today`を呼び、今日
+（UTC日付）既に成功実行済みなら`(0, 0, 0)`を返してスキップする（他のクローラーも同じ判定を
+共通で行う。詳細は`crawler-internals`スキル参照）。`CrawlCounters`への対応付け: DEPSCANは
+inserted=新規検知・updated=保持期間超過の実削除・deleted=解決済み、DEPSOPSは
+inserted=自動マージ・updated=要確認・deleted=解消済み。
 **DEPSOPSはこの対策が特に重要**: 履歴テーブルへ実行ごとに記録するログ設計のため、APScheduler
 とGitHub Actions（daily-crawl.yml）の二重トリガーで1日2回実行されると件数が二重化する
 （本番で総件数2388件中約半数が重複していた。現在は同内容のflaggedは1行に集約される）。`force=True`（`/admin/dependabot-ops

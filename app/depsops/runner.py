@@ -21,10 +21,9 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.crawler_runner import already_succeeded_today
-from app.core.database import SessionLocal
-from app.core.notifications import notify_dependabot_ops, notify_error
-from app.crawler_logs.writer import now_utc, write_crawler_log
+from app.core.crawler_runner import CrawlCounters, CrawlJob
+from app.core.notifications import notify_dependabot_ops
+from app.crawler_logs.writer import now_utc
 from app.depscan.github_client import list_target_repos
 from app.depsops.classify import classify_bump
 from app.depsops.github_client import (
@@ -460,72 +459,60 @@ def _scan_target_repos(
     return merged, flagged, resolved, error_count
 
 
+class _DepsopsJob(CrawlJob):
+    """DEPSOPS の1回分の実行（`CrawlJob` のサブクラス）。
+
+    `CrawlCounters` へのマッピング: inserted=自動マージ件数、updated=要確認件数、
+    deleted=解消済みと判定した件数。戻り値は (自動マージ, 要確認, エラー数)。
+    リポジトリ単位の失敗（error_count）はクロール全体を失敗扱いにしない。
+    """
+
+    crawler_type = "DEPSOPS"
+
+    def __init__(self) -> None:
+        self.merged: list[dict[str, Any]] = []
+        self.flagged: list[dict[str, Any]] = []
+        self.error_count = 0
+
+    def execute(self, db: Session, counters: CrawlCounters) -> None:
+        started_at = now_utc()
+        repos = list_target_repos(settings.GITHUB_USERNAME, settings.GITHUB_TOKEN)
+        logger.info("DEPSOPS: %d target repos to scan", len(repos))
+
+        self.merged, self.flagged, resolved, self.error_count = _scan_target_repos(db, repos)
+        counters.inserted = len(self.merged)
+        counters.updated = len(self.flagged)
+        counters.deleted = len(resolved)
+
+        # 判定履歴を DB に記録（ダッシュボードでの一覧表示用）。
+        # 失敗してもクロール自体は成功扱いとする
+        try:
+            _record_pr_logs(db, self.merged, self.flagged, started_at, resolved=resolved)
+            _cleanup_pr_logs(db)
+        except Exception as exc:
+            logger.error("Failed to record DEPSOPS PR logs: %s", exc, exc_info=True)
+
+    def after_success(self, counters: CrawlCounters) -> None:
+        logger.info(
+            "=== DEPSOPS completed: merged=%d, flagged=%d, resolved=%d, errors=%d ===",
+            counters.inserted, counters.updated, counters.deleted, self.error_count,
+        )
+        notify_dependabot_ops(self.merged, self.flagged)
+
+    def result(self, counters: CrawlCounters) -> tuple[int, ...]:
+        return counters.inserted, counters.updated, self.error_count
+
+
 def run_dependabot_ops(*, force: bool = False) -> tuple[int, int, int]:
     """DEPSOPS のメインエントリポイント。
 
     Args:
         force: True の場合、今日すでに成功実行済みでも強制的に再実行する（Issue #239）。
-            DEPSOPSは実行ごとに1PRにつき1行追記するログ設計のため、二重実行が
+            DEPSOPSは判定履歴を実行ごとに記録する設計のため、二重実行が
             そのまま件数の二重化に直結する（本番で総件数2388件中約半数が重複だった）。
 
     Returns:
         (merged_count, flagged_count, error_count) のタプル（スキップ時は (0, 0, 0)）
     """
     logger.info("=== DEPSOPS started ===")
-    if not force and already_succeeded_today("DEPSOPS"):
-        logger.info("DEPSOPS already succeeded today (UTC), skipping duplicate run")
-        return 0, 0, 0
-
-    started_at = now_utc()
-    merged: list[dict[str, Any]] = []
-    flagged: list[dict[str, Any]] = []
-    resolved: list[dict[str, Any]] = []
-    error_count = 0
-
-    db: Session = SessionLocal()
-    try:
-        try:
-            repos = list_target_repos(settings.GITHUB_USERNAME, settings.GITHUB_TOKEN)
-            logger.info("DEPSOPS: %d target repos to scan", len(repos))
-
-            merged, flagged, resolved, error_count = _scan_target_repos(db, repos)
-
-        except Exception as exc:
-            write_crawler_log(
-                crawler_type="DEPSOPS",
-                status="error",
-                started_at=started_at,
-                finished_at=now_utc(),
-                inserted=len(merged),
-                updated=len(flagged),
-                deleted=len(resolved),
-                error_message=str(exc),
-            )
-            notify_error("DEPSOPS", str(exc))
-            raise
-
-        # 判定履歴を DB に記録（ダッシュボードでの一覧表示用）。
-        # 失敗してもクロール自体は成功扱いとする
-        try:
-            _record_pr_logs(db, merged, flagged, started_at, resolved=resolved)
-            _cleanup_pr_logs(db)
-        except Exception as exc:
-            logger.error("Failed to record DEPSOPS PR logs: %s", exc, exc_info=True)
-    finally:
-        db.close()
-
-    logger.info(
-        "=== DEPSOPS completed: merged=%d, flagged=%d, resolved=%d, errors=%d ===",
-        len(merged), len(flagged), len(resolved), error_count,
-    )
-    write_crawler_log(
-        crawler_type="DEPSOPS",
-        status="success",
-        started_at=started_at,
-        finished_at=now_utc(),
-        inserted=len(merged),
-        updated=len(flagged),
-        deleted=len(resolved),
-    )
-    notify_dependabot_ops(merged, flagged)
-    return len(merged), len(flagged), error_count
+    return _DepsopsJob().run(force=force)  # type: ignore[return-value]

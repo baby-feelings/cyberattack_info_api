@@ -14,12 +14,11 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.crawler_runner import already_succeeded_today
-from app.core.database import SessionLocal
-from app.core.notifications import notify_dependency_findings, notify_error
+from app.core.crawler_runner import CrawlCounters, CrawlJob
+from app.core.notifications import notify_dependency_findings
 from app.core.osv_client import fetch_vuln_by_id, parse_severity, query_versions_batch
 from app.core.registry_client import fetch_latest_version, is_newer_version
-from app.crawler_logs.writer import now_utc, write_crawler_log
+from app.crawler_logs.writer import now_utc
 from app.depscan.github_client import (
     get_file_content,
     get_repo_tree,
@@ -387,6 +386,68 @@ def _delete_old_depscan_records(db: Session) -> int:
     return deleted
 
 
+class _DepscanJob(CrawlJob):
+    """DEPSCAN の1回分の実行（`CrawlJob` のサブクラス）。
+
+    `CrawlCounters` へのマッピング: inserted=新規検知件数、updated=保持期間超過の実削除件数、
+    deleted=今回解決済みにした件数。戻り値は (新規検知, 解決済み, スキャンしたリポジトリ数)。
+    """
+
+    crawler_type = "DEPSCAN"
+
+    def __init__(self) -> None:
+        self.new_snapshots: list[dict[str, Any]] = []
+        self.repos_scanned = 0
+
+    def execute(self, db: Session, counters: CrawlCounters) -> None:
+        dep_to_repos, self.repos_scanned, repo_visibility = _collect_dependencies(
+            settings.GITHUB_USERNAME, settings.GITHUB_TOKEN,
+        )
+        logger.info(
+            "DEPSCAN: %d repos scanned, %d unique (ecosystem,package,version) found",
+            self.repos_scanned, len(dep_to_repos),
+        )
+
+        records = _build_findings(dep_to_repos, repo_visibility)
+
+        # 到達可能性の判定失敗はクロール全体を失敗させない（"unknown" のまま据え置く）
+        try:
+            _apply_reachability(records, settings.GITHUB_USERNAME, settings.GITHUB_TOKEN)
+        except Exception as exc:
+            logger.error("Failed to compute reachability: %s", exc, exc_info=True)
+
+        counters.inserted, self.new_snapshots = _upsert_findings(db, records)
+
+        current_keys: set[FindingKey] = {
+            (r["repo_full_name"], r["ecosystem"], r["package_name"], r["osv_id"])
+            for r in records
+        }
+        counters.deleted, resolved_repos = _resolve_stale_findings(db, current_keys)
+
+        # Issue クローズ失敗はクロール全体を失敗させない（Issue起票と同じ方針）
+        try:
+            _close_resolved_repo_issues(db, resolved_repos)
+        except Exception as exc:
+            logger.error("Failed to close resolved GitHub issues: %s", exc, exc_info=True)
+
+        # 保持期間超過の削除失敗はクロール全体を失敗させない（KEV/OSV/JVN と同様の方針）
+        try:
+            counters.updated = _delete_old_depscan_records(db)
+        except Exception as exc:
+            logger.error("Failed to delete old DEPSCAN records: %s", exc, exc_info=True)
+
+    def after_success(self, counters: CrawlCounters) -> None:
+        logger.info(
+            "=== DEPSCAN completed: new=%d, resolved=%d, purged=%d, repos=%d ===",
+            counters.inserted, counters.deleted, counters.updated, self.repos_scanned,
+        )
+        notify_dependency_findings(self.new_snapshots)
+        _file_github_issues(self.new_snapshots)
+
+    def result(self, counters: CrawlCounters) -> tuple[int, ...]:
+        return counters.inserted, counters.deleted, self.repos_scanned
+
+
 def fetch_and_scan_dependencies(*, force: bool = False) -> tuple[int, int, int]:
     """DEPSCAN のメインエントリポイント。
 
@@ -401,84 +462,4 @@ def fetch_and_scan_dependencies(*, force: bool = False) -> tuple[int, int, int]:
         (new_findings, resolved, repos_scanned) のタプル（スキップ時は (0, 0, 0)）
     """
     logger.info("=== DEPSCAN started ===")
-    if not force and already_succeeded_today("DEPSCAN"):
-        logger.info("DEPSCAN already succeeded today (UTC), skipping duplicate run")
-        return 0, 0, 0
-
-    started_at = now_utc()
-    new_count = 0
-    resolved_count = 0
-    purged_count = 0
-    repos_scanned = 0
-    new_snapshots: list[dict[str, Any]] = []
-
-    db: Session = SessionLocal()
-    try:
-        dep_to_repos, repos_scanned, repo_visibility = _collect_dependencies(
-            settings.GITHUB_USERNAME, settings.GITHUB_TOKEN,
-        )
-        logger.info(
-            "DEPSCAN: %d repos scanned, %d unique (ecosystem,package,version) found",
-            repos_scanned, len(dep_to_repos),
-        )
-
-        records = _build_findings(dep_to_repos, repo_visibility)
-
-        # 到達可能性の判定失敗はクロール全体を失敗させない（"unknown" のまま据え置く）
-        try:
-            _apply_reachability(records, settings.GITHUB_USERNAME, settings.GITHUB_TOKEN)
-        except Exception as exc:
-            logger.error("Failed to compute reachability: %s", exc, exc_info=True)
-
-        new_count, new_snapshots = _upsert_findings(db, records)
-
-        current_keys: set[FindingKey] = {
-            (r["repo_full_name"], r["ecosystem"], r["package_name"], r["osv_id"])
-            for r in records
-        }
-        resolved_count, resolved_repos = _resolve_stale_findings(db, current_keys)
-
-        # Issue クローズ失敗はクロール全体を失敗させない（Issue起票と同じ方針）
-        try:
-            _close_resolved_repo_issues(db, resolved_repos)
-        except Exception as exc:
-            logger.error("Failed to close resolved GitHub issues: %s", exc, exc_info=True)
-
-        # 保持期間超過の削除失敗はクロール全体を失敗させない（KEV/OSV/JVN と同様の方針）
-        try:
-            purged_count = _delete_old_depscan_records(db)
-        except Exception as exc:
-            logger.error("Failed to delete old DEPSCAN records: %s", exc, exc_info=True)
-
-    except Exception as exc:
-        write_crawler_log(
-            crawler_type="DEPSCAN",
-            status="error",
-            started_at=started_at,
-            finished_at=now_utc(),
-            inserted=new_count,
-            updated=purged_count,
-            deleted=resolved_count,
-            error_message=str(exc),
-        )
-        notify_error("DEPSCAN", str(exc))
-        raise
-    finally:
-        db.close()
-
-    logger.info(
-        "=== DEPSCAN completed: new=%d, resolved=%d, purged=%d, repos=%d ===",
-        new_count, resolved_count, purged_count, repos_scanned,
-    )
-    write_crawler_log(
-        crawler_type="DEPSCAN",
-        status="success",
-        started_at=started_at,
-        finished_at=now_utc(),
-        inserted=new_count,
-        updated=purged_count,
-        deleted=resolved_count,
-    )
-    notify_dependency_findings(new_snapshots)
-    _file_github_issues(new_snapshots)
-    return new_count, resolved_count, repos_scanned
+    return _DepscanJob().run(force=force)  # type: ignore[return-value]
