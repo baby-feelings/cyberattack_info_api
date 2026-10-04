@@ -149,76 +149,101 @@ def _infer_fixed_versions(
     return []
 
 
-def build_findings(
-    dep_to_repos: dict[DepKey, list[tuple[str, str]]],
-    repo_visibility: dict[str, str] | None = None,
-) -> list[dict[str, Any]]:
-    """パッケージ×バージョンを OSV に照合し、DependencyFinding レコード辞書のリストを構築する。"""
-    hits = query_versions_batch(list(dep_to_repos.keys()))
-    if not hits:
-        return []
+class FindingBuilder:
+    """パッケージ×バージョンの OSV 照合結果から、DependencyFinding レコード辞書を構築する。
 
-    # 脆弱性 ID ごとの詳細情報をキャッシュ（複数パッケージが同じ脆弱性 ID を参照しうる）
-    vuln_cache: dict[str, dict[str, Any] | None] = {}
-    # レジストリの最新版（修正版の補完用）。同じパッケージを何度も引かないよう共有する
-    latest_cache: dict[tuple[str, str], str | None] = {}
-    records: list[dict[str, Any]] = []
-    now = now_utc()
+    OSV の脆弱性詳細（複数パッケージが同じ ID を参照しうる）とレジストリの最新版
+    （修正版の補完用）は、同じ実行内で何度も引かないようインスタンスにキャッシュする。
+    """
 
-    for key, osv_ids in hits.items():
-        ecosystem, package_name, version = key
-        for osv_id in osv_ids:
-            if osv_id not in vuln_cache:
-                try:
-                    vuln_cache[osv_id] = fetch_vuln_by_id(osv_id)
-                except httpx.HTTPError as exc:
-                    logger.warning("Failed to fetch vuln %s: %s", osv_id, exc)
-                    vuln_cache[osv_id] = None
-            vuln = vuln_cache[osv_id]
-            if vuln is None:
-                continue
+    def __init__(self, repo_visibility: dict[str, str] | None = None) -> None:
+        self._repo_visibility = repo_visibility or {}
+        self._vuln_cache: dict[str, dict[str, Any] | None] = {}
+        self._latest_cache: dict[tuple[str, str], str | None] = {}
 
-            severity, cvss_score = parse_severity(vuln)
-            summary = (vuln.get("summary") or "").strip()
-            fixed_versions = sorted({
-                event["fixed"]
-                for affected in vuln.get("affected", [])
-                for rng in affected.get("ranges", [])
-                for event in rng.get("events", [])
-                if "fixed" in event
-            })
-            if not fixed_versions:
-                fixed_versions = _infer_fixed_versions(
-                    vuln, ecosystem, package_name, latest_cache,
-                )
-            # OSV IDだけではCVEと直接対応しないため、aliasesからCVE形式のみ抽出して
-            # 保存しておく（Issue #135: KEV掲載有無・EPSSスコアとの突合に使う）
-            cve_ids = sorted({
-                alias for alias in vuln.get("aliases", [])
-                if alias.startswith("CVE-")
-            })
+    def _get_vuln(self, osv_id: str) -> dict[str, Any] | None:
+        """脆弱性詳細を取得する（キャッシュ付き。取得失敗は None として記録し再取得しない）。"""
+        if osv_id not in self._vuln_cache:
+            try:
+                self._vuln_cache[osv_id] = fetch_vuln_by_id(osv_id)
+            except httpx.HTTPError as exc:
+                logger.warning("Failed to fetch vuln %s: %s", osv_id, exc)
+                self._vuln_cache[osv_id] = None
+        return self._vuln_cache[osv_id]
 
-            for repo_full_name, manifest_path in dep_to_repos[key]:
-                records.append({
-                    "repo_full_name": repo_full_name,
+    def _fixed_versions(
+        self, vuln: dict[str, Any], ecosystem: str, package_name: str,
+    ) -> list[str]:
+        """OSV の `fixed` を集める。無ければレジストリの最新版から補完を試みる。"""
+        fixed_versions = sorted({
+            event["fixed"]
+            for affected in vuln.get("affected", [])
+            for rng in affected.get("ranges", [])
+            for event in rng.get("events", [])
+            if "fixed" in event
+        })
+        if fixed_versions:
+            return fixed_versions
+        return _infer_fixed_versions(vuln, ecosystem, package_name, self._latest_cache)
+
+    @staticmethod
+    def _cve_ids(vuln: dict[str, Any]) -> list[str]:
+        """aliases から CVE 形式のみ抽出する。
+
+        OSV ID だけでは CVE と直接対応しないため保存しておく
+        （Issue #135: KEV 掲載有無・EPSS スコアとの突合に使う）。
+        """
+        return sorted({alias for alias in vuln.get("aliases", []) if alias.startswith("CVE-")})
+
+    def build(self, dep_to_repos: dict[DepKey, list[tuple[str, str]]]) -> list[dict[str, Any]]:
+        """パッケージ×バージョンを OSV に照合し、検知レコード辞書のリストを返す。"""
+        hits = query_versions_batch(list(dep_to_repos.keys()))
+        if not hits:
+            return []
+
+        records: list[dict[str, Any]] = []
+        now = now_utc()
+
+        for key, osv_ids in hits.items():
+            ecosystem, package_name, version = key
+            for osv_id in osv_ids:
+                vuln = self._get_vuln(osv_id)
+                if vuln is None:
+                    continue
+
+                severity, cvss_score = parse_severity(vuln)
+                shared = {
                     "ecosystem": ecosystem,
                     "package_name": package_name,
                     "installed_version": version,
                     "osv_id": osv_id,
                     "severity": severity,
                     "cvss_score": cvss_score,
-                    "summary": summary,
-                    "fixed_versions": fixed_versions,
-                    "cve_ids": cve_ids,
-                    "manifest_path": manifest_path,
-                    # _apply_reachability が上書きする。呼び出し自体が失敗した場合の
+                    "summary": (vuln.get("summary") or "").strip(),
+                    "fixed_versions": self._fixed_versions(vuln, ecosystem, package_name),
+                    "cve_ids": self._cve_ids(vuln),
+                    # apply_reachability が上書きする。呼び出し自体が失敗した場合の
                     # フォールバック値として "unknown" を既定にしておく
                     "reachability": "unknown",
-                    "repo_visibility": (repo_visibility or {}).get(repo_full_name),
                     "detected_at": now,
-                })
+                }
+                for repo_full_name, manifest_path in dep_to_repos[key]:
+                    records.append({
+                        **shared,
+                        "repo_full_name": repo_full_name,
+                        "manifest_path": manifest_path,
+                        "repo_visibility": self._repo_visibility.get(repo_full_name),
+                    })
 
-    return records
+        return records
+
+
+def build_findings(
+    dep_to_repos: dict[DepKey, list[tuple[str, str]]],
+    repo_visibility: dict[str, str] | None = None,
+) -> list[dict[str, Any]]:
+    """パッケージ×バージョンを OSV に照合し、DependencyFinding レコード辞書のリストを構築する。"""
+    return FindingBuilder(repo_visibility).build(dep_to_repos)
 
 
 def _apply_reachability(

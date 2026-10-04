@@ -1004,3 +1004,55 @@ class TestGetOsvVulnerability:
         _make_osv(db_session, osv_id="GHSA-route-0001", package_name="pkg-a")
         res = client.get("/api/osv/GHSA-route-0001")
         assert res.status_code == 403
+
+
+class TestOsvRecordHelpers:
+    """_build_records から切り出したヘルパーの単体テスト。"""
+
+    def test_parse_osv_datetime_handles_z_suffix_none_and_garbage(self):
+        from app.osv.crawler import _parse_osv_datetime
+
+        parsed = _parse_osv_datetime("2026-01-02T03:04:05Z")
+        assert parsed is not None and parsed.utcoffset().total_seconds() == 0
+        assert _parse_osv_datetime(None) is None
+        assert _parse_osv_datetime("") is None
+        assert _parse_osv_datetime("not-a-date") is None
+        assert _parse_osv_datetime(12345) is None
+
+    def test_common_fields_cap_references_and_fall_back_published_to_modified(self):
+        from app.osv.crawler import _vuln_common_fields
+
+        modified = datetime(2026, 2, 1, tzinfo=timezone.utc)
+        vuln = {
+            "id": "GHSA-x", "aliases": ["CVE-1", "", None],
+            "summary": "  s  ", "details": "",
+            "references": [{"url": f"https://e/{i}"} for i in range(8)] + [{"x": 1}],
+            "published": "broken", "withdrawn": "2026-03-01T00:00:00Z",
+        }
+        common = _vuln_common_fields(vuln, modified)
+
+        assert common["osv_id"] == "GHSA-x"
+        assert common["aliases"] == ["CVE-1"]
+        assert common["summary"] == "s"
+        assert common["details"] is None
+        assert len(common["references"]) == 5
+        assert common["published"] == modified  # 不正な published は modified で代替
+        assert common["withdrawn_at"] is not None
+
+    def test_build_records_shares_common_fields_across_affected_packages(self):
+        modified = datetime(2026, 2, 1, tzinfo=timezone.utc)
+        vuln = {
+            "id": "GHSA-multi",
+            "affected": [
+                {"package": {"name": "a", "ecosystem": "npm"}, "versions": ["1"] * 40},
+                {"package": {"name": "b", "ecosystem": "PyPI"}},
+                {"package": {"name": "", "ecosystem": "npm"}},  # 名前なしは除外
+            ],
+        }
+        records = _build_records(vuln, modified)
+
+        assert [(r["ecosystem"], r["package_name"]) for r in records] == [
+            ("npm", "a"), ("PyPI", "b"),
+        ]
+        assert len(records[0]["affected_versions"]) == 30
+        assert records[0]["osv_id"] == records[1]["osv_id"] == "GHSA-multi"
