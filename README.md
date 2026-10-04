@@ -1,7 +1,7 @@
 # Cyberattack Info API
 
 [![CI](https://github.com/baby-feelings/cyberattack_info_api/actions/workflows/ci.yml/badge.svg)](https://github.com/baby-feelings/cyberattack_info_api/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen)](https://github.com/baby-feelings/cyberattack_info_api/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-99%25-brightgreen)](https://github.com/baby-feelings/cyberattack_info_api/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.11-blue)](https://www.python.org/)
 
 米 CISA の [Known Exploited Vulnerabilities (KEV) Catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog)・[OSV (Open Source Vulnerabilities)](https://osv.dev/)・[JVN (Japan Vulnerability Notes)](https://jvndb.jvn.jp/) を定期収集し、REST API として配信するプラットフォームです。  
@@ -74,7 +74,7 @@ ruff check app/ tests/                # Linting
 mypy app/ --ignore-missing-imports    # 型チェック
 ```
 
-**テスト結果（最新）:** バックエンド 923 テスト / カバレッジ 98%、ダッシュボード 270 テスト
+**テスト結果（最新）:** バックエンド 923 テスト / カバレッジ 99%、ダッシュボード 270 テスト
 （Vitest）/ カバレッジ 98%
 
 ダッシュボードのE2Eテスト（Playwright、API全モック）は `dashboard/` で `npm run e2e`。
