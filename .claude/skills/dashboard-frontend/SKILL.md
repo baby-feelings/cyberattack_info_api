@@ -9,7 +9,11 @@ description: Reactダッシュボード（dashboard/）のアーキテクチャ�
 KEV / OSV / JVN / DEPSCAN / CODESCAN の 5 データソースは、画面下部固定のタブバーで切り替え
 表示する構成（縦並び表示ではない）。DEPSOPS（Dependabot 運用状況）に専用タブは作らず、DEPSCAN
 タブ内のボタンから開く全画面モーダルとして統合している。
-`TabKey` / `TABS` 定数と `activeTab` state で選択中セクションのみを条件レンダリングし、
+`App.tsx`（約70行）は組み立てのみ。タブごとの定義（キー・ラベル・アイコン・見出し・サブタイトル・
+枠線色・本体パネル）は `components/layout/tabs.tsx` の `TAB_DEFINITIONS` に集約しており
+（新しいタブはここに1件足す。以前は`App.tsx`にタブ数×約20行の同じ構造が並んでいた）、
+`TabBar.tsx`（下部固定タブバー）・`TabPanel.tsx`（見出し＋本体）・`HeaderMenu.tsx`
+（ハンバーガーメニュー）が描画する。`activeTab` state で選択中のパネルのみを条件レンダリングし、
 サーバー稼働状況（`HealthStatus`）とエラーバナーは全タブ共通で常に表示する。
 タブには `role="tablist"/"tab"/"tabpanel"` と `aria-selected`/`aria-controls`/`aria-labelledby` を付与済み。
 
@@ -86,8 +90,8 @@ CODESCAN追加後もキー名はあえて変更せず両ドメインで共有す
 引数無しで呼び、ログイン確認後は即座に`CodescanPanel`を表示するだけのシンプルな構成。
 
 `SettingsPanel.tsx`（Issue #227: ユーザー別Slack通知登録画面）も同じ`useGithubSession()`
-を引数無しで呼ぶ第三の利用箇所。ヘッダー右上のハンバーガーメニュー（`App.tsx`の
-`menuOpen`/`settingsOpen` state）から開くモーダルとして実装しており、タブ切り替えとは
+を引数無しで呼ぶ第三の利用箇所。ヘッダー右上のハンバーガーメニュー（`HeaderMenu.tsx`の
+`menuOpen` state と`App.tsx`の`settingsOpen` state）から開くモーダルとして実装しており、タブ切り替えとは
 独立した表示（下部固定タブバーとは別のUI階層）。`api/auth.ts`の
 `fetchNotificationSettings`/`putNotificationSettings`/`deleteNotificationSettings`を使い、
 登録（PUT）はバックエンド側で実際にテスト送信されるため、フォーム側は成功/失敗メッセージを
@@ -132,4 +136,4 @@ CODESCAN追加後もキー名はあえて変更せず両ドメインで共有す
 - 時間依存（DEPSCANの2分ごとの新着確認）は`page.clock.install()`＋`runFor()`で進める。
 - E2Eで発見・修正した不具合: ハンバーガーメニューの外側クリックが効かなかった。透明オーバーレイ
   （`fixed inset-0`）が親ヘッダーの`backdrop-blur`（containing blockになる）の影響でヘッダー内しか
-  覆えなかったため、`App.tsx`はドキュメントの`pointerdown`/Escapeで閉じる方式に変更した。
+  覆えなかったため、`HeaderMenu.tsx`はドキュメントの`pointerdown`/Escapeで閉じる方式に変更した。

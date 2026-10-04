@@ -1,74 +1,19 @@
-import { useEffect, useRef, useState } from 'react'
-import { ShieldAlert, Shield, Package, FileWarning, Bug, ScanSearch, Menu } from 'lucide-react'
+import { useState } from 'react'
+import { ShieldAlert } from 'lucide-react'
 import { HealthStatus } from './components/HealthStatus'
-import { KevPanel } from './components/KevPanel'
-import { OsvPanel } from './components/OsvPanel'
-import { JvnPanel } from './components/JvnPanel'
-import { DepscanAuthGate } from './components/DepscanAuthGate'
-import { CodescanAuthGate } from './components/CodescanAuthGate'
 import { SettingsPanel } from './components/SettingsPanel'
-
-// セクション見出しコンポーネント
-function SectionHeader({
-  icon,
-  title,
-  subtitle,
-  borderColor,
-}: {
-  icon: React.ReactNode
-  title: string
-  subtitle: string
-  borderColor: string
-}) {
-  return (
-    <div className={`flex items-center gap-3 pb-4 border-b ${borderColor}`}>
-      <div>{icon}</div>
-      <div>
-        <h2 className="text-base font-semibold text-white leading-tight">{title}</h2>
-        <p className="text-xs text-slate-500 leading-tight">{subtitle}</p>
-      </div>
-    </div>
-  )
-}
-
-// タブ種別
-type TabKey = 'kev' | 'osv' | 'jvn' | 'depscan' | 'codescan'
-
-const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
-  { key: 'kev', label: 'KEV', icon: <Shield size={20} className="text-blue-400" /> },
-  { key: 'osv', label: 'OSV', icon: <Package size={20} className="text-emerald-400" /> },
-  { key: 'jvn', label: 'JVN', icon: <FileWarning size={20} className="text-amber-400" /> },
-  { key: 'depscan', label: 'DEPSCAN', icon: <Bug size={20} className="text-rose-400" /> },
-  { key: 'codescan', label: 'CODESCAN', icon: <ScanSearch size={20} className="text-cyan-400" /> },
-]
+import { HeaderMenu } from './components/layout/HeaderMenu'
+import { TabBar } from './components/layout/TabBar'
+import { TabPanel } from './components/layout/TabPanel'
+import { TAB_DEFINITIONS, type TabKey } from './components/layout/tabs'
 
 export default function App() {
   // GitHub OAuth コールバックからの復帰（?depscan_code=...）時は DEPSCAN タブを自動選択する
   const [activeTab, setActiveTab] = useState<TabKey>(() => (
     new URLSearchParams(window.location.search).has('depscan_code') ? 'depscan' : 'kev'
   ))
-  const [menuOpen, setMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const menuRef = useRef<HTMLDivElement>(null)
-
-  // メニュー外のクリック・Escapeキーで閉じる。全画面の透明オーバーレイ方式だと、
-  // 親ヘッダーの backdrop-blur が fixed の基準になりヘッダー内しか覆えなかったため、
-  // ドキュメント全体のイベントで判定する
-  useEffect(() => {
-    if (!menuOpen) return
-    function handlePointerDown(e: PointerEvent) {
-      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false)
-    }
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') setMenuOpen(false)
-    }
-    document.addEventListener('pointerdown', handlePointerDown)
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [menuOpen])
+  const activeDefinition = TAB_DEFINITIONS.find((tab) => tab.key === activeTab)
 
   return (
     <div className="min-h-screen bg-[#0a0e1a] text-slate-100 flex flex-col items-center">
@@ -91,27 +36,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* ハンバーガーメニュー（Issue #227: 設定画面への導線） */}
-          <div className="relative" ref={menuRef}>
-            <button
-              onClick={() => setMenuOpen((v) => !v)}
-              aria-label="メニュー"
-              aria-expanded={menuOpen}
-              className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors"
-            >
-              <Menu size={18} />
-            </button>
-            {menuOpen && (
-              <div className="absolute right-0 top-full mt-1 z-20 w-40 rounded-lg border border-slate-800 bg-slate-900 shadow-xl py-1">
-                <button
-                  onClick={() => { setMenuOpen(false); setSettingsOpen(true) }}
-                  className="w-full text-left px-3 py-2 text-sm text-slate-300 hover:bg-slate-800 transition-colors"
-                >
-                  設定
-                </button>
-              </div>
-            )}
-          </div>
+          <HeaderMenu onOpenSettings={() => setSettingsOpen(true)} />
 
         </div>
       </header>
@@ -121,108 +46,11 @@ export default function App() {
       {/* メインコンテンツ（下部固定タブバーの高さ分、下に余白を確保） */}
       <main className="flex-1 max-w-screen-xl w-full px-4 sm:px-6 lg:px-12 py-6 sm:py-8 lg:py-10 pb-24 sm:pb-24 flex flex-col gap-6 sm:gap-8 lg:gap-10">
 
-        {/* ══ サーバー稼働状況（全タブ共通） ═══════════════════════════ */}
+        {/* サーバー稼働状況（全タブ共通） */}
         <HealthStatus />
 
-        {/* ══ CISA KEV タブ ══════════════════════════════════════════ */}
-        {activeTab === 'kev' && (
-          <section
-            id="tabpanel-kev"
-            role="tabpanel"
-            aria-labelledby="tab-kev"
-            className="flex flex-col gap-4 sm:gap-6 lg:gap-8"
-          >
-            <SectionHeader
-              icon={<Shield size={18} className="text-blue-400" />}
-              title="CISA KEV — Known Exploited Vulnerabilities"
-              subtitle="実際に悪用が確認された脆弱性（米 CISA 公式カタログ）"
-              borderColor="border-blue-800/40"
-            />
-
-            {/* KEV パネル（サマリー・チャート・一覧を内包。OSV/JVN と同じ構成） */}
-            <KevPanel />
-          </section>
-        )}
-
-        {/* ══ OSV タブ ═══════════════════════════════════════════════ */}
-        {activeTab === 'osv' && (
-          <section
-            id="tabpanel-osv"
-            role="tabpanel"
-            aria-labelledby="tab-osv"
-            className="flex flex-col gap-4 sm:gap-6 lg:gap-8"
-          >
-            <SectionHeader
-              icon={<Package size={18} className="text-emerald-400" />}
-              title="OSV — Open Source Vulnerabilities"
-              subtitle="オープンソースライブラリの脆弱性（過去 6 ヶ月）"
-              borderColor="border-emerald-800/40"
-            />
-
-            {/* OSV パネル（サマリーカード・チャート・一覧を内包） */}
-            <OsvPanel />
-          </section>
-        )}
-
-        {/* ══ JVN タブ ═══════════════════════════════════════════════ */}
-        {activeTab === 'jvn' && (
-          <section
-            id="tabpanel-jvn"
-            role="tabpanel"
-            aria-labelledby="tab-jvn"
-            className="flex flex-col gap-4 sm:gap-6 lg:gap-8"
-          >
-            <SectionHeader
-              icon={<FileWarning size={18} className="text-amber-400" />}
-              title="JVN — Japan Vulnerability Notes"
-              subtitle="日本国内の脆弱性情報（MyJVN / JVNDB 過去 6 ヶ月）"
-              borderColor="border-amber-800/40"
-            />
-
-            {/* JVN パネル（サマリーカード・チャート・一覧を内包） */}
-            <JvnPanel />
-          </section>
-        )}
-
-        {/* ══ DEPSCAN タブ ═══════════════════════════════════════════ */}
-        {activeTab === 'depscan' && (
-          <section
-            id="tabpanel-depscan"
-            role="tabpanel"
-            aria-labelledby="tab-depscan"
-            className="flex flex-col gap-4 sm:gap-6 lg:gap-8"
-          >
-            <SectionHeader
-              icon={<Bug size={18} className="text-rose-400" />}
-              title="DEPSCAN — 自作アプリの依存ライブラリ脆弱性"
-              subtitle="GitHub上の自作リポジトリの依存関係を OSV API とリアルタイム照合"
-              borderColor="border-rose-800/40"
-            />
-
-            {/* GitHub ログイン後、本人所有リポジトリの DEPSCAN パネルを表示 */}
-            <DepscanAuthGate />
-          </section>
-        )}
-
-        {/* ══ CODESCAN タブ ══════════════════════════════════════════ */}
-        {activeTab === 'codescan' && (
-          <section
-            id="tabpanel-codescan"
-            role="tabpanel"
-            aria-labelledby="tab-codescan"
-            className="flex flex-col gap-4 sm:gap-6 lg:gap-8"
-          >
-            <SectionHeader
-              icon={<ScanSearch size={18} className="text-cyan-400" />}
-              title="CODESCAN — 自アプリのコード脆弱性診断"
-              subtitle="GitHub上の自作リポジトリのソースコードを Semgrep + Gitleaks で静的解析"
-              borderColor="border-cyan-800/40"
-            />
-
-            {/* GitHub ログイン後、CODESCAN パネル（サマリー・一覧を内包）を表示 */}
-            <CodescanAuthGate />
-          </section>
-        )}
+        {/* 選択中のタブのパネル（見出し＋本体） */}
+        {activeDefinition && <TabPanel tab={activeDefinition} />}
 
       </main>
 
@@ -235,34 +63,7 @@ export default function App() {
       </footer>
 
       {/* 下部固定タブバー */}
-      <nav className="fixed bottom-0 inset-x-0 z-20 border-t border-slate-800/60 bg-[#0a0e1a]/95 backdrop-blur-md">
-        <div role="tablist" className="max-w-screen-xl mx-auto grid grid-cols-5">
-          {TABS.map((tab) => {
-            const isActive = activeTab === tab.key
-            return (
-              <button
-                key={tab.key}
-                id={`tab-${tab.key}`}
-                role="tab"
-                aria-selected={isActive}
-                aria-controls={`tabpanel-${tab.key}`}
-                onClick={() => setActiveTab(tab.key)}
-                className={`flex flex-col items-center justify-center gap-1 py-2.5 text-xs font-medium transition-colors ${
-                  isActive ? 'text-white' : 'text-slate-500 hover:text-slate-300'
-                }`}
-              >
-                <span className={isActive ? 'opacity-100' : 'opacity-60'}>{tab.icon}</span>
-                <span>{tab.label}</span>
-                <span
-                  className={`h-0.5 w-8 rounded-full transition-colors ${
-                    isActive ? 'bg-violet-500' : 'bg-transparent'
-                  }`}
-                />
-              </button>
-            )
-          })}
-        </div>
-      </nav>
+      <TabBar activeTab={activeTab} onSelect={setActiveTab} />
 
     </div>
   )
