@@ -132,9 +132,19 @@ datetime 型の属性だけ自動変換する。`JvnVulnerabilityOut`/`OsvVulner
 ## 一覧APIのページネーション共通化（pagination.py）
 `list_vulnerabilities`/`list_osv`/`list_jvn`/`list_depscan`/`list_depsops`/`list_codescan` がそれぞれ持っていた
 「`query.count()` → offset算出 → `order_by`/`offset`/`limit` を適用して取得」という定型処理を
-`app.core.pagination.paginate(query, page, per_page, order_by)` に一元化している。フィルタ条件
-の構築（検索キーワード・重要度・エコシステム等の絞り込み）はドメインごとに大きく異なるため
-対象外とし、真に共通していたページネーション部分のみを抽出した。
+`app.core.pagination.paginate(query, page, per_page, order_by)` に一元化している。
+
+**絞り込み条件は「検索条件オブジェクト」にまとめる（`app.core.list_filters`＋各ドメインの`filters.py`）**:
+各`list_*`が8〜9個のクエリパラメータを引数で受け取りフィルターを組み立てていたため、
+ルーターは`page`/`per_page`と`flt: XxxListFilter = Depends()`だけを受け取り、`flt.apply(query)`を
+呼ぶ形にした。FastAPIは`Depends()`のクラスの`__init__`引数をクエリパラメータに展開するため、
+**OpenAPI上のパラメータ名・制約・説明は従来と同一**（`tests/core/test_list_filters.py`が回帰ガード）。
+共通部は`FeedListFilter`（OSV/JVN。直近日数・重要度・キーワード・ソート・差分取得。サブクラスが
+`model`/`date_column`/`search_columns`/`normalize_severity`を宣言し、OSVは`ecosystem`を追加）と
+`RepoFindingFilter`（DEPSCAN/CODESCAN。repo/owner/severity/resolved。`restrict_to_owner`が
+セッション認証時のowner強制と他人リポジトリ指定の403ガードを担う。DEPSCANは`ecosystem`、CODESCANは
+`min_cvss`を追加）。KEVは`KevListFilter`単独。サブクラスのコンストラクタに`Query(...)`既定値を
+書く必要があるため、**テストでは全引数を明示して生成する**。
 
 ## SQLite / PostgreSQL 切り替え
 `DATABASE_URL` が `sqlite://` で始まる場合は `check_same_thread=False` と PRAGMA 設定を自動適用。

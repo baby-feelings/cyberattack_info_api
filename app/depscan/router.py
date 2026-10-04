@@ -20,6 +20,7 @@ from app.core.database import get_db
 from app.core.pagination import paginate
 from app.core.schemas import SeverityStat
 from app.depscan.crawler import fetch_and_scan_dependencies
+from app.depscan.filters import DepscanListFilter
 from app.depscan.models import DependencyFinding, RepoAssetContext
 from app.depscan.priority import (
     compute_priority_reasons,
@@ -81,51 +82,22 @@ def list_depscan(
     forced_owner: Annotated[str | None, Depends(_resolve_access)],
     page: int = Query(1, ge=1, description="ページ番号（1始まり）"),
     per_page: int = Query(50, ge=1, le=200, description="1ページあたりの件数"),
-    repo: str | None = Query(None, description="リポジトリ名絞り込み（例: owner/repo）"),
-    owner: str | None = Query(None, description="リポジトリオーナー絞り込み（例: baby-feelings）"),
-    ecosystem: str | None = Query(None, description="エコシステム絞り込み（例: PyPI / npm）"),
-    severity: str | None = Query(
-        None, description="重要度絞り込み（CRITICAL / HIGH / MEDIUM / LOW）"
-    ),
-    resolved: bool | None = Query(None, description="解決状態で絞り込み（未指定なら全件）"),
+    flt: DepscanListFilter = Depends(),
 ) -> DependencyFindingListResponse:
     """依存ライブラリ脆弱性の検知結果を取得する。
 
     セッショントークン認証時は `owner` クエリパラメータの指定に関わらず、
     ログイン中の GitHub ユーザー本人が所有するリポジトリのみに強制的に絞り込む。
     """
-    if forced_owner is not None:
-        owner = forced_owner
-        # `repo` は owner とは独立した完全一致フィルタのため、セッション認証時に
-        # 他人のリポジトリを直接指定して owner 制限を迂回できないようガードする
-        if repo is not None and not repo.startswith(f"{forced_owner}/"):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You can only query repositories you own.",
-            )
-
-    query = db.query(DependencyFinding)
-
-    if repo:
-        query = query.filter(DependencyFinding.repo_full_name == repo)
-    if owner:
-        query = query.filter(DependencyFinding.repo_full_name.like(f"{owner}/%"))
-    if ecosystem:
-        query = query.filter(DependencyFinding.ecosystem == ecosystem)
-    if severity:
-        query = query.filter(DependencyFinding.severity == severity.upper())
-    if resolved is not None:
-        if resolved:
-            query = query.filter(DependencyFinding.resolved_at.is_not(None))
-        else:
-            query = query.filter(DependencyFinding.resolved_at.is_(None))
+    flt.restrict_to_owner(forced_owner)
+    query = flt.apply(db.query(DependencyFinding))
 
     total, items = paginate(query, page, per_page, DependencyFinding.detected_at.desc())
 
     logger.info(
         "list_depscan: total=%d, page=%d, repo=%r, owner=%r, ecosystem=%r, "
         "severity=%r, resolved=%r",
-        total, page, repo, owner, ecosystem, severity, resolved,
+        total, page, flt.repo, flt.owner, flt.ecosystem, flt.severity, flt.resolved,
     )
 
     asset_context_map = fetch_asset_context_map(

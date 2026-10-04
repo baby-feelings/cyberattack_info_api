@@ -18,6 +18,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.codescan.crawler import fetch_and_scan_code
+from app.codescan.filters import CodescanListFilter
 from app.codescan.models import CodeFinding
 from app.codescan.schemas import (
     CodeFindingListResponse,
@@ -71,35 +72,17 @@ def list_codescan(
     _access: Annotated[str | None, Depends(require_api_key_or_session)],
     page: int = Query(1, ge=1, description="ページ番号（1始まり）"),
     per_page: int = Query(50, ge=1, le=200, description="1ページあたりの件数"),
-    repo: str | None = Query(None, description="リポジトリ名絞り込み（例: owner/repo）"),
-    owner: str | None = Query(None, description="リポジトリオーナー絞り込み（例: baby-feelings）"),
-    severity: str | None = Query(None, description="重要度絞り込み（ERROR/WARNING/INFO）"),
-    resolved: bool | None = Query(None, description="解決状態で絞り込み（未指定なら全件）"),
-    min_cvss: float | None = Query(None, ge=0, le=10, description="CVSS基本値の下限値で絞り込み"),
+    flt: CodescanListFilter = Depends(),
 ) -> CodeFindingListResponse:
     """自アプリのコード脆弱性検知結果を取得する。"""
-    query = db.query(CodeFinding)
-
-    if repo:
-        query = query.filter(CodeFinding.repo_full_name == repo)
-    if owner:
-        query = query.filter(CodeFinding.repo_full_name.like(f"{owner}/%"))
-    if severity:
-        query = query.filter(CodeFinding.severity == severity.upper())
-    if resolved is not None:
-        if resolved:
-            query = query.filter(CodeFinding.resolved_at.is_not(None))
-        else:
-            query = query.filter(CodeFinding.resolved_at.is_(None))
-    if min_cvss is not None:
-        query = query.filter(CodeFinding.cvss_score >= min_cvss)
+    query = flt.apply(db.query(CodeFinding))
 
     total, items = paginate(query, page, per_page, CodeFinding.detected_at.desc())
 
     logger.info(
         "list_codescan: total=%d, page=%d, repo=%r, owner=%r, severity=%r, "
         "resolved=%r, min_cvss=%r",
-        total, page, repo, owner, severity, resolved, min_cvss,
+        total, page, flt.repo, flt.owner, flt.severity, flt.resolved, flt.min_cvss,
     )
 
     data = [CodeFindingOut.model_validate(item) for item in items]

@@ -6,11 +6,11 @@ GET /api/vulnerabilities/{cve_id} – CVE 個別取得
 """
 import json
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, Security
-from sqlalchemy import func, or_
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.auth import require_api_key, require_public_api_key
@@ -20,6 +20,7 @@ from app.core.db_utils import year_month_expr
 from app.core.pagination import paginate
 from app.core.schemas import MonthlyStat
 from app.kev.crawler import fetch_and_store_kev
+from app.kev.filters import KevListFilter
 from app.kev.models import Vulnerability
 from app.kev.schemas import StatsResponse, VendorStat, VulnerabilityListResponse, VulnerabilityOut
 from app.kev.stix import build_stix_vulnerability
@@ -67,16 +68,7 @@ def list_vulnerabilities(
     db: Annotated[Session, Depends(get_db)],
     page: int = Query(1, ge=1, description="ページ番号（1始まり）"),
     per_page: int = Query(50, ge=1, le=500, description="1ページあたりの件数"),
-    search: str | None = Query(None, description="ベンダー名・製品名の部分一致検索"),
-    vendor: str | None = Query(None, description="ベンダー名での絞り込み（完全一致）"),
-    product: str | None = Query(None, description="製品名での絞り込み（部分一致）"),
-    min_epss: float | None = Query(
-        None, ge=0.0, le=1.0,
-        description="EPSS スコアの下限（0.0〜1.0）。指定値以上のもののみ返す",
-    ),
-    updated_since: datetime | None = Query(
-        None, description="この日時以降に内容が更新されたレコードのみ返す（差分取得用、ISO 8601）",
-    ),
+    flt: KevListFilter = Depends(),
 ) -> VulnerabilityListResponse:
     """脆弱性一覧を取得する。
 
@@ -87,40 +79,14 @@ def list_vulnerabilities(
     - `updated_since`: 差分取得（増分同期）用。新規追加または内容変更があったレコードのみ返す
     - 最新の date_added 順でソート
     """
-    query = db.query(Vulnerability)
-
-    # キーワード検索: ベンダー名 OR 製品名の部分一致
-    if search:
-        keyword = f"%{search}%"
-        query = query.filter(
-            or_(
-                Vulnerability.vendor_project.ilike(keyword),
-                Vulnerability.product.ilike(keyword),
-            )
-        )
-
-    # ベンダー名の完全一致フィルタ
-    if vendor:
-        query = query.filter(Vulnerability.vendor_project == vendor)
-
-    # 製品名の部分一致フィルタ
-    if product:
-        query = query.filter(Vulnerability.product.ilike(f"%{product}%"))
-
-    # EPSS スコアの下限フィルタ
-    if min_epss is not None:
-        query = query.filter(Vulnerability.epss_score >= min_epss)
-
-    # 差分取得（増分同期）: 新規追加または内容変更があったレコードのみに絞り込む
-    if updated_since is not None:
-        query = query.filter(Vulnerability.updated_at >= updated_since)
+    query = flt.apply(db.query(Vulnerability))
 
     # 最新の追加日順でソートし、ページネーションを適用
     total, items = paginate(query, page, per_page, Vulnerability.date_added.desc())
 
     logger.info(
         "list_vulnerabilities: total=%d, page=%d, per_page=%d, search=%r",
-        total, page, per_page, search,
+        total, page, per_page, flt.search,
     )
 
     return VulnerabilityListResponse(
