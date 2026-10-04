@@ -33,7 +33,7 @@ class TestRunCodescanForUser:
     def test_success_path_inserts_findings(self, db_session):
         repos = [{"full_name": "octocat/repo", "default_branch": "main"}]
         with patch("app.codescan.user_scan.list_target_repos", return_value=repos), \
-             patch("app.codescan.user_scan._scan_repo", return_value=[_finding()]), \
+             patch("app.codescan.user_scan.scan_repo", return_value=[_finding()]), \
              patch("app.codescan.user_scan.SessionLocal", return_value=db_session):
             run_codescan_for_user("octocat", "gho_token")
 
@@ -54,7 +54,7 @@ class TestRunCodescanForUser:
             return [_finding(repo_full_name=full_name)]
 
         with patch("app.codescan.user_scan.list_target_repos", return_value=repos), \
-             patch("app.codescan.user_scan._scan_repo", side_effect=_scan_side_effect), \
+             patch("app.codescan.user_scan.scan_repo", side_effect=_scan_side_effect), \
              patch("app.codescan.user_scan.SessionLocal", return_value=db_session):
             run_codescan_for_user("octocat", "gho_token")
 
@@ -73,10 +73,10 @@ class TestRunCodescanForUser:
 
         repos = [{"full_name": "octocat/repo", "default_branch": "main"}]
         with patch("app.codescan.user_scan.list_target_repos", return_value=repos), \
-             patch("app.codescan.user_scan._scan_repo", return_value=[_finding()]), \
+             patch("app.codescan.user_scan.scan_repo", return_value=[_finding()]), \
              patch("app.codescan.user_scan.SessionLocal", return_value=db_session), \
              patch("app.codescan.user_scan.notify_success") as mock_notify, \
-             patch("app.codescan.user_scan._file_github_issues") as mock_file_issues:
+             patch("app.codescan.user_scan.file_github_issues") as mock_file_issues:
             run_codescan_for_user("octocat", "gho_token")
 
         mock_notify.assert_called_once()
@@ -89,10 +89,10 @@ class TestRunCodescanForUser:
     def test_no_notification_when_webhook_not_registered(self, db_session):
         repos = [{"full_name": "octocat/repo", "default_branch": "main"}]
         with patch("app.codescan.user_scan.list_target_repos", return_value=repos), \
-             patch("app.codescan.user_scan._scan_repo", return_value=[_finding()]), \
+             patch("app.codescan.user_scan.scan_repo", return_value=[_finding()]), \
              patch("app.codescan.user_scan.SessionLocal", return_value=db_session), \
              patch("app.codescan.user_scan.notify_success") as mock_notify, \
-             patch("app.codescan.user_scan._file_github_issues") as mock_file_issues:
+             patch("app.codescan.user_scan.file_github_issues") as mock_file_issues:
             run_codescan_for_user("octocat", "gho_token")
 
         mock_notify.assert_not_called()

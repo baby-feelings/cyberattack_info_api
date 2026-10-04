@@ -46,7 +46,7 @@ def _format_finding_lines(findings: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
-def _file_github_issues(new_snapshots: list[dict[str, Any]], token: str | None = None) -> None:
+def file_github_issues(new_snapshots: list[dict[str, Any]], token: str | None = None) -> None:
     """新規検知を、検知されたリポジトリ自身に GitHub Issue として自動起票する。
 
     同名の Open な Issue が既にあればコメントを追記し、無ければ新規作成する。

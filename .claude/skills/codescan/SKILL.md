@@ -74,7 +74,7 @@ CVSS 7.0以上はダッシュボード（`CodescanRow.tsx`のCvssBadge）で赤�
 の複合ユニーク制約（Semgrepには安定した検知ID的なものが無いため）。DEPSCANは
 「今回の全リポジトリ横断スキャンで検知されなくなったfinding」を一括で解決済みに
 するが、CODESCANは`_run_codescan_body`のループ内でリポジトリを1つずつtarball
-取得→スキャンするため、`app.codescan.crawler._resolve_stale_repo_findings`は
+取得→スキャンするため、`app.codescan.crawler.resolve_stale_repo_findings`は
 **そのリポジトリのスキャンが成功した直後に、そのリポジトリだけを対象に**
 解決判定を行う設計にした（あるリポジトリのスキャンが失敗してスキップされた場合、
 そのリポジトリの既存findingを誤って解決済みにしないため）。
@@ -93,14 +93,14 @@ DEPSCANは詳細なSlackダイジェスト（`notify_dependency_findings`）・I
 「リポジトリ単位でグルーピング→Open Issue検索→追記または新規作成→API失敗は
 握りつぶす」という手順自体はDEPSCANの`app.depscan.issue_management`と完全に
 同一のため、`app.core.issue_filing.file_or_update_repo_issues`に共通化されている。
-`app.codescan.issue_management._file_github_issues`はこの共通処理へ、Issueタイトル
+`app.codescan.issue_management.file_github_issues`はこの共通処理へ、Issueタイトル
 `"🔎 自アプリのコード脆弱性が検出されました (CODESCAN)"`（DEPSCANの
 `"🚨 依存ライブラリの脆弱性が検出されました (DEPSCAN)"`と混同しないための固定文字列）と
 本文整形関数`_format_finding_lines`（severity降順→ファイルパス順）を渡すだけの
 薄い実装になっている。本文整形をDEPSCANの`app.core.finding_format.format_package_lines`
 と共有しないのは、検知の粒度（パッケージ単位 vs ファイル:行単位）が異なるため。
 現バージョンでは新規起票・追記のみを実装し、自動クローズ（DEPSCANの
-`_close_resolved_repo_issues`相当）は将来の拡張とした（`run_crawler`ベースの
+`close_resolved_repo_issues`相当）は将来の拡張とした（`run_crawler`ベースの
 オーケストレーションでは、DEPSCANが行う「全体再スキャン検証後」というクローズ
 タイミングの前提が成立しないため）。
 
@@ -137,7 +137,7 @@ gitleaks（https://github.com/gitleaks/gitleaks )も同じtarball展開先に対
 （Semgrepの300秒より短い。正規表現ベースのシークレット検知は一般にSemgrepの
 パターンマッチよりも高速なため）。
 
-**Semgrepとgitleaksは独立したtry/exceptで囲む**（`_scan_repo`）。1つのtry/except
+**Semgrepとgitleaksは独立したtry/exceptで囲む**（`scan_repo`）。1つのtry/except
 で両方を囲むと、片方の障害（タイムアウト・パース失敗等）でもう片方の正常な検知結果
 まで丸ごと失ってしまうため、意図的に分離している。
 

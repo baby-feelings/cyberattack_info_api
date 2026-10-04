@@ -1,8 +1,8 @@
 """DEPSCAN 検知結果の GitHub Issue 管理（起票・追記・自動クローズ）。
 
 app.depscan.crawler から GitHub Issue 関連ロジックのみを切り出したモジュール。
-新規検知の起票（`_file_github_issues`）・未解決 finding が0件になった
-リポジトリの自動クローズ（`_close_resolved_repo_issues`）を担当し、
+新規検知の起票（`file_github_issues`）・未解決 finding が0件になった
+リポジトリの自動クローズ（`close_resolved_repo_issues`）を担当し、
 DEPSCAN 全体のオーケストレーション（crawler.py）とは責務を分離する。
 """
 import logging
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 _ISSUE_TITLE = "🚨 依存ライブラリの脆弱性が検出されました (DEPSCAN)"
 
 
-def _file_github_issues(new_snapshots: list[dict[str, Any]], token: str | None = None) -> None:
+def file_github_issues(new_snapshots: list[dict[str, Any]], token: str | None = None) -> None:
     """新規検知を、検知されたリポジトリ自身に GitHub Issue として自動起票する。
 
     同名の Open な Issue が既にあればコメントを追記し、無ければ新規作成する。
@@ -53,7 +53,7 @@ def _file_github_issues(new_snapshots: list[dict[str, Any]], token: str | None =
     file_or_update_repo_issues(new_snapshots, _ISSUE_TITLE, format_body, token, "DEPSCAN")
 
 
-def _close_resolved_repo_issues(db: Session, candidate_repos: set[str]) -> None:
+def close_resolved_repo_issues(db: Session, candidate_repos: set[str]) -> None:
     """未解決 finding が0件になったリポジトリの Open な DEPSCAN Issue をクローズする。
 
     Issue 本文に列挙された個々の CVE を突き合わせるのではなく、「そのリポジトリに

@@ -10,9 +10,7 @@ from typing import Any
 
 import httpx
 
-from app.core.github_http import GITHUB_API_BASE as _GITHUB_API_BASE
-from app.core.github_http import github_headers as _headers
-from app.core.retry import request_with_retry
+from app.core.github_http import GitHubApi
 
 logger = logging.getLogger(__name__)
 
@@ -36,15 +34,12 @@ def list_target_repos(username: str, token: str) -> list[dict[str, Any]]:
     """
     repos: list[dict[str, Any]] = []
     page = 1
-    with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
+    with GitHubApi(token, timeout=_TIMEOUT) as api:
         while True:
-            def _get_repos_page(p: int = page) -> httpx.Response:
-                return client.get(
-                    f"{_GITHUB_API_BASE}/user/repos",
-                    params={"affiliation": "owner", "per_page": _PER_PAGE, "page": p},
-                )
-
-            resp = request_with_retry(_get_repos_page)
+            resp = api.get(
+                "/user/repos",
+                params={"affiliation": "owner", "per_page": _PER_PAGE, "page": page},
+            )
             batch = resp.json()
             if not batch:
                 break
@@ -74,8 +69,8 @@ def repo_exists(owner: str, repo: str, token: str) -> bool | None:
             倒し、判定不能な間はDBデータを削除しないこと。
     """
     try:
-        with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
-            request_with_retry(lambda: client.get(f"{_GITHUB_API_BASE}/repos/{owner}/{repo}"))
+        with GitHubApi(token, timeout=_TIMEOUT) as api:
+            api.get(f"/repos/{owner}/{repo}")
         return True
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 404:
@@ -99,12 +94,9 @@ def get_repo_tree(owner: str, repo: str, default_branch: str, token: str) -> lis
     Returns:
         ファイルパスのリスト（ディレクトリは除外）
     """
-    with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
-        resp = request_with_retry(
-            lambda: client.get(
-                f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/git/trees/{default_branch}",
-                params={"recursive": "1"},
-            ),
+    with GitHubApi(token, timeout=_TIMEOUT) as api:
+        resp = api.get(
+            f"/repos/{owner}/{repo}/git/trees/{default_branch}", params={"recursive": "1"},
         )
     data = resp.json()
 
@@ -131,10 +123,8 @@ def get_file_content(owner: str, repo: str, path: str, token: str) -> str:
     Returns:
         ファイル内容（UTF-8 文字列）
     """
-    with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
-        resp = request_with_retry(
-            lambda: client.get(f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/contents/{path}"),
-        )
+    with GitHubApi(token, timeout=_TIMEOUT) as api:
+        resp = api.get(f"/repos/{owner}/{repo}/contents/{path}")
     data = resp.json()
     content = data.get("content", "")
     encoding = data.get("encoding", "base64")
@@ -205,12 +195,9 @@ def find_open_issue(owner: str, repo: str, title: str, token: str) -> int | None
     Returns:
         見つかった Issue 番号。無ければ None。
     """
-    with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
-        resp = request_with_retry(
-            lambda: client.get(
-                f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/issues",
-                params={"state": "open", "per_page": _PER_PAGE},
-            ),
+    with GitHubApi(token, timeout=_TIMEOUT) as api:
+        resp = api.get(
+            f"/repos/{owner}/{repo}/issues", params={"state": "open", "per_page": _PER_PAGE},
         )
     for issue in resp.json():
         if issue.get("title") == title and "pull_request" not in issue:
@@ -226,12 +213,8 @@ def create_issue(owner: str, repo: str, title: str, body: str, token: str) -> di
     対して重複作成してしまうリスクがあるため。GETやIssueクローズ等の冪等な
     操作とは異なる方針）。
     """
-    with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
-        resp = client.post(
-            f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/issues",
-            json={"title": title, "body": body},
-        )
-        resp.raise_for_status()
+    with GitHubApi(token, timeout=_TIMEOUT) as api:
+        resp = api.post(f"/repos/{owner}/{repo}/issues", json={"title": title, "body": body})
     return dict(resp.json())
 
 
@@ -243,22 +226,17 @@ def add_issue_comment(
     新規リソース作成（POST）のため create_issue と同様の理由でリトライしない
     （重複コメント投稿のリスクを避けるため）。
     """
-    with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
-        resp = client.post(
-            f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/issues/{issue_number}/comments",
-            json={"body": body},
+    with GitHubApi(token, timeout=_TIMEOUT) as api:
+        resp = api.post(
+            f"/repos/{owner}/{repo}/issues/{issue_number}/comments", json={"body": body},
         )
-        resp.raise_for_status()
     return dict(resp.json())
 
 
 def close_issue(owner: str, repo: str, issue_number: int, token: str) -> dict[str, Any]:
     """Issue をクローズする（state を "closed" に更新）。冪等な操作のためリトライする。"""
-    with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
-        resp = request_with_retry(
-            lambda: client.patch(
-                f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/issues/{issue_number}",
-                json={"state": "closed"},
-            ),
+    with GitHubApi(token, timeout=_TIMEOUT) as api:
+        resp = api.patch(
+            f"/repos/{owner}/{repo}/issues/{issue_number}", json={"state": "closed"},
         )
     return dict(resp.json())

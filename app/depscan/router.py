@@ -22,9 +22,9 @@ from app.core.schemas import SeverityStat
 from app.depscan.crawler import fetch_and_scan_dependencies
 from app.depscan.models import DependencyFinding, RepoAssetContext
 from app.depscan.priority import (
-    _compute_priority_reasons,
-    _fetch_asset_context_map,
-    _fetch_kev_map,
+    compute_priority_reasons,
+    fetch_asset_context_map,
+    fetch_kev_map,
 )
 from app.depscan.sbom import build_cyclonedx_sbom, build_purl, build_spdx_sbom
 from app.depscan.schemas import (
@@ -128,17 +128,17 @@ def list_depscan(
         total, page, repo, owner, ecosystem, severity, resolved,
     )
 
-    asset_context_map = _fetch_asset_context_map(
+    asset_context_map = fetch_asset_context_map(
         db, {item.repo_full_name for item in items},
     )
-    kev_map = _fetch_kev_map(db, items)
+    kev_map = fetch_kev_map(db, items)
 
     data = []
     for item in items:
         asset_context = asset_context_map.get(item.repo_full_name)
         data.append(DependencyFindingOut.model_validate(item).model_copy(update={
             "asset_context": asset_context,
-            "priority_reasons": _compute_priority_reasons(item, asset_context, kev_map),
+            "priority_reasons": compute_priority_reasons(item, asset_context, kev_map),
             "purl": build_purl(item.ecosystem, item.package_name, item.installed_version),
         }))
 

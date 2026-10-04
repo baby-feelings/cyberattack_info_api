@@ -10,9 +10,7 @@ from typing import Any
 
 import httpx
 
-from app.core.github_http import GITHUB_API_BASE as _GITHUB_API_BASE
-from app.core.github_http import github_headers as _headers
-from app.core.retry import request_with_retry
+from app.core.github_http import GitHubApi
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +23,9 @@ _DEPENDABOT_LOGIN = "dependabot[bot]"
 
 def list_open_dependabot_prs(owner: str, repo: str, token: str) -> list[dict[str, Any]]:
     """Open な Dependabot 作成 PR の一覧を取得する（number・title を含む）。"""
-    with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
-        resp = request_with_retry(
-            lambda: client.get(
-                f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/pulls",
-                params={"state": "open", "per_page": _PER_PAGE},
-            ),
+    with GitHubApi(token, timeout=_TIMEOUT) as api:
+        resp = api.get(
+            f"/repos/{owner}/{repo}/pulls", params={"state": "open", "per_page": _PER_PAGE},
         )
     return [
         pr for pr in resp.json()
@@ -40,28 +35,23 @@ def list_open_dependabot_prs(owner: str, repo: str, token: str) -> list[dict[str
 
 def get_pull_request(owner: str, repo: str, number: int, token: str) -> dict[str, Any]:
     """PR 詳細を取得する（`mergeable_state` 判定に使用）。"""
-    with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
-        resp = request_with_retry(
-            lambda: client.get(f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/pulls/{number}"),
-        )
+    with GitHubApi(token, timeout=_TIMEOUT) as api:
+        resp = api.get(f"/repos/{owner}/{repo}/pulls/{number}")
     return dict(resp.json())
 
 
 def merge_pull_request(owner: str, repo: str, number: int, token: str) -> dict[str, Any]:
     """PR をマージし、ブランチを削除する。"""
-    with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
+    with GitHubApi(token, timeout=_TIMEOUT) as api:
         # PUTでの状態遷移（マージ）は冪等（再試行してもマージ済みエラーが返るのみで
         # 重複マージにはならない）ためリトライ対象とする
-        resp = request_with_retry(
-            lambda: client.put(
-                f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/pulls/{number}/merge",
-                json={"merge_method": "merge"},
-            ),
+        resp = api.put(
+            f"/repos/{owner}/{repo}/pulls/{number}/merge", json={"merge_method": "merge"},
         )
         merged = dict(resp.json())
         try:
             branch = get_pull_request(owner, repo, number, token)["head"]["ref"]
-            client.delete(f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/git/refs/heads/{branch}")
+            api.delete(f"/repos/{owner}/{repo}/git/refs/heads/{branch}")
         except httpx.HTTPError as exc:
             # ブランチ削除失敗はマージ自体の成否に影響させない（Dependabotが後で消すこともある）
             logger.warning("Failed to delete branch after merging %s/%s#%d: %s",
@@ -75,23 +65,17 @@ def request_rebase(owner: str, repo: str, number: int, token: str) -> None:
     新規リソース作成（POST）のためリトライしない（重複コメント投稿のリスクを
     避けるため。app.depscan.github_client.create_issue と同じ方針）。
     """
-    with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
-        resp = client.post(
-            f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/issues/{number}/comments",
-            json={"body": "@dependabot rebase"},
+    with GitHubApi(token, timeout=_TIMEOUT) as api:
+        api.post(
+            f"/repos/{owner}/{repo}/issues/{number}/comments", json={"body": "@dependabot rebase"},
         )
-        resp.raise_for_status()
 
 
 def has_ci_workflows(owner: str, repo: str, token: str) -> bool:
     """`.github/workflows` 配下に何らかのワークフローファイルがあるか判定する。"""
-    with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
+    with GitHubApi(token, timeout=_TIMEOUT) as api:
         try:
-            resp = request_with_retry(
-                lambda: client.get(
-                    f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/contents/.github/workflows",
-                ),
-            )
+            resp = api.get(f"/repos/{owner}/{repo}/contents/.github/workflows")
         except httpx.HTTPStatusError as exc:
             # 404（workflowsディレクトリが無い）は正常系のため、リトライ対象外・
             # エラーとせずFalseを返す
@@ -110,11 +94,9 @@ def list_open_dependabot_alerts(owner: str, repo: str, token: str) -> list[dict[
     含まれない別スコープのため、未設定のトークンでは 403 を送出する。呼び出し側で
     捕捉し、判定不能として扱うこと）。
     """
-    with httpx.Client(timeout=_TIMEOUT, headers=_headers(token)) as client:
-        resp = request_with_retry(
-            lambda: client.get(
-                f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/dependabot/alerts",
-                params={"state": "open", "per_page": _PER_PAGE},
-            ),
+    with GitHubApi(token, timeout=_TIMEOUT) as api:
+        resp = api.get(
+            f"/repos/{owner}/{repo}/dependabot/alerts",
+            params={"state": "open", "per_page": _PER_PAGE},
         )
     return list(resp.json())

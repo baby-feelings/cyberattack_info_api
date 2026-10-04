@@ -23,12 +23,12 @@ from app.core.notifications import notify_dependency_findings
 from app.crawler_logs.writer import now_utc
 from app.depscan.crawler import (
     FindingKey,
-    _build_findings,
-    _collect_dependencies,
-    _resolve_stale_findings,
-    _upsert_findings,
+    build_findings,
+    collect_dependencies,
+    resolve_stale_findings,
+    upsert_findings,
 )
-from app.depscan.issue_management import _file_github_issues
+from app.depscan.issue_management import file_github_issues
 from app.depscan.models import UserScan
 
 logger = logging.getLogger(__name__)
@@ -126,15 +126,15 @@ def run_depscan_for_user(username: str, token: str) -> None:
     try:
         _set_user_scan_status(db, username, "running", started_at=started_at)
 
-        dep_to_repos, repos_scanned, repo_visibility = _collect_dependencies(username, token)
-        records = _build_findings(dep_to_repos, repo_visibility)
-        new_count, new_snapshots = _upsert_findings(db, records)
+        dep_to_repos, repos_scanned, repo_visibility = collect_dependencies(username, token)
+        records = build_findings(dep_to_repos, repo_visibility)
+        new_count, new_snapshots = upsert_findings(db, records)
 
         current_keys: set[FindingKey] = {
             (r["repo_full_name"], r["ecosystem"], r["package_name"], r["osv_id"])
             for r in records
         }
-        _resolve_stale_findings(db, current_keys, repo_owner_prefix=username)
+        resolve_stale_findings(db, current_keys, repo_owner_prefix=username)
 
         # Slack通知・GitHub Issue起票は、本人が通知を有効にして登録している場合のみ
         # 行う（未登録ユーザーがログインしただけでは一切通知しない既存方針を維持）
@@ -142,7 +142,7 @@ def run_depscan_for_user(username: str, token: str) -> None:
         if webhook:
             notify_dependency_findings(new_snapshots, recipients=[webhook])
             try:
-                _file_github_issues(new_snapshots, token)
+                file_github_issues(new_snapshots, token)
             except Exception as exc:
                 logger.error(
                     "DEPSCAN (on-demand for %s): failed to file GitHub issues: %s",

@@ -17,12 +17,12 @@ import httpx  # noqa: E402
 from app.auth.session import create_session_token  # noqa: E402
 from app.core.notifications import notify_dependency_findings  # noqa: E402
 from app.depscan.crawler import (  # noqa: E402
-    _build_findings,
-    _collect_dependencies,
     _discover_manifests,
-    _resolve_stale_findings,
-    _upsert_findings,
+    build_findings,
+    collect_dependencies,
     fetch_and_scan_dependencies,
+    resolve_stale_findings,
+    upsert_findings,
 )
 from app.depscan.github_client import (  # noqa: E402
     add_issue_comment,
@@ -804,7 +804,7 @@ class TestCollectDependencies:
         with patch("app.depscan.crawler.list_target_repos", return_value=repos), \
              patch("app.depscan.crawler._discover_manifests", return_value=["requirements.txt"]), \
              patch("app.depscan.crawler.get_file_content", return_value="fastapi==0.115.6\n"):
-            dep_to_repos, repos_scanned, repo_visibility = _collect_dependencies("u", "token")
+            dep_to_repos, repos_scanned, repo_visibility = collect_dependencies("u", "token")
 
         assert repos_scanned == 1
         assert dep_to_repos[("PyPI", "fastapi", "0.115.6")] == [("u/repo1", "requirements.txt")]
@@ -820,7 +820,7 @@ class TestCollectDependencies:
                      "404", request=MagicMock(), response=MagicMock()
                  ),
              ):
-            dep_to_repos, repos_scanned, repo_visibility = _collect_dependencies("u", "token")
+            dep_to_repos, repos_scanned, repo_visibility = collect_dependencies("u", "token")
         assert dep_to_repos == {}
         assert repos_scanned == 1
 
@@ -832,7 +832,7 @@ class TestCollectDependencies:
         ]
         with patch("app.depscan.crawler.list_target_repos", return_value=repos), \
              patch("app.depscan.crawler._discover_manifests", return_value=[]):
-            _, _, repo_visibility = _collect_dependencies("u", "token")
+            _, _, repo_visibility = collect_dependencies("u", "token")
         assert repo_visibility == {"u/public-repo": "public", "u/private-repo": "private"}
 
 
@@ -851,7 +851,7 @@ class TestBuildFindings:
             "app.depscan.crawler.query_versions_batch",
             return_value={("PyPI", "cryptography", "3.4.7"): ["GHSA-crypto-001"]},
         ), patch("app.depscan.crawler.fetch_vuln_by_id", return_value=vuln):
-            records = _build_findings(dep_to_repos)
+            records = build_findings(dep_to_repos)
 
         assert len(records) == 1
         rec = records[0]
@@ -862,7 +862,7 @@ class TestBuildFindings:
 
     def test_no_hits_returns_empty(self):
         with patch("app.depscan.crawler.query_versions_batch", return_value={}):
-            assert _build_findings({("PyPI", "pkg", "1.0.0"): [("u/r", "requirements.txt")]}) == []
+            assert build_findings({("PyPI", "pkg", "1.0.0"): [("u/r", "requirements.txt")]}) == []
 
     def test_vuln_fetch_failure_skipped(self):
         dep_to_repos = {("PyPI", "pkg", "1.0.0"): [("u/r", "requirements.txt")]}
@@ -873,7 +873,7 @@ class TestBuildFindings:
             "app.depscan.crawler.fetch_vuln_by_id",
             side_effect=httpx.HTTPStatusError("500", request=MagicMock(), response=MagicMock()),
         ):
-            assert _build_findings(dep_to_repos) == []
+            assert build_findings(dep_to_repos) == []
 
     def test_default_reachability_is_unknown(self):
         """_apply_reachabilityで上書きされる前のフォールバック既定値。"""
@@ -883,7 +883,7 @@ class TestBuildFindings:
             "app.depscan.crawler.query_versions_batch",
             return_value={("PyPI", "cryptography", "3.4.7"): ["GHSA-x"]},
         ), patch("app.depscan.crawler.fetch_vuln_by_id", return_value=vuln):
-            records = _build_findings(dep_to_repos)
+            records = build_findings(dep_to_repos)
         assert records[0]["reachability"] == "unknown"
 
     def test_sets_repo_visibility_from_map(self):
@@ -894,7 +894,7 @@ class TestBuildFindings:
             "app.depscan.crawler.query_versions_batch",
             return_value={("PyPI", "cryptography", "3.4.7"): ["GHSA-x"]},
         ), patch("app.depscan.crawler.fetch_vuln_by_id", return_value=vuln):
-            records = _build_findings(dep_to_repos, {"u/repo1": "private"})
+            records = build_findings(dep_to_repos, {"u/repo1": "private"})
         assert records[0]["repo_visibility"] == "private"
 
     def test_repo_visibility_none_when_map_missing_entry(self):
@@ -905,7 +905,7 @@ class TestBuildFindings:
             "app.depscan.crawler.query_versions_batch",
             return_value={("PyPI", "cryptography", "3.4.7"): ["GHSA-x"]},
         ), patch("app.depscan.crawler.fetch_vuln_by_id", return_value=vuln):
-            records = _build_findings(dep_to_repos)
+            records = build_findings(dep_to_repos)
         assert records[0]["repo_visibility"] is None
 
 
@@ -935,7 +935,7 @@ class TestBuildFindingsInfersFixedVersion:
             patch("app.depscan.crawler.fetch_vuln_by_id", return_value=vuln),
             patch("app.depscan.crawler.fetch_latest_version", return_value=latest) as fetch,
         ):
-            return _build_findings(dep_to_repos), fetch
+            return build_findings(dep_to_repos), fetch
 
     def test_latest_newer_than_last_affected_becomes_fixed_version(self):
         vuln = self._vuln([{"introduced": "0"}, {"last_affected": "1.14.0"}])
@@ -1076,18 +1076,18 @@ class TestUpsertFindings:
         return base
 
     def test_inserts_new_finding(self, db_session):
-        inserted, snapshots = _upsert_findings(db_session, [self._rec()])
+        inserted, snapshots = upsert_findings(db_session, [self._rec()])
         assert inserted == 1
         assert snapshots[0]["osv_id"] == "GHSA-001"
         assert db_session.query(DependencyFinding).count() == 1
 
     def test_dedupes_within_batch(self, db_session):
-        inserted, _ = _upsert_findings(db_session, [self._rec(), self._rec()])
+        inserted, _ = upsert_findings(db_session, [self._rec(), self._rec()])
         assert inserted == 1
 
     def test_reopens_resolved_finding(self, db_session):
         _make_finding(db_session, osv_id="GHSA-001", resolved_at=_NOW)
-        inserted, snapshots = _upsert_findings(db_session, [self._rec()])
+        inserted, snapshots = upsert_findings(db_session, [self._rec()])
         assert inserted == 0
         assert snapshots == []
         reopened = db_session.query(DependencyFinding).filter_by(osv_id="GHSA-001").first()
@@ -1095,7 +1095,7 @@ class TestUpsertFindings:
 
     def test_existing_open_finding_not_reinserted(self, db_session):
         _make_finding(db_session, osv_id="GHSA-001")
-        inserted, snapshots = _upsert_findings(db_session, [self._rec()])
+        inserted, snapshots = upsert_findings(db_session, [self._rec()])
         assert inserted == 0
         assert snapshots == []
 
@@ -1104,7 +1104,7 @@ class TestUpsertFindings:
         _make_finding(
             db_session, osv_id="GHSA-001", reachability="unreachable", summary="old summary",
         )
-        _upsert_findings(
+        upsert_findings(
             db_session, [self._rec(reachability="reachable", summary="new summary")],
         )
         finding = db_session.query(DependencyFinding).filter_by(osv_id="GHSA-001").first()
@@ -1114,14 +1114,14 @@ class TestUpsertFindings:
     def test_existing_open_finding_gets_newly_inferred_fixed_versions(self, db_session):
         """以前は修正版が空だった未解決findingに、後から判明した修正版を反映する。"""
         _make_finding(db_session, osv_id="GHSA-001", fixed_versions=[])
-        _upsert_findings(db_session, [self._rec(fixed_versions=["1.15.0"])])
+        upsert_findings(db_session, [self._rec(fixed_versions=["1.15.0"])])
         finding = db_session.query(DependencyFinding).filter_by(osv_id="GHSA-001").first()
         assert finding.fixed_versions == ["1.15.0"]
 
     def test_existing_fixed_versions_not_wiped_when_lookup_returns_nothing(self, db_session):
         """レジストリを一時的に引けず空になった回に、既知の修正版を消さない。"""
         _make_finding(db_session, osv_id="GHSA-001", fixed_versions=["1.15.0"])
-        _upsert_findings(db_session, [self._rec(fixed_versions=[])])
+        upsert_findings(db_session, [self._rec(fixed_versions=[])])
         finding = db_session.query(DependencyFinding).filter_by(osv_id="GHSA-001").first()
         assert finding.fixed_versions == ["1.15.0"]
 
@@ -1129,7 +1129,7 @@ class TestUpsertFindings:
 class TestResolveStaleFindings:
     def test_marks_missing_findings_resolved(self, db_session):
         _make_finding(db_session, osv_id="GHSA-stale")
-        resolved, affected_repos = _resolve_stale_findings(db_session, current_keys=set())
+        resolved, affected_repos = resolve_stale_findings(db_session, current_keys=set())
         assert resolved == 1
         assert affected_repos == {"baby-feelings/baby_grow"}
         finding = db_session.query(DependencyFinding).filter_by(osv_id="GHSA-stale").first()
@@ -1138,7 +1138,7 @@ class TestResolveStaleFindings:
     def test_keeps_current_findings_open(self, db_session):
         _make_finding(db_session, osv_id="GHSA-current")
         key = ("baby-feelings/baby_grow", "PyPI", "cryptography", "GHSA-current")
-        resolved, affected_repos = _resolve_stale_findings(db_session, current_keys={key})
+        resolved, affected_repos = resolve_stale_findings(db_session, current_keys={key})
         assert resolved == 0
         assert affected_repos == set()
 
@@ -1149,7 +1149,7 @@ class TestResolveStaleFindings:
         )
         _make_finding(db_session, repo_full_name="octocat/hello-world", osv_id="GHSA-octocat")
 
-        resolved, affected_repos = _resolve_stale_findings(
+        resolved, affected_repos = resolve_stale_findings(
             db_session, current_keys=set(), repo_owner_prefix="octocat",
         )
 
@@ -1225,7 +1225,7 @@ class TestFetchAndScanDependenciesDeduplication:
         ))
         db_session.commit()
 
-        with patch("app.depscan.crawler._collect_dependencies") as mock_collect:
+        with patch("app.depscan.crawler.collect_dependencies") as mock_collect:
             result = fetch_and_scan_dependencies()
 
         assert result == (0, 0, 0)
@@ -1244,13 +1244,13 @@ class TestFetchAndScanDependenciesDeduplication:
         db_session.commit()
 
         with patch(
-            "app.depscan.crawler._collect_dependencies", return_value=({}, 0, {}),
+            "app.depscan.crawler.collect_dependencies", return_value=({}, 0, {}),
         ), patch(
-            "app.depscan.crawler._build_findings", return_value=[],
+            "app.depscan.crawler.build_findings", return_value=[],
         ), patch("app.core.crawler_runner.SessionLocal", return_value=db_session), \
            patch("app.depscan.crawler._apply_reachability"), \
            patch("app.depscan.crawler.notify_dependency_findings"), \
-           patch("app.depscan.crawler._file_github_issues"):
+           patch("app.depscan.crawler.file_github_issues"):
             db_session.close = MagicMock()
             new_count, resolved_count, repos_scanned = fetch_and_scan_dependencies(force=True)
 
@@ -1260,12 +1260,12 @@ class TestFetchAndScanDependenciesDeduplication:
 class TestFetchAndScanDependencies:
     def test_success_path(self, db_session):
         with patch(
-            "app.depscan.crawler._collect_dependencies",
+            "app.depscan.crawler.collect_dependencies",
             return_value=(
                 {("PyPI", "pkg", "1.0.0"): [("u/r", "requirements.txt")]}, 1, {"u/r": "public"},
             ),
         ), patch(
-            "app.depscan.crawler._build_findings",
+            "app.depscan.crawler.build_findings",
             return_value=[{
                 "repo_full_name": "u/r", "ecosystem": "PyPI", "package_name": "pkg",
                 "installed_version": "1.0.0", "osv_id": "GHSA-001", "severity": "HIGH",
@@ -1275,7 +1275,7 @@ class TestFetchAndScanDependencies:
         ), patch("app.core.crawler_runner.SessionLocal", return_value=db_session), \
            patch("app.depscan.crawler._apply_reachability") as mock_reachability, \
            patch("app.depscan.crawler.notify_dependency_findings") as mock_notify, \
-           patch("app.depscan.crawler._file_github_issues") as mock_file_issues:
+           patch("app.depscan.crawler.file_github_issues") as mock_file_issues:
             new_count, resolved_count, repos_scanned = fetch_and_scan_dependencies()
 
         assert new_count == 1
@@ -1287,9 +1287,9 @@ class TestFetchAndScanDependencies:
     def test_delete_failure_does_not_fail_crawler(self, db_session):
         """_delete_old_depscan_records が失敗してもクローラー全体はエラーにならないこと。"""
         with patch(
-            "app.depscan.crawler._collect_dependencies", return_value=({}, 0, {}),
+            "app.depscan.crawler.collect_dependencies", return_value=({}, 0, {}),
         ), patch(
-            "app.depscan.crawler._build_findings", return_value=[],
+            "app.depscan.crawler.build_findings", return_value=[],
         ), patch("app.core.crawler_runner.SessionLocal", return_value=db_session), \
            patch("app.depscan.crawler._apply_reachability"), \
            patch(
@@ -1297,7 +1297,7 @@ class TestFetchAndScanDependencies:
                side_effect=Exception("delete failed"),
            ), \
            patch("app.depscan.crawler.notify_dependency_findings"), \
-           patch("app.depscan.crawler._file_github_issues"):
+           patch("app.depscan.crawler.file_github_issues"):
             new_count, resolved_count, repos_scanned = fetch_and_scan_dependencies()
 
         assert new_count == 0
@@ -1305,7 +1305,7 @@ class TestFetchAndScanDependencies:
 
     def test_error_path_logs_and_notifies(self, db_session):
         with patch(
-            "app.depscan.crawler._collect_dependencies",
+            "app.depscan.crawler.collect_dependencies",
             side_effect=RuntimeError("GitHub API down"),
         ), patch("app.core.crawler_runner.SessionLocal", return_value=db_session), \
            patch("app.core.crawler_runner.notify_error") as mock_notify_error:
@@ -1432,14 +1432,14 @@ class TestNotifyDependencyFindings:
 class TestRunDepscanForUser:
     def test_success_path_records_done_status(self, db_session):
         with patch(
-            "app.depscan.user_scan._collect_dependencies",
+            "app.depscan.user_scan.collect_dependencies",
             return_value=(
                 {("PyPI", "pkg", "1.0.0"): [("octocat/repo", "requirements.txt")]},
                 1,
                 {"octocat/repo": "public"},
             ),
         ), patch(
-            "app.depscan.user_scan._build_findings",
+            "app.depscan.user_scan.build_findings",
             return_value=[{
                 "repo_full_name": "octocat/repo", "ecosystem": "PyPI", "package_name": "pkg",
                 "installed_version": "1.0.0", "osv_id": "GHSA-001", "severity": "HIGH",
@@ -1463,9 +1463,9 @@ class TestRunDepscanForUser:
         _make_finding(db_session, repo_full_name="baby-feelings/baby_grow", osv_id="GHSA-untouched")
 
         with patch(
-            "app.depscan.user_scan._collect_dependencies", return_value=({}, 0, {}),
+            "app.depscan.user_scan.collect_dependencies", return_value=({}, 0, {}),
         ), patch(
-            "app.depscan.user_scan._build_findings", return_value=[],
+            "app.depscan.user_scan.build_findings", return_value=[],
         ), patch("app.depscan.user_scan.SessionLocal", return_value=db_session):
             run_depscan_for_user("octocat", "gho_token")
 
@@ -1474,7 +1474,7 @@ class TestRunDepscanForUser:
 
     def test_failure_records_error_status(self, db_session):
         with patch(
-            "app.depscan.user_scan._collect_dependencies",
+            "app.depscan.user_scan.collect_dependencies",
             side_effect=RuntimeError("GitHub API down"),
         ), patch("app.depscan.user_scan.SessionLocal", return_value=db_session):
             run_depscan_for_user("octocat", "gho_token")  # 例外を送出しないことを確認
@@ -1492,14 +1492,14 @@ class TestRunDepscanForUser:
         set_slack_webhook(db_session, "octocat", "https://hooks.slack.com/services/octocat")
 
         with patch(
-            "app.depscan.user_scan._collect_dependencies",
+            "app.depscan.user_scan.collect_dependencies",
             return_value=(
                 {("PyPI", "pkg", "1.0.0"): [("octocat/repo", "requirements.txt")]},
                 1,
                 {"octocat/repo": "public"},
             ),
         ), patch(
-            "app.depscan.user_scan._build_findings",
+            "app.depscan.user_scan.build_findings",
             return_value=[{
                 "repo_full_name": "octocat/repo", "ecosystem": "PyPI", "package_name": "pkg",
                 "installed_version": "1.0.0", "osv_id": "GHSA-001", "severity": "HIGH",
@@ -1508,7 +1508,7 @@ class TestRunDepscanForUser:
             }],
         ), patch("app.depscan.user_scan.SessionLocal", return_value=db_session), \
            patch("app.depscan.user_scan.notify_dependency_findings") as mock_notify, \
-           patch("app.depscan.user_scan._file_github_issues") as mock_file_issues:
+           patch("app.depscan.user_scan.file_github_issues") as mock_file_issues:
             run_depscan_for_user("octocat", "gho_token")
 
         mock_notify.assert_called_once()
@@ -1521,14 +1521,14 @@ class TestRunDepscanForUser:
     def test_no_notification_when_webhook_not_registered(self, db_session):
         """Webhook未登録のユーザーには従来通り一切通知しない。"""
         with patch(
-            "app.depscan.user_scan._collect_dependencies",
+            "app.depscan.user_scan.collect_dependencies",
             return_value=(
                 {("PyPI", "pkg", "1.0.0"): [("octocat/repo", "requirements.txt")]},
                 1,
                 {"octocat/repo": "public"},
             ),
         ), patch(
-            "app.depscan.user_scan._build_findings",
+            "app.depscan.user_scan.build_findings",
             return_value=[{
                 "repo_full_name": "octocat/repo", "ecosystem": "PyPI", "package_name": "pkg",
                 "installed_version": "1.0.0", "osv_id": "GHSA-001", "severity": "HIGH",
@@ -1537,7 +1537,7 @@ class TestRunDepscanForUser:
             }],
         ), patch("app.depscan.user_scan.SessionLocal", return_value=db_session), \
            patch("app.depscan.user_scan.notify_dependency_findings") as mock_notify, \
-           patch("app.depscan.user_scan._file_github_issues") as mock_file_issues:
+           patch("app.depscan.user_scan.file_github_issues") as mock_file_issues:
             run_depscan_for_user("octocat", "gho_token")
 
         mock_notify.assert_not_called()
@@ -1545,9 +1545,9 @@ class TestRunDepscanForUser:
 
     def test_second_run_updates_existing_status_row(self, db_session):
         with patch(
-            "app.depscan.user_scan._collect_dependencies", return_value=({}, 0, {}),
+            "app.depscan.user_scan.collect_dependencies", return_value=({}, 0, {}),
         ), patch(
-            "app.depscan.user_scan._build_findings", return_value=[],
+            "app.depscan.user_scan.build_findings", return_value=[],
         ), patch("app.depscan.user_scan.SessionLocal", return_value=db_session):
             run_depscan_for_user("octocat", "gho_token")
             run_depscan_for_user("octocat", "gho_token")

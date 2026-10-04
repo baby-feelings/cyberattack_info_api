@@ -25,7 +25,7 @@ from app.depscan.github_client import (
     get_source_files,
     list_target_repos,
 )
-from app.depscan.issue_management import _close_resolved_repo_issues, _file_github_issues
+from app.depscan.issue_management import close_resolved_repo_issues, file_github_issues
 from app.depscan.models import DependencyFinding
 from app.depscan.parsers import LOCKFILE_FILENAMES, parse_manifest
 from app.depscan.reachability import SOURCE_EXTENSIONS, check_reachability
@@ -48,7 +48,7 @@ def _discover_manifests(owner: str, repo: str, default_branch: str, token: str) 
     return [p for p in paths if p.rsplit("/", 1)[-1] in LOCKFILE_FILENAMES]
 
 
-def _collect_dependencies(
+def collect_dependencies(
     username: str, token: str,
 ) -> tuple[dict[DepKey, list[tuple[str, str]]], int, dict[str, str]]:
     """全対象リポジトリからロックファイルを収集・パースする。
@@ -149,7 +149,7 @@ def _infer_fixed_versions(
     return []
 
 
-def _build_findings(
+def build_findings(
     dep_to_repos: dict[DepKey, list[tuple[str, str]]],
     repo_visibility: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
@@ -269,7 +269,7 @@ def _apply_reachability(
         )
 
 
-def _upsert_findings(
+def upsert_findings(
     db: Session, records: list[dict[str, Any]],
 ) -> tuple[int, list[dict[str, Any]]]:
     """DependencyFinding を Upsert する。
@@ -328,7 +328,7 @@ def _upsert_findings(
     return inserted, new_snapshots
 
 
-def _resolve_stale_findings(
+def resolve_stale_findings(
     db: Session, current_keys: set[FindingKey], repo_owner_prefix: str | None = None,
 ) -> tuple[int, set[str]]:
     """今回のスキャンで検知されなくなった未解決 Finding を解決済みにする。
@@ -340,7 +340,7 @@ def _resolve_stale_findings(
 
     Returns:
         (解決件数, 今回1件以上解決した repo_full_name の集合)。
-        後者は _close_resolved_repo_issues が「Issue クローズ判定が必要な
+        後者は close_resolved_repo_issues が「Issue クローズ判定が必要な
         リポジトリ」を絞り込むために使う（何も解決していないリポジトリを
         毎回チェックする無駄を避けるため）。
     """
@@ -400,7 +400,7 @@ class _DepscanJob(CrawlJob):
         self.repos_scanned = 0
 
     def execute(self, db: Session, counters: CrawlCounters) -> None:
-        dep_to_repos, self.repos_scanned, repo_visibility = _collect_dependencies(
+        dep_to_repos, self.repos_scanned, repo_visibility = collect_dependencies(
             settings.GITHUB_USERNAME, settings.GITHUB_TOKEN,
         )
         logger.info(
@@ -408,7 +408,7 @@ class _DepscanJob(CrawlJob):
             self.repos_scanned, len(dep_to_repos),
         )
 
-        records = _build_findings(dep_to_repos, repo_visibility)
+        records = build_findings(dep_to_repos, repo_visibility)
 
         # 到達可能性の判定失敗はクロール全体を失敗させない（"unknown" のまま据え置く）
         try:
@@ -416,17 +416,17 @@ class _DepscanJob(CrawlJob):
         except Exception as exc:
             logger.error("Failed to compute reachability: %s", exc, exc_info=True)
 
-        counters.inserted, self.new_snapshots = _upsert_findings(db, records)
+        counters.inserted, self.new_snapshots = upsert_findings(db, records)
 
         current_keys: set[FindingKey] = {
             (r["repo_full_name"], r["ecosystem"], r["package_name"], r["osv_id"])
             for r in records
         }
-        counters.deleted, resolved_repos = _resolve_stale_findings(db, current_keys)
+        counters.deleted, resolved_repos = resolve_stale_findings(db, current_keys)
 
         # Issue クローズ失敗はクロール全体を失敗させない（Issue起票と同じ方針）
         try:
-            _close_resolved_repo_issues(db, resolved_repos)
+            close_resolved_repo_issues(db, resolved_repos)
         except Exception as exc:
             logger.error("Failed to close resolved GitHub issues: %s", exc, exc_info=True)
 
@@ -442,7 +442,7 @@ class _DepscanJob(CrawlJob):
             counters.inserted, counters.deleted, counters.updated, self.repos_scanned,
         )
         notify_dependency_findings(self.new_snapshots)
-        _file_github_issues(self.new_snapshots)
+        file_github_issues(self.new_snapshots)
 
     def result(self, counters: CrawlCounters) -> tuple[int, ...]:
         return counters.inserted, counters.deleted, self.repos_scanned

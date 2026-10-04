@@ -15,8 +15,8 @@ os.environ.setdefault("ENVIRONMENT", "development")
 import httpx  # noqa: E402
 
 from app.depscan.issue_management import (  # noqa: E402
-    _close_resolved_repo_issues,
-    _file_github_issues,
+    close_resolved_repo_issues,
+    file_github_issues,
 )
 from app.depscan.models import DependencyFinding  # noqa: E402
 
@@ -65,14 +65,14 @@ class TestFileGithubIssues:
 
     def test_does_nothing_when_no_new_findings(self):
         with patch("app.core.issue_filing.find_open_issue") as mock_find:
-            _file_github_issues([])
+            file_github_issues([])
         mock_find.assert_not_called()
 
     def test_creates_issue_when_none_open(self):
         with patch("app.core.issue_filing.find_open_issue", return_value=None), \
              patch("app.core.issue_filing.create_issue") as mock_create, \
              patch("app.core.issue_filing.add_issue_comment") as mock_comment:
-            _file_github_issues([self._finding()])
+            file_github_issues([self._finding()])
         mock_create.assert_called_once()
         args = mock_create.call_args[0]
         assert args[0] == "baby-feelings"
@@ -84,7 +84,7 @@ class TestFileGithubIssues:
         with patch("app.core.issue_filing.find_open_issue", return_value=7), \
              patch("app.core.issue_filing.create_issue") as mock_create, \
              patch("app.core.issue_filing.add_issue_comment") as mock_comment:
-            _file_github_issues([self._finding()])
+            file_github_issues([self._finding()])
         mock_comment.assert_called_once()
         assert mock_comment.call_args[0][2] == 7
         mock_create.assert_not_called()
@@ -97,7 +97,7 @@ class TestFileGithubIssues:
         with patch("app.core.issue_filing.find_open_issue", return_value=None), \
              patch("app.core.issue_filing.create_issue") as mock_create, \
              patch("app.core.issue_filing.add_issue_comment"):
-            _file_github_issues(findings)
+            file_github_issues(findings)
         assert mock_create.call_count == 2
 
     def test_http_error_does_not_raise(self):
@@ -106,7 +106,7 @@ class TestFileGithubIssues:
             "app.core.issue_filing.find_open_issue",
             side_effect=httpx.HTTPStatusError("403", request=MagicMock(), response=MagicMock()),
         ):
-            _file_github_issues([self._finding()])  # 例外を送出しないことを確認
+            file_github_issues([self._finding()])  # 例外を送出しないことを確認
 
 
 class TestCloseResolvedRepoIssues:
@@ -115,7 +115,7 @@ class TestCloseResolvedRepoIssues:
         with patch("app.depscan.issue_management.find_open_issue", return_value=7), \
              patch("app.depscan.issue_management.add_issue_comment") as mock_comment, \
              patch("app.depscan.issue_management.close_issue") as mock_close:
-            _close_resolved_repo_issues(db_session, {"baby-feelings/baby_grow"})
+            close_resolved_repo_issues(db_session, {"baby-feelings/baby_grow"})
 
         mock_comment.assert_called_once()
         assert mock_comment.call_args[0][:3] == ("baby-feelings", "baby_grow", 7)
@@ -128,7 +128,7 @@ class TestCloseResolvedRepoIssues:
 
         with patch("app.depscan.issue_management.find_open_issue") as mock_find, \
              patch("app.depscan.issue_management.close_issue") as mock_close:
-            _close_resolved_repo_issues(db_session, {"baby-feelings/baby_grow"})
+            close_resolved_repo_issues(db_session, {"baby-feelings/baby_grow"})
 
         mock_find.assert_not_called()
         mock_close.assert_not_called()
@@ -136,13 +136,13 @@ class TestCloseResolvedRepoIssues:
     def test_does_nothing_when_no_open_issue_exists(self, db_session):
         with patch("app.depscan.issue_management.find_open_issue", return_value=None), \
              patch("app.depscan.issue_management.close_issue") as mock_close:
-            _close_resolved_repo_issues(db_session, {"baby-feelings/baby_grow"})
+            close_resolved_repo_issues(db_session, {"baby-feelings/baby_grow"})
 
         mock_close.assert_not_called()
 
     def test_empty_candidate_repos_does_not_query_github(self, db_session):
         with patch("app.depscan.issue_management.find_open_issue") as mock_find:
-            _close_resolved_repo_issues(db_session, set())
+            close_resolved_repo_issues(db_session, set())
 
         mock_find.assert_not_called()
 
@@ -152,4 +152,4 @@ class TestCloseResolvedRepoIssues:
             "app.depscan.issue_management.find_open_issue",
             side_effect=httpx.HTTPStatusError("403", request=MagicMock(), response=MagicMock()),
         ):
-            _close_resolved_repo_issues(db_session, {"baby-feelings/baby_grow"})  # 例外を送出しない
+            close_resolved_repo_issues(db_session, {"baby-feelings/baby_grow"})  # 例外を送出しない
