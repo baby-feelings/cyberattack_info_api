@@ -13,11 +13,7 @@ HTTP 呼び出しで取得する。
 """
 import logging
 
-import httpx
-
-from app.core.github_http import GITHUB_API_BASE as _GITHUB_API_BASE
-from app.core.github_http import github_headers as _headers
-from app.core.retry import request_with_retry
+from app.core.github_http import GitHubApi
 
 logger = logging.getLogger(__name__)
 
@@ -40,12 +36,6 @@ def download_repo_tarball(owner: str, repo: str, token: str, branch: str = "HEAD
     Returns:
         tar.gz のバイト列（呼び出し側で `tarfile` を使って展開する）
     """
-    with httpx.Client(
-        timeout=_TIMEOUT, headers=_headers(token), follow_redirects=True,
-    ) as client:
-        resp = request_with_retry(
-            lambda: client.get(
-                f"{_GITHUB_API_BASE}/repos/{owner}/{repo}/tarball/{branch}",
-            ),
-        )
+    with GitHubApi(token, timeout=_TIMEOUT, follow_redirects=True) as api:
+        resp = api.get(f"/repos/{owner}/{repo}/tarball/{branch}")
     return resp.content

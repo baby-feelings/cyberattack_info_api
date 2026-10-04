@@ -14,7 +14,7 @@ os.environ.setdefault("API_KEY", "test-api-key-for-pytest")
 os.environ.setdefault("ENVIRONMENT", "development")
 
 from app.depscan.models import DependencyFinding  # noqa: E402
-from app.depscan.priority import _compute_priority_reasons, _fetch_kev_map  # noqa: E402
+from app.depscan.priority import compute_priority_reasons, fetch_kev_map  # noqa: E402
 from app.depscan.schemas import RepoAssetContextOut  # noqa: E402
 from app.kev.models import Vulnerability  # noqa: E402
 
@@ -53,18 +53,18 @@ class TestFetchKevMap:
         db_session.commit()
         finding = _make_finding(db_session, cve_ids=["CVE-2024-0001"])
 
-        result = _fetch_kev_map(db_session, [finding])
+        result = fetch_kev_map(db_session, [finding])
 
         assert set(result.keys()) == {"CVE-2024-0001"}
 
     def test_excludes_non_kev_cve_ids(self, db_session):
         finding = _make_finding(db_session, cve_ids=["CVE-2024-9999"])
-        result = _fetch_kev_map(db_session, [finding])
+        result = fetch_kev_map(db_session, [finding])
         assert result == {}
 
     def test_empty_when_no_cve_ids(self, db_session):
         finding = _make_finding(db_session, cve_ids=[])
-        result = _fetch_kev_map(db_session, [finding])
+        result = fetch_kev_map(db_session, [finding])
         assert result == {}
 
 
@@ -88,40 +88,40 @@ class TestComputePriorityReasons:
 
     def test_no_reasons_when_nothing_matches(self):
         finding = self._finding()
-        assert _compute_priority_reasons(finding, None, {}) == []
+        assert compute_priority_reasons(finding, None, {}) == []
 
     def test_kev_listed_when_cve_in_kev_map(self):
         finding = self._finding(cve_ids=["CVE-2024-0001"])
         kev_map = {"CVE-2024-0001": self._vuln("CVE-2024-0001", epss_score=None)}
-        assert _compute_priority_reasons(finding, None, kev_map) == ["kev_listed"]
+        assert compute_priority_reasons(finding, None, kev_map) == ["kev_listed"]
 
     def test_epss_high_added_when_score_above_threshold(self):
         finding = self._finding(cve_ids=["CVE-2024-0001"])
         kev_map = {"CVE-2024-0001": self._vuln("CVE-2024-0001", epss_score=0.9)}
-        reasons = _compute_priority_reasons(finding, None, kev_map)
+        reasons = compute_priority_reasons(finding, None, kev_map)
         assert reasons == ["kev_listed", "epss_high"]
 
     def test_epss_high_not_added_when_score_below_threshold(self):
         finding = self._finding(cve_ids=["CVE-2024-0001"])
         kev_map = {"CVE-2024-0001": self._vuln("CVE-2024-0001", epss_score=0.1)}
-        reasons = _compute_priority_reasons(finding, None, kev_map)
+        reasons = compute_priority_reasons(finding, None, kev_map)
         assert reasons == ["kev_listed"]
 
     def test_reachable_reason(self):
         finding = self._finding(reachability="reachable")
-        assert _compute_priority_reasons(finding, None, {}) == ["reachable"]
+        assert compute_priority_reasons(finding, None, {}) == ["reachable"]
 
     def test_unreachable_does_not_add_reason(self):
         finding = self._finding(reachability="unreachable")
-        assert _compute_priority_reasons(finding, None, {}) == []
+        assert compute_priority_reasons(finding, None, {}) == []
 
     def test_public_repo_reason(self):
         finding = self._finding(repo_visibility="public")
-        assert _compute_priority_reasons(finding, None, {}) == ["public_repo"]
+        assert compute_priority_reasons(finding, None, {}) == ["public_repo"]
 
     def test_private_repo_does_not_add_reason(self):
         finding = self._finding(repo_visibility="private")
-        assert _compute_priority_reasons(finding, None, {}) == []
+        assert compute_priority_reasons(finding, None, {}) == []
 
     def test_asset_context_reasons(self):
         finding = self._finding()
@@ -129,7 +129,7 @@ class TestComputePriorityReasons:
             repo_full_name="u/r", is_production=True, is_internet_facing=True,
             importance="high", updated_at=_NOW.isoformat(),
         )
-        reasons = _compute_priority_reasons(finding, ctx, {})
+        reasons = compute_priority_reasons(finding, ctx, {})
         assert set(reasons) == {
             "internet_facing_asset", "production_asset", "high_importance_asset",
         }
@@ -140,7 +140,7 @@ class TestComputePriorityReasons:
             repo_full_name="u/r", is_production=False, is_internet_facing=False,
             importance="low", updated_at=_NOW.isoformat(),
         )
-        assert _compute_priority_reasons(finding, ctx, {}) == []
+        assert compute_priority_reasons(finding, ctx, {}) == []
 
     def test_combines_all_signals(self):
         finding = self._finding(
@@ -151,7 +151,7 @@ class TestComputePriorityReasons:
             repo_full_name="u/r", is_production=True, is_internet_facing=True,
             importance="high", updated_at=_NOW.isoformat(),
         )
-        reasons = _compute_priority_reasons(finding, ctx, kev_map)
+        reasons = compute_priority_reasons(finding, ctx, kev_map)
         assert set(reasons) == {
             "kev_listed", "epss_high", "reachable", "public_repo",
             "internet_facing_asset", "production_asset", "high_importance_asset",

@@ -16,7 +16,7 @@ cyberattack_info_api/
 │   │                           # crypto〈トークン暗号化〉・db_utils・notifications・pagination・
 │   │                           # repo_cleanup〈削除済みリポジトリのデータ削除、Issue #228〉・
 │   │                           # user_crawl_runner〈登録済み他ユーザー向け定期実行、Issue #227〉・
-│   │                           # github_http〈GitHub API認証ヘッダーの共通化〉・
+│   │                           # github_http〈GitHub API認証ヘッダー・`GitHubApi`クライアントの共通化〉・
 │   │                           # issue_filing〈DEPSCAN/CODESCANのIssue起票共通処理〉・共通 schemas）
 │   ├── kev/                    # CISA KEV ドメイン（models・schemas・crawler・router〈router + admin_router〉）
 │   ├── osv/                    # OSV ドメイン（models・schemas・crawler・router〈router + admin_router〉）

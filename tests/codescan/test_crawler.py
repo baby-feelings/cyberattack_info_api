@@ -20,13 +20,13 @@ from app.codescan.crawler import (  # noqa: E402
     _extract_tarball,
     _parse_gitleaks_results,
     _parse_semgrep_results,
-    _resolve_stale_repo_findings,
     _run_codescan_body,
     _run_gitleaks,
     _run_semgrep,
-    _scan_repo,
-    _upsert_repo_findings,
     fetch_and_scan_code,
+    resolve_stale_repo_findings,
+    scan_repo,
+    upsert_repo_findings,
 )
 from app.codescan.models import CodeFinding  # noqa: E402
 from app.core.crawler_runner import CrawlCounters  # noqa: E402
@@ -344,7 +344,7 @@ class TestScanRepo:
         with patch("app.codescan.crawler.download_repo_tarball", return_value=tarball), \
              patch("app.codescan.crawler._run_semgrep", return_value=_SAMPLE_SEMGREP_JSON), \
              patch("app.codescan.crawler._run_gitleaks", return_value=_SAMPLE_GITLEAKS_JSON):
-            records = _scan_repo("owner/repo", "main", "token")
+            records = scan_repo("owner/repo", "main", "token")
         assert len(records) == 2
         tools = {r["tool"] for r in records}
         assert tools == {"semgrep", "gitleaks"}
@@ -358,7 +358,7 @@ class TestScanRepo:
                  "app.codescan.crawler._run_gitleaks",
                  side_effect=subprocess.TimeoutExpired(cmd="gitleaks", timeout=120),
              ):
-            records = _scan_repo("owner/repo", "main", "token")
+            records = scan_repo("owner/repo", "main", "token")
         assert len(records) == 1
         assert records[0]["tool"] == "semgrep"
 
@@ -370,7 +370,7 @@ class TestScanRepo:
                  side_effect=subprocess.TimeoutExpired(cmd="semgrep", timeout=300),
              ), \
              patch("app.codescan.crawler._run_gitleaks", return_value=_SAMPLE_GITLEAKS_JSON):
-            records = _scan_repo("owner/repo", "main", "token")
+            records = scan_repo("owner/repo", "main", "token")
         assert len(records) == 1
         assert records[0]["tool"] == "gitleaks"
 
@@ -384,7 +384,7 @@ class TestUpsertRepoFindings:
             "cvss_score": 5.0, "cvss_vector": "v", "detected_at": _NOW,
             "resolved_at": None,
         }
-        inserted, snapshots = _upsert_repo_findings(db_session, "owner/repo", [rec])
+        inserted, snapshots = upsert_repo_findings(db_session, "owner/repo", [rec])
         assert inserted == 1
         assert len(snapshots) == 1
         assert db_session.query(CodeFinding).count() == 1
@@ -397,7 +397,7 @@ class TestUpsertRepoFindings:
             "cvss_score": 5.0, "cvss_vector": "v", "detected_at": _NOW,
             "resolved_at": None,
         }
-        inserted, _ = _upsert_repo_findings(db_session, "owner/repo", [rec, dict(rec)])
+        inserted, _ = upsert_repo_findings(db_session, "owner/repo", [rec, dict(rec)])
         assert inserted == 1
 
     def test_existing_unresolved_finding_is_updated_not_duplicated(self, db_session):
@@ -409,7 +409,7 @@ class TestUpsertRepoFindings:
             "owasp_categories": [], "code_snippet": "x", "cvss_score": 9.0,
             "cvss_vector": "v2", "detected_at": _NOW, "resolved_at": None,
         }
-        inserted, snapshots = _upsert_repo_findings(db_session, "baby-feelings/baby_grow", [rec])
+        inserted, snapshots = upsert_repo_findings(db_session, "baby-feelings/baby_grow", [rec])
         assert inserted == 0
         assert snapshots == []
         assert db_session.query(CodeFinding).count() == 1
@@ -426,7 +426,7 @@ class TestUpsertRepoFindings:
             "code_snippet": "x", "cvss_score": 5.0, "cvss_vector": "v",
             "detected_at": _NOW, "resolved_at": None,
         }
-        inserted, snapshots = _upsert_repo_findings(db_session, "baby-feelings/baby_grow", [rec])
+        inserted, snapshots = upsert_repo_findings(db_session, "baby-feelings/baby_grow", [rec])
         assert inserted == 0  # 再発は新規カウントしない
         updated = db_session.query(CodeFinding).first()
         assert updated.resolved_at is None
@@ -435,7 +435,7 @@ class TestUpsertRepoFindings:
 class TestResolveStaleRepoFindings:
     def test_marks_unmatched_findings_as_resolved(self, db_session):
         _make_finding(db_session)
-        resolved = _resolve_stale_repo_findings(db_session, "baby-feelings/baby_grow", set())
+        resolved = resolve_stale_repo_findings(db_session, "baby-feelings/baby_grow", set())
         assert resolved == 1
         updated = db_session.query(CodeFinding).first()
         assert updated.resolved_at is not None
@@ -443,14 +443,14 @@ class TestResolveStaleRepoFindings:
     def test_keeps_matching_findings_unresolved(self, db_session):
         _make_finding(db_session)
         key = ("baby-feelings/baby_grow", "app/main.py", _RULE_ID, 10)
-        resolved = _resolve_stale_repo_findings(db_session, "baby-feelings/baby_grow", {key})
+        resolved = resolve_stale_repo_findings(db_session, "baby-feelings/baby_grow", {key})
         assert resolved == 0
         updated = db_session.query(CodeFinding).first()
         assert updated.resolved_at is None
 
     def test_only_affects_specified_repo(self, db_session):
         _make_finding(db_session, repo_full_name="other/repo")
-        resolved = _resolve_stale_repo_findings(db_session, "baby-feelings/baby_grow", set())
+        resolved = resolve_stale_repo_findings(db_session, "baby-feelings/baby_grow", set())
         assert resolved == 0
 
 
@@ -493,8 +493,8 @@ class TestRunCodescanBody:
 
         counters = CrawlCounters()
         with patch("app.codescan.crawler.list_target_repos", return_value=repos), \
-             patch("app.codescan.crawler._scan_repo", side_effect=_scan_side_effect), \
-             patch("app.codescan.crawler._file_github_issues") as mock_issues:
+             patch("app.codescan.crawler.scan_repo", side_effect=_scan_side_effect), \
+             patch("app.codescan.crawler.file_github_issues") as mock_issues:
             _run_codescan_body(db_session, counters)
 
         assert counters.inserted == 1
@@ -510,8 +510,8 @@ class TestRunCodescanBody:
         repos = [{"full_name": "owner/repo", "default_branch": "main"}]
         counters = CrawlCounters()
         with patch("app.codescan.crawler.list_target_repos", return_value=repos), \
-             patch("app.codescan.crawler._scan_repo", return_value=[]), \
-             patch("app.codescan.crawler._file_github_issues", side_effect=RuntimeError("boom")):
+             patch("app.codescan.crawler.scan_repo", return_value=[]), \
+             patch("app.codescan.crawler.file_github_issues", side_effect=RuntimeError("boom")):
             _run_codescan_body(db_session, counters)  # 例外を送出しないことを確認
 
 

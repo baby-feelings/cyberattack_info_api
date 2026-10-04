@@ -20,11 +20,11 @@ from sqlalchemy.orm import Session
 from app.auth.account_store import get_webhook_for_user
 from app.codescan.crawler import (
     FindingKey,
-    _resolve_stale_repo_findings,
-    _scan_repo,
-    _upsert_repo_findings,
+    resolve_stale_repo_findings,
+    scan_repo,
+    upsert_repo_findings,
 )
-from app.codescan.issue_management import _file_github_issues
+from app.codescan.issue_management import file_github_issues
 from app.core.database import SessionLocal
 from app.core.notifications import notify_success
 from app.depscan.github_client import list_target_repos
@@ -49,7 +49,7 @@ def run_codescan_for_user(username: str, token: str) -> None:
             full_name = repo_info["full_name"]
             default_branch = repo_info.get("default_branch") or "main"
             try:
-                records = _scan_repo(full_name, default_branch, token)
+                records = scan_repo(full_name, default_branch, token)
             except (httpx.HTTPError, subprocess.TimeoutExpired, tarfile.TarError,
                      json.JSONDecodeError, OSError) as exc:
                 logger.warning(
@@ -58,7 +58,7 @@ def run_codescan_for_user(username: str, token: str) -> None:
                 )
                 continue
 
-            inserted, new_snapshots = _upsert_repo_findings(db, full_name, records)
+            inserted, new_snapshots = upsert_repo_findings(db, full_name, records)
             new_count += inserted
             all_new_snapshots.extend(new_snapshots)
 
@@ -66,13 +66,13 @@ def run_codescan_for_user(username: str, token: str) -> None:
                 (r["repo_full_name"], r["file_path"], r["rule_id"], r["line_start"])
                 for r in records
             }
-            _resolve_stale_repo_findings(db, full_name, current_keys)
+            resolve_stale_repo_findings(db, full_name, current_keys)
 
         webhook = get_webhook_for_user(db, username)
         if webhook:
             notify_success("CODESCAN", inserted=new_count, updated=0, recipients=[webhook])
             try:
-                _file_github_issues(all_new_snapshots, token)
+                file_github_issues(all_new_snapshots, token)
             except Exception as exc:
                 logger.error(
                     "CODESCAN (for %s): failed to file GitHub issues: %s",

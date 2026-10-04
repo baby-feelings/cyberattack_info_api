@@ -18,7 +18,7 @@ from app.core.database import SessionLocal
 from app.core.notifications import notify_dependabot_ops
 from app.crawler_logs.writer import now_utc
 from app.depscan.github_client import list_target_repos
-from app.depsops.runner import _cleanup_pr_logs, _record_pr_logs, _scan_target_repos
+from app.depsops.runner import cleanup_pr_logs, record_pr_logs, scan_target_repos
 
 logger = logging.getLogger(__name__)
 
@@ -33,13 +33,13 @@ def run_dependabot_ops_for_user(username: str, token: str, webhook_url: str) -> 
         repos = list_target_repos(username, token)
         logger.info("DEPSOPS (for %s): %d target repos to scan", username, len(repos))
 
-        merged, flagged, resolved, error_count = _scan_target_repos(db, repos, token)
+        merged, flagged, resolved, error_count = scan_target_repos(db, repos, token)
 
         try:
             processed_at_repos: list[dict[str, Any]] = merged + flagged + resolved
             if processed_at_repos:
-                _record_pr_logs(db, merged, flagged, now_utc(), resolved=resolved)
-                _cleanup_pr_logs(db)
+                record_pr_logs(db, merged, flagged, now_utc(), resolved=resolved)
+                cleanup_pr_logs(db)
         except Exception as exc:
             logger.error(
                 "DEPSOPS (for %s): failed to record PR logs: %s", username, exc, exc_info=True,

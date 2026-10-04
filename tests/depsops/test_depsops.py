@@ -28,7 +28,6 @@ from app.depsops.github_client import (  # noqa: E402
 )
 from app.depsops.models import DependabotPrLog  # noqa: E402
 from app.depsops.runner import (  # noqa: E402
-    _cleanup_pr_logs,
     _collapse_duplicate_flagged_logs,
     _delete_old_depsops_records,
     _extract_compatibility_badge_url,
@@ -36,7 +35,8 @@ from app.depsops.runner import (  # noqa: E402
     _matches_security_alert,
     _process_pr,
     _purge_legacy_closed_pr_logs,
-    _record_pr_logs,
+    cleanup_pr_logs,
+    record_pr_logs,
     run_dependabot_ops,
 )
 
@@ -631,7 +631,7 @@ class TestRecordPrLogs:
         ]
         processed_at = datetime(2026, 6, 1, tzinfo=timezone.utc)
 
-        _record_pr_logs(db_session, merged, flagged, processed_at)
+        record_pr_logs(db_session, merged, flagged, processed_at)
 
         rows = db_session.query(DependabotPrLog).order_by(DependabotPrLog.pr_number).all()
         assert len(rows) == 2
@@ -649,7 +649,7 @@ class TestRecordPrLogs:
         }]
         processed_at = datetime(2026, 6, 1, tzinfo=timezone.utc)
 
-        _record_pr_logs(db_session, merged, flagged, processed_at)
+        record_pr_logs(db_session, merged, flagged, processed_at)
 
         rows = db_session.query(DependabotPrLog).order_by(DependabotPrLog.pr_number).all()
         assert rows[0].is_security_update is True
@@ -660,7 +660,7 @@ class TestRecordPrLogs:
         merged = [{"repo_full_name": "u/r", "pr_number": 1, "title": "bump x"}]
         processed_at = datetime(2026, 6, 1, tzinfo=timezone.utc)
 
-        _record_pr_logs(db_session, merged, [], processed_at)
+        record_pr_logs(db_session, merged, [], processed_at)
 
         row = db_session.query(DependabotPrLog).filter_by(pr_number=1).first()
         assert row.is_security_update is None
@@ -672,7 +672,7 @@ class TestRecordPrLogs:
         }]
         processed_at = datetime(2026, 6, 1, tzinfo=timezone.utc)
 
-        _record_pr_logs(db_session, merged, [], processed_at)
+        record_pr_logs(db_session, merged, [], processed_at)
 
         row = db_session.query(DependabotPrLog).filter_by(pr_number=1).first()
         assert row.compatibility_badge_url == "https://dependabot-badges.githubapp.com/badges/x"
@@ -693,7 +693,7 @@ class TestRecordPrLogs:
         db_session.commit()
         resolved = [{"repo_full_name": "u/r", "pr_number": 3, "title": "bump z"}]
 
-        _record_pr_logs(
+        record_pr_logs(
             db_session, [], [], datetime(2026, 6, 1, tzinfo=timezone.utc), resolved=resolved,
         )
 
@@ -711,8 +711,8 @@ class TestRecordPrLogs:
         day1 = datetime(2026, 6, 1, tzinfo=timezone.utc)
         day2 = datetime(2026, 6, 2, tzinfo=timezone.utc)
 
-        _record_pr_logs(db_session, [], flagged, day1)
-        _record_pr_logs(db_session, [], flagged, day2)
+        record_pr_logs(db_session, [], flagged, day1)
+        record_pr_logs(db_session, [], flagged, day2)
 
         rows = db_session.query(DependabotPrLog).filter_by(pr_number=2).all()
         assert len(rows) == 1
@@ -721,11 +721,11 @@ class TestRecordPrLogs:
     def test_flagged_pr_with_changed_reason_appends_new_row(self, db_session):
         """理由が変わった場合は状態変化の履歴として新しい行が追記されること。"""
         base = {"repo_full_name": "u/r", "pr_number": 2, "title": "bump y"}
-        _record_pr_logs(
+        record_pr_logs(
             db_session, [], [{**base, "reason": "CI未設定"}],
             datetime(2026, 6, 1, tzinfo=timezone.utc),
         )
-        _record_pr_logs(
+        record_pr_logs(
             db_session, [], [{**base, "reason": "メジャーバージョンアップ"}],
             datetime(2026, 6, 2, tzinfo=timezone.utc),
         )
@@ -738,8 +738,8 @@ class TestRecordPrLogs:
     def test_flagged_after_merged_is_appended_not_merged_into_old_row(self, db_session):
         """直近の行が"merged"のPRが再度flaggedになった場合は新しい行として追記されること。"""
         base = {"repo_full_name": "u/r", "pr_number": 2, "title": "bump y"}
-        _record_pr_logs(db_session, [base], [], datetime(2026, 6, 1, tzinfo=timezone.utc))
-        _record_pr_logs(
+        record_pr_logs(db_session, [base], [], datetime(2026, 6, 1, tzinfo=timezone.utc))
+        record_pr_logs(
             db_session, [], [{**base, "reason": "CI失敗"}],
             datetime(2026, 6, 2, tzinfo=timezone.utc),
         )
@@ -836,9 +836,9 @@ class TestCleanupPrLogs:
         self._add(db_session, 2, "closed", 1, reason="解消済み")
         db_session.commit()
 
-        _cleanup_pr_logs(db_session)
+        cleanup_pr_logs(db_session)
         first = db_session.query(DependabotPrLog).count()
-        _cleanup_pr_logs(db_session)
+        cleanup_pr_logs(db_session)
 
         assert first == 1
         assert db_session.query(DependabotPrLog).count() == 1

@@ -142,7 +142,7 @@ def _process_pr(
     return "merged", _pr_summary(full_name, pr, is_security_update, compatibility_badge_url)
 
 
-def _record_pr_logs(
+def record_pr_logs(
     db: Session,
     merged: list[dict[str, Any]],
     flagged: list[dict[str, Any]],
@@ -351,7 +351,7 @@ def _collapse_duplicate_flagged_logs(db: Session) -> int:
     return len(delete_ids)
 
 
-def _cleanup_pr_logs(db: Session) -> None:
+def cleanup_pr_logs(db: Session) -> None:
     """PR判定履歴の整理（旧"closed"行の削除・重複"flagged"行の集約・保持期間超過分の削除）。"""
     _purge_legacy_closed_pr_logs(db)
     _collapse_duplicate_flagged_logs(db)
@@ -438,7 +438,7 @@ def _process_repo(
     return merged, flagged, resolved, error_count
 
 
-def _scan_target_repos(
+def scan_target_repos(
     db: Session, repos: list[dict[str, Any]], token: str | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], int]:
     """対象リポジトリ全件を走査し、判定結果を集約する。"""
@@ -479,7 +479,7 @@ class _DepsopsJob(CrawlJob):
         repos = list_target_repos(settings.GITHUB_USERNAME, settings.GITHUB_TOKEN)
         logger.info("DEPSOPS: %d target repos to scan", len(repos))
 
-        self.merged, self.flagged, resolved, self.error_count = _scan_target_repos(db, repos)
+        self.merged, self.flagged, resolved, self.error_count = scan_target_repos(db, repos)
         counters.inserted = len(self.merged)
         counters.updated = len(self.flagged)
         counters.deleted = len(resolved)
@@ -487,8 +487,8 @@ class _DepsopsJob(CrawlJob):
         # 判定履歴を DB に記録（ダッシュボードでの一覧表示用）。
         # 失敗してもクロール自体は成功扱いとする
         try:
-            _record_pr_logs(db, self.merged, self.flagged, started_at, resolved=resolved)
-            _cleanup_pr_logs(db)
+            record_pr_logs(db, self.merged, self.flagged, started_at, resolved=resolved)
+            cleanup_pr_logs(db)
         except Exception as exc:
             logger.error("Failed to record DEPSOPS PR logs: %s", exc, exc_info=True)
 

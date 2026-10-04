@@ -16,7 +16,7 @@ archived 除外）ため `app.depscan.github_client.list_target_repos` を再利
 Semgrep（コードパターン検知）に加え、専用のシークレット検知ツール gitleaks
 （https://github.com/gitleaks/gitleaks）も同じ tarball 展開先に対して実行する
 （Issue #219）。両ツールは互いに独立して try/except し、一方が失敗・タイムアウト
-してももう一方の結果は活かす（`_scan_repo` 参照）。
+してももう一方の結果は活かす（`scan_repo` 参照）。
 
 【重要・セキュリティ】gitleaks の JSON 出力には検知したシークレットの実際の値
 （`Secret` フィールド）が平文で含まれる。これを DB に保存したり API レスポンス
@@ -44,7 +44,7 @@ from sqlalchemy.orm import Session
 
 from app.codescan.cvss_mapping import estimate_cvss_vector
 from app.codescan.github_client import download_repo_tarball
-from app.codescan.issue_management import _file_github_issues
+from app.codescan.issue_management import file_github_issues
 from app.codescan.models import CodeFinding
 from app.core.config import settings
 from app.core.crawler_runner import CrawlCounters, run_crawler
@@ -100,7 +100,7 @@ def _run_semgrep(target_dir: str) -> dict[str, Any]:
     実際のバイナリ呼び出しをこの関数に閉じ込めることで、Semgrep 非依存の
     テスト（このラッパー自体をモックする）を可能にする。1リポジトリあたりの
     タイムアウトを必ず設定する（超過時は `subprocess.TimeoutExpired` を送出し、
-    呼び出し元 `_scan_repo` の try/except でそのリポジトリのみスキップされる）。
+    呼び出し元 `scan_repo` の try/except でそのリポジトリのみスキップされる）。
     """
     result = subprocess.run(  # noqa: S603
         [
@@ -190,7 +190,7 @@ def _run_gitleaks(target_dir: str) -> list[dict[str, Any]]:
     `--exit-code 0`（シークレット検知時の非ゼロ終了を防ぎ、Semgrep と同様に
     「検知があっても正常終了として扱い JSON 出力をパースする」設計に統一する）
     が必須。1リポジトリあたりのタイムアウトを必ず設定する（超過時は
-    `subprocess.TimeoutExpired` を送出し、呼び出し元 `_scan_repo` の try/except
+    `subprocess.TimeoutExpired` を送出し、呼び出し元 `scan_repo` の try/except
     により gitleaks の結果のみスキップされ、Semgrep の結果は活かされる）。
 
     対象リポジトリのルートに `.gitleaks.toml` が存在すれば `--config` で
@@ -308,7 +308,7 @@ def _parse_gitleaks_results(
     return records
 
 
-def _scan_repo(full_name: str, branch: str, token: str) -> list[dict[str, Any]]:
+def scan_repo(full_name: str, branch: str, token: str) -> list[dict[str, Any]]:
     """1リポジトリを tarball 取得 → 展開 → Semgrep + gitleaks 実行 → パースする。
 
     tempfile.TemporaryDirectory() でスキャン用の一時ディレクトリを作成し、
@@ -346,7 +346,7 @@ def _scan_repo(full_name: str, branch: str, token: str) -> list[dict[str, Any]]:
         return records
 
 
-def _upsert_repo_findings(
+def upsert_repo_findings(
     db: Session, full_name: str, records: list[dict[str, Any]],
 ) -> tuple[int, list[dict[str, Any]]]:
     """1リポジトリ分の `CodeFinding` を Upsert する。
@@ -408,7 +408,7 @@ def _upsert_repo_findings(
     return inserted, new_snapshots
 
 
-def _resolve_stale_repo_findings(
+def resolve_stale_repo_findings(
     db: Session, full_name: str, current_keys: set[FindingKey],
 ) -> int:
     """1リポジトリについて、今回のスキャンで検知されなくなった未解決 finding を
@@ -478,13 +478,13 @@ def _run_codescan_body(db: Session, counters: CrawlCounters) -> None:
         logger.info("CODESCAN: [%d/%d] scanning %s", i, len(repos), full_name)
 
         try:
-            records = _scan_repo(full_name, default_branch, token)
+            records = scan_repo(full_name, default_branch, token)
         except (httpx.HTTPError, subprocess.TimeoutExpired, tarfile.TarError,
                 json.JSONDecodeError, OSError) as exc:
             logger.warning("CODESCAN: failed to scan %s, skipping: %s", full_name, exc)
             continue
 
-        inserted, new_snapshots = _upsert_repo_findings(db, full_name, records)
+        inserted, new_snapshots = upsert_repo_findings(db, full_name, records)
         counters.inserted += inserted
         all_new_snapshots.extend(new_snapshots)
 
@@ -492,7 +492,7 @@ def _run_codescan_body(db: Session, counters: CrawlCounters) -> None:
             (r["repo_full_name"], r["file_path"], r["rule_id"], r["line_start"])
             for r in records
         }
-        counters.deleted += _resolve_stale_repo_findings(db, full_name, current_keys)
+        counters.deleted += resolve_stale_repo_findings(db, full_name, current_keys)
 
     # 保持期間超過の削除失敗はクロール全体を失敗させない（DEPSCAN/KEV/OSV/JVNと同様の方針）
     try:
@@ -502,7 +502,7 @@ def _run_codescan_body(db: Session, counters: CrawlCounters) -> None:
 
     # Issue起票失敗はクロール全体を失敗させない（DEPSCANと同じ方針）
     try:
-        _file_github_issues(all_new_snapshots)
+        file_github_issues(all_new_snapshots)
     except Exception as exc:
         logger.error("CODESCAN: failed to file GitHub issues: %s", exc, exc_info=True)
 

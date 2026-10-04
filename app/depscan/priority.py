@@ -17,7 +17,7 @@ from app.kev.models import Vulnerability
 _EPSS_HIGH_THRESHOLD = 0.5
 
 
-def _fetch_asset_context_map(
+def fetch_asset_context_map(
     db: Session, repo_full_names: set[str],
 ) -> dict[str, RepoAssetContextOut]:
     """指定リポジトリ群の資産コンテキストをまとめて取得する（N+1クエリ回避）。
@@ -36,7 +36,7 @@ def _fetch_asset_context_map(
     return {row.repo_full_name: RepoAssetContextOut.model_validate(row) for row in rows}
 
 
-def _fetch_kev_map(
+def fetch_kev_map(
     db: Session, items: list[DependencyFinding],
 ) -> dict[str, Vulnerability]:
     """指定した検知結果群のCVE ID群について、CISA KEV掲載レコードをまとめて取得する
@@ -52,7 +52,7 @@ def _fetch_kev_map(
     return {row.cve_id: row for row in rows}
 
 
-def _compute_priority_reasons(
+def compute_priority_reasons(
     item: DependencyFinding,
     asset_context: RepoAssetContextOut | None,
     kev_map: dict[str, Vulnerability],

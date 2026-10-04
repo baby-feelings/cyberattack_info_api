@@ -23,7 +23,7 @@ Contents: Read-only + **Issues: Write** 推奨）を使用する。
 ## OSVに`fixed`が無く`last_affected`だけの脆弱性は、レジストリの最新版で修正版を補う
 OSVは影響範囲の上限（`last_affected`）しか載せない脆弱性があり（例: accelerateの
 PYSEC-2026-3804は「〜1.14.0」）、`fixed`イベントだけを見ると`fixed_versions`が空になって
-「修正版なし」と誤表示される（実際はPyPIの1.15.0へ上げれば解消した）。`_build_findings`は
+「修正版なし」と誤表示される（実際はPyPIの1.15.0へ上げれば解消した）。`build_findings`は
 `fixed`が空のときだけ`_infer_fixed_versions`で補う: 対象パッケージ（エコシステム一致・
 PyPI流の名前正規化）の`last_affected`を集め、`app.core.registry_client.fetch_latest_version`
 （PyPI・npm・RubyGems・crates.io・Pub）で最新版を引き、**全ての`last_affected`より新しい
@@ -35,7 +35,7 @@ PyPI流の名前正規化）の`last_affected`を集め、`app.core.registry_cli
 反映する（一時的に引けなかった回に空で上書きして既知の修正版を消さないため）。
 
 ## DEPSCAN の新規検知は GitHub Issue としても自動起票する（issue_management.py）
-`app.depscan.issue_management._file_github_issues` が、新規検知を検知されたリポジトリ自身に
+`app.depscan.issue_management.file_github_issues` が、新規検知を検知されたリポジトリ自身に
 Issue として起票する（Slack通知と同じ `new_snapshots` を使用）。「リポジトリ単位でグルーピング
 → タイトル固定文字列でOpen Issueを検索 → あれば `add_issue_comment` で追記、無ければ
 `create_issue` で新規作成（1リポジトリにつき常に1つの Open Issue に集約）→ GitHub API 呼び出し
@@ -46,10 +46,10 @@ Issue として起票する（Slack通知と同じ `new_snapshots` を使用）�
 （`format_package_lines`）自体は Slack 通知（`app.core.notifications`）と共有するため
 `app.core.finding_format` に切り出してある。
 
-`_close_resolved_repo_issues` が、DEPSCAN の再スキャンで「そのリポジトリの未解決 finding が
+`close_resolved_repo_issues` が、DEPSCAN の再スキャンで「そのリポジトリの未解決 finding が
 実際に0件になったこと」を確認できたタイミングで Open な DEPSCAN Issue を自動的にクローズする。
 トリガーを **DEPSCAN の再スキャン検証後**とし、DEPSOPS の PR マージ直後に即座にクローズしない
-設計（マージしただけでは本当に脆弱性が解消されたか未検証のため）。`_resolve_stale_findings`
+設計（マージしただけでは本当に脆弱性が解消されたか未検証のため）。`resolve_stale_findings`
 が返す `affected_repos`（今回1件以上解決したリポジトリの集合）を候補として受け取り、そのリポジトリ
 に絞って再度 DB に問い合わせてから判定する（無関係なリポジトリへの無駄な GitHub API 呼び出しを
 避けるため）。クローズ前に `add_issue_comment` で解決報告コメントを追加してから `close_issue`
@@ -72,14 +72,14 @@ Packagist・Hexは最も精度が低いbest-effort。`get_source_files`が対象
 露出しているか」を組み合わせてこそ、対応の優先度を正しく判断できる（SSVC的な意思決定支援）。
 
 - **`DependencyFinding.repo_visibility`**（`"public"`/`"private"`）: GitHub APIの
-  `private`フィールドから`_collect_dependencies`が自動導出し、スキャンのたびに上書き
+  `private`フィールドから`collect_dependencies`が自動導出し、スキャンのたびに上書き
   （手動設定不要）
 - **`RepoAssetContext`テーブル**（`app/depscan/models.py`）: `is_production`・
   `is_internet_facing`・`importance`（`"high"`/`"medium"`/`"low"`）を管理者が
   `PUT /admin/depscan/assets/{owner}/{repo}`で手動設定（Upsert）。低頻度更新のため
   DB＋管理API方式を採用し、静的設定ファイル方式（変更にデプロイが必要）は見送った
 - `GET /api/depscan`のレスポンスには`repo_visibility`（フラット）・`asset_context`
-  （ネスト、未設定なら`null`）として埋め込む。`app.depscan.priority._fetch_asset_context_map`
+  （ネスト、未設定なら`null`）として埋め込む。`app.depscan.priority.fetch_asset_context_map`
   が一覧取得のたびに該当リポジトリ群をまとめて1回で問い合わせる（N+1回避）
 - `GET /api/depscan/assets`で設定済みの資産コンテキストを一覧取得できる（未設定は含まれない）
 
@@ -88,16 +88,16 @@ Packagist・Hexは最も精度が低いbest-effort。`get_source_files`が対象
 高いと判断されたか」を機械可読な理由コード配列として提示する。
 
 - `DependencyFinding.cve_ids`（JSON配列）: OSVエントリの`aliases`から`CVE-`始まりの
-  IDのみ抽出して保存する（`_build_findings`が設定）。OSV ID単独ではKEVテーブルの
+  IDのみ抽出して保存する（`build_findings`が設定）。OSV ID単独ではKEVテーブルの
   `cve_id`と直接対応しないため、突合用に別途保持する
 - `GET /api/depscan`のレスポンスの`priority_reasons`は`app.depscan.priority
-  ._compute_priority_reasons`が判定する（複数該当可）:
+  .compute_priority_reasons`が判定する（複数該当可）:
   - `kev_listed`: `cve_ids`のいずれかがCISA KEVに掲載されている
   - `epss_high`: KEV側マッチレコードの`epss_score`が`_EPSS_HIGH_THRESHOLD`（0.5）以上
   - `reachable` / `public_repo` / `internet_facing_asset` / `production_asset` /
     `high_importance_asset`: それぞれ`reachability`/`repo_visibility`/`asset_context`
     から導出
-  - KEV突合は`_fetch_kev_map`が一覧取得のたびに該当CVE群をまとめて1回で問い合わせる
+  - KEV突合は`fetch_kev_map`が一覧取得のたびに該当CVE群をまとめて1回で問い合わせる
 - **書き込み時ではなく読み取り時に計算する**設計（KEV掲載・EPSSスコアはDEPSCANの
   スキャンとは独立して毎日更新されるため、再スキャンなしで常に最新状態を反映できる）
 - ダッシュボード（`DepscanGroupRow.tsx`）では、いずれかのCVEが`kev_listed`の場合に
@@ -144,7 +144,7 @@ DEPSCAN（検知）・Dependabot（修正PR作成）に続く3層目として、
 自動マージする**運用層。`POST /admin/dependabot-ops`から`run_dependabot_ops`を呼ぶ
 （`DEPSOPS_CRON_HOUR_UTC`＝既定UTC 23:00=JST 8:00、DEPSCANの後段で自動実行）。
 `run_dependabot_ops`本体はオーケストレーションのみに専念し、リポジトリ単位の判定・
-マージは`_process_repo`、対象リポジトリ走査は`_scan_target_repos`に分解している。
+マージは`_process_repo`、対象リポジトリ走査は`scan_target_repos`に分解している。
 コンフリクトでマージできなかったPRは、翌日以降リベースが完了していれば自動的に
 再判定・マージされる（複数日にまたがる自己修復）。
 
@@ -184,15 +184,15 @@ PAT: 「Dependabot alerts: Read-only」）。無い場合は`null`のまま記�
 人手によるマージ等DEPSOPSの関知しないところで解消されると、ダッシュボードの「未解決」件数が
 実態と乖離する不具合があった（parent_diaryリポジトリで発覚）。`_find_resolved_flagged_prs`が、
 直近`flagged`記録されたPRのうち今回のOpen PR一覧に含まれなくなったものを検出し、
-`_record_pr_logs`がそのPRの**全行を削除**する（旧実装は`action="closed"`行を追記していたが、
+`record_pr_logs`がそのPRの**全行を削除**する（旧実装は`action="closed"`行を追記していたが、
 解決済みは履歴に残す価値が低く行数が膨らむだけのため廃止。`action`は`merged`/`flagged`の2種のみ）。
 自動マージ`merged`の行は「システムが何を自動マージしたか」の唯一の事後記録なので残す。
 `CrawlerLog`（`crawler_type="DEPSOPS"`）の`deleted`フィールドはこの解決済みPR件数を表す。
 
 **行数の抑制（毎日追記しない）**: 同じ理由（`reason`・`is_security_update`）で`flagged`のまま
-続くPRは、`_record_pr_logs`が新しい行を足さず既存行の`processed_at`を更新する（以前は毎日1行
+続くPRは、`record_pr_logs`が新しい行を足さず既存行の`processed_at`を更新する（以前は毎日1行
 追記され、解決済みを含め総件数が約2,700行まで膨らんでいた）。理由が変わった場合のみ履歴として
-新しい行を足す。`_cleanup_pr_logs`が実行のたびに(1)旧`closed`行の削除
+新しい行を足す。`cleanup_pr_logs`が実行のたびに(1)旧`closed`行の削除
 （`_purge_legacy_closed_pr_logs`）(2)連続する同一内容`flagged`行の最新1行への集約
 （`_collapse_duplicate_flagged_logs`）(3)保持期間超過分の削除を行い、既存データも
 マイグレーション無しで新方針へ収束する（いずれも冪等）。
@@ -264,7 +264,7 @@ Organization全体への一括デフォルト設定が無い）:
   直近24時間以内に完了済みなら再スキャンをスキップ。Slack通知・GitHub Issue起票は、
   本人がSlack Webhookを登録して通知を有効にしている場合のみ行う（Issue #227、詳細は
   下記セクション）。未登録のまま単にログインしただけでは一切通知・起票しない
-- **`_resolve_stale_findings`のクロスユーザー事故防止**: `repo_owner_prefix`引数で
+- **`resolve_stale_findings`のクロスユーザー事故防止**: `repo_owner_prefix`引数で
   そのユーザーのリポジトリのみに絞り込む（無絞り込みだと他ユーザーのfindingを誤って
   解決済み扱いにする）
 - **フロントエンド**（`DepscanAuthGate.tsx`）: ネットワーク瞬断等の一時的エラーでは
@@ -301,8 +301,8 @@ DEPSCANのGitHubログインを土台に、任意のユーザーが自分専用�
   無いままDEPSOPSの自動マージのようなリポジトリ変更操作を行うのは想定外の驚きになる
   ため、Webhook登録をopt-inのゲートとして使う）。`USER_CRAWL_CRON_HOUR_UTC`/
   `MINUTE_UTC`で毎日実行、`POST /admin/user-crawl`で手動実行も可能
-- **Issue起票・PRマージの権限分離**: `app.depscan.issue_management._file_github_issues`・
-  `app.codescan.issue_management._file_github_issues`・`app.depsops.runner._process_repo`
+- **Issue起票・PRマージの権限分離**: `app.depscan.issue_management.file_github_issues`・
+  `app.codescan.issue_management.file_github_issues`・`app.depsops.runner._process_repo`
   にいずれも`token`引数（省略時`settings.GITHUB_TOKEN`）を追加した。`GITHUB_TOKEN`
   （baby-feelings専用PAT）には他ユーザーのプライベートリポジトリへの書き込み権限が
   無いため、登録済み他ユーザー向けの実行では必ず本人のトークンを明示的に渡す
@@ -311,12 +311,17 @@ DEPSCANのGitHubログインを土台に、任意のユーザーが自分専用�
   という別名だった（同じ「登録ユーザー自身のリポジトリに対する daily crawl のper-user版」
   という設計にファイル名が揃っていなかった）。命名一貫性のため`app.depsops.user_runner`を
   `app.depsops.user_scan`にリネームした（`run_dependabot_ops_for_user`関数自体は変更なし）
-- **`app.depscan.github_client`・`app.codescan.github_client`・`app.depsops.github_client`の
-  `_headers()`/APIベースURL共通化**: 3ファイルとも認証ヘッダーの組み立てとAPIベースURLの
-  定義が完全に同一のコピペだったため、`app.core.github_http`（`github_headers`/
-  `GITHUB_API_BASE`）に切り出した。各ファイルは`_headers`/`_GITHUB_API_BASE`という
-  ローカル名でインポートし直すエイリアスにしているため、既存の呼び出し箇所は変更不要
-  （3ファイルの高レベル関数群自体のドメイン分離は意図的な設計のため維持している）
+- **GitHub API呼び出しは`app.core.github_http.GitHubApi`に集約**: 3ファイル
+  （`app.depscan.github_client`・`app.codescan.github_client`・`app.depsops.github_client`）が
+  関数ごとに「`httpx.Client`を開く→認証ヘッダー付与→`request_with_retry`」をコピペしていたため、
+  接続とリトライ方針をカプセル化するクラスにした（`with GitHubApi(token, timeout=...) as api:`で
+  `api.get/put/patch`=冪等なのでリトライ、`api.post/delete`=重複リスクがあるためリトライしない。
+  `post`は`raise_for_status`、`delete`は従来どおり例外にしない）。各`github_client`の公開関数
+  （`list_target_repos`等）のシグネチャは不変で、高レベル関数群のドメイン分離は意図的な設計のため維持。
+  テストは`httpx.Client`をpatchするため、クラス化後もそのまま動く。
+- **ドメイン間で使う関数は公開名にする**: `user_scan`/`router`が他モジュールから呼ぶ15関数
+  （`scan_repo`・`build_findings`・`record_pr_logs`・`file_github_issues`等）は`_`始まりの
+  private名のままimportされていた（カプセル化の破れ）ため、`_`を外して公開名にした。
 
 ## 公開ダッシュボード用キー（PUBLIC_API_KEY）と管理者用キー（API_KEY）の分離
 Vite の `VITE_` 接頭辞の環境変数はビルド時にJSバンドルへ平文で埋め込まれるため、
