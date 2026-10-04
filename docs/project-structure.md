@@ -24,7 +24,7 @@ cyberattack_info_api/
 │   ├── depscan/                # 依存ライブラリ脆弱性スキャン（DEPSCAN）ドメイン
 │   │   └── parsers/            # 10 エコシステム分のロックファイルパーサー
 │   ├── depsops/                # Dependabot PR 自動運用（DEPSOPS）ドメイン（models・schemas・router
-│   │                           # 〈router + admin_router〉。crawler.py 相当は runner.py。
+│   │                           # 〈router + admin_router〉。crawler.py 相当は runner.py〈走査の組み立て〉・pr_judge.py〈PR判定〉・pr_log_repository.py〈履歴DB操作〉。
 │   │                           # 登録済み他ユーザー向けのper-user実行はuser_scan.py）
 │   ├── codescan/                # 自アプリコード脆弱性診断（CODESCAN）ドメイン（Semgrep静的解析 + gitleaks
 │   │                           # シークレット検知。github_client・issue_management・cvss_mapping含む）

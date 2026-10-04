@@ -16,10 +16,10 @@ class TestRunDependabotOpsForUser:
              patch("app.depsops.runner.has_ci_workflows", return_value=True), \
              patch("app.depsops.runner.list_open_dependabot_alerts", return_value=[]), \
              patch(
-                 "app.depsops.runner.get_pull_request",
+                 "app.depsops.pr_judge.get_pull_request",
                  return_value={"mergeable_state": "clean"},
              ), \
-             patch("app.depsops.runner.merge_pull_request") as mock_merge, \
+             patch("app.depsops.pr_judge.merge_pull_request") as mock_merge, \
              patch("app.depsops.user_scan.notify_dependabot_ops") as mock_notify:
             run_dependabot_ops_for_user("octocat", "gho_token", _WEBHOOK)
 
@@ -37,7 +37,7 @@ class TestRunDependabotOpsForUser:
              patch("app.depsops.runner.has_ci_workflows", return_value=False), \
              patch("app.depsops.runner.list_open_dependabot_alerts", return_value=[]), \
              patch(
-                 "app.depsops.runner.get_pull_request",
+                 "app.depsops.pr_judge.get_pull_request",
                  return_value={"mergeable_state": "clean"},
              ), \
              patch("app.depsops.user_scan.notify_dependabot_ops"):

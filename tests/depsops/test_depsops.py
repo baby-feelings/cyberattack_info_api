@@ -27,18 +27,13 @@ from app.depsops.github_client import (  # noqa: E402
     request_rebase,
 )
 from app.depsops.models import DependabotPrLog  # noqa: E402
-from app.depsops.runner import (  # noqa: E402
-    _collapse_duplicate_flagged_logs,
-    _delete_old_depsops_records,
-    _extract_compatibility_badge_url,
-    _find_resolved_flagged_prs,
-    _matches_security_alert,
-    _process_pr,
-    _purge_legacy_closed_pr_logs,
-    cleanup_pr_logs,
-    record_pr_logs,
-    run_dependabot_ops,
+from app.depsops.pr_judge import (  # noqa: E402
+    PrJudge,
+    extract_compatibility_badge_url,
+    matches_security_alert,
 )
+from app.depsops.pr_log_repository import PrLogRepository  # noqa: E402
+from app.depsops.runner import run_dependabot_ops  # noqa: E402
 
 TEST_API_KEY = "test-api-key-for-pytest"
 HEADERS = {"X-API-KEY": TEST_API_KEY}
@@ -258,30 +253,30 @@ class TestListOpenDependabotAlerts:
 
 class TestMatchesSecurityAlert:
     def test_none_alert_packages_means_unknown(self):
-        assert _matches_security_alert("Bump requests from 1.0 to 2.0", None) is None
+        assert matches_security_alert("Bump requests from 1.0 to 2.0", None) is None
 
     def test_matching_package_returns_true(self):
-        result = _matches_security_alert(
+        result = matches_security_alert(
             "Bump requests from 1.0 to 2.0", {"requests", "flask"},
         )
         assert result is True
 
     def test_no_matching_package_returns_false(self):
-        result = _matches_security_alert(
+        result = matches_security_alert(
             "Bump requests from 1.0 to 2.0", {"flask", "django"},
         )
         assert result is False
 
     def test_empty_alert_set_returns_false(self):
-        assert _matches_security_alert("Bump requests from 1.0 to 2.0", set()) is False
+        assert matches_security_alert("Bump requests from 1.0 to 2.0", set()) is False
 
     def test_matches_case_insensitively(self):
-        result = _matches_security_alert("Bump REQUESTS from 1.0 to 2.0", {"requests"})
+        result = matches_security_alert("Bump REQUESTS from 1.0 to 2.0", {"requests"})
         assert result is True
 
     def test_does_not_match_substring_of_a_different_package(self):
         """"requests" は "requests_toolbelt" の一部として誤マッチしないこと。"""
-        result = _matches_security_alert(
+        result = matches_security_alert(
             "Bump requests_toolbelt from 1.0 to 2.0", {"requests"},
         )
         assert result is False
@@ -298,7 +293,7 @@ class TestExtractCompatibilityBadgeUrl:
             "(https://docs.github.com/en/github/managing-security-vulnerabilities/"
             "about-dependabot-security-updates#about-compatibility-scores)"
         )
-        url = _extract_compatibility_badge_url(body)
+        url = extract_compatibility_badge_url(body)
         assert url == (
             "https://dependabot-badges.githubapp.com/badges/compatibility_score"
             "?dependency-name=google-genai&package-manager=pip"
@@ -308,11 +303,11 @@ class TestExtractCompatibilityBadgeUrl:
     def test_returns_none_when_badge_absent(self):
         """範囲指定の requirement 更新PR等、バッジが埋め込まれないケース。"""
         body = "Updates the requirements on foo to permit the latest version."
-        assert _extract_compatibility_badge_url(body) is None
+        assert extract_compatibility_badge_url(body) is None
 
     def test_returns_none_for_empty_body(self):
-        assert _extract_compatibility_badge_url(None) is None
-        assert _extract_compatibility_badge_url("") is None
+        assert extract_compatibility_badge_url(None) is None
+        assert extract_compatibility_badge_url("") is None
 
 
 class TestProcessPr:
@@ -321,10 +316,10 @@ class TestProcessPr:
 
     def test_dirty_requests_rebase(self):
         with patch(
-            "app.depsops.runner.get_pull_request", return_value={"mergeable_state": "dirty"},
-        ), patch("app.depsops.runner.request_rebase") as mock_rebase, \
-           patch("app.depsops.runner.merge_pull_request") as mock_merge:
-            action, item = _process_pr("u/r", "u", "r", self._pr(), True, "token")
+            "app.depsops.pr_judge.get_pull_request", return_value={"mergeable_state": "dirty"},
+        ), patch("app.depsops.pr_judge.request_rebase") as mock_rebase, \
+           patch("app.depsops.pr_judge.merge_pull_request") as mock_merge:
+            action, item = PrJudge("u/r", "u", "r", "token", has_ci=True).judge(self._pr())
         assert action == "flagged"
         assert "リベース" in item["reason"]
         mock_rebase.assert_called_once()
@@ -332,9 +327,9 @@ class TestProcessPr:
 
     def test_no_ci_flags_without_merging(self):
         with patch(
-            "app.depsops.runner.get_pull_request", return_value={"mergeable_state": "clean"},
-        ), patch("app.depsops.runner.merge_pull_request") as mock_merge:
-            action, item = _process_pr("u/r", "u", "r", self._pr(), False, "token")
+            "app.depsops.pr_judge.get_pull_request", return_value={"mergeable_state": "clean"},
+        ), patch("app.depsops.pr_judge.merge_pull_request") as mock_merge:
+            action, item = PrJudge("u/r", "u", "r", "token", has_ci=False).judge(self._pr())
         assert action == "flagged"
         assert "CI未設定" in item["reason"]
         mock_merge.assert_not_called()
@@ -342,9 +337,9 @@ class TestProcessPr:
     def test_major_bump_flags_without_merging(self):
         pr = self._pr(title="Bump x from 1.0.0 to 2.0.0")
         with patch(
-            "app.depsops.runner.get_pull_request", return_value={"mergeable_state": "clean"},
-        ), patch("app.depsops.runner.merge_pull_request") as mock_merge:
-            action, item = _process_pr("u/r", "u", "r", pr, True, "token")
+            "app.depsops.pr_judge.get_pull_request", return_value={"mergeable_state": "clean"},
+        ), patch("app.depsops.pr_judge.merge_pull_request") as mock_merge:
+            action, item = PrJudge("u/r", "u", "r", "token", has_ci=True).judge(pr)
         assert action == "flagged"
         assert "メジャー" in item["reason"]
         mock_merge.assert_not_called()
@@ -352,26 +347,26 @@ class TestProcessPr:
     def test_unknown_bump_flags_without_merging(self):
         pr = self._pr(title="Bump x and y in /dashboard")
         with patch(
-            "app.depsops.runner.get_pull_request", return_value={"mergeable_state": "clean"},
-        ), patch("app.depsops.runner.merge_pull_request") as mock_merge:
-            action, item = _process_pr("u/r", "u", "r", pr, True, "token")
+            "app.depsops.pr_judge.get_pull_request", return_value={"mergeable_state": "clean"},
+        ), patch("app.depsops.pr_judge.merge_pull_request") as mock_merge:
+            action, item = PrJudge("u/r", "u", "r", "token", has_ci=True).judge(pr)
         assert action == "flagged"
         assert "判定不可" in item["reason"]
         mock_merge.assert_not_called()
 
     def test_unstable_state_flags_without_merging(self):
         with patch(
-            "app.depsops.runner.get_pull_request", return_value={"mergeable_state": "unstable"},
-        ), patch("app.depsops.runner.merge_pull_request") as mock_merge:
-            action, item = _process_pr("u/r", "u", "r", self._pr(), True, "token")
+            "app.depsops.pr_judge.get_pull_request", return_value={"mergeable_state": "unstable"},
+        ), patch("app.depsops.pr_judge.merge_pull_request") as mock_merge:
+            action, item = PrJudge("u/r", "u", "r", "token", has_ci=True).judge(self._pr())
         assert action == "flagged"
         mock_merge.assert_not_called()
 
     def test_clean_minor_with_ci_merges(self):
         with patch(
-            "app.depsops.runner.get_pull_request", return_value={"mergeable_state": "clean"},
-        ), patch("app.depsops.runner.merge_pull_request") as mock_merge:
-            action, item = _process_pr("u/r", "u", "r", self._pr(), True, "token")
+            "app.depsops.pr_judge.get_pull_request", return_value={"mergeable_state": "clean"},
+        ), patch("app.depsops.pr_judge.merge_pull_request") as mock_merge:
+            action, item = PrJudge("u/r", "u", "r", "token", has_ci=True).judge(self._pr())
         assert action == "merged"
         assert item["repo_full_name"] == "u/r"
         assert item["is_security_update"] is None  # alert_package_names未指定時
@@ -380,22 +375,22 @@ class TestProcessPr:
     def test_records_security_update_flag_when_alert_matches(self):
         pr = self._pr(title="Bump requests from 1.0.0 to 1.0.1")
         with patch(
-            "app.depsops.runner.get_pull_request", return_value={"mergeable_state": "clean"},
-        ), patch("app.depsops.runner.merge_pull_request"):
-            action, item = _process_pr(
-                "u/r", "u", "r", pr, True, "token", alert_package_names={"requests"},
-            )
+            "app.depsops.pr_judge.get_pull_request", return_value={"mergeable_state": "clean"},
+        ), patch("app.depsops.pr_judge.merge_pull_request"):
+            action, item = PrJudge(
+                "u/r", "u", "r", "token", has_ci=True, alert_package_names={"requests"},
+            ).judge(pr)
         assert action == "merged"
         assert item["is_security_update"] is True
 
     def test_records_security_update_false_when_no_alert_matches(self):
         pr = self._pr(title="Bump requests from 1.0.0 to 1.0.1")
         with patch(
-            "app.depsops.runner.get_pull_request", return_value={"mergeable_state": "clean"},
-        ), patch("app.depsops.runner.merge_pull_request"):
-            action, item = _process_pr(
-                "u/r", "u", "r", pr, True, "token", alert_package_names=set(),
-            )
+            "app.depsops.pr_judge.get_pull_request", return_value={"mergeable_state": "clean"},
+        ), patch("app.depsops.pr_judge.merge_pull_request"):
+            action, item = PrJudge(
+                "u/r", "u", "r", "token", has_ci=True, alert_package_names=set(),
+            ).judge(pr)
         assert action == "merged"
         assert item["is_security_update"] is False
 
@@ -410,9 +405,9 @@ class TestProcessPr:
                 "&previous-version=1.0.0&new-version=1.0.1)](https://docs.github.com/x)"
             ),
         }
-        with patch("app.depsops.runner.get_pull_request", return_value=detail), \
-             patch("app.depsops.runner.merge_pull_request"):
-            action, item = _process_pr("u/r", "u", "r", pr, True, "token")
+        with patch("app.depsops.pr_judge.get_pull_request", return_value=detail), \
+             patch("app.depsops.pr_judge.merge_pull_request"):
+            action, item = PrJudge("u/r", "u", "r", "token", has_ci=True).judge(pr)
         assert action == "merged"
         assert item["compatibility_badge_url"] == (
             "https://dependabot-badges.githubapp.com/badges/compatibility_score"
@@ -422,10 +417,10 @@ class TestProcessPr:
 
     def test_compatibility_badge_url_is_none_when_absent_from_body(self):
         with patch(
-            "app.depsops.runner.get_pull_request",
+            "app.depsops.pr_judge.get_pull_request",
             return_value={"mergeable_state": "clean", "body": "no badge here"},
-        ), patch("app.depsops.runner.merge_pull_request"):
-            action, item = _process_pr("u/r", "u", "r", self._pr(), True, "token")
+        ), patch("app.depsops.pr_judge.merge_pull_request"):
+            action, item = PrJudge("u/r", "u", "r", "token", has_ci=True).judge(self._pr())
         assert action == "merged"
         assert item["compatibility_badge_url"] is None
 
@@ -475,10 +470,10 @@ class TestRunDependabotOps:
              patch("app.depsops.runner.has_ci_workflows", return_value=True), \
              patch("app.depsops.runner.list_open_dependabot_alerts", return_value=[]), \
              patch(
-                 "app.depsops.runner.get_pull_request",
+                 "app.depsops.pr_judge.get_pull_request",
                  return_value={"mergeable_state": "clean"},
              ), \
-             patch("app.depsops.runner.merge_pull_request"), \
+             patch("app.depsops.pr_judge.merge_pull_request"), \
              patch("app.depsops.runner.notify_dependabot_ops") as mock_notify:
             merged_count, flagged_count, error_count = run_dependabot_ops()
 
@@ -518,7 +513,7 @@ class TestRunDependabotOps:
              patch("app.depsops.runner.has_ci_workflows", return_value=True), \
              patch("app.depsops.runner.list_open_dependabot_alerts", return_value=[]), \
              patch(
-                 "app.depsops.runner.get_pull_request",
+                 "app.depsops.pr_judge.get_pull_request",
                  side_effect=httpx.HTTPStatusError(
                      "500", request=MagicMock(), response=MagicMock(),
                  ),
@@ -535,10 +530,10 @@ class TestRunDependabotOps:
              patch("app.depsops.runner.has_ci_workflows", return_value=True), \
              patch("app.depsops.runner.list_open_dependabot_alerts", return_value=[]), \
              patch(
-                 "app.depsops.runner.get_pull_request",
+                 "app.depsops.pr_judge.get_pull_request",
                  return_value={"mergeable_state": "clean"},
              ), \
-             patch("app.depsops.runner.merge_pull_request") as mock_merge, \
+             patch("app.depsops.pr_judge.merge_pull_request") as mock_merge, \
              patch("app.depsops.runner.notify_dependabot_ops"):
             merged_count, flagged_count, error_count = run_dependabot_ops()
         assert (merged_count, flagged_count, error_count) == (0, 1, 0)
@@ -568,8 +563,8 @@ class TestRunDependabotOps:
              patch("app.depsops.runner.list_open_dependabot_prs", return_value=prs), \
              patch("app.depsops.runner.has_ci_workflows", return_value=True), \
              patch("app.depsops.runner.list_open_dependabot_alerts", return_value=[]), \
-             patch("app.depsops.runner.get_pull_request", side_effect=_get_pr), \
-             patch("app.depsops.runner.merge_pull_request"), \
+             patch("app.depsops.pr_judge.get_pull_request", side_effect=_get_pr), \
+             patch("app.depsops.pr_judge.merge_pull_request"), \
              patch("app.depsops.runner.notify_dependabot_ops"):
             run_dependabot_ops()
 
@@ -613,7 +608,7 @@ class TestRunDependabotOps:
              patch("app.depsops.runner.has_ci_workflows", return_value=True), \
              patch("app.depsops.runner.list_open_dependabot_alerts", return_value=[]), \
              patch(
-                 "app.depsops.runner.get_pull_request",
+                 "app.depsops.pr_judge.get_pull_request",
                  return_value={"mergeable_state": "clean"},
              ), \
              patch("app.depsops.runner.notify_dependabot_ops"):
@@ -631,7 +626,7 @@ class TestRecordPrLogs:
         ]
         processed_at = datetime(2026, 6, 1, tzinfo=timezone.utc)
 
-        record_pr_logs(db_session, merged, flagged, processed_at)
+        PrLogRepository(db_session).record(merged, flagged, processed_at)
 
         rows = db_session.query(DependabotPrLog).order_by(DependabotPrLog.pr_number).all()
         assert len(rows) == 2
@@ -649,7 +644,7 @@ class TestRecordPrLogs:
         }]
         processed_at = datetime(2026, 6, 1, tzinfo=timezone.utc)
 
-        record_pr_logs(db_session, merged, flagged, processed_at)
+        PrLogRepository(db_session).record(merged, flagged, processed_at)
 
         rows = db_session.query(DependabotPrLog).order_by(DependabotPrLog.pr_number).all()
         assert rows[0].is_security_update is True
@@ -660,7 +655,7 @@ class TestRecordPrLogs:
         merged = [{"repo_full_name": "u/r", "pr_number": 1, "title": "bump x"}]
         processed_at = datetime(2026, 6, 1, tzinfo=timezone.utc)
 
-        record_pr_logs(db_session, merged, [], processed_at)
+        PrLogRepository(db_session).record(merged, [], processed_at)
 
         row = db_session.query(DependabotPrLog).filter_by(pr_number=1).first()
         assert row.is_security_update is None
@@ -672,7 +667,7 @@ class TestRecordPrLogs:
         }]
         processed_at = datetime(2026, 6, 1, tzinfo=timezone.utc)
 
-        record_pr_logs(db_session, merged, [], processed_at)
+        PrLogRepository(db_session).record(merged, [], processed_at)
 
         row = db_session.query(DependabotPrLog).filter_by(pr_number=1).first()
         assert row.compatibility_badge_url == "https://dependabot-badges.githubapp.com/badges/x"
@@ -693,8 +688,8 @@ class TestRecordPrLogs:
         db_session.commit()
         resolved = [{"repo_full_name": "u/r", "pr_number": 3, "title": "bump z"}]
 
-        record_pr_logs(
-            db_session, [], [], datetime(2026, 6, 1, tzinfo=timezone.utc), resolved=resolved,
+        PrLogRepository(db_session).record(
+            [], [], datetime(2026, 6, 1, tzinfo=timezone.utc), resolved=resolved,
         )
 
         assert db_session.query(DependabotPrLog).filter_by(pr_number=3).count() == 0
@@ -711,8 +706,8 @@ class TestRecordPrLogs:
         day1 = datetime(2026, 6, 1, tzinfo=timezone.utc)
         day2 = datetime(2026, 6, 2, tzinfo=timezone.utc)
 
-        record_pr_logs(db_session, [], flagged, day1)
-        record_pr_logs(db_session, [], flagged, day2)
+        PrLogRepository(db_session).record([], flagged, day1)
+        PrLogRepository(db_session).record([], flagged, day2)
 
         rows = db_session.query(DependabotPrLog).filter_by(pr_number=2).all()
         assert len(rows) == 1
@@ -721,12 +716,12 @@ class TestRecordPrLogs:
     def test_flagged_pr_with_changed_reason_appends_new_row(self, db_session):
         """理由が変わった場合は状態変化の履歴として新しい行が追記されること。"""
         base = {"repo_full_name": "u/r", "pr_number": 2, "title": "bump y"}
-        record_pr_logs(
-            db_session, [], [{**base, "reason": "CI未設定"}],
+        PrLogRepository(db_session).record(
+            [], [{**base, "reason": "CI未設定"}],
             datetime(2026, 6, 1, tzinfo=timezone.utc),
         )
-        record_pr_logs(
-            db_session, [], [{**base, "reason": "メジャーバージョンアップ"}],
+        PrLogRepository(db_session).record(
+            [], [{**base, "reason": "メジャーバージョンアップ"}],
             datetime(2026, 6, 2, tzinfo=timezone.utc),
         )
 
@@ -738,9 +733,9 @@ class TestRecordPrLogs:
     def test_flagged_after_merged_is_appended_not_merged_into_old_row(self, db_session):
         """直近の行が"merged"のPRが再度flaggedになった場合は新しい行として追記されること。"""
         base = {"repo_full_name": "u/r", "pr_number": 2, "title": "bump y"}
-        record_pr_logs(db_session, [base], [], datetime(2026, 6, 1, tzinfo=timezone.utc))
-        record_pr_logs(
-            db_session, [], [{**base, "reason": "CI失敗"}],
+        PrLogRepository(db_session).record([base], [], datetime(2026, 6, 1, tzinfo=timezone.utc))
+        PrLogRepository(db_session).record(
+            [], [{**base, "reason": "CI失敗"}],
             datetime(2026, 6, 2, tzinfo=timezone.utc),
         )
 
@@ -768,7 +763,7 @@ class TestCleanupPrLogs:
         self._add(db_session, 3, "merged", 1)
         db_session.commit()
 
-        deleted = _purge_legacy_closed_pr_logs(db_session)
+        deleted = PrLogRepository(db_session).purge_legacy_closed()
 
         assert deleted == 3
         remaining = sorted(
@@ -782,7 +777,7 @@ class TestCleanupPrLogs:
         self._add(db_session, 1, "flagged", 2)
         db_session.commit()
 
-        assert _purge_legacy_closed_pr_logs(db_session) == 0
+        assert PrLogRepository(db_session).purge_legacy_closed() == 0
         assert db_session.query(DependabotPrLog).count() == 2
 
     def test_collapse_keeps_only_latest_of_identical_consecutive_flagged_rows(self, db_session):
@@ -791,7 +786,7 @@ class TestCleanupPrLogs:
         self._add(db_session, 2, "flagged", 1)
         db_session.commit()
 
-        deleted = _collapse_duplicate_flagged_logs(db_session)
+        deleted = PrLogRepository(db_session).collapse_duplicate_flagged()
 
         assert deleted == 3
         rows = db_session.query(DependabotPrLog).filter_by(pr_number=1).all()
@@ -807,7 +802,7 @@ class TestCleanupPrLogs:
         self._add(db_session, 1, "flagged", 4, reason="メジャー")
         db_session.commit()
 
-        assert _collapse_duplicate_flagged_logs(db_session) == 2
+        assert PrLogRepository(db_session).collapse_duplicate_flagged() == 2
         days = sorted(
             r.processed_at.replace(tzinfo=timezone.utc).day
             for r in db_session.query(DependabotPrLog).all()
@@ -820,7 +815,7 @@ class TestCleanupPrLogs:
         self._add(db_session, 2, "flagged", 1, repo="u/a")
         db_session.commit()
 
-        assert _collapse_duplicate_flagged_logs(db_session) == 0
+        assert PrLogRepository(db_session).collapse_duplicate_flagged() == 0
         assert db_session.query(DependabotPrLog).count() == 3
 
     def test_collapse_does_not_touch_merged_rows(self, db_session):
@@ -828,7 +823,7 @@ class TestCleanupPrLogs:
         self._add(db_session, 1, "merged", 2)
         db_session.commit()
 
-        assert _collapse_duplicate_flagged_logs(db_session) == 0
+        assert PrLogRepository(db_session).collapse_duplicate_flagged() == 0
 
     def test_cleanup_is_idempotent(self, db_session):
         for day in (1, 2, 3):
@@ -836,9 +831,9 @@ class TestCleanupPrLogs:
         self._add(db_session, 2, "closed", 1, reason="解消済み")
         db_session.commit()
 
-        cleanup_pr_logs(db_session)
+        PrLogRepository(db_session).cleanup()
         first = db_session.query(DependabotPrLog).count()
-        cleanup_pr_logs(db_session)
+        PrLogRepository(db_session).cleanup()
 
         assert first == 1
         assert db_session.query(DependabotPrLog).count() == 1
@@ -855,7 +850,7 @@ class TestFindResolvedFlaggedPrs:
         ))
         db_session.commit()
 
-        result = _find_resolved_flagged_prs(db_session, "u/r1", open_pr_numbers=set())
+        result = PrLogRepository(db_session).find_resolved_flagged("u/r1", open_pr_numbers=set())
 
         assert len(result) == 1
         assert result[0]["pr_number"] == 5
@@ -868,7 +863,7 @@ class TestFindResolvedFlaggedPrs:
         ))
         db_session.commit()
 
-        result = _find_resolved_flagged_prs(db_session, "u/r1", open_pr_numbers={5})
+        result = PrLogRepository(db_session).find_resolved_flagged("u/r1", open_pr_numbers={5})
 
         assert result == []
 
@@ -879,7 +874,7 @@ class TestFindResolvedFlaggedPrs:
         ))
         db_session.commit()
 
-        result = _find_resolved_flagged_prs(db_session, "u/r1", open_pr_numbers=set())
+        result = PrLogRepository(db_session).find_resolved_flagged("u/r1", open_pr_numbers=set())
 
         assert result == []
 
@@ -897,7 +892,7 @@ class TestFindResolvedFlaggedPrs:
         ])
         db_session.commit()
 
-        result = _find_resolved_flagged_prs(db_session, "u/r1", open_pr_numbers=set())
+        result = PrLogRepository(db_session).find_resolved_flagged("u/r1", open_pr_numbers=set())
 
         assert result == []
 
@@ -908,7 +903,7 @@ class TestFindResolvedFlaggedPrs:
         ))
         db_session.commit()
 
-        result = _find_resolved_flagged_prs(db_session, "u/r1", open_pr_numbers=set())
+        result = PrLogRepository(db_session).find_resolved_flagged("u/r1", open_pr_numbers=set())
 
         assert result == []
 
@@ -926,7 +921,7 @@ class TestDeleteOldDepsopsRecords:
         db_session.add_all([old, recent])
         db_session.commit()
 
-        deleted = _delete_old_depsops_records(db_session)
+        deleted = PrLogRepository(db_session).delete_expired()
 
         assert deleted == 1
         remaining = db_session.query(DependabotPrLog).all()
