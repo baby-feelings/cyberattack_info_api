@@ -74,7 +74,7 @@ ruff check app/ tests/                # Linting
 mypy app/ --ignore-missing-imports    # 型チェック
 ```
 
-**テスト結果（最新）:** バックエンド 878 テスト / カバレッジ 98%、ダッシュボード 264 テスト
+**テスト結果（最新）:** バックエンド 883 テスト / カバレッジ 98%、ダッシュボード 264 テスト
 （Vitest）/ カバレッジ 98%
 
 ダッシュボードのE2Eテスト（Playwright、API全モック）は `dashboard/` で `npm run e2e`。

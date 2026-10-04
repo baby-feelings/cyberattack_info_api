@@ -1247,7 +1247,7 @@ class TestFetchAndScanDependenciesDeduplication:
             "app.depscan.crawler._collect_dependencies", return_value=({}, 0, {}),
         ), patch(
             "app.depscan.crawler._build_findings", return_value=[],
-        ), patch("app.depscan.crawler.SessionLocal", return_value=db_session), \
+        ), patch("app.core.crawler_runner.SessionLocal", return_value=db_session), \
            patch("app.depscan.crawler._apply_reachability"), \
            patch("app.depscan.crawler.notify_dependency_findings"), \
            patch("app.depscan.crawler._file_github_issues"):
@@ -1272,7 +1272,7 @@ class TestFetchAndScanDependencies:
                 "cvss_score": 7.5, "summary": "vuln", "fixed_versions": [],
                 "manifest_path": "requirements.txt", "detected_at": _NOW,
             }],
-        ), patch("app.depscan.crawler.SessionLocal", return_value=db_session), \
+        ), patch("app.core.crawler_runner.SessionLocal", return_value=db_session), \
            patch("app.depscan.crawler._apply_reachability") as mock_reachability, \
            patch("app.depscan.crawler.notify_dependency_findings") as mock_notify, \
            patch("app.depscan.crawler._file_github_issues") as mock_file_issues:
@@ -1290,7 +1290,7 @@ class TestFetchAndScanDependencies:
             "app.depscan.crawler._collect_dependencies", return_value=({}, 0, {}),
         ), patch(
             "app.depscan.crawler._build_findings", return_value=[],
-        ), patch("app.depscan.crawler.SessionLocal", return_value=db_session), \
+        ), patch("app.core.crawler_runner.SessionLocal", return_value=db_session), \
            patch("app.depscan.crawler._apply_reachability"), \
            patch(
                "app.depscan.crawler._delete_old_depscan_records",
@@ -1307,8 +1307,8 @@ class TestFetchAndScanDependencies:
         with patch(
             "app.depscan.crawler._collect_dependencies",
             side_effect=RuntimeError("GitHub API down"),
-        ), patch("app.depscan.crawler.SessionLocal", return_value=db_session), \
-           patch("app.depscan.crawler.notify_error") as mock_notify_error:
+        ), patch("app.core.crawler_runner.SessionLocal", return_value=db_session), \
+           patch("app.core.crawler_runner.notify_error") as mock_notify_error:
             import pytest
             with pytest.raises(RuntimeError):
                 fetch_and_scan_dependencies()
