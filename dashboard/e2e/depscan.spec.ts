@@ -341,3 +341,50 @@ scenario('DEP-16', 'モーダルのページ送りと該当なし状態', async 
   await dialog.getByRole('group', { name: '判定フィルター' }).getByRole('button', { name: '要確認' }).click()
   await expect(dialog.getByText('該当する PR はありません')).toBeVisible()
 })
+
+scenario('DEP-17', 'モーダルのページ送りの最初/最後ボタンとページ番号の直接入力', async ({ page, api }) => {
+  await openDepscan(page)
+  await page.getByRole('button', { name: 'Dependabot運用状況' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Dependabot 運用状況' })
+  const bottom = dialog.getByRole('navigation', { name: 'ページ送り（下部）' })
+  const first = bottom.getByRole('button', { name: '最初のページへ' })
+  const last = bottom.getByRole('button', { name: '最後のページへ' })
+  const jump = bottom.getByLabel('ページ番号を入力')
+  const move = bottom.getByRole('button', { name: '入力したページへ移動' })
+
+  // 1ページ目: 「最初」は押せず「最後」は押せる。入力欄が空のうちは「移動」も押せない
+  await expect(bottom).toContainText('1 / 3')
+  await expect(first).toBeDisabled()
+  await expect(last).toBeEnabled()
+  await expect(move).toBeDisabled()
+
+  // 「最後」で最終ページへ一気に移動する
+  await last.click()
+  await expect(bottom).toContainText('3 / 3')
+  await expect(last).toBeDisabled()
+  expect(api.lastQuery('/api/depsops')?.get('page')).toBe('3')
+
+  // 「最初」で1ページ目へ戻る
+  await first.click()
+  await expect(bottom).toContainText('1 / 3')
+  expect(api.lastQuery('/api/depsops')?.get('page')).toBe('1')
+
+  // 数字以外は入力できず、「移動」ボタンで指定ページへ移動する
+  await jump.fill('2')
+  await expect(jump).toHaveValue('2')
+  await move.click()
+  await expect(bottom).toContainText('2 / 3')
+  expect(api.lastQuery('/api/depsops')?.get('page')).toBe('2')
+  await expect(jump).toHaveValue('')
+
+  // 範囲外は最終ページに丸められ、Enterでも確定できる
+  await jump.fill('999')
+  await jump.press('Enter')
+  await expect(bottom).toContainText('3 / 3')
+  expect(api.lastQuery('/api/depsops')?.get('page')).toBe('3')
+
+  // 0 は1ページ目に丸められる
+  await jump.fill('0')
+  await move.click()
+  await expect(bottom).toContainText('1 / 3')
+})

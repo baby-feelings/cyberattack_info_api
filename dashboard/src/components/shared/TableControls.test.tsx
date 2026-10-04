@@ -64,6 +64,80 @@ describe('Pagination', () => {
     expect(updater(2)).toBe(1)
     expect(updater(1)).toBe(1) // clamped to 1
   })
+
+  it('disables first/previous on the first page and enables last/next', () => {
+    render(<Pagination page={1} totalPages={5} total={100} onPageChange={vi.fn()} />)
+    expect(screen.getByRole('button', { name: '最初のページへ' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '最後のページへ' })).not.toBeDisabled()
+  })
+
+  it('disables next/last on the last page and enables first', () => {
+    render(<Pagination page={5} totalPages={5} total={100} onPageChange={vi.fn()} />)
+    expect(screen.getByRole('button', { name: '最後のページへ' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '最初のページへ' })).not.toBeDisabled()
+  })
+
+  it('jumps to page 1 when the first-page button is clicked', () => {
+    const onPageChange = vi.fn()
+    render(<Pagination page={4} totalPages={5} total={100} onPageChange={onPageChange} />)
+    fireEvent.click(screen.getByRole('button', { name: '最初のページへ' }))
+    expect(onPageChange).toHaveBeenCalledTimes(1)
+    expect(onPageChange.mock.calls[0][0](4)).toBe(1)
+  })
+
+  it('jumps to the last page when the last-page button is clicked', () => {
+    const onPageChange = vi.fn()
+    render(<Pagination page={2} totalPages={5} total={100} onPageChange={onPageChange} />)
+    fireEvent.click(screen.getByRole('button', { name: '最後のページへ' }))
+    expect(onPageChange).toHaveBeenCalledTimes(1)
+    expect(onPageChange.mock.calls[0][0](2)).toBe(5)
+  })
+
+  it('jumps to the typed page number when submitted via the move button', () => {
+    const onPageChange = vi.fn()
+    render(<Pagination page={1} totalPages={10} total={200} onPageChange={onPageChange} />)
+    fireEvent.change(screen.getByLabelText('ページ番号を入力'), { target: { value: '7' } })
+    fireEvent.click(screen.getByRole('button', { name: '入力したページへ移動' }))
+    expect(onPageChange).toHaveBeenCalledTimes(1)
+    expect(onPageChange.mock.calls[0][0](1)).toBe(7)
+  })
+
+  it('jumps when Enter is pressed in the input and clears the draft', () => {
+    const onPageChange = vi.fn()
+    render(<Pagination page={1} totalPages={10} total={200} onPageChange={onPageChange} />)
+    const input = screen.getByLabelText('ページ番号を入力') as HTMLInputElement
+    fireEvent.change(input, { target: { value: '3' } })
+    fireEvent.submit(input.closest('form')!)
+    expect(onPageChange.mock.calls[0][0](1)).toBe(3)
+    expect(input.value).toBe('')
+  })
+
+  it('clamps out-of-range input to the first and last page', () => {
+    const onPageChange = vi.fn()
+    render(<Pagination page={5} totalPages={10} total={200} onPageChange={onPageChange} />)
+    const input = screen.getByLabelText('ページ番号を入力')
+    fireEvent.change(input, { target: { value: '999' } })
+    fireEvent.click(screen.getByRole('button', { name: '入力したページへ移動' }))
+    expect(onPageChange.mock.calls[0][0](5)).toBe(10)
+    fireEvent.change(input, { target: { value: '0' } })
+    fireEvent.click(screen.getByRole('button', { name: '入力したページへ移動' }))
+    expect(onPageChange.mock.calls[1][0](5)).toBe(1)
+  })
+
+  it('strips non-numeric characters and disables the move button while empty', () => {
+    render(<Pagination page={1} totalPages={10} total={200} onPageChange={vi.fn()} />)
+    const input = screen.getByLabelText('ページ番号を入力') as HTMLInputElement
+    expect(screen.getByRole('button', { name: '入力したページへ移動' })).toBeDisabled()
+    fireEvent.change(input, { target: { value: 'a1b2' } })
+    expect(input.value).toBe('12')
+    expect(screen.getByRole('button', { name: '入力したページへ移動' })).not.toBeDisabled()
+  })
+
+  it('keeps existing button names so current selectors keep working', () => {
+    render(<Pagination page={2} totalPages={5} total={100} onPageChange={vi.fn()} />)
+    expect(screen.getByRole('button', { name: '← 前へ' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '次へ →' })).toBeInTheDocument()
+  })
 })
 
 describe('SeverityFilterButtons', () => {

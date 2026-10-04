@@ -20,6 +20,12 @@ KEV / OSV / JVN / DEPSCAN / CODESCAN の 5 データソースは、画面下部�
 `SeverityFilterButtons`/`SearchBox`/`SortSelector`）に切り出し済み
 （`VulnPanelParts.tsx`は元々これら全てを持つ単一ファイルだったが、責務分割のため
 3ファイルに分割した。既存のexport名・props型は変えていない）。
+`Pagination`は6画面（KEV/OSV/JVN/DEPSCAN/CODESCAN/DEPSOPSモーダル）で共通で、「« 最初」「← 前へ」
+「次へ →」「最後 »」の4ボタンとページ番号の直接入力（入力欄+「移動」。Enter可・範囲外は1〜最終ページに
+丸める・数字以外は入力不可）を持つ。既存のボタン名（`← 前へ`/`次へ →`）と`1 / 3`の表示テキストは
+E2Eのロケーターが依存しているため変えないこと。スマホ幅（sm未満）では最初/最後を記号のみ（`«`/`»`、
+アクセシブルネームは`最初のページへ`/`最後のページへ`）にし、現在位置・件数・入力欄を2段目へ折り返す
+（ボタンは`whitespace-nowrap`で折り返さない）。
 深刻度の値・配色（OSV: CRITICAL/HIGH/MEDIUM/LOW、JVN: High/Medium/Low、CODESCAN:
 ERROR/WARNING/INFO）はドメイン固有のため `classMap`/`colorMap` として呼び出し側から渡す。
 `SeverityBadge`/`SeverityFilterButtons`には任意の`labels`propsも追加済みで、値そのもの

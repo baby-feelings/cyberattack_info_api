@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
 
 // OsvPanel・JvnPanel で共有する、テーブル一覧の制御系パーツ群
 // （ローディングスケルトン・空状態・ページネーション・重要度フィルター・
@@ -34,6 +34,10 @@ export function EmptyState({ icon, message }: { icon: ReactNode; message: string
 
 // ── ページネーション ──────────────────────────────────────────
 
+// ページ送りボタン共通のスタイル。スマホでも押しやすいよう高さ・余白を確保する
+const PAGE_BTN_CLS =
+  'flex items-center justify-center gap-1 min-h-9 px-2.5 sm:px-3 py-1.5 whitespace-nowrap rounded-lg bg-slate-800 hover:bg-slate-700 text-sm text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors'
+
 export function Pagination({
   page, totalPages, total, onPageChange, position = 'bottom',
 }: {
@@ -44,31 +48,89 @@ export function Pagination({
   // 'top' はテーブル上部にも同じ操作を配置する場合に使う（区切り線を下側に出す）
   position?: 'top' | 'bottom'
 }) {
+  // 直接入力中のページ番号（確定するまでの下書き）
+  const [jumpValue, setJumpValue] = useState('')
   if (totalPages <= 1) return null
+  // 入力値を 1〜totalPages に丸めてそのページへ移動する。数字以外・空の場合は何もしない
+  const handleJump = (e: FormEvent) => {
+    e.preventDefault()
+    const n = Number.parseInt(jumpValue, 10)
+    if (Number.isNaN(n)) return
+    onPageChange(() => Math.min(totalPages, Math.max(1, n)))
+    setJumpValue('')
+  }
   const borderCls = position === 'top' ? 'pb-2 border-b border-slate-800' : 'pt-2 border-t border-slate-800'
   return (
     <nav
       aria-label={position === 'top' ? 'ページ送り（上部）' : 'ページ送り（下部）'}
-      className={`flex items-center justify-between ${borderCls}`}
+      className={`flex flex-wrap items-center justify-between gap-x-1 gap-y-2 sm:flex-nowrap sm:gap-2 ${borderCls}`}
     >
-      <button
-        onClick={() => onPageChange(p => Math.max(1, p - 1))}
-        disabled={page === 1}
-        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-      >
-        ← 前へ
-      </button>
-      <span className="text-sm text-slate-600 tabular-nums">
-        {page} / {totalPages}
-        <span className="ml-2 text-slate-700">（{total} 件）</span>
-      </span>
-      <button
-        onClick={() => onPageChange(p => Math.min(totalPages, p + 1))}
-        disabled={page === totalPages}
-        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-      >
-        次へ →
-      </button>
+      <div className="flex items-center gap-1 sm:gap-2">
+        {/* 最初のページへ。狭い画面では記号のみ表示して横幅を節約する */}
+        <button
+          onClick={() => onPageChange(() => 1)}
+          disabled={page === 1}
+          aria-label="最初のページへ"
+          className={PAGE_BTN_CLS}
+        >
+          <span aria-hidden="true">«</span>
+          <span aria-hidden="true" className="hidden sm:inline">最初</span>
+        </button>
+        <button
+          onClick={() => onPageChange(p => Math.max(1, p - 1))}
+          disabled={page === 1}
+          className={PAGE_BTN_CLS}
+        >
+          ← 前へ
+        </button>
+      </div>
+      {/* 中央: 現在位置・件数・ページ番号入力。狭い画面では2段目（全幅）に回して、ボタンの幅を確保する */}
+      <div className="order-last flex w-full flex-wrap items-center justify-center gap-x-3 gap-y-1 sm:order-none sm:w-auto sm:flex-nowrap">
+        <span className="text-center text-sm text-slate-600 tabular-nums">
+          {page} / {totalPages}
+          <span className="ml-2 text-slate-700">（{total} 件）</span>
+        </span>
+        {/* ページ番号の直接入力。Enter または「移動」で確定する */}
+        <form onSubmit={handleJump} className="flex items-center gap-1">
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            value={jumpValue}
+            onChange={e => setJumpValue(e.target.value.replace(/[^0-9]/g, ''))}
+            placeholder="ページ"
+            aria-label="ページ番号を入力"
+            className="w-14 min-h-9 px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-sm text-slate-200 text-center tabular-nums placeholder:text-slate-600 focus:outline-none focus:border-slate-500"
+          />
+          <button
+            type="submit"
+            disabled={jumpValue === ''}
+            aria-label="入力したページへ移動"
+            className={PAGE_BTN_CLS}
+          >
+            移動
+          </button>
+        </form>
+      </div>
+      <div className="flex items-center gap-1 sm:gap-2">
+        <button
+          onClick={() => onPageChange(p => Math.min(totalPages, p + 1))}
+          disabled={page === totalPages}
+          className={PAGE_BTN_CLS}
+        >
+          次へ →
+        </button>
+        {/* 最後のページへ。狭い画面では記号のみ表示する */}
+        <button
+          onClick={() => onPageChange(() => totalPages)}
+          disabled={page === totalPages}
+          aria-label="最後のページへ"
+          className={PAGE_BTN_CLS}
+        >
+          <span aria-hidden="true" className="hidden sm:inline">最後</span>
+          <span aria-hidden="true">»</span>
+        </button>
+      </div>
     </nav>
   )
 }
