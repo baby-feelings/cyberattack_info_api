@@ -163,3 +163,75 @@ scenario('KEV-09', 'リクエストに公開用 X-API-KEY ヘッダーが付与�
   // /health は認証不要
   expect(api.requestsTo('/health')[0].headers['x-api-key']).toBeUndefined()
 })
+
+scenario('KEV-10', 'ページ送りの最初/最後ボタンとページ番号の直接入力', async ({ page, api }) => {
+  await page.goto('/')
+  const bottom = page.getByRole('navigation', { name: 'ページ送り（下部）' })
+  const first = bottom.getByRole('button', { name: '最初のページへ' })
+  const last = bottom.getByRole('button', { name: '最後のページへ' })
+  const jump = bottom.getByLabel('ページ番号を入力')
+  const move = bottom.getByRole('button', { name: '入力したページへ移動' })
+
+  // 1ページ目: 「最初」は押せず「最後」は押せる。入力欄が空のうちは「移動」も押せない
+  await expect(bottom).toContainText('1 / 3')
+  await expect(first).toBeDisabled()
+  await expect(last).toBeEnabled()
+  await expect(move).toBeDisabled()
+
+  // 「最後」で最終ページへ一気に移動する
+  await last.click()
+  await expect(bottom).toContainText('3 / 3')
+  await expect(last).toBeDisabled()
+  expect(api.lastQuery('/api/vulnerabilities')?.get('page')).toBe('3')
+
+  // 「最初」で1ページ目へ戻る
+  await first.click()
+  await expect(bottom).toContainText('1 / 3')
+  expect(api.lastQuery('/api/vulnerabilities')?.get('page')).toBe('1')
+
+  // 数字以外は入力できず、「移動」ボタンで指定ページへ移動する
+  await jump.fill('2')
+  await expect(jump).toHaveValue('2')
+  await move.click()
+  await expect(bottom).toContainText('2 / 3')
+  expect(api.lastQuery('/api/vulnerabilities')?.get('page')).toBe('2')
+  await expect(jump).toHaveValue('')
+
+  // 範囲外は最終ページに丸められ、Enterでも確定できる
+  await jump.fill('999')
+  await jump.press('Enter')
+  await expect(bottom).toContainText('3 / 3')
+  expect(api.lastQuery('/api/vulnerabilities')?.get('page')).toBe('3')
+
+  // 0 は1ページ目に丸められる
+  await jump.fill('0')
+  await move.click()
+  await expect(bottom).toContainText('1 / 3')
+})
+
+scenario('KEV-11', 'スマホ幅でもページ送りが画面内に収まり横スクロールしない', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 })
+  await page.goto('/')
+  const bottom = page.getByRole('navigation', { name: 'ページ送り（下部）' })
+  await expect(bottom).toContainText('1 / 3')
+
+  // 全ボタン・入力欄が表示され、画面幅（375px）の内側に収まっている
+  for (const name of ['最初のページへ', '← 前へ', '次へ →', '最後のページへ', '入力したページへ移動']) {
+    const box = await bottom.getByRole('button', { name }).boundingBox()
+    expect(box, name).not.toBeNull()
+    expect(box!.x, name).toBeGreaterThanOrEqual(0)
+    expect(box!.x + box!.width, name).toBeLessThanOrEqual(375)
+  }
+  const input = await bottom.getByLabel('ページ番号を入力').boundingBox()
+  expect(input!.x + input!.width).toBeLessThanOrEqual(375)
+
+  // ページ全体が横にはみ出していない
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  )
+  expect(overflow).toBeLessThanOrEqual(0)
+
+  // スマホ幅でも「最後」へ移動できる
+  await bottom.getByRole('button', { name: '最後のページへ' }).click()
+  await expect(bottom).toContainText('3 / 3')
+})

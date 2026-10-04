@@ -193,3 +193,48 @@ scenario('COD-10', 'CVSS 7.0以上のバッジ強調・未算出表示・ツー�
   await expect(rows.nth(2).getByText('警告', { exact: true })).toBeVisible()
   await expect(rows.nth(3).getByText('情報', { exact: true })).toBeVisible()
 })
+
+scenario('COD-11', 'ページ送りの最初/最後ボタンとページ番号の直接入力', async ({ page, api }) => {
+  await openCodescan(page)
+  const bottom = page.getByRole('navigation', { name: 'ページ送り（下部）' })
+  const first = bottom.getByRole('button', { name: '最初のページへ' })
+  const last = bottom.getByRole('button', { name: '最後のページへ' })
+  const jump = bottom.getByLabel('ページ番号を入力')
+  const move = bottom.getByRole('button', { name: '入力したページへ移動' })
+
+  // 1ページ目: 「最初」は押せず「最後」は押せる。入力欄が空のうちは「移動」も押せない
+  await expect(bottom).toContainText('1 / 2')
+  await expect(first).toBeDisabled()
+  await expect(last).toBeEnabled()
+  await expect(move).toBeDisabled()
+
+  // 「最後」で最終ページへ一気に移動する
+  await last.click()
+  await expect(bottom).toContainText('2 / 2')
+  await expect(last).toBeDisabled()
+  expect(api.lastQuery('/api/codescan')?.get('page')).toBe('2')
+
+  // 「最初」で1ページ目へ戻る
+  await first.click()
+  await expect(bottom).toContainText('1 / 2')
+  expect(api.lastQuery('/api/codescan')?.get('page')).toBe('1')
+
+  // 数字以外は入力できず、「移動」ボタンで指定ページへ移動する
+  await jump.fill('2')
+  await expect(jump).toHaveValue('2')
+  await move.click()
+  await expect(bottom).toContainText('2 / 2')
+  expect(api.lastQuery('/api/codescan')?.get('page')).toBe('2')
+  await expect(jump).toHaveValue('')
+
+  // 範囲外は最終ページに丸められ、Enterでも確定できる
+  await jump.fill('999')
+  await jump.press('Enter')
+  await expect(bottom).toContainText('2 / 2')
+  expect(api.lastQuery('/api/codescan')?.get('page')).toBe('2')
+
+  // 0 は1ページ目に丸められる
+  await jump.fill('0')
+  await move.click()
+  await expect(bottom).toContainText('1 / 2')
+})

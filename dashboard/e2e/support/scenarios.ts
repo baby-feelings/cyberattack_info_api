@@ -32,6 +32,8 @@ export const SCENARIOS = [
   { id: 'KEV-07', area: 'KEV', title: 'EPSS未取得は「—」、CVE IDはNVDへの外部リンクになる' },
   { id: 'KEV-08', area: 'KEV', title: 'APIエラー時もクラッシュせずデータなし状態になる' },
   { id: 'KEV-09', area: 'KEV', title: 'リクエストに公開用 X-API-KEY ヘッダーが付与される' },
+  { id: 'KEV-10', area: 'KEV', title: 'ページ送りの最初/最後ボタンとページ番号の直接入力' },
+  { id: 'KEV-11', area: 'KEV', title: 'スマホ幅でもページ送りが画面内に収まり横スクロールしない' },
 
   // ── OSV ───────────────────────────────────────────────────────────
   { id: 'OSV-01', area: 'OSV', title: '一覧・CRIT/HIGH件数・グラフが表示される' },
@@ -43,6 +45,7 @@ export const SCENARIOS = [
   { id: 'OSV-07', area: 'OSV', title: 'ページ送り' },
   { id: 'OSV-08', area: 'OSV', title: '該当なしのとき空状態メッセージが表示される' },
   { id: 'OSV-09', area: 'OSV', title: 'フィルター変更時にページが1に戻る' },
+  { id: 'OSV-10', area: 'OSV', title: 'ページ送りの最初/最後ボタンとページ番号の直接入力' },
 
   // ── JVN ───────────────────────────────────────────────────────────
   { id: 'JVN-01', area: 'JVN', title: '一覧・HIGH/MED件数・グラフが表示される' },
@@ -53,6 +56,7 @@ export const SCENARIOS = [
   { id: 'JVN-06', area: 'JVN', title: 'ページ送り' },
   { id: 'JVN-07', area: 'JVN', title: '該当なしのとき空状態メッセージが表示される' },
   { id: 'JVN-08', area: 'JVN', title: '再読み込みボタンで再取得される' },
+  { id: 'JVN-09', area: 'JVN', title: 'ページ送りの最初/最後ボタンとページ番号の直接入力' },
 
   // ── DEPSCAN ───────────────────────────────────────────────────────
   { id: 'DEP-01', area: 'DEPSCAN', title: '未ログイン時はGitHubログイン案内とログインリンクが表示される' },
@@ -71,6 +75,7 @@ export const SCENARIOS = [
   { id: 'DEP-14', area: 'DEPSCAN', title: '該当なしのとき空状態メッセージが表示される' },
   { id: 'DEP-15', area: 'DEPSCAN', title: 'リクエストにBearerトークンが付与される（X-API-KEYではない）' },
   { id: 'DEP-16', area: 'DEPSCAN', title: 'モーダルのページ送りと該当なし状態' },
+  { id: 'DEP-17', area: 'DEPSCAN', title: 'モーダルのページ送りの最初/最後ボタンとページ番号の直接入力' },
 
   // ── CODESCAN ──────────────────────────────────────────────────────
   { id: 'COD-01', area: 'CODESCAN', title: '未ログイン時はGitHubログイン案内が表示される' },
@@ -83,6 +88,7 @@ export const SCENARIOS = [
   { id: 'COD-08', area: 'CODESCAN', title: 'ログアウトで未ログインに戻る' },
   { id: 'COD-09', area: 'CODESCAN', title: 'ページ送り' },
   { id: 'COD-10', area: 'CODESCAN', title: 'CVSS 7.0以上のバッジ強調・未算出表示・ツールバッジ' },
+  { id: 'COD-11', area: 'CODESCAN', title: 'ページ送りの最初/最後ボタンとページ番号の直接入力' },
 
   // ── 設定（Slack通知登録） ─────────────────────────────────────────
   { id: 'SET-01', area: '設定', title: 'メニュー→設定で開き、未ログイン時はログイン案内が表示される' },
