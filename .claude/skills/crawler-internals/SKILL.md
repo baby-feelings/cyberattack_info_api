@@ -52,6 +52,14 @@ GET・PUT（`merge_pull_request`）・PATCH（`close_issue`）等の冪等な操
 （`notify_new_vulnerabilities` 等のクローラー別ラッパーは廃止済み、DRY違反だったため削除）。
 エラーメッセージは `_sanitize_error()` で接続文字列マスク + 200 文字制限。
 
+**`Notifier`（Template Method）**: 全通知は抽象クラス`Notifier.send()`の共通フロー
+（`has_content`＝内容があるか→`default_recipients`＝`recipients`省略時の送信先→`build_message`＝本文→
+全送信先へ`_send_slack`）に載る。サブクラスは`CrawlerSuccessNotifier`・`CrawlerErrorNotifier`
+（既定の送信先は常に管理者）・`DependencyFindingsNotifier`・`DependabotOpsNotifier`の4つ。
+`notify_success`/`notify_error`/`notify_dependency_findings`/`notify_dependabot_ops`は
+従来のシグネチャのまま各Notifierを呼ぶ薄いラッパー（呼び出し側・テストのパッチ先は不変）。
+新しい種類の通知は`Notifier`を継承して3メソッドを実装する。
+
 **送信先の解決（Issue #227）**: 固定の`SLACK_WEBHOOK_URL`環境変数は廃止し、
 `app.auth.account_store`（`UserAccount`テーブル、ダッシュボードから登録するSlack
 Webhook）から動的に解決する。`notify_success`等の検知結果通知はKEV/OSV/JVNなら
