@@ -325,7 +325,7 @@ DEPSCANのGitHubログインを土台に、任意のユーザーが自分専用�
   （`list_target_repos`等）のシグネチャは不変で、高レベル関数群のドメイン分離は意図的な設計のため維持。
   テストは`httpx.Client`をpatchするため、クラス化後もそのまま動く。
 - **ドメイン間で使う関数は公開名にする**: `user_scan`/`router`が他モジュールから呼ぶ15関数
-  （`scan_repo`・`build_findings`・`record_pr_logs`・`file_github_issues`等）は`_`始まりの
+  （`scan_repo`・`build_findings`・`scan_target_repos`・`file_github_issues`等）は`_`始まりの
   private名のままimportされていた（カプセル化の破れ）ため、`_`を外して公開名にした。
 
 ## 公開ダッシュボード用キー（PUBLIC_API_KEY）と管理者用キー（API_KEY）の分離
