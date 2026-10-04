@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, Security
-from sqlalchemy import func, or_
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.auth import require_api_key, require_public_api_key
@@ -20,6 +20,7 @@ from app.core.db_utils import year_month_expr
 from app.core.pagination import paginate
 from app.core.schemas import MonthlyStat
 from app.osv.crawler import fetch_and_store_osv
+from app.osv.filters import OsvListFilter
 from app.osv.models import OsvVulnerability
 from app.osv.schemas import (
     OsvEcosystemStat,
@@ -77,59 +78,17 @@ def list_osv(
     db: Annotated[Session, Depends(get_db)],
     page: int = Query(1, ge=1, description="ページ番号（1始まり）"),
     per_page: int = Query(50, ge=1, le=200, description="1ページあたりの件数"),
-    days: int = Query(30, ge=1, le=365, description="直近何日分を取得するか"),
-    ecosystem: str | None = Query(None, description="エコシステム絞り込み（例: PyPI / npm）"),
-    severity: str | None = Query(
-        None, description="重要度絞り込み（CRITICAL / HIGH / MEDIUM / LOW）"
-    ),
-    search: str | None = Query(
-        None, description="OSV ID・パッケージ名・概要のキーワード検索"
-    ),
-    sort_by: Literal["modified", "cvss"] = Query(
-        "modified", description="ソートキー（modified: 更新日時降順 / cvss: CVSSスコア降順）"
-    ),
-    updated_since: datetime | None = Query(
-        None, description="この日時以降に内容が更新されたレコードのみ返す（差分取得用、ISO 8601）",
-    ),
+    flt: OsvListFilter = Depends(),
 ) -> OsvListResponse:
     """直近 N 日以内に更新された OSV 脆弱性を取得する。"""
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-    query = db.query(OsvVulnerability).filter(OsvVulnerability.modified >= cutoff)
-
-    # 差分取得（増分同期）: 新規追加または内容変更があったレコードのみに絞り込む
-    if updated_since is not None:
-        query = query.filter(OsvVulnerability.updated_at >= updated_since)
-
-    # エコシステムフィルタ（完全一致）
-    if ecosystem:
-        query = query.filter(OsvVulnerability.ecosystem == ecosystem)
-
-    # 重要度フィルタ（大文字統一）
-    if severity:
-        query = query.filter(OsvVulnerability.severity == severity.upper())
-
-    # キーワード検索（OSV ID / パッケージ名 / 概要の部分一致）
-    if search:
-        kw = f"%{search}%"
-        query = query.filter(
-            or_(
-                OsvVulnerability.osv_id.ilike(kw),
-                OsvVulnerability.package_name.ilike(kw),
-                OsvVulnerability.summary.ilike(kw),
-            )
-        )
-
-    # ソート順の適用（cvss 指定時は CVSS スコア降順、NULL は末尾）
-    if sort_by == "cvss":
-        order = OsvVulnerability.cvss_score.desc().nulls_last()  # type: ignore[union-attr,assignment]
-    else:
-        order = OsvVulnerability.modified.desc()  # type: ignore[assignment]
+    query = flt.apply(flt.base_query(db))
+    order = flt.order()
 
     total, items = paginate(query, page, per_page, order)
 
     logger.info(
         "list_osv: total=%d, page=%d, ecosystem=%r, severity=%r, search=%r, sort_by=%r",
-        total, page, ecosystem, severity, search, sort_by,
+        total, page, flt.ecosystem, flt.severity, flt.search, flt.sort_by,
     )
 
     return OsvListResponse(

@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, Security
-from sqlalchemy import func, or_
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.auth import require_api_key, require_public_api_key
@@ -20,6 +20,7 @@ from app.core.db_utils import year_month_expr
 from app.core.pagination import paginate
 from app.core.schemas import MonthlyStat
 from app.jvn.crawler import fetch_and_store_jvn
+from app.jvn.filters import JvnListFilter
 from app.jvn.models import JvnVulnerability
 from app.jvn.schemas import JvnListResponse, JvnSeverityStat, JvnStatsResponse, JvnVulnerabilityOut
 from app.jvn.stix import build_stix_vulnerability
@@ -71,59 +72,17 @@ def list_jvn(
     db: Annotated[Session, Depends(get_db)],
     page: int = Query(1, ge=1, description="ページ番号（1始まり）"),
     per_page: int = Query(50, ge=1, le=200, description="1ページあたりの件数"),
-    days: int = Query(30, ge=1, le=365, description="直近何日分を取得するか"),
-    severity: str | None = Query(
-        None, description="重要度絞り込み（High / Medium / Low）"
-    ),
-    search: str | None = Query(
-        None, description="JVNDB ID・タイトル・概要のキーワード検索"
-    ),
-    sort_by: Literal["modified", "cvss"] = Query(
-        "modified",
-        description="ソートキー（modified: 更新日時降順 / cvss: CVSSスコア降順）",
-    ),
-    updated_since: datetime | None = Query(
-        None, description="この日時以降に内容が更新されたレコードのみ返す（差分取得用、ISO 8601）",
-    ),
+    flt: JvnListFilter = Depends(),
 ) -> JvnListResponse:
     """直近 N 日以内に更新された JVN 脆弱性を取得する。"""
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-    query = db.query(JvnVulnerability).filter(
-        JvnVulnerability.date_last_modified >= cutoff
-    )
-
-    # 差分取得（増分同期）: 新規追加または内容変更があったレコードのみに絞り込む
-    if updated_since is not None:
-        query = query.filter(JvnVulnerability.updated_at >= updated_since)
-
-    # 重要度フィルタ（先頭大文字統一: high → High）
-    if severity:
-        query = query.filter(
-            JvnVulnerability.severity == severity.capitalize()
-        )
-
-    # キーワード検索（JVNDB ID / タイトル / 概要の部分一致）
-    if search:
-        kw = f"%{search}%"
-        query = query.filter(
-            or_(
-                JvnVulnerability.jvndb_id.ilike(kw),
-                JvnVulnerability.title.ilike(kw),
-                JvnVulnerability.overview.ilike(kw),
-            )
-        )
-
-    # ソート順の適用（cvss 指定時は CVSS スコア降順、NULL は末尾）
-    if sort_by == "cvss":
-        order = JvnVulnerability.cvss_score.desc().nulls_last()  # type: ignore[union-attr,assignment]
-    else:
-        order = JvnVulnerability.date_last_modified.desc()  # type: ignore[assignment]
+    query = flt.apply(flt.base_query(db))
+    order = flt.order()
 
     total, items = paginate(query, page, per_page, order)
 
     logger.info(
         "list_jvn: total=%d, page=%d, severity=%r, search=%r, sort_by=%r",
-        total, page, severity, search, sort_by,
+        total, page, flt.severity, flt.search, flt.sort_by,
     )
 
     return JvnListResponse(
