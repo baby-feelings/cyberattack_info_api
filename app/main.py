@@ -15,32 +15,25 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.auth.router import router as auth_router
-from app.codescan.crawler import fetch_and_scan_code
 from app.codescan.router import admin_router as codescan_admin_router
 from app.codescan.router import router as codescan_router
 from app.core.config import settings
 from app.core.database import Base, engine, get_db
 from app.core.metrics import router as metrics_router
-from app.core.repo_cleanup import run_repo_cleanup
 from app.core.repo_cleanup_router import admin_router as repo_cleanup_admin_router
+from app.core.scheduler_jobs import build_scheduled_jobs, register_jobs
 from app.core.schemas import HealthResponse
 from app.core.taxii import taxii_router
 from app.core.user_crawl_router import admin_router as user_crawl_admin_router
-from app.core.user_crawl_runner import run_user_crawls_for_all_accounts
 from app.crawler_logs.router import router as crawler_logs_router
-from app.depscan.crawler import fetch_and_scan_dependencies
 from app.depscan.router import admin_router as depscan_admin_router
 from app.depscan.router import router as depscan_router
 from app.depsops.router import admin_router as depsops_admin_router
 from app.depsops.router import router as depsops_router
-from app.depsops.runner import run_dependabot_ops
-from app.jvn.crawler import fetch_and_store_jvn
 from app.jvn.router import admin_router as jvn_admin_router
 from app.jvn.router import router as jvn_router
-from app.kev.crawler import fetch_and_store_kev
 from app.kev.router import admin_router as kev_admin_router
 from app.kev.router import router as kev_router
-from app.osv.crawler import fetch_and_store_osv
 from app.osv.router import admin_router as osv_admin_router
 from app.osv.router import router as osv_router
 
@@ -74,96 +67,6 @@ def _drop_scan_results_table(db_engine) -> None:
         logger.warning("Could not drop scan_results table: %s", exc)
 
 
-def _register_scheduled_jobs(job_scheduler: BackgroundScheduler) -> None:
-    """KEV/OSV/JVN/DEPSCAN/DEPSOPS/CODESCAN/USER_CRAWL を APScheduler に登録し起動する。"""
-    # CISA KEV クローラー: 毎日 UTC 19:00（JST 翌日 4:00）
-    job_scheduler.add_job(
-        fetch_and_store_kev,
-        trigger="cron",
-        hour=settings.CRON_HOUR_UTC,
-        minute=settings.CRON_MINUTE_UTC,
-        id="cisa_kev_crawler",
-        replace_existing=True,
-    )
-    # OSV クローラー
-    job_scheduler.add_job(
-        fetch_and_store_osv,
-        trigger="cron",
-        hour=settings.OSV_CRON_HOUR_UTC,
-        minute=0,
-        id="osv_crawler",
-        replace_existing=True,
-    )
-    # JVN クローラー
-    job_scheduler.add_job(
-        fetch_and_store_jvn,
-        trigger="cron",
-        hour=settings.JVN_CRON_HOUR_UTC,
-        minute=0,
-        id="jvn_crawler",
-        replace_existing=True,
-    )
-    # 依存ライブラリ脆弱性スキャナー（DEPSCAN）
-    job_scheduler.add_job(
-        fetch_and_scan_dependencies,
-        trigger="cron",
-        hour=settings.DEPSCAN_CRON_HOUR_UTC,
-        minute=0,
-        id="depscan_crawler",
-        replace_existing=True,
-    )
-    # 自アプリコード脆弱性診断（CODESCAN）: DEPSCAN の後段に配置
-    job_scheduler.add_job(
-        fetch_and_scan_code,
-        trigger="cron",
-        hour=settings.CODESCAN_CRON_HOUR_UTC,
-        minute=settings.CODESCAN_CRON_MINUTE_UTC,
-        id="codescan_crawler",
-        replace_existing=True,
-    )
-    # Dependabot PR 自動運用（DEPSOPS）
-    job_scheduler.add_job(
-        run_dependabot_ops,
-        trigger="cron",
-        hour=settings.DEPSOPS_CRON_HOUR_UTC,
-        minute=0,
-        id="dependabot_ops",
-        replace_existing=True,
-    )
-    # 削除済みリポジトリのDEPSCAN/CODESCAN/DEPSOPSデータ削除（Issue #228）: DEPSOPSの後段
-    job_scheduler.add_job(
-        run_repo_cleanup,
-        trigger="cron",
-        hour=settings.REPO_CLEANUP_CRON_HOUR_UTC,
-        minute=settings.REPO_CLEANUP_CRON_MINUTE_UTC,
-        id="repo_cleanup",
-        replace_existing=True,
-    )
-    # 登録済みユーザー（GITHUB_USERNAME以外）向けDEPSCAN/CODESCAN/DEPSOPS（Issue #227）:
-    # 削除済みリポジトリの掃除の後段に配置
-    job_scheduler.add_job(
-        run_user_crawls_for_all_accounts,
-        trigger="cron",
-        hour=settings.USER_CRAWL_CRON_HOUR_UTC,
-        minute=settings.USER_CRAWL_CRON_MINUTE_UTC,
-        id="user_crawl",
-        replace_existing=True,
-    )
-    job_scheduler.start()
-    logger.info(
-        "Scheduler started: KEV UTC %02d:%02d / OSV UTC %02d:00 / JVN UTC %02d:00 / "
-        "DEPSCAN UTC %02d:00 / CODESCAN UTC %02d:%02d / DEPSOPS UTC %02d:00 / "
-        "REPO_CLEANUP UTC %02d:%02d / USER_CRAWL UTC %02d:%02d",
-        settings.CRON_HOUR_UTC, settings.CRON_MINUTE_UTC,
-        settings.OSV_CRON_HOUR_UTC, settings.JVN_CRON_HOUR_UTC,
-        settings.DEPSCAN_CRON_HOUR_UTC,
-        settings.CODESCAN_CRON_HOUR_UTC, settings.CODESCAN_CRON_MINUTE_UTC,
-        settings.DEPSOPS_CRON_HOUR_UTC,
-        settings.REPO_CLEANUP_CRON_HOUR_UTC, settings.REPO_CLEANUP_CRON_MINUTE_UTC,
-        settings.USER_CRAWL_CRON_HOUR_UTC, settings.USER_CRAWL_CRON_MINUTE_UTC,
-    )
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """アプリの起動・終了時に実行するライフサイクル処理。"""
@@ -175,7 +78,7 @@ async def lifespan(app: FastAPI):
     _drop_scan_results_table(engine)
     logger.info("Database tables created/verified")
 
-    _register_scheduled_jobs(scheduler)
+    register_jobs(scheduler, build_scheduled_jobs())
 
     yield  # アプリ実行中
 

@@ -8,7 +8,7 @@ DEPSCAN / CODESCAN / クローラーログ / 横断的共通処理）単位の�
 ```
 cyberattack_info_api/
 ├── app/
-│   ├── main.py                 # FastAPI アプリ本体・APScheduler 設定・ルーター include のみに専念
+│   ├── main.py                 # FastAPI アプリ本体・ルーター include・lifespan のみに専念（定期ジョブ定義は core/scheduler_jobs.py）
 │   │                           # （/admin/* は持たない。各ドメインの router.py の admin_router に定義）
 │   ├── auth/                   # GitHub ログイン・ユーザー別Slack通知登録ドメイン（models・account_store・
 │   │                           # session・github_oauth・router。Issue #227でUserAccountテーブル追加）
@@ -17,7 +17,7 @@ cyberattack_info_api/
 │   │                           # repo_cleanup〈削除済みリポジトリのデータ削除、Issue #228〉・
 │   │                           # user_crawl_runner〈登録済み他ユーザー向け定期実行、Issue #227〉・
 │   │                           # github_http〈GitHub API認証ヘッダー・`GitHubApi`クライアントの共通化〉・
-│   │                           # issue_filing〈DEPSCAN/CODESCANのIssue起票共通処理〉・共通 schemas）
+│   │                           # issue_filing〈DEPSCAN/CODESCANのIssue起票共通処理〉・scheduler_jobs〈定期ジョブの定義と登録〉・共通 schemas）
 │   ├── kev/                    # CISA KEV ドメイン（models・schemas・crawler・router〈router + admin_router〉）
 │   ├── osv/                    # OSV ドメイン（models・schemas・crawler・router〈router + admin_router〉）
 │   ├── jvn/                    # JVN ドメイン（models・schemas・crawler・router〈router + admin_router〉）

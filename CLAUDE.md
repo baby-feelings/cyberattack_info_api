@@ -70,7 +70,7 @@ pip-audit -r requirements.txt --desc                   # 依存脆弱性確認�
 
 ```
 app/
-├── main.py       # FastAPI アプリ・lifespan・スケジューラ登録・ルーター include
+├── main.py       # FastAPI アプリ・lifespan・ルーター include（定期ジョブは core/scheduler_jobs）
 ├── auth/         # GitHubログイン・ユーザー別Slack通知登録（UserAccount/account_store）
 ├── core/         # 横断的インフラ: config/database/auth/background/crawler_runner/crypto/
 │                 #   db_utils/notifications/osv_client/registry_client/pagination/repo_cleanup/
