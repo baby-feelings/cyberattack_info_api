@@ -81,7 +81,7 @@ app/
 ├── jvn/          # JVN（MyJVN API / RDF-RSS）
 ├── depscan/      # 依存ライブラリ脆弱性スキャン（+issue_management/priority/sbom/
 │                 #   user_scan/github_client/parsers/）
-├── depsops/      # Dependabot PR 自動運用（runner/classify/github_client/user_scan）
+├── depsops/      # Dependabot PR 自動運用（runner/pr_judge/pr_log_repository/classify/github_client/user_scan）
 ├── codescan/     # 自アプリのコード脆弱性診断（Semgrep静的解析+gitleaksシークレット検知。GitHubログイン
 │                 #   必須〈DEPSCANとセッション共有〉。+github_client/issue_management/cvss_mapping。
 │                 #   CVSS計算式自体はapp.core.cvss）

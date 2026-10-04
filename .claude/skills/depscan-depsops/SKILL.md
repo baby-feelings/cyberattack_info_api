@@ -143,12 +143,17 @@ inserted=自動マージ・updated=要確認・deleted=解消済み。
 DEPSCAN（検知）・Dependabot（修正PR作成）に続く3層目として、**安全性が高いPRだけを
 自動マージする**運用層。`POST /admin/dependabot-ops`から`run_dependabot_ops`を呼ぶ
 （`DEPSOPS_CRON_HOUR_UTC`＝既定UTC 23:00=JST 8:00、DEPSCANの後段で自動実行）。
-`run_dependabot_ops`本体はオーケストレーションのみに専念し、リポジトリ単位の判定・
-マージは`_process_repo`、対象リポジトリ走査は`scan_target_repos`に分解している。
+責務は3つに分離している: **`runner.py`**＝走査の組み立てのみ（`_DepsopsJob`〈`CrawlJob`〉・
+リポジトリ単位の`_process_repo`・全体走査の`scan_target_repos`）、**`pr_judge.py`**＝PR判定
+（`PrJudge`クラス。所有者・リポジトリ名・トークン・CI有無・alert名集合をインスタンスに保持し、
+`judge(pr)`はPRだけを受け取る。マージ・リベース依頼の副作用もここに閉じ込める）、
+**`pr_log_repository.py`**＝履歴DBの操作（`PrLogRepository(db)`の`record`/`find_resolved_flagged`/
+`cleanup`〈旧closed行の削除`purge_legacy_closed`・重複集約`collapse_duplicate_flagged`・
+保持期間超過`delete_expired`〉）。
 コンフリクトでマージできなかったPRは、翌日以降リベースが完了していれば自動的に
 再判定・マージされる（複数日にまたがる自己修復）。
 
-**判定ロジック**（`_process_pr`、上から順に評価）:
+**判定ロジック**（`PrJudge.judge`、上から順に評価）:
 1. `mergeable_state == "dirty"`（コンフリクト）→ `@dependabot rebase`をコメントしflagged
 2. 対象リポジトリにCI（`.github/workflows`）が無い → 常にflagged
 3. `classify_bump`の判定が`"major"`または`"unknown"` → flagged。**0.x系はminorの変化も
@@ -302,7 +307,7 @@ DEPSCANのGitHubログインを土台に、任意のユーザーが自分専用�
   ため、Webhook登録をopt-inのゲートとして使う）。`USER_CRAWL_CRON_HOUR_UTC`/
   `MINUTE_UTC`で毎日実行、`POST /admin/user-crawl`で手動実行も可能
 - **Issue起票・PRマージの権限分離**: `app.depscan.issue_management.file_github_issues`・
-  `app.codescan.issue_management.file_github_issues`・`app.depsops.runner._process_repo`
+  `app.codescan.issue_management.file_github_issues`・`app.depsops.runner._process_repo`（判定は`PrJudge`）
   にいずれも`token`引数（省略時`settings.GITHUB_TOKEN`）を追加した。`GITHUB_TOKEN`
   （baby-feelings専用PAT）には他ユーザーのプライベートリポジトリへの書き込み権限が
   無いため、登録済み他ユーザー向けの実行では必ず本人のトークンを明示的に渡す
