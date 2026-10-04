@@ -1620,3 +1620,68 @@ class TestShouldRescanForUser:
         db_session.add(UserScan(username="octocat", status="running", started_at=recent))
         db_session.commit()
         assert should_rescan_for_user(db_session, "octocat") is False
+
+
+class TestFindingBuilder:
+    """build_findings の実体（FindingBuilder）のキャッシュ・補完・展開の単体テスト。"""
+
+    KEY = ("PyPI", "pkg", "1.0.0")
+
+    def _vuln(self, **extra):
+        return {
+            "id": "GHSA-1", "summary": " s ", "aliases": ["CVE-2026-1", "GHSA-x", "CVE-2026-0"],
+            "affected": [{"ranges": [{"events": [{"fixed": "1.0.1"}]}]}], **extra,
+        }
+
+    def test_expands_one_record_per_repo_with_shared_fields_and_cve_ids(self):
+        from app.depscan.crawler import FindingBuilder
+
+        dep_to_repos = {self.KEY: [("u/a", "requirements.txt"), ("u/b", "sub/requirements.txt")]}
+        with patch("app.depscan.crawler.query_versions_batch",
+                   return_value={self.KEY: ["GHSA-1"]}), \
+             patch("app.depscan.crawler.fetch_vuln_by_id", return_value=self._vuln()):
+            records = FindingBuilder({"u/a": "public"}).build(dep_to_repos)
+
+        assert [r["repo_full_name"] for r in records] == ["u/a", "u/b"]
+        assert records[0]["repo_visibility"] == "public"
+        assert records[1]["repo_visibility"] is None
+        assert records[0]["cve_ids"] == ["CVE-2026-0", "CVE-2026-1"]  # CVEのみ・ソート済み
+        assert records[0]["summary"] == "s"
+        assert records[0]["fixed_versions"] == ["1.0.1"]
+        assert records[0]["reachability"] == "unknown"
+        assert records[0]["detected_at"] == records[1]["detected_at"]
+
+    def test_caches_vuln_details_per_osv_id_including_failures(self):
+        import httpx
+
+        from app.depscan.crawler import FindingBuilder
+
+        k2 = ("PyPI", "other", "2.0.0")
+        dep_to_repos = {self.KEY: [("u/a", "r.txt")], k2: [("u/a", "r.txt")]}
+        with patch("app.depscan.crawler.query_versions_batch",
+                   return_value={self.KEY: ["GHSA-1"], k2: ["GHSA-1"]}), \
+             patch("app.depscan.crawler.fetch_vuln_by_id",
+                   side_effect=httpx.ConnectError("down")) as mock_fetch:
+            records = FindingBuilder().build(dep_to_repos)
+
+        assert records == []
+        mock_fetch.assert_called_once_with("GHSA-1")  # 失敗も含め同じIDは再取得しない
+
+    def test_infers_fixed_version_from_registry_only_when_osv_has_no_fixed(self):
+        from app.depscan.crawler import FindingBuilder
+
+        vuln = {
+            "id": "GHSA-1", "summary": "s",
+            "affected": [{
+                "package": {"name": "pkg", "ecosystem": "PyPI"},
+                "ranges": [{"events": [{"last_affected": "1.0.0"}]}],
+            }],
+        }
+        with patch("app.depscan.crawler.query_versions_batch",
+                   return_value={self.KEY: ["GHSA-1"]}), \
+             patch("app.depscan.crawler.fetch_vuln_by_id", return_value=vuln), \
+             patch("app.depscan.crawler.fetch_latest_version", return_value="2.0.0") as mock_latest:
+            records = FindingBuilder().build({self.KEY: [("u/a", "r.txt")]})
+
+        assert records[0]["fixed_versions"] == ["2.0.0"]
+        mock_latest.assert_called_once()

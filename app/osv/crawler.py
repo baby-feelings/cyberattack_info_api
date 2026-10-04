@@ -30,6 +30,37 @@ logger = logging.getLogger(__name__)
 TARGET_ECOSYSTEMS = list(POPULAR_PACKAGES.keys())
 
 
+def _parse_osv_datetime(value: Any) -> datetime | None:
+    """OSV の ISO8601 日時文字列（末尾 `Z` 可）をパースする。未設定・不正な値は None。"""
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        return None
+
+
+def _vuln_common_fields(vuln: dict[str, Any], modified: datetime) -> dict[str, Any]:
+    """OSV エントリのうち、影響するパッケージによらず共通のレコード項目を組み立てる。"""
+    severity, cvss_score = parse_severity(vuln)
+    return {
+        "osv_id": vuln.get("id", ""),
+        "aliases": [a for a in (vuln.get("aliases") or []) if a],
+        "summary": (vuln.get("summary") or "").strip(),
+        "details": (vuln.get("details") or None),
+        "severity": severity,
+        "cvss_score": cvss_score,
+        # 参考リンクは最大 5 件に制限
+        "references": [r["url"] for r in (vuln.get("references") or []) if r.get("url")][:5],
+        # 公開日時をパース（失敗時は modified で代替）
+        "published": _parse_osv_datetime(vuln.get("published")) or modified,
+        "modified": modified,
+        # OSVスキーマの withdrawn フィールド。設定されていればソース側で撤回済みのエントリ
+        "withdrawn_at": _parse_osv_datetime(vuln.get("withdrawn")),
+        "fetched_at": now_utc(),
+    }
+
+
 def _build_records(
     vuln: dict[str, Any], modified: datetime
 ) -> list[dict[str, Any]]:
@@ -37,36 +68,7 @@ def _build_records(
 
     1つの脆弱性が複数パッケージに影響する場合は 1 レコード/パッケージ を生成する。
     """
-    severity, cvss_score = parse_severity(vuln)
-
-    # 公開日時をパース（失敗時は modified で代替）
-    published_str = vuln.get("published", "")
-    try:
-        published = datetime.fromisoformat(
-            published_str.replace("Z", "+00:00")
-        )
-    except (ValueError, AttributeError):
-        published = modified
-
-    osv_id = vuln.get("id", "")
-    aliases = [a for a in (vuln.get("aliases") or []) if a]
-    # 参考リンクは最大 5 件に制限
-    refs = [r["url"] for r in (vuln.get("references") or []) if r.get("url")][:5]
-    summary = (vuln.get("summary") or "").strip()
-    details = (vuln.get("details") or None)
-
-    # OSVスキーマの withdrawn フィールド（ISO8601日時文字列）。設定されていれば
-    # ソース側で撤回済みのエントリであることを示す
-    withdrawn_str = vuln.get("withdrawn")
-    withdrawn_at: datetime | None = None
-    if withdrawn_str:
-        try:
-            withdrawn_at = datetime.fromisoformat(withdrawn_str.replace("Z", "+00:00"))
-        except (ValueError, AttributeError):
-            withdrawn_at = None
-
-    fetched_at = now_utc()
-
+    common = _vuln_common_fields(vuln, modified)
     records: list[dict[str, Any]] = []
 
     for affected in vuln.get("affected", []):
@@ -76,29 +78,14 @@ def _build_records(
         if not pkg_name or not pkg_eco:
             continue
 
-        # 影響バージョンは最大 30 件に制限
-        affected_versions = (affected.get("versions") or [])[:30]
-        fixed_versions = extract_fixed_versions(affected)
-
-        records.append(
-            {
-                "osv_id": osv_id,
-                "ecosystem": pkg_eco,
-                "package_name": pkg_name,
-                "aliases": aliases,
-                "summary": summary,
-                "details": details,
-                "severity": severity,
-                "cvss_score": cvss_score,
-                "affected_versions": affected_versions,
-                "fixed_versions": fixed_versions,
-                "references": refs,
-                "published": published,
-                "modified": modified,
-                "withdrawn_at": withdrawn_at,
-                "fetched_at": fetched_at,
-            }
-        )
+        records.append({
+            **common,
+            "ecosystem": pkg_eco,
+            "package_name": pkg_name,
+            # 影響バージョンは最大 30 件に制限
+            "affected_versions": (affected.get("versions") or [])[:30],
+            "fixed_versions": extract_fixed_versions(affected),
+        })
 
     return records
 
