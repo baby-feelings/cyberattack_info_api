@@ -1,6 +1,6 @@
 # ── 本番依存パッケージ ──────────────────────────────────────────
 fastapi>=0.141.1
-uvicorn[standard]>=0.52.4
+uvicorn[standard]>=0.54.0
 # SQLAlchemy 2.1.0でmypyプラグイン（sqlalchemy.ext.mypy.plugin、pyproject.tomlで
 # 使用中）が削除され、mypyが起動時エラーになる（CI: Python 3.11ジョブのみ2.1.0を
 # 解決し失敗、3.10ジョブはキャッシュ済み2.0.54のままで気付かれなかった）。
