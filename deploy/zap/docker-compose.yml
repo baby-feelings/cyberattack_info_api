@@ -17,6 +17,12 @@ services:
       API_KEY: zap-scan-dummy-key
       ENVIRONMENT: development # /openapi.json と /docs を有効にするため
       GITHUB_USERNAME: zap-scan-user
+      # 未設定だと /metrics・/auth/github/* が 503 を返し「Server Error」の誤検知になるため、
+      # ダミー値で設定済みの状態にする（外部通信は遮断されているので実在の認証は行われない）
+      METRICS_API_KEY: zap-scan-dummy-metrics-key
+      GITHUB_OAUTH_CLIENT_ID: zap-scan-dummy-client-id
+      GITHUB_OAUTH_CLIENT_SECRET: zap-scan-dummy-client-secret
+      SESSION_SECRET_KEY: zap-scan-dummy-session-secret-key-32bytes
     networks: [scan]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/openapi.json')"]
