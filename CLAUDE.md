@@ -130,7 +130,8 @@ deploy/       # OCIデプロイ関連（deploy_to_oci.ps1・docker-compose.yml�
 - npmの`package-lock.json`はWindowsで`npm install`/`update`しない（Linux向け依存がロックから欠落し
   CIの`npm ci`が失敗する）。LinuxのDocker（`node:22`）で更新する。手順は`deployment-ops`スキル参照
 - MCP（`/mcp`）はRESTの読み取りGETの薄いラッパー。DEPSCAN/CODESCANは本人所有リポジトリのみ見え、
-  `PUBLIC_API_KEY`では見えない。`/api/codescan`もセッション認証時は本人所有のみ（`docs/mcp-server.md`）
+  `PUBLIC_API_KEY`では見えない。MCPトークンは台帳（`mcp_tokens`）で個別に失効でき、台帳に無い
+  トークンは拒否（`docs/mcp-server.md`）。`/api/codescan`もセッション認証時は本人所有のみ
 - 全レスポンスに`core/security_headers.py`がnosniff等を付与（ZAP指摘対応）
 - ruffの`S`ルールの例外は理由付き`noqa`（複数行の呼び出しは指摘された行に付ける）。`.gitleaks.toml`の
   allowlistは`[allowlist]`テーブル（`[[allowlist]]`はgitleaks 8.30で読み込めない）

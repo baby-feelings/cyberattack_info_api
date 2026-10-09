@@ -52,3 +52,31 @@ class UserAccount(Base):
             f"<UserAccount {self.github_username} "
             f"webhook={'set' if self.slack_webhook_url else 'unset'}>"
         )
+
+
+class McpToken(Base):
+    """発行済みの MCP アクセストークンの台帳（個別の失効・一覧・最終使用日時のため）。
+
+    トークン本体（JWT）は保存しない。JWT の `jti` クレームにこの行の `id` を載せ、MCP 接続時に
+    署名・期限に加えて、この行が存在し失効していないことを確認する（`app.auth.mcp_token_store`）。
+    1ユーザーが複数のトークン（端末ごと等）を持てる。
+    """
+
+    __tablename__ = "mcp_tokens"
+
+    # トークンID（UUID4。JWT の jti と同じ値）
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+
+    # 発行したユーザーの GitHub ユーザー名（このトークンで参照できるのは本人所有リポジトリのみ）
+    username: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False,
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    # 失効日時（未失効なら null）。失効済みトークンでの接続は 401
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # 最終使用日時（MCP 接続で認証が通った最新の時刻。書き込みの頻度を抑えるため分単位で間引く）
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

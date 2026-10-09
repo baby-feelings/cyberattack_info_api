@@ -155,12 +155,11 @@ scenario('SET-10', 'MCPトークンを発行すると登録コマンドと有効
   const command = dialog.getByLabel('Claude Code に登録するコマンド')
   await expect(command).toHaveValue(/claude mcp add --transport http cyberattack-info .*\/mcp /)
   await expect(command).toHaveValue(/Authorization: Bearer mcp-test-token/)
-  await expect(dialog.getByText('有効期限: 2026-11-08')).toBeVisible()
+  await expect(dialog.getByText('有効期限: 2026-11-09')).toBeVisible()
   await expect(dialog.getByText('このトークンは再表示できません。', { exact: false })).toBeVisible()
   // ログイン中のセッショントークンで発行を要求する
   const [req] = api.requestsTo('/auth/mcp-token', 'POST')
   expect(req.headers['authorization']).toBe('Bearer test-session-token')
-  await expect(dialog.getByRole('button', { name: 'トークンを再発行' })).toBeVisible()
 })
 
 scenario('SET-11', 'MCPトークンの発行に失敗するとエラーが表示される', async ({ page, api }) => {
@@ -174,4 +173,56 @@ scenario('SET-11', 'MCPトークンの発行に失敗するとエラーが表示
 
   await expect(dialog.getByText('トークンの発行に失敗しました')).toBeVisible()
   await expect(dialog.getByLabel('Claude Code に登録するコマンド')).toHaveCount(0)
+})
+
+scenario('SET-12', 'MCPトークンの有効期限（7/30/90日）を選んで発行できる', async ({ page, api }) => {
+  await seedSession(page)
+  await page.goto('/')
+  await openSettings(page)
+  const dialog = page.getByRole('dialog', { name: '設定' })
+
+  // 既定は30日
+  await expect(dialog.getByLabel('有効期限')).toHaveValue('30')
+  await dialog.getByLabel('有効期限').selectOption('7')
+  await dialog.getByRole('button', { name: 'MCPトークンを発行' }).click()
+
+  await expect(dialog.getByText('有効期限: 2026-10-17')).toBeVisible()
+  const [req] = api.requestsTo('/auth/mcp-token', 'POST')
+  expect(req.body).toEqual({ days: 7 })
+})
+
+scenario('SET-13', '発行済みMCPトークンが一覧に表示され、個別に失効できる', async ({ page, api }) => {
+  await seedSession(page)
+  await page.goto('/')
+  await openSettings(page)
+  const dialog = page.getByRole('dialog', { name: '設定' })
+  await dialog.getByRole('button', { name: 'MCPトークンを発行' }).click()
+
+  const list = dialog.getByRole('list', { name: '発行済みのMCPトークン' })
+  await expect(list.getByRole('listitem')).toHaveCount(1)
+  await expect(list.getByText('有効')).toBeVisible()
+  await expect(list.getByText('未使用', { exact: false })).toBeVisible()
+
+  // 失効の確認ダイアログを承諾すると、状態が「失効済み」になり、表示中のコマンドも消える
+  page.once('dialog', (confirm) => void confirm.accept())
+  await list.getByRole('button', { name: /を失効する/ }).click()
+  await expect(list.getByText('失効済み')).toBeVisible()
+  await expect(list.getByRole('button', { name: /を失効する/ })).toHaveCount(0)
+  await expect(dialog.getByLabel('Claude Code に登録するコマンド')).toHaveCount(0)
+  expect(api.requestsTo('/auth/mcp-tokens/tok-1-aaaa-bbbb', 'DELETE')).toHaveLength(1)
+})
+
+scenario('SET-14', 'MCPトークンが上限に達していると説明が表示される', async ({ page, api }) => {
+  api.override('POST', '/auth/mcp-token', () => ({
+    status: 409,
+    body: { detail: '有効なMCPトークンが上限（10個）に達しています。使っていないトークンを失効してから発行してください。' },
+  }))
+  await seedSession(page)
+  await page.goto('/')
+  await openSettings(page)
+  const dialog = page.getByRole('dialog', { name: '設定' })
+
+  await dialog.getByRole('button', { name: 'MCPトークンを発行' }).click()
+
+  await expect(dialog.getByText('有効なMCPトークンが上限（10個）に達しています。', { exact: false })).toBeVisible()
 })

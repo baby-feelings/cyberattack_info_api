@@ -58,7 +58,7 @@ curlの代わりに、リモートMCPサーバー（`https://168.138.213.240.nip
 | 認証 | 見えるもの |
 |------|-----------|
 | `X-API-KEY`=`PUBLIC_API_KEY` | KEV/OSV/JVNの公開情報のみ |
-| `Authorization: Bearer <MCPトークン>`（ダッシュボードの設定画面で発行、30日） | 公開情報＋**自分が所有する**リポジトリのDEPSCAN/CODESCAN |
+| `Authorization: Bearer <MCPトークン>`（ダッシュボードの設定画面で発行。期限7/30/90日、個別に失効可） | 公開情報＋**自分が所有する**リポジトリのDEPSCAN/CODESCAN |
 | `X-API-KEY`=`API_KEY`（運用者） | すべて |
 
 登録: `claude mcp add --scope user --transport http cyberattack-info <URL> --header "Authorization: Bearer <トークン>"`、

@@ -33,6 +33,12 @@ export interface MockState {
   crawlerLogId: number
   // Slack通知設定（GET/PUT/DELETE で読み書きされる）
   notification: { slack_webhook_url: string | null; notifications_enabled: boolean }
+  // MCPトークンの台帳（POST で追加・GET で一覧・DELETE で失効）
+  mcpTokens: Array<{
+    id: string; created_at: string; expires_at: string
+    revoked_at: string | null; last_used_at: string | null
+    status: 'active' | 'revoked' | 'expired'
+  }>
   username: string
 }
 
@@ -64,6 +70,15 @@ const includesCI = (haystack: string, needle: string) =>
 // 既定ハンドラー: 実APIと同様にクエリパラメータでデータを絞り込む
 function defaultResponse(req: RecordedRequest, state: MockState): MockResponse {
   const { path, query, method } = req
+
+  // パスに可変部分（トークンID）を含むため、switch の前で処理する
+  if (method === 'DELETE' && path.startsWith('/auth/mcp-tokens/')) {
+    const row = state.mcpTokens.find((t) => t.id === decodeURIComponent(path.split('/').pop()!))
+    if (!row) return { status: 404, body: { detail: 'Token not found.' } }
+    row.status = 'revoked'
+    row.revoked_at = '2026-10-10T01:00:00+00:00'
+    return { body: { id: row.id, revoked: true } }
+  }
 
   switch (`${method} ${path}`) {
     case 'GET /health':
@@ -184,13 +199,20 @@ function defaultResponse(req: RecordedRequest, state: MockState): MockResponse {
       state.notification = { slack_webhook_url: url, notifications_enabled: true }
       return { body: state.notification }
     }
-    case 'POST /auth/mcp-token':
-      return {
-        body: {
-          token: 'mcp-test-token', username: state.username,
-          expires_at: '2026-11-08T00:00:00+00:00',
-        },
+    case 'POST /auth/mcp-token': {
+      const days = (req.body as { days?: number } | null)?.days ?? 30
+      const row = {
+        id: `tok-${state.mcpTokens.length + 1}-aaaa-bbbb`,
+        created_at: '2026-10-10T00:00:00+00:00',
+        // 7日=2026-10-17 / 30日=2026-11-09 / 90日=2027-01-08（テストで期限選択を判別できる値）
+        expires_at: { 7: '2026-10-17', 30: '2026-11-09', 90: '2027-01-08' }[days] + 'T00:00:00+00:00',
+        revoked_at: null, last_used_at: null, status: 'active' as const,
       }
+      state.mcpTokens.unshift(row)
+      return { body: { ...row, token: 'mcp-test-token', username: state.username } }
+    }
+    case 'GET /auth/mcp-tokens':
+      return { body: { tokens: state.mcpTokens } }
     case 'DELETE /auth/notification-settings':
       state.notification = { slack_webhook_url: null, notifications_enabled: false }
       return { body: state.notification }
@@ -206,6 +228,7 @@ export async function installMockApi(page: Page): Promise<MockApi> {
     scanStatuses: [{ username: 'octocat', status: 'done', repos_scanned: 3 }],
     crawlerLogId: 100,
     notification: { slack_webhook_url: null, notifications_enabled: false },
+    mcpTokens: [],
     username: 'octocat',
   }
   const requests: RecordedRequest[] = []

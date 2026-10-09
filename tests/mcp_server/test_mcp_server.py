@@ -8,7 +8,7 @@
 import json
 import os
 from contextlib import asynccontextmanager
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import patch
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
@@ -23,6 +23,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from mcp.server.fastmcp.exceptions import ToolError  # noqa: E402
 
 from app.auth.mcp_token import create_mcp_token  # noqa: E402
+from app.auth.mcp_token_store import issue_token, revoke_token  # noqa: E402
 from app.auth.session import create_session_token  # noqa: E402
 from app.codescan.models import CodeFinding  # noqa: E402
 from app.codescan.router import router as codescan_router  # noqa: E402
@@ -35,6 +36,7 @@ from app.kev.router import router as kev_router  # noqa: E402
 from app.mcp_server.auth import Principal  # noqa: E402
 from app.mcp_server.server import MAX_PER_PAGE, McpServer, _clean, _enforce_owner  # noqa: E402
 from app.osv.router import router as osv_router  # noqa: E402
+from tests.conftest import TestSessionLocal  # noqa: E402
 
 _NOW = datetime(2026, 10, 1, tzinfo=timezone.utc)
 _ADMIN = {"X-API-KEY": "test-api-key-for-pytest"}
@@ -42,8 +44,11 @@ _PUBLIC_KEY = "public-key-for-mcp-test"
 _RPC_HEADERS = {"Accept": "application/json, text/event-stream"}
 
 
-def _mcp_headers(token: str) -> dict[str, str]:
-    return {"Authorization": f"Bearer {create_mcp_token(token)[0]}"}
+def _mcp_headers(username: str) -> dict[str, str]:
+    """台帳に記録された、有効な MCP トークンの Authorization ヘッダー。"""
+    with TestSessionLocal() as db:
+        token, _ = issue_token(db, username, 30)
+    return {"Authorization": f"Bearer {token}"}
 
 
 def _depscan(db, repo: str, osv_id: str) -> None:
@@ -68,7 +73,7 @@ def _codescan(db, repo: str, rule_id: str) -> None:
 @pytest.fixture
 def mcp_client(db_session):
     """本物のルーターだけを載せた使い捨てアプリに MCP サーバーを組み込んだクライアント。"""
-    server = McpServer()
+    server = McpServer(session_factory=TestSessionLocal)
 
     @asynccontextmanager
     async def lifespan(_app):
@@ -125,6 +130,53 @@ class TestAuthentication:
     def test_rejects_garbage_bearer_token(self, mcp_client):
         headers = {"Authorization": "Bearer not-a-token"}
         assert _rpc(mcp_client, "tools/list", headers=headers).status_code == 401
+
+    def test_revoked_token_is_rejected(self, mcp_client):
+        with TestSessionLocal() as db:
+            token, row = issue_token(db, "alice", 30)
+        headers = {"Authorization": f"Bearer {token}"}
+        assert _rpc(mcp_client, "tools/list", headers=headers).status_code == 200
+        with TestSessionLocal() as db:
+            assert revoke_token(db, "alice", row.id)
+        assert _rpc(mcp_client, "tools/list", headers=headers).status_code == 401
+
+    def test_legacy_token_without_ledger_entry_is_rejected(self, mcp_client):
+        # 署名は正しくても、台帳に無い（jti が未登録の）トークンは受け付けない
+        token = create_mcp_token(
+            "alice", "not-in-ledger", datetime.now(timezone.utc) + timedelta(days=1),
+        )
+        headers = {"Authorization": f"Bearer {token}"}
+        assert _rpc(mcp_client, "tools/list", headers=headers).status_code == 401
+
+    def test_token_of_another_user_id_is_rejected(self, mcp_client):
+        # 他人の台帳IDを自分のユーザー名で署名しても通らない（所有者の一致を確認する）
+        with TestSessionLocal() as db:
+            _, row = issue_token(db, "bob", 30)
+        forged = create_mcp_token("alice", row.id, datetime.now(timezone.utc) + timedelta(days=1))
+        headers = {"Authorization": f"Bearer {forged}"}
+        assert _rpc(mcp_client, "tools/list", headers=headers).status_code == 401
+
+    def test_ledger_failure_fails_closed(self, db_session):
+        from sqlalchemy.exc import OperationalError
+
+        def broken_factory():
+            raise OperationalError("select", {}, Exception("db down"))
+
+        server = McpServer(session_factory=broken_factory)
+
+        @asynccontextmanager
+        async def lifespan(_app):
+            async with server.lifespan():
+                yield
+
+        app = FastAPI(lifespan=lifespan)
+        server.mount(app)
+        with TestClient(app) as c:
+            token = create_mcp_token("alice", "x", datetime.now(timezone.utc) + timedelta(days=1))
+            resp = _rpc(c, "tools/list", headers={"Authorization": f"Bearer {token}"})
+            assert resp.status_code == 401
+            # API キーによる認証は台帳に依存しないため影響を受けない
+            assert _rpc(c, "tools/list", headers=_ADMIN).status_code == 200
 
     def test_public_key_is_accepted(self, mcp_client):
         resp = _rpc(mcp_client, "tools/list", headers={"X-API-KEY": _PUBLIC_KEY})
