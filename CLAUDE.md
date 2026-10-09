@@ -28,6 +28,7 @@ code-review-graph watch
 | **バリデーション** | Pydantic 2.13.x + pydantic-settings 2.15.x |
 | **HTTP クライアント** | httpx／**XML パーサー** | defusedxml |
 | **デプロイ先** | OCI（Compute VM、Docker Compose） |
+| **AI連携** | リモートMCPサーバー（`/mcp`、`mcp` SDK。`docs/mcp-server.md`） |
 | **GitHub** | `https://github.com/baby-feelings/cyberattack_info_api` |
 
 ## 開発方針（設計原則）
@@ -55,7 +56,9 @@ alembic revision --autogenerate -m "説明"               # マイグレーシ�
 uvicorn app.main:app --reload --env-file .env.development  # 開発サーバー起動
 pytest                                                 # テスト（カバレッジ付き）
 cd dashboard && npm run e2e                            # ダッシュボードE2E（Playwright。HTMLレポート付き）
-ruff check app/ tests/                                 # Lint
+ruff check app/ tests/                                 # Lint（`S`=bandit相当を含む）
+cd dashboard && npm run lint                           # ESLint（警告数の上限あり。package.json）
+deploy/zap/run_zap_scan.ps1                            # OWASP ZAP（Docker Desktop。docs/zap-scan.md）
 mypy app/ --ignore-missing-imports                     # 型チェック
 pip install -r requirements-dev.txt                    # 開発依存インストール
 pip-audit -r requirements.txt --desc                   # 依存脆弱性確認（PYTHONUTF8=1推奨）
@@ -64,7 +67,7 @@ pip-audit -r requirements.txt --desc                   # 依存脆弱性確認�
 ---
 
 ## プロジェクト構成
-`app/` はドメイン（KEV / OSV / JVN / DEPSCAN / DEPSOPS / クローラーログ / 横断共通処理）単位の
+`app/` はドメイン（KEV / OSV / JVN / DEPSCAN / CODESCAN / DEPSOPS / MCP / クローラーログ / 横断共通処理）単位の
 パッケージ。各ドメインは `models.py`（ORM）・`schemas.py`（Pydantic）・`crawler.py`・`router.py`を
 1フォルダにまとめ高凝集を保つ。`app/main.py`はルーターinclude・lifespanのみに専念。
 
@@ -106,12 +109,12 @@ deploy/       # OCIデプロイ関連（deploy_to_oci.ps1・docker-compose.yml�
 
 | スキル | 内容 |
 |--------|------|
-| `api-usage` | 本番APIの使い方（curl例）・フィールド定義・エラーレスポンス |
+| `api-usage` | 本番APIの使い方（curl例・MCPサーバー）・フィールド定義・エラーレスポンス |
 | `crawler-internals` | KEV/OSV/JVN共通基盤（retry/notifications/pagination等）・STIX/TAXII・Alembic |
 | `depscan-depsops` | DEPSCAN/DEPSOPSの検知・優先度推薦・SBOM・自動マージ判定・GitHub OAuth・ユーザー別Slack通知登録 |
-| `codescan` | CODESCAN（Semgrep静的解析+gitleaks）の設計判断・tarball取得方式・CVSSベストエフォート推定・GitHubログイン必須化 |
+| `codescan` | CODESCAN（Semgrep静的解析+gitleaks）の設計判断・tarball取得方式・CVSSベストエフォート推定・ログイン必須と本人所有リポジトリのみの絞り込み |
 | `dashboard-frontend` | Reactダッシュボードのコンポーネント構成・集約ロジック・E2E（Playwright）の設計 |
-| `deployment-ops` | CI/CD・OCIデプロイ手順・環境変数・Prometheus/Grafana監視 |
+| `deployment-ops` | CI/CD（ESLint・gitleaks・ZAP含む）・OCIデプロイ手順・環境変数・Prometheus/Grafana監視 |
 
 ---
 
@@ -124,39 +127,23 @@ deploy/       # OCIデプロイ関連（deploy_to_oci.ps1・docker-compose.yml�
 - semgrepは`requirements.txt`に入れない（`semgrep-cli.txt`・Dockerfileの専用venv）。依存を狭く
   固定する外部CLIとアプリの依存解決を分けるため。`Dockerfile`に`COPY`を足したら
   `deploy/deploy_to_oci.ps1`の転送対象も更新する（`deployment-ops`スキル参照）
-- dashboardに依存を追加する際はWindowsで`npm install`しない（Linux向け依存がロックから欠落し
-  CIの`npm ci`が失敗する）。手順は`deployment-ops`スキルのCI節を参照
+- npmの`package-lock.json`はWindowsで`npm install`/`update`しない（Linux向け依存がロックから欠落し
+  CIの`npm ci`が失敗する）。LinuxのDocker（`node:22`）で更新する。手順は`deployment-ops`スキル参照
+- MCP（`/mcp`）はRESTの読み取りGETの薄いラッパー。DEPSCAN/CODESCANは本人所有リポジトリのみ見え、
+  `PUBLIC_API_KEY`では見えない。`/api/codescan`もセッション認証時は本人所有のみ（`docs/mcp-server.md`）
+- 全レスポンスに`core/security_headers.py`がnosniff等を付与（ZAP指摘対応）
+- ruffの`S`ルールの例外は理由付き`noqa`（複数行の呼び出しは指摘された行に付ける）。`.gitleaks.toml`の
+  allowlistは`[allowlist]`テーブル（`[[allowlist]]`はgitleaks 8.30で読み込めない）
+- `deploy_to_oci.ps1`の出力を`Select-Object -First`等で途中打ち切りしない（スクリプトごと中断される）
 - Windows: `python3`は無効なストアスタブのため`python`を使う。日本語コメント絡みのcp932エラーは
   `PYTHONUTF8=1`で解消。テストDB削除は`test_engine.dispose()`してから`os.remove`する
 
 ---
 
-## 開発手順
-
-```bash
-# 1. feature ブランチを作成
-git checkout -b feature/your-feature-name
-
-# 2. コードを変更・コミット
-git add <files>
-git commit -m "feat: 機能の説明"
-
-# 3. プッシュして PR を作成
-git push -u origin feature/your-feature-name
-
-# 4. CI（ruff・mypy・pytest）が通ったら main へマージ
-```
-
-## コミットメッセージ規約
-
-| プレフィックス | 用途 |
-|--------------|------|
-| `feat:` | 新機能 |
-| `fix:` | バグ修正 |
-| `docs:` | ドキュメント |
-| `refactor:` | リファクタリング |
-| `test:` | テスト追加・修正 |
-| `chore:` | ビルド・設定変更 |
+## 開発の進め方
+作業ごとに `main` から `feat/`・`fix/`・`docs/` 等のブランチを切り、PR → CI（ruff・mypy・pytest・
+ESLint・gitleaks 等）→ main へマージ。コミットは `feat:`/`fix:`/`docs:`/`refactor:`/`test:`/`chore:`。
+詳細・品質チェック一覧は [docs/development-workflow.md](docs/development-workflow.md)。
 
 ---
 

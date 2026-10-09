@@ -1,6 +1,6 @@
 ---
 name: api-usage
-description: サイバー攻撃情報API（本番稼働中のREST API）の使い方リファレンス。KEV/OSV/JVN脆弱性検索、DEPSCAN依存ライブラリスキャン、DEPSOPS判定履歴、STIX/TAXII配信、クローラーログ、Grafana監視など、curlでAPIを叩いて何かを調べたい・分析したい時に読む。フィールド定義・エラーレスポンス・データ更新スケジュールも含む。
+description: サイバー攻撃情報API（本番稼働中のREST API）の使い方リファレンス。KEV/OSV/JVN脆弱性検索、DEPSCAN依存ライブラリスキャン、DEPSOPS判定履歴、STIX/TAXII配信、クローラーログ、Grafana監視、リモートMCPサーバー（/mcp）など、APIを叩いて何かを調べたい・分析したい時に読む。フィールド定義・エラーレスポンス・データ更新スケジュールも含む。
 ---
 
 # Cyberattack Info API — スキルガイド
@@ -46,6 +46,23 @@ API キーの比較には `hmac.compare_digest` を使用し、タイミング�
 > **Note:** 本番環境では Swagger UI（`/docs`）と ReDoc（`/redoc`）はセキュリティ上の理由で無効化されています。
 > API 仕様の詳細は本ドキュメントまたは `README.md` を参照してください。
 > ローカル開発時は `http://localhost:8000/docs` で OpenAPI ドキュメントを参照できます。
+
+---
+
+## MCPサーバーとして使う（AIエージェント向け・推奨）
+curlの代わりに、リモートMCPサーバー（`https://168.138.213.240.nip.io/mcp`、Streamable HTTP）を
+登録すると、ツール（`search_kev`/`get_recent_kev`/`get_kev`/`search_osv`/`search_jvn`/
+`list_depscan_findings`/`get_depscan_stats`/`list_codescan_findings`/`get_codescan_stats`/`whoami`）として
+使える。キーはMCPの設定に閉じ、CLAUDE.mdにcurl例を書く必要がない。読み取り専用で`/admin/*`は無い。
+
+| 認証 | 見えるもの |
+|------|-----------|
+| `X-API-KEY`=`PUBLIC_API_KEY` | KEV/OSV/JVNの公開情報のみ |
+| `Authorization: Bearer <MCPトークン>`（ダッシュボードの設定画面で発行、30日） | 公開情報＋**自分が所有する**リポジトリのDEPSCAN/CODESCAN |
+| `X-API-KEY`=`API_KEY`（運用者） | すべて |
+
+登録: `claude mcp add --scope user --transport http cyberattack-info <URL> --header "Authorization: Bearer <トークン>"`、
+接続確認は`/mcp`と`whoami`ツール。1回の取得は最大50件。詳細・設計は`docs/mcp-server.md`。
 
 ---
 

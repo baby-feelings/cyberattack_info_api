@@ -6,16 +6,17 @@ description: CI/CD（GitHub Actions）・OCI本番デプロイ手順・環境変
 # デプロイ・CI/CD・運用監視リファレンス
 
 ## CI（ci.yml）
-PR 作成・main/develop へのプッシュで自動実行。3つのジョブが並列に動く。
+PR 作成・main/develop へのプッシュで自動実行。3つのジョブが並列に動く。ほかに`gitleaks.yml`（PR/mainで
+シークレット検出）と`zap-scan.yml`（ZAP、手動+毎週月曜）が別ワークフローで動く（下記）。
 
 **`test`（バックエンド、Python 3.10 / 3.11 の matrix）**
-1. `ruff check app/ tests/` — Linting
+1. `ruff check app/ tests/` — Linting（`S`=flake8-bandit相当を含む。testsは`S`除外）
 2. `mypy app/ --ignore-missing-imports` — 型チェック
 3. `pytest --cov=app --cov-fail-under=90` — テスト（カバレッジ 90% 未満で失敗）
 4. `htmlcov/` を Artifact として 30 日間保持（Python 3.11 のみ）
 
 **`dashboard-test`（ダッシュボードのユニットテスト・ビルド）**
-`npm ci` → `npm run test:coverage`（Vitest。statements/lines 90%・functions/branches 85%
+`npm ci` → `npm run lint`（ESLint。警告数が`--max-warnings`を超えると失敗）→ `npm run test:coverage`（Vitest。statements/lines 90%・functions/branches 85%
 未満で失敗、`vite.config.ts`の`thresholds`）→ `npm run build`（`tsc -b`の型チェック込み）。
 `dashboard/coverage/` を Artifact として 30 日間保持。
 
@@ -23,6 +24,13 @@ PR 作成・main/develop へのプッシュで自動実行。3つのジョブが
 `npm ci` → `npx playwright install --with-deps chromium` → `npm run e2e:typecheck` →
 `npm run e2e`（APIは全モック。シナリオ網羅率90%未満で失敗）。`dashboard/playwright-report/`
 （`index.html`と`scenario-coverage.html`）を失敗時も含め Artifact として 30 日間保持。
+
+**`gitleaks.yml`**: PR（base..head）とmainのpushで、チェックサム検証済みの公式バイナリ（Dockerfileと同じ
+バージョン）を使い`gitleaks git --redact`を実行。除外は`.gitleaks.toml`（書式は`codescan`スキル参照）。
+
+**`zap-scan.yml`**: OWASP ZAP API Scanを`workflow_dispatch`と毎週月曜03:00 JSTで実行。使い捨てのAPI
+コンテナ（SQLite・ダミー鍵・外部通信なし、`deploy/zap/`）だけを対象にし、本番には向けない。レポートを
+artifactに保存し、Medium以上を`python -m app.zapscan`でIssue起票（詳細は`docs/zap-scan.md`）。
 
 **注意（dashboardの依存追加）:** Windowsで`npm install <pkg>`すると、Linux向けの
 `@emnapi/*`・`tslib`（wasm系optional依存）が`package-lock.json`から欠落し、CIの`npm ci`が
@@ -97,6 +105,10 @@ CODESCANはUpsertのため二重実行の実害は薄いが、DEPSOPSは実行�
 DBマイグレーションは`Dockerfile`の`CMD`（`python -m app.core.migrate && uvicorn ...`）で
 コンテナ起動時に自動適用される。ファイルが削除されたPRをデプロイする際は、SCPが削除を
 反映しないため、リモート側の不要ファイルを`ssh`で手動削除すること。
+
+**デプロイスクリプト実行の注意**: `deploy_to_oci.ps1`の出力を`| Select-Object -First N`等で打ち切ると、
+パイプライン停止でスクリプトごと中断され、本番が古いまま残る（実際に発生）。`| Out-String`で全体を受けて
+から`Select-String`で絞る。デプロイ後は`/health`・`/mcp`（401が返れば到達）で反映を確認する。
 
 ## デプロイ構成
 
@@ -200,6 +212,10 @@ CIで自動実行される。間接依存（他パッケージ経由で入る依
 古い版へ下げる → 別の依存（`mcp`/`click`）の脆弱性に置き換わるだけ（`pip-audit`で実測）、
 (3) **固定する側が外部CLIなら専用venvへ隔離する**（採用。`semgrep-cli.txt`・`Dockerfile`）。
 まず`pip-audit -r requirements.txt`で修正前後を比較し、別の脆弱性が増えないか確認すること。
+
+**注（アプリ自身の`mcp`依存）:** 上記の「別の依存（`mcp`/`click`）」はsemgrepの依存の話で、semgrepは
+専用venvのため影響しない。アプリ自身はリモートMCPサーバー用に`requirements.txt`で`mcp==1.30.0`を直接ピン
+留めしている（更新時は`pip-audit`で前後比較）。
 
 ## CORS・Swagger の本番制限
 - CORS: 本番は `["https://cyberattackinfoapi.vercel.app"]` のみ許可。開発時は localhost も追加

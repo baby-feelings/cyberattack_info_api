@@ -1,7 +1,7 @@
 # Cyberattack Info API
 
 [![CI](https://github.com/baby-feelings/cyberattack_info_api/actions/workflows/ci.yml/badge.svg)](https://github.com/baby-feelings/cyberattack_info_api/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-99%25-brightgreen)](https://github.com/baby-feelings/cyberattack_info_api/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen)](https://github.com/baby-feelings/cyberattack_info_api/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.11-blue)](https://www.python.org/)
 
 米 CISA の [Known Exploited Vulnerabilities (KEV) Catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog)・[OSV (Open Source Vulnerabilities)](https://osv.dev/)・[JVN (Japan Vulnerability Notes)](https://jvndb.jvn.jp/) を定期収集し、REST API として配信するプラットフォームです。  
@@ -19,9 +19,11 @@ Claude Code や CI/CD ツールから「今まさに悪用されているサイ�
 | **依存ライブラリ脆弱性スキャン（DEPSCAN）** | GitHub 上の自作アプリ全リポジトリのロックファイルを OSV API とリアルタイム照合。新規検知はリポジトリへ GitHub Issue も自動起票し、解消を確認すると自動クローズ |
 | **自アプリコード脆弱性診断（CODESCAN）** | GitHub 上の自作アプリ全リポジトリのソースコードを Semgrep + gitleaks で静的解析。CVSSはベストエフォート推定 |
 | **Dependabot PR 自動運用（DEPSOPS）** | 安全性の高い Dependabot PR（マイナー/パッチ・CIあり・コンフリクトなし）のみ自動マージ、それ以外はSlack通知 |
-| **DEPSCAN/CODESCAN ダッシュボードの GitHub ログイン** | 任意の GitHub アカウントでログインし、本人が所有するリポジトリの検知結果のみ閲覧可能 |
+| **DEPSCAN/CODESCAN ダッシュボードの GitHub ログイン** | 任意の GitHub アカウントでログインし、本人が所有するリポジトリの検知結果のみ閲覧可能（DEPSCAN・CODESCAN とも。他の人には見えない） |
+| **AIエージェント向けリモートMCPサーバー** | `/mcp`（Streamable HTTP）で、KEV/OSV/JVN の検索と、本人所有リポジトリの DEPSCAN/CODESCAN をツールとして提供。MCPトークンはダッシュボードの設定画面から発行（詳細: [docs/mcp-server.md](docs/mcp-server.md)） |
 | **ユーザー別 Slack 通知登録** | ダッシュボードから任意の GitHub アカウントで自分専用の Slack Webhook を登録可能（詳細: [docs/slack-notifications.md](docs/slack-notifications.md)） |
 | **削除済みリポジトリ・古いデータの自動削除** | GitHub上で削除確認できたリポジトリのデータ、保持期間超過レコードを自動削除 |
+| **品質・セキュリティ検査** | ruff（bandit 相当含む）・mypy・ESLint・pytest/Vitest/Playwright、gitleaks・OSV-Scanner・pip-audit、OWASP ZAP による動的診断を CI で実行 |
 | **運用監視** | Prometheus + Grafana によるクローラー実行結果・ホストリソースの可視化（OCI上、任意） |
 | **一覧・統計・実行ログ API** | ページネーション・検索・フィルタリング対応（詳細: [docs/api-reference.md](docs/api-reference.md)） |
 | **React ダッシュボード** | KEV・OSV・JVN・DEPSCAN・CODESCANを画面下部固定タブで切り替え表示（Vercel デプロイ） |
@@ -70,12 +72,14 @@ Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
 ```bash
 pytest                                # 全テスト実行（カバレッジ付き）
 pytest tests/kev/ -v                  # 特定ドメインのみ実行
-ruff check app/ tests/                # Linting
+ruff check app/ tests/                # Linting（S = bandit 相当のセキュリティ検査を含む）
 mypy app/ --ignore-missing-imports    # 型チェック
+cd dashboard && npm run lint          # ESLint（警告数の上限あり）
+deploy/zap/run_zap_scan.ps1           # OWASP ZAP の動的診断（Docker Desktop。docs/zap-scan.md）
 ```
 
-**テスト結果（最新）:** バックエンド 923 テスト / カバレッジ 99%、ダッシュボード 270 テスト
-（Vitest）/ カバレッジ 98%
+**テスト結果（最新）:** バックエンド 970 テスト / カバレッジ 98%、ダッシュボード 279 テスト
+（Vitest）/ カバレッジ 98%、E2E 81 シナリオ
 
 ダッシュボードのE2Eテスト（Playwright、API全モック）は `dashboard/` で `npm run e2e`。
 HTMLレポートは `npm run e2e:report`、画面・機能のシナリオ網羅率（90%未満で失敗）は
@@ -102,6 +106,7 @@ Compose により稼働し、`deploy/deploy_to_oci.ps1` を都度手動実行し
 - Slack通知の登録方法・通知先ルール: [docs/slack-notifications.md](docs/slack-notifications.md)
 - OWASP ZAP による API の動的診断: [docs/zap-scan.md](docs/zap-scan.md)
 - AIエージェント向けリモートMCPサーバー（接続方法・見える範囲）: [docs/mcp-server.md](docs/mcp-server.md)
+- 開発の進め方・CI の品質チェック一覧: [docs/development-workflow.md](docs/development-workflow.md)
 - Claude Code / AIエージェントからの活用例: [.claude/skills/api-usage/SKILL.md](.claude/skills/api-usage/SKILL.md)
 
 ---

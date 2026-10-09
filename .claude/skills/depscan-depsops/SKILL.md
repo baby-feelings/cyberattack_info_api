@@ -338,3 +338,15 @@ Vite の `VITE_` 接頭辞の環境変数はビルド時にJSバンドルへ平�
 `PUBLIC_API_KEY`の値のみを設定する。`/admin/*`は`require_api_key`（`API_KEY`のみ）
 のまま。DEPSCANはダッシュボードから`X-API-KEY`を一切送らずセッショントークンのみを
 使うため、この分離の対象外。
+
+## 未解決が残る典型パターンと修正の手順（2026-10の一括対応で判明）
+- **修正版なし**（`fixed_versions`が空）: `braces`・`sprintf-js`等。更新では直らない。ライブラリ側の
+  新版待ち。**GitHub Pagesの`rubyzip`**は`github-pages` gemの固定依存でGitHub側の更新待ち。
+- **すでにDependabotが直していてもIssue/検知が翌日以降まで残る**: 検知はスキャン時点のmainを見る。
+  修正前に対象リポジトリのロックの実バージョンを確認し、本番で`POST /admin/depscan-crawl?force=true`を
+  実行して反映する（実行完了後に解決済みになり、Issueは再スキャンで自動クローズされる）。
+- **推移的依存のnpmロック更新**（`proxy-addr`等）: `npm update <pkg>`が"up to date"で変更しない
+  ことがある。依存関係が同一なら`package-lock.json`の該当エントリの`version`/`resolved`/`integrity`の
+  3行を直接書き換え、LinuxのDocker（`node:22`）で`npm ci --dry-run`して整合を確認する。Windowsで
+  `npm install`するとwasm系optional依存がロックから消える。
+- 他リポジトリの修正は、作業中のローカルを避けて`gh repo clone --depth 1`の新規クローンで行う。

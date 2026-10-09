@@ -283,3 +283,9 @@ MyJVN API（`https://jvndb.jvn.jp/myjvn`）は RDF/RSS 1.0 形式で返す。XML
 **Windows でのテスト DB ファイルロック**: teardown時は `test_engine.dispose()` で
 コネクションを解放してから `os.remove("test.db")` する（`OSError` は無視）。dispose せず
 削除すると Windows ではファイルロックで失敗する。
+
+## セキュリティヘッダー（app/core/security_headers.py）
+`SecurityHeadersMiddleware`（`app/main.py`で`add_middleware`）が全レスポンスに`X-Content-Type-Options: nosniff`・
+`X-Frame-Options: DENY`・`Referrer-Policy: no-referrer`を付与する（OWASP ZAPの`X-Content-Type-Options
+Header Missing`指摘への対応）。ハンドラ側で設定済みの値は`setdefault`で上書きしない。本APIはJSONのみを返し、
+ブラウザでHTMLとして埋め込まれる用途が無いため保守的な値で一律に付けている。

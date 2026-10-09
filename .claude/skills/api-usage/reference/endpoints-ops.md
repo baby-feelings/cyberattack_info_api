@@ -68,9 +68,10 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 + `p/secrets`）で静的解析した結果を確認する。DEPSCAN（依存ライブラリの既知脆弱性）
 とは異なり、SQLi・ハードコード認証情報・XSS等、自アプリのコード自体に潜む脆弱性
 パターンを検知する。CVSSスコアはベストエフォート推定であり精度は保証しない
-（詳細は `.claude/skills/codescan/SKILL.md` 参照）。認証は KEV/OSV/JVN と同じ
-`X-API-KEY`（`API_KEY` または `PUBLIC_API_KEY`）で、DEPSCANのようなGitHubログイン
-によるオーナー制限は無い。
+（詳細は `.claude/skills/codescan/SKILL.md` 参照）。認証は `X-API-KEY`（`API_KEY` のみ。
+`PUBLIC_API_KEY` では不可）または GitHub ログインのセッション JWT（`Authorization: Bearer`）。
+セッション認証では DEPSCAN と同様に**本人所有のリポジトリのみ**に絞り込まれる
+（`API_KEY` は全件）。MCPサーバー経由は `list_codescan_findings` を使う。
 
 ```bash
 # 未解決かつCVSS 7.0以上（要対応優先度が高いもの）
