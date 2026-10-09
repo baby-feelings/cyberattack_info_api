@@ -8,7 +8,8 @@ app.depscan.github_client（サービスレベル PAT を使うロックファ�
 import httpx
 
 _GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
-_GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
+# S105: 変数名に TOKEN を含むだけの公開 URL であり、秘密情報ではない
+_GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"  # noqa: S105
 _GITHUB_API_BASE = "https://api.github.com"
 _TIMEOUT = 15.0
 

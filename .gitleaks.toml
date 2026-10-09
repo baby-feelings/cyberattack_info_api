@@ -14,7 +14,9 @@ title = "cyberattack_info_api gitleaks config"
 [extend]
 useDefault = true
 
-[[allowlist]]
+# gitleaks 8.x は allowlist をテーブル（配列ではない）として読む。
+# 配列表記 [[allowlist]] だと "expected a map, got slice" で設定の読み込みに失敗する
+[allowlist]
 description = "CODESCANのgitleaks結果パース処理を検証するためのテスト用ダミーAWSキー（実データではない）"
 paths = [
   '''tests/codescan/test_crawler\.py''',

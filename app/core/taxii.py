@@ -91,7 +91,7 @@ def _get_kev_object(db: Session, object_id: str) -> dict[str, Any] | None:
     if matched is None:
         return None
     item = db.query(Vulnerability).filter(Vulnerability.cve_id == matched).first()
-    assert item is not None  # matchedはcve_ids一覧から取得したため必ず存在する
+    assert item is not None  # noqa: S101  # matchedはcve_ids一覧から取得したため必ず存在する（型の絞り込み）
     return build_kev_stix_vulnerability(item)
 
 
@@ -130,7 +130,7 @@ def _get_osv_object(db: Session, object_id: str) -> dict[str, Any] | None:
         )
         .first()
     )
-    assert item is not None  # matchedはrows一覧から取得したため必ず存在する
+    assert item is not None  # noqa: S101  # matchedはrows一覧から取得したため必ず存在する（型の絞り込み）
     return build_osv_stix_vulnerability(item)
 
 
@@ -154,7 +154,7 @@ def _get_jvn_object(db: Session, object_id: str) -> dict[str, Any] | None:
     if matched is None:
         return None
     item = db.query(JvnVulnerability).filter(JvnVulnerability.jvndb_id == matched).first()
-    assert item is not None  # matchedはjvndb_ids一覧から取得したため必ず存在する
+    assert item is not None  # noqa: S101  # matchedはjvndb_ids一覧から取得したため必ず存在する（型の絞り込み）
     return build_jvn_stix_vulnerability(item)
 
 

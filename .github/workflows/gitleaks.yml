@@ -1,0 +1,55 @@
+name: Gitleaks — Secret Scan
+
+# PR とmainへのpushで、コミット履歴にシークレット（APIキー・トークン等）が混入していないかを
+# マージ前に検出する。CODESCAN（毎日）は事後検知のため、PR の時点で止める目的で追加した。
+# 除外設定はリポジトリルートの .gitleaks.toml（gitleaks が自動で読む）。
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  # Dockerfile（CODESCAN）と同じバージョンに固定する
+  GITLEAKS_VERSION: "8.30.1"
+
+jobs:
+  gitleaks:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # PR のコミット範囲（base..head）を検査するため全履歴を取得する
+          fetch-depth: 0
+
+      # 公式リリースのバイナリを、チェックサム検証してから使う
+      - name: Install gitleaks
+        run: |
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          # チェックサム一覧のファイル名と一致させるため、配布名のまま保存する
+          curl -fsSL "${base}/${archive}" -o "${archive}"
+          curl -fsSL "${base}/gitleaks_${GITLEAKS_VERSION}_checksums.txt" -o checksums.txt
+          grep " ${archive}$" checksums.txt | sha256sum -c -
+          tar -xzf "${archive}" gitleaks
+          ./gitleaks version
+
+      # --redact: ログに秘密の値そのものを出さない
+      - name: Scan pull request commits
+        if: github.event_name == 'pull_request'
+        run: >
+          ./gitleaks git --redact --no-banner --verbose
+          --log-opts="origin/${{ github.base_ref }}..HEAD" .
+
+      - name: Scan pushed commits
+        if: github.event_name == 'push'
+        run: >
+          ./gitleaks git --redact --no-banner --verbose
+          --log-opts="${{ github.event.before }}..${{ github.sha }}" .
