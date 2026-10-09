@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   githubLoginUrl, fetchScanStatus, exchangeAuthCode,
-  fetchNotificationSettings, putNotificationSettings, deleteNotificationSettings,
+  fetchNotificationSettings, putNotificationSettings, deleteNotificationSettings, issueMcpToken,
 } from './auth'
 import { UnauthorizedError } from './shared'
 
@@ -137,6 +137,30 @@ describe('api/auth', () => {
     it('throws UnauthorizedError specifically on 401', async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse({}, { ok: false, status: 401 }))
       await expect(deleteNotificationSettings('bad-token')).rejects.toBeInstanceOf(UnauthorizedError)
+    })
+  })
+
+  describe('issueMcpToken', () => {
+    it('POSTs with the session token and returns the issued MCP token', async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({ token: 'mcp-1', username: 'octocat', expires_at: '2026-11-08T00:00:00+00:00' }),
+      )
+      const result = await issueMcpToken('tok-123')
+      expect(result.token).toBe('mcp-1')
+      const [url, opts] = fetchMock.mock.calls[0]
+      expect(url).toBe(`${BASE_URL}/auth/mcp-token`)
+      expect(opts.method).toBe('POST')
+      expect(opts.headers.Authorization).toBe('Bearer tok-123')
+    })
+
+    it('throws UnauthorizedError on 401', async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({}, { ok: false, status: 401 }))
+      await expect(issueMcpToken('bad')).rejects.toBeInstanceOf(UnauthorizedError)
+    })
+
+    it('throws a generic error on other failures', async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({}, { ok: false, status: 500 }))
+      await expect(issueMcpToken('tok')).rejects.toThrow('MCP token error 500')
     })
   })
 })

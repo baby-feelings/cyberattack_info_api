@@ -35,6 +35,7 @@ from app.jvn.router import admin_router as jvn_admin_router
 from app.jvn.router import router as jvn_router
 from app.kev.router import admin_router as kev_admin_router
 from app.kev.router import router as kev_router
+from app.mcp_server.server import McpServer
 from app.osv.router import admin_router as osv_admin_router
 from app.osv.router import router as osv_router
 
@@ -52,6 +53,9 @@ logger = logging.getLogger(__name__)
 # APScheduler（バックグラウンドスケジューラ）
 # ──────────────────────────────────────────────
 scheduler = BackgroundScheduler()
+
+# AI エージェント向けのリモート MCP サーバー（/mcp）。lifespan の起動・終了と組み合わせて使う
+mcp_server = McpServer()
 
 
 def _drop_scan_results_table(db_engine) -> None:
@@ -81,7 +85,9 @@ async def lifespan(app: FastAPI):
 
     register_jobs(scheduler, build_scheduled_jobs())
 
-    yield  # アプリ実行中
+    # MCP サーバー（Streamable HTTP）のセッションマネージャーを起動
+    async with mcp_server.lifespan():
+        yield  # アプリ実行中
 
     # ── 終了処理 ──
     scheduler.shutdown(wait=False)
@@ -139,6 +145,8 @@ app.include_router(user_crawl_admin_router)
 app.include_router(repo_cleanup_admin_router)
 app.include_router(metrics_router)
 app.include_router(taxii_router)
+# リモート MCP サーバー（POST /mcp。認証は McpAuthMiddleware）
+mcp_server.mount(app)
 
 
 # ──────────────────────────────────────────────

@@ -43,6 +43,7 @@ from app.auth.github_oauth import (
     exchange_code_for_token,
     get_authenticated_user_login,
 )
+from app.auth.mcp_token import create_mcp_token
 from app.auth.session import create_session_token, decode_session_token
 from app.core.config import settings
 from app.core.database import get_db
@@ -205,6 +206,23 @@ def exchange(body: ExchangeRequest) -> dict:
             detail="Invalid session token.",
         )
     return {"token": session_token, "username": username}
+
+
+@router.post(
+    "/mcp-token",
+    summary="MCPサーバー用アクセストークンを発行する（ログイン中ユーザー本人専用）",
+)
+def issue_mcp_token(username: Annotated[str, Depends(get_current_username)]) -> dict:
+    """ログイン中ユーザー専用の MCP トークン（30 日有効）を発行する。
+
+    AI エージェントの MCP 設定に `Authorization: Bearer <token>` として貼り付けて使う。
+    このトークンで参照できる DEPSCAN / CODESCAN は、発行したユーザー本人が所有する
+    リポジトリのみ（他の人のリポジトリは見えない）。発行のたびに新しいトークンが作られるが、
+    以前のトークンは有効期限まで使える（全トークンの即時失効は SESSION_SECRET_KEY の入れ替え）。
+    """
+    token, expires_at = create_mcp_token(username)
+    logger.info("MCP token issued for %s", username)
+    return {"token": token, "username": username, "expires_at": expires_at.isoformat()}
 
 
 @router.get("/scan-status", summary="ログイン中ユーザーのオンデマンドスキャン進捗を取得")

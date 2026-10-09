@@ -55,13 +55,34 @@ class TestListCodescan:
         assert body["data"][0]["cvss_score"] == 7.4
         assert body["data"][0]["tool"] == "semgrep"
 
-    def test_session_token_is_accepted(self, client, db_session):
-        # CODESCAN は DEPSCAN と異なりオーナー絞り込みは行わない。ログイン済み
-        # であれば任意の GitHub ユーザーが全件を閲覧できる（セッション共有、Issue #219）
-        _make_finding(db_session, repo_full_name="baby-feelings/other-repo")
+    def test_session_token_sees_only_own_repos(self, client, db_session):
+        # セッション認証時は、ログインユーザー（octocat）本人が所有するリポジトリのみ見える。
+        # 他のユーザー（baby-feelings）のリポジトリの検知結果は閲覧できない
+        _make_finding(db_session, repo_full_name="octocat/mine")
+        _make_finding(
+            db_session, repo_full_name="baby-feelings/other-repo", rule_id="other.rule",
+        )
         resp = client.get("/api/codescan", headers=_SESSION_HEADERS)
         assert resp.status_code == 200
-        assert resp.json()["total"] == 1
+        body = resp.json()
+        assert body["total"] == 1
+        assert body["data"][0]["repo_full_name"] == "octocat/mine"
+
+    def test_session_token_cannot_bypass_owner_with_owner_param(self, client, db_session):
+        _make_finding(db_session, repo_full_name="baby-feelings/other-repo")
+        resp = client.get(
+            "/api/codescan", params={"owner": "baby-feelings"}, headers=_SESSION_HEADERS,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["total"] == 0
+
+    def test_session_token_cannot_query_other_users_repo(self, client, db_session):
+        _make_finding(db_session, repo_full_name="baby-feelings/other-repo")
+        resp = client.get(
+            "/api/codescan", params={"repo": "baby-feelings/other-repo"},
+            headers=_SESSION_HEADERS,
+        )
+        assert resp.status_code == 403
 
     def test_invalid_session_token_and_no_api_key_returns_403(self, client):
         resp = client.get(
@@ -123,11 +144,17 @@ class TestCodescanStats:
         assert body["repos"][0]["repo_full_name"] == "baby-feelings/baby_grow"
         assert body["severities"][0]["severity"] == "ERROR"
 
-    def test_session_token_is_accepted(self, client, db_session):
-        _make_finding(db_session, resolved_at=None, severity="ERROR")
+    def test_session_token_counts_only_own_repos(self, client, db_session):
+        _make_finding(db_session, repo_full_name="octocat/mine", resolved_at=None)
+        _make_finding(
+            db_session, repo_full_name="baby-feelings/other-repo", rule_id="other.rule",
+            resolved_at=None,
+        )
         resp = client.get("/api/codescan/stats", headers=_SESSION_HEADERS)
         assert resp.status_code == 200
-        assert resp.json()["total"] == 1
+        body = resp.json()
+        assert body["total"] == 1
+        assert body["repos"][0]["repo_full_name"] == "octocat/mine"
 
 
 class TestTriggerCodescanCrawl:

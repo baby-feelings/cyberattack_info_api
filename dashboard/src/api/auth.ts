@@ -86,3 +86,23 @@ export async function deleteNotificationSettings(authToken: string): Promise<Not
   if (!res.ok) throw new Error(`Notification settings error ${res.status}`)
   return res.json()
 }
+
+// ── MCPアクセストークン発行 ────────────────────────────────────────
+
+export interface McpTokenResponse {
+  token: string
+  username: string
+  expires_at: string
+}
+
+// ログイン中ユーザー本人専用のMCPトークン（30日有効）を発行する。このトークンで参照できる
+// DEPSCAN/CODESCANは、発行したユーザー本人が所有するリポジトリのみに限られる
+export async function issueMcpToken(authToken: string): Promise<McpTokenResponse> {
+  const res = await fetch(`${BASE_URL}/auth/mcp-token`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${authToken}` },
+  })
+  if (res.status === 401) throw new UnauthorizedError('Session token is invalid or expired')
+  if (!res.ok) throw new Error(`MCP token error ${res.status}`)
+  return res.json()
+}

@@ -100,6 +100,8 @@ export const SCENARIOS = [
   { id: 'SET-07', area: '設定', title: '入力が空の間は保存ボタンが無効' },
   { id: 'SET-08', area: '設定', title: '設定の取得失敗時にエラーメッセージが表示される' },
   { id: 'SET-09', area: '設定', title: '設定画面からのログアウト' },
+  { id: 'SET-10', area: '設定', title: 'MCPトークンを発行すると登録コマンドと有効期限が表示される' },
+  { id: 'SET-11', area: '設定', title: 'MCPトークンの発行に失敗するとエラーが表示される' },
 ] as const
 
 export type ScenarioId = (typeof SCENARIOS)[number]['id']

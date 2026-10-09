@@ -101,6 +101,7 @@ Compose により稼働し、`deploy/deploy_to_oci.ps1` を都度手動実行し
 - 環境変数の全一覧: [docs/environment-variables.md](docs/environment-variables.md)
 - Slack通知の登録方法・通知先ルール: [docs/slack-notifications.md](docs/slack-notifications.md)
 - OWASP ZAP による API の動的診断: [docs/zap-scan.md](docs/zap-scan.md)
+- AIエージェント向けリモートMCPサーバー（接続方法・見える範囲）: [docs/mcp-server.md](docs/mcp-server.md)
 - Claude Code / AIエージェントからの活用例: [.claude/skills/api-usage/SKILL.md](.claude/skills/api-usage/SKILL.md)
 
 ---
