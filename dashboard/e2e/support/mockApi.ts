@@ -184,6 +184,13 @@ function defaultResponse(req: RecordedRequest, state: MockState): MockResponse {
       state.notification = { slack_webhook_url: url, notifications_enabled: true }
       return { body: state.notification }
     }
+    case 'POST /auth/mcp-token':
+      return {
+        body: {
+          token: 'mcp-test-token', username: state.username,
+          expires_at: '2026-11-08T00:00:00+00:00',
+        },
+      }
     case 'DELETE /auth/notification-settings':
       state.notification = { slack_webhook_url: null, notifications_enabled: false }
       return { body: state.notification }

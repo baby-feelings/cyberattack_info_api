@@ -3,12 +3,13 @@
 GET /api/codescan        – 検知結果一覧（リポジトリ・重要度・解決状態・CVSS下限でフィルタ）
 GET /api/codescan/stats  – リポジトリ別・重要度別の統計情報（未解決分のみ集計）
 
-自アプリの内部コード脆弱性は特定ユーザーに紐づく情報ではないため、DEPSCAN のような
-「本人所有リポジトリのみ」へのオーナー絞り込みは行わない。一方でダッシュボードの
-DEPSCAN/CODESCAN タブ間でセッションを共有し、両方とも GitHub ログインを必須にする
-（Issue #219）ため、`app.core.auth.require_api_key_or_session`（`X-API-KEY` または
-GitHub ログインセッション JWT のいずれかを要求する共通認証。戻り値は絞り込みには
-使わず、ログイン済みかどうかのゲートとしてのみ使う）で保護する。
+ダッシュボードの DEPSCAN/CODESCAN タブ間でセッションを共有し、両方とも GitHub ログインを
+必須にする（Issue #219）ため、`app.core.auth.require_api_key_or_session`（`X-API-KEY` または
+GitHub ログインセッション JWT のいずれかを要求する共通認証）で保護する。
+
+検知結果にはリポジトリ名・脆弱な箇所が含まれるため、DEPSCAN と同様に、セッション認証時は
+戻り値（ログインユーザー名）で本人所有リポジトリのみに強制的に絞り込む。他のユーザーが
+自分のリポジトリの検知結果を閲覧できてはならないため（API キー認証時は絞り込まない）。
 """
 import logging
 from typing import Annotated
@@ -69,12 +70,18 @@ def trigger_codescan_crawl(
 )
 def list_codescan(
     db: Annotated[Session, Depends(get_db)],
-    _access: Annotated[str | None, Depends(require_api_key_or_session)],
+    forced_owner: Annotated[str | None, Depends(require_api_key_or_session)],
     page: int = Query(1, ge=1, description="ページ番号（1始まり）"),
     per_page: int = Query(50, ge=1, le=200, description="1ページあたりの件数"),
     flt: CodescanListFilter = Depends(),
 ) -> CodeFindingListResponse:
-    """自アプリのコード脆弱性検知結果を取得する。"""
+    """自アプリのコード脆弱性検知結果を取得する。
+
+    セッショントークン認証時は `owner` クエリパラメータの指定に関わらず、ログイン中の
+    GitHub ユーザー本人が所有するリポジトリのみに強制的に絞り込む（DEPSCAN と同じ。
+    他のユーザーに自分のリポジトリの検知結果を見せないため）。
+    """
+    flt.restrict_to_owner(forced_owner)
     query = flt.apply(db.query(CodeFinding))
 
     total, items = paginate(query, page, per_page, CodeFinding.detected_at.desc())
@@ -98,10 +105,16 @@ def list_codescan(
 )
 def get_codescan_stats(
     db: Annotated[Session, Depends(get_db)],
-    _access: Annotated[str | None, Depends(require_api_key_or_session)],
+    forced_owner: Annotated[str | None, Depends(require_api_key_or_session)],
 ) -> CodeFindingStatsResponse:
-    """未解決の自アプリコード脆弱性を集計して返す。"""
+    """未解決の自アプリコード脆弱性を集計して返す。
+
+    セッショントークン認証時は、ログイン中の GitHub ユーザー本人が所有するリポジトリのみに
+    強制的に絞り込む。
+    """
     base = db.query(CodeFinding).filter(CodeFinding.resolved_at.is_(None))
+    if forced_owner is not None:
+        base = base.filter(CodeFinding.repo_full_name.like(f"{forced_owner}/%"))
     total = base.count()
 
     repo_rows = (

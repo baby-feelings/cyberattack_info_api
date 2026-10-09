@@ -87,6 +87,8 @@ app/
 ├── codescan/     # 自アプリのコード脆弱性診断（Semgrep静的解析+gitleaksシークレット検知。GitHubログイン
 │                 #   必須〈DEPSCANとセッション共有〉。+github_client/issue_management/cvss_mapping。
 │                 #   CVSS計算式自体はapp.core.cvss）
+├── mcp_server/   # AIエージェント向けリモートMCPサーバー（/mcp、Streamable HTTP。ツール=server.py・
+│                 #   認証=auth.py。DEPSCAN/CODESCANは本人所有リポジトリのみ。docs/mcp-server.md）
 ├── zapscan/      # OWASP ZAP（API Scan）の結果→GitHub Issue起票（`python -m app.zapscan`）。
 │                 #   スキャン自体は deploy/zap/（使い捨てAPIコンテナ向け。詳細は docs/zap-scan.md）
 └── crawler_logs/ # クローラー実行ログ

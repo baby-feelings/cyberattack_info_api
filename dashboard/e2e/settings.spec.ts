@@ -141,3 +141,37 @@ scenario('SET-09', '設定画面からのログアウト', async ({ page }) => {
   await expect(dialog.getByText('Slack通知の登録にはGitHubアカウントでのログインが必要です。')).toBeVisible()
   expect(await page.evaluate(() => localStorage.getItem('depscan_session_token'))).toBeNull()
 })
+
+scenario('SET-10', 'MCPトークンを発行すると登録コマンドと有効期限が表示される', async ({ page, api }) => {
+  await seedSession(page)
+  await page.goto('/')
+  await openSettings(page)
+  const dialog = page.getByRole('dialog', { name: '設定' })
+
+  // 発行前はコマンドを表示しない
+  await expect(dialog.getByLabel('Claude Code に登録するコマンド')).toHaveCount(0)
+  await dialog.getByRole('button', { name: 'MCPトークンを発行' }).click()
+
+  const command = dialog.getByLabel('Claude Code に登録するコマンド')
+  await expect(command).toHaveValue(/claude mcp add --transport http cyberattack-info .*\/mcp /)
+  await expect(command).toHaveValue(/Authorization: Bearer mcp-test-token/)
+  await expect(dialog.getByText('有効期限: 2026-11-08')).toBeVisible()
+  await expect(dialog.getByText('このトークンは再表示できません。', { exact: false })).toBeVisible()
+  // ログイン中のセッショントークンで発行を要求する
+  const [req] = api.requestsTo('/auth/mcp-token', 'POST')
+  expect(req.headers['authorization']).toBe('Bearer test-session-token')
+  await expect(dialog.getByRole('button', { name: 'トークンを再発行' })).toBeVisible()
+})
+
+scenario('SET-11', 'MCPトークンの発行に失敗するとエラーが表示される', async ({ page, api }) => {
+  api.override('POST', '/auth/mcp-token', () => ({ status: 500, body: { detail: 'boom' } }))
+  await seedSession(page)
+  await page.goto('/')
+  await openSettings(page)
+  const dialog = page.getByRole('dialog', { name: '設定' })
+
+  await dialog.getByRole('button', { name: 'MCPトークンを発行' }).click()
+
+  await expect(dialog.getByText('トークンの発行に失敗しました')).toBeVisible()
+  await expect(dialog.getByLabel('Claude Code に登録するコマンド')).toHaveCount(0)
+})

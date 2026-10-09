@@ -39,3 +39,6 @@ anyio>=4.14.2
 # OSV-Scannerが理論上許容される最古のバージョン（0.0.9、DoS等16件のCVE対象）を
 # 検出していた。実際にpipが解決するバージョン（0.0.32）を下限として明示する
 python-multipart>=0.0.32
+
+# AI エージェント向けリモートMCPサーバー（/mcp、Streamable HTTP。app/mcp_server/）
+mcp==1.30.0
