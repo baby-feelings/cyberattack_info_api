@@ -7,9 +7,13 @@ on:
   merge_group:
     branches: [main]
 
+# 呼び出す再利用ワークフロー（osv-scanner-reusable-pr.yml）は最上位で security-events: write を
+# 要求する。呼び出し側がこれを許可していないと、ワークフローが起動すらせず startup_failure になる
+# （SARIF アップロードは無効化しているが、権限の宣言自体は必須）
 permissions:
   actions: read
   contents: read
+  security-events: write
 
 jobs:
   scan-pr:
