@@ -160,9 +160,24 @@ class TestPublicTools:
         assert is_error
         assert "見つかりません" in text
 
-    def test_user_token_can_read_public_data(self, mcp_client):
-        is_error, _ = _call(mcp_client, "get_recent_kev", {"days": 7}, _mcp_headers("alice"))
+    def test_recent_kev_is_capped_with_total(self, mcp_client, db_session):
+        # 期間内の件数が多くても、返すのは MAX_PER_PAGE 件まで（総数は total で分かる）
+        for i in range(MAX_PER_PAGE + 5):
+            db_session.add(Vulnerability(
+                cve_id=f"CVE-2026-{i:05d}", vendor_project="Acme", product="Widget",
+                vulnerability_name="n", description="d", required_action="a",
+                date_added=date.today(),
+            ))
+        db_session.commit()
+        is_error, body = _call(mcp_client, "get_recent_kev", {"days": 30}, _ADMIN)
         assert not is_error
+        assert body["total"] == MAX_PER_PAGE + 5
+        assert len(body["data"]) == MAX_PER_PAGE
+
+    def test_user_token_can_read_public_data(self, mcp_client):
+        is_error, body = _call(mcp_client, "get_recent_kev", {"days": 7}, _mcp_headers("alice"))
+        assert not is_error
+        assert body == {"total": 0, "data": []}
 
 
 class TestPrivateDataIsolation:

@@ -143,9 +143,14 @@ def _register_tools(mcp: FastMCP) -> None:
         })
 
     @mcp.tool()
-    async def get_recent_kev(ctx: Context, days: int = 30) -> list[dict[str, Any]]:
-        """直近 days 日（1〜365）に CISA KEV へ追加された脆弱性を返す。"""
-        return await _get(ctx, "/api/vulnerabilities/recent", {"days": days})
+    async def get_recent_kev(ctx: Context, days: int = 30) -> dict[str, Any]:
+        """直近 days 日（1〜365）に CISA KEV へ追加された脆弱性を、新しい順に返す。
+
+        件数が多い期間でもコンテキストを圧迫しないよう、返すのは新しい順に最大 50 件。
+        全体の件数は total で分かる（それ以上は search_kev でページを送って取得する）。
+        """
+        items = await _get(ctx, "/api/vulnerabilities/recent", {"days": days})
+        return {"total": len(items), "data": items[:MAX_PER_PAGE]}
 
     @mcp.tool()
     async def get_kev(ctx: Context, cve_id: str) -> dict[str, Any]:
