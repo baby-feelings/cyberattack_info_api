@@ -1,0 +1,72 @@
+name: OWASP ZAP API Scan
+
+# 使い捨ての API コンテナ（SQLite・ダミー鍵・外部通信なし）に対してのみスキャンする。
+# 本番 URL は対象にしない（deploy/zap/docker-compose.yml 参照）。
+on:
+  workflow_dispatch:
+    inputs:
+      min_risk:
+        description: "Issueを起票する最小リスク（1=Low 2=Medium 3=High）"
+        required: false
+        default: "2"
+  schedule:
+    # 毎週月曜 03:00 JST（日曜 18:00 UTC）
+    - cron: "0 18 * * 0"
+
+permissions:
+  contents: read
+  issues: write # 検出結果を Issue に起票するため
+
+jobs:
+  zap-api-scan:
+    name: ZAP API Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # ZAP コンテナ（zap ユーザー）がレポートを書き込めるよう、出力先を書き込み可能にする
+      - name: Prepare report directory
+        run: chmod 777 deploy/zap/reports
+
+      # ZAP の終了コード: 0=問題なし / 2=警告あり（-I により 0 扱い）/ 1・3=スキャン失敗
+      - name: Run ZAP API Scan
+        run: >
+          docker compose -f deploy/zap/docker-compose.yml
+          up --build --abort-on-container-exit --exit-code-from zap
+
+      - name: Tear down containers
+        if: always()
+        run: docker compose -f deploy/zap/docker-compose.yml down --remove-orphans
+
+      - name: Upload ZAP report as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-report
+          path: |
+            deploy/zap/reports/zap-report.html
+            deploy/zap/reports/zap-report.json
+          retention-days: 30
+
+      # 検出結果を GitHub Issue に起票（DEPSCAN / CODESCAN と同じ運用）。
+      # 手動実行時は入力値、定期実行時は Medium 以上（2）を閾値にする
+      - name: File GitHub issues for findings
+        env:
+          DATABASE_URL: sqlite:///./zap-issue.db
+          API_KEY: dummy-not-used
+          GITHUB_USERNAME: ${{ github.repository_owner }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MIN_RISK: ${{ github.event.inputs.min_risk || '2' }}
+        run: python -m app.zapscan deploy/zap/reports/zap-report.json --min-risk "$MIN_RISK"
