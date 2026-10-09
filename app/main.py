@@ -23,6 +23,7 @@ from app.core.metrics import router as metrics_router
 from app.core.repo_cleanup_router import admin_router as repo_cleanup_admin_router
 from app.core.scheduler_jobs import build_scheduled_jobs, register_jobs
 from app.core.schemas import HealthResponse
+from app.core.security_headers import SecurityHeadersMiddleware
 from app.core.taxii import taxii_router
 from app.core.user_crawl_router import admin_router as user_crawl_admin_router
 from app.crawler_logs.router import router as crawler_logs_router
@@ -116,6 +117,8 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["X-API-KEY", "Authorization", "Content-Type"],
 )
+# セキュリティヘッダー（nosniff 等）を全レスポンスへ付与（OWASP ZAP の指摘対応）
+app.add_middleware(SecurityHeadersMiddleware)
 
 # ルーター登録
 app.include_router(auth_router)
