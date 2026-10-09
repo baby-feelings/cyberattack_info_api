@@ -1,0 +1,57 @@
+# OWASP ZAP API Scan。ローカルの Docker Desktop で手動実行する。
+#   実行: deploy/zap/run_zap_scan.ps1
+#
+# 安全策:
+#   - スキャン対象は同ネットワーク内に起動する使い捨て API のみ（本番 URL は指定しない）
+#   - DB は SQLite（コンテナ内 /tmp）、キーはダミー値。.env.production は一切読まない
+#   - ネットワークは internal: true（外部へ出られない）。アクティブスキャンで /admin/* が
+#     叩かれてクローラーが動いても CISA/GitHub 等の外部へは通信できない
+
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/zap/Dockerfile.api
+    environment:
+      DATABASE_URL: sqlite:////tmp/zap.db
+      API_KEY: zap-scan-dummy-key
+      ENVIRONMENT: development # /openapi.json と /docs を有効にするため
+      GITHUB_USERNAME: zap-scan-user
+    networks: [scan]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/openapi.json')"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  zap:
+    image: ghcr.io/zaproxy/zaproxy:stable
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [scan]
+    volumes:
+      # レポート出力先（ホスト側の deploy/zap/reports と共有）
+      - ./reports:/zap/wrk:rw
+    # -I: 警告（WARN）でも終了コードを非0にしない。-z: ZAP 本体設定
+    #   replacer: 全リクエストに X-API-KEY を付与（認証付きエンドポイントを検査するため）
+    #   globalexcludeurl: /admin/*（クローラー起動など副作用のある管理系）はスキャン対象外
+    command: >
+      zap-api-scan.py
+      -t http://api:8000/openapi.json
+      -f openapi
+      -r zap-report.html
+      -J zap-report.json
+      -I
+      -z "-config replacer.full_list(0).description=apikey
+      -config replacer.full_list(0).enabled=true
+      -config replacer.full_list(0).matchtype=REQ_HEADER
+      -config replacer.full_list(0).matchstr=X-API-KEY
+      -config replacer.full_list(0).regex=false
+      -config replacer.full_list(0).replacement=zap-scan-dummy-key
+      -config globalexcludeurl.url_list.url(0).regex=.*/admin/.*
+      -config globalexcludeurl.url_list.url(0).enabled=true"
+
+networks:
+  scan:
+    internal: true # 外部通信を遮断

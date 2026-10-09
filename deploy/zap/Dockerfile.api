@@ -1,0 +1,20 @@
+# ZAP スキャン専用の使い捨て API イメージ（ローカルの Docker Desktop 用）。
+# 本番 Dockerfile は gitleaks の linux_arm64 バイナリ・semgrep を含み x86 の Windows では
+# ビルドできず、スキャンにも不要なため、依存と app だけの最小構成にする。
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# 依存パッケージ（レイヤーキャッシュを効かせるため先にコピー）
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app/ ./app/
+COPY alembic.ini .
+COPY alembic/ ./alembic/
+
+ENV PYTHONUNBUFFERED=1
+EXPOSE 8000
+
+# テーブルは lifespan の create_all が SQLite に作るため、マイグレーションは実行しない
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

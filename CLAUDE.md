@@ -87,13 +87,15 @@ app/
 ├── codescan/     # 自アプリのコード脆弱性診断（Semgrep静的解析+gitleaksシークレット検知。GitHubログイン
 │                 #   必須〈DEPSCANとセッション共有〉。+github_client/issue_management/cvss_mapping。
 │                 #   CVSS計算式自体はapp.core.cvss）
+├── zapscan/      # OWASP ZAP（API Scan）の結果→GitHub Issue起票（`python -m app.zapscan`）。
+│                 #   スキャン自体は deploy/zap/（使い捨てAPIコンテナ向け。詳細は docs/zap-scan.md）
 └── crawler_logs/ # クローラー実行ログ
 
 tests/        # app/ と同じドメイン構成でミラーリング
 dashboard/    # Vercel デプロイの React ダッシュボード（KEV/OSV/JVN/DEPSCAN/CODESCAN の5タブ切替。e2e/にPlaywright）
 alembic/      # DBスキーマのマイグレーション（env.py に新規モデルimportが必須）
 docs/         # README.mdから分離した詳細ドキュメント（API一覧・環境変数・デプロイ手順等）
-.github/workflows/  # ci.yml / deploy.yml / daily-crawl.yml / osv-scanner-*.yml / pip-audit.yml
+.github/workflows/  # ci.yml / deploy.yml / daily-crawl.yml / osv-scanner-*.yml / pip-audit.yml / zap-scan.yml
 deploy/       # OCIデプロイ関連（deploy_to_oci.ps1・docker-compose.yml・Caddyfile・grafana/）
 ```
 
