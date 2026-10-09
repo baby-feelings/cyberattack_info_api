@@ -102,6 +102,9 @@ export const SCENARIOS = [
   { id: 'SET-09', area: '設定', title: '設定画面からのログアウト' },
   { id: 'SET-10', area: '設定', title: 'MCPトークンを発行すると登録コマンドと有効期限が表示される' },
   { id: 'SET-11', area: '設定', title: 'MCPトークンの発行に失敗するとエラーが表示される' },
+  { id: 'SET-12', area: '設定', title: 'MCPトークンの有効期限（7/30/90日）を選んで発行できる' },
+  { id: 'SET-13', area: '設定', title: '発行済みMCPトークンが一覧に表示され、個別に失効できる' },
+  { id: 'SET-14', area: '設定', title: 'MCPトークンが上限に達していると説明が表示される' },
 ] as const
 
 export type ScenarioId = (typeof SCENARIOS)[number]['id']

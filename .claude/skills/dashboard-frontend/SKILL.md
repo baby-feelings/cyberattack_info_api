@@ -98,10 +98,14 @@ CODESCAN追加後もキー名はあえて変更せず両ドメインで共有す
 そのまま表示するだけでよい（クライアント側でのURL妥当性検証はプレフィックスチェックのみ）。
 
 同じ設定画面の下段に`McpTokenSection.tsx`（リモートMCPサーバー用トークンの発行欄）がある。
-`api/auth.ts`の`issueMcpToken`（`POST /auth/mcp-token`、ログイン中のセッショントークンで本人専用の
-30日トークンを発行）を呼び、`claude mcp add ...`の登録コマンドと有効期限を**発行時の1回だけ**表示する
-（サーバーは保存しない）。コピーは`navigator.clipboard`。セッション（24時間）が切れていると401→
-「再ログインしてください」を表示する（その場合はGitHubログインをやり直してから発行）。
+`api/auth.ts`の`issueMcpToken(authToken, days)`（`POST /auth/mcp-token`、有効期限は7/30/90日の選択式）・
+`listMcpTokens`・`revokeMcpToken`を使い、`claude mcp add ...`の登録コマンドと有効期限を**発行時の1回だけ**
+表示する（トークン本体はサーバーに保存されない）。下段に発行済みトークンの一覧（状態・期限・最終使用日）と
+有効なものへの「失効」ボタン（`window.confirm`で確認。表示中のコマンドのトークンを失効したらコマンドも消す）を出す。
+上限（有効10個）超過の409だけはサーバーの説明文をそのまま表示し、他のエラーは固定文言（詳細を漏らさない）。
+コピーは`navigator.clipboard`。セッション（24時間）が切れていると401→「再ログインしてください」を表示する
+（GitHubログインをやり直してから発行）。一覧の初回取得は`setTimeout`経由で呼び、effect内の同期setStateによる
+ESLint警告を増やさない。
 
 ## index.css の CSS カスケードレイヤーに関する注意
 `*, *::before, *::after` の余白リセットは必ず `@layer base` の中に書くこと。

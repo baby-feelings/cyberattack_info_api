@@ -29,7 +29,8 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.auth.session import create_session_token
 from app.core.config import settings
-from app.mcp_server.auth import McpAuthMiddleware, Principal
+from app.core.database import SessionLocal
+from app.mcp_server.auth import McpAuthMiddleware, Principal, SessionFactory
 
 logger = logging.getLogger(__name__)
 
@@ -263,9 +264,10 @@ class McpServer:
     lifespan を何度も回すテストでも壊れないようにするため）。lifespan 外のリクエストは 503 を返す。
     """
 
-    def __init__(self) -> None:
+    def __init__(self, session_factory: SessionFactory = SessionLocal) -> None:
+        """session_factory: トークン台帳（失効確認）の DB セッション。テストでは差し替える。"""
         self._inner: ASGIApp | None = None
-        self.asgi: ASGIApp = McpAuthMiddleware(self._dispatch)
+        self.asgi: ASGIApp = McpAuthMiddleware(self._dispatch, session_factory)
 
     @staticmethod
     def _build() -> tuple[FastMCP, ASGIApp]:
