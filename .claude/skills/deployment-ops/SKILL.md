@@ -196,6 +196,13 @@ Issue #227でダッシュボードからのユーザー別登録方式（`UserAc
 DDL 競合や権限不足で失敗してもサービスを止めないよう `try/except SQLAlchemyError` で囲んである。
 
 ## 依存パッケージの脆弱性スキャン（OSV-Scanner / pip-audit）とセキュリティピン留め
+**OSV-Scannerの落とし穴（2026-10に判明）**: ①`osv-scanner-pr.yml`が呼ぶ再利用ワークフローは最上位で
+`security-events: write`を要求するため、呼び出し側が許可していないと`startup_failure`（ワークフローが起動
+すらしない）になり、PRの差分スキャンが動いていないのに気づけない（`gh run list --workflow=osv-scanner-pr.yml`で
+`startup_failure`が並んでいないか定期的に見る）。②OSV-Scannerは`requirements.txt`の**下限**（`Mako>=1.4.1`なら
+1.4.1）を検知するが、pip-auditは実際にインストールされる最新版を見るため、片方だけ失敗することがある。
+下限を修正版へ上げて解消する。
+
 `osv-scanner-pr.yml`（PRで新規導入された脆弱性のみ差分検出）・`osv-scanner-scheduled.yml`/
 `pip-audit.yml`（本リポジトリ自身の`requirements.txt`を週次・mainマージ時にスキャン）が
 CIで自動実行される。間接依存（他パッケージ経由で入る依存）に明示的なバージョン下限が無いと、

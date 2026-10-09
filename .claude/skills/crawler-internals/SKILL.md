@@ -284,6 +284,13 @@ MyJVN API（`https://jvndb.jvn.jp/myjvn`）は RDF/RSS 1.0 形式で返す。XML
 コネクションを解放してから `os.remove("test.db")` する（`OSError` は無視）。dispose せず
 削除すると Windows ではファイルロックで失敗する。
 
+## DBマイグレーションの適用（デプロイ時）
+`Dockerfile`のCMDが`python -m app.core.migrate`（alembic head まで適用）→`uvicorn`の順で起動するため、
+`deploy_to_oci.ps1`でデプロイすると新しいマイグレーションが本番DB（Neon）に自動適用される。新テーブルは追加のみ
+にして既存データに影響させない。モデルを足したら`alembic/env.py`に`models`のimportを足し、`alembic upgrade head`→
+`downgrade -1`→`upgrade head`→`alembic check`（差分なし）をローカルのSQLiteで確認する（`python -m alembic`で実行。
+`alembic`コマンド単体だとカレントが`sys.path`に入らず`app`をimportできない）。
+
 ## セキュリティヘッダー（app/core/security_headers.py）
 `SecurityHeadersMiddleware`（`app/main.py`で`add_middleware`）が全レスポンスに`X-Content-Type-Options: nosniff`・
 `X-Frame-Options: DENY`・`Referrer-Policy: no-referrer`を付与する（OWASP ZAPの`X-Content-Type-Options
