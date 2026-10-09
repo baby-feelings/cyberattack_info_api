@@ -20,7 +20,7 @@ Claude Code や CI/CD ツールから「今まさに悪用されているサイ�
 | **自アプリコード脆弱性診断（CODESCAN）** | GitHub 上の自作アプリ全リポジトリのソースコードを Semgrep + gitleaks で静的解析。CVSSはベストエフォート推定 |
 | **Dependabot PR 自動運用（DEPSOPS）** | 安全性の高い Dependabot PR（マイナー/パッチ・CIあり・コンフリクトなし）のみ自動マージ、それ以外はSlack通知 |
 | **DEPSCAN/CODESCAN ダッシュボードの GitHub ログイン** | 任意の GitHub アカウントでログインし、本人が所有するリポジトリの検知結果のみ閲覧可能（DEPSCAN・CODESCAN とも。他の人には見えない） |
-| **AIエージェント向けリモートMCPサーバー** | `/mcp`（Streamable HTTP）で、KEV/OSV/JVN の検索と、本人所有リポジトリの DEPSCAN/CODESCAN をツールとして提供。MCPトークンはダッシュボードの設定画面から発行（詳細: [docs/mcp-server.md](docs/mcp-server.md)） |
+| **AIエージェント向けリモートMCPサーバー** | `/mcp`（Streamable HTTP）で、KEV/OSV/JVN の検索と、本人所有リポジトリの DEPSCAN/CODESCAN をツールとして提供。MCPトークンはダッシュボードの設定画面から発行（期限 7/30/90 日の選択、個別失効に対応。詳細: [docs/mcp-server.md](docs/mcp-server.md)） |
 | **ユーザー別 Slack 通知登録** | ダッシュボードから任意の GitHub アカウントで自分専用の Slack Webhook を登録可能（詳細: [docs/slack-notifications.md](docs/slack-notifications.md)） |
 | **削除済みリポジトリ・古いデータの自動削除** | GitHub上で削除確認できたリポジトリのデータ、保持期間超過レコードを自動削除 |
 | **品質・セキュリティ検査** | ruff（bandit 相当含む）・mypy・ESLint・pytest/Vitest/Playwright、gitleaks・OSV-Scanner・pip-audit、OWASP ZAP による動的診断を CI で実行 |
@@ -78,8 +78,8 @@ cd dashboard && npm run lint          # ESLint（警告数の上限あり）
 deploy/zap/run_zap_scan.ps1           # OWASP ZAP の動的診断（Docker Desktop。docs/zap-scan.md）
 ```
 
-**テスト結果（最新）:** バックエンド 970 テスト / カバレッジ 98%、ダッシュボード 279 テスト
-（Vitest）/ カバレッジ 98%、E2E 81 シナリオ
+**テスト結果（最新）:** バックエンド 996 テスト / カバレッジ 98%、ダッシュボード 295 テスト
+（Vitest）/ カバレッジ 98%、E2E 84 シナリオ
 
 ダッシュボードのE2Eテスト（Playwright、API全モック）は `dashboard/` で `npm run e2e`。
 HTMLレポートは `npm run e2e:report`、画面・機能のシナリオ網羅率（90%未満で失敗）は

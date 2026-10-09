@@ -31,6 +31,10 @@
 | GET | `/auth/github/callback` | GitHub OAuthのコールバック（ブラウザ専用。使い捨て交換コード付きでダッシュボードへリダイレクト） |
 | POST | `/auth/exchange` | 交換コード→セッションJWT |
 | GET | `/auth/scan-status` | オンデマンドスキャン進捗（Bearer認証） |
+| POST | `/auth/mcp-token` | MCPトークンを発行（Bearer認証・ログイン本人のみ。`{"days": 7\|30\|90}`、既定30。有効10個まで、超過は409）。トークン本体は応答にだけ含まれる |
+| GET | `/auth/mcp-tokens` | 自分のMCPトークンの一覧（状態・期限・最終使用。トークン本体は含まない。Bearer認証） |
+| DELETE | `/auth/mcp-tokens/{id}` | 自分のMCPトークンを失効（他人のトークンは404。Bearer認証） |
+| POST | `/mcp` | リモートMCPサーバー（Streamable HTTP。`X-API-KEY` または `Authorization: Bearer <MCPトークン>`。詳細は [mcp-server.md](mcp-server.md)） |
 | GET/PUT/DELETE | `/auth/notification-settings` | ログイン中ユーザーのSlack Webhook通知登録・解除（Bearer認証、Issue #227）。PUTは実際にテスト送信し成功した場合のみ保存 |
 | POST | `/admin/crawl` | KEV手動クロール（`?force=true`対応、Issue #239） |
 | POST | `/admin/osv-crawl` | OSV手動クロール（`?days=N`・`?force=true`対応） |

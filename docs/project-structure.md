@@ -1,7 +1,7 @@
 # プロジェクト構成
 
 [README.md](../README.md) から分離した詳細ページ。`app/` はドメイン（KEV / OSV / JVN /
-DEPSCAN / CODESCAN / クローラーログ / 横断的共通処理）単位のパッケージ構成。各ドメインが
+DEPSCAN / CODESCAN / DEPSOPS / MCP / ZAP / クローラーログ / 横断的共通処理）単位のパッケージ構成。各ドメインが
 `models.py`・`schemas.py`・`crawler.py`・`router.py` を1つのフォルダにまとめる。`tests/` も
 同じドメイン構成でミラーリングする。
 
@@ -10,8 +10,9 @@ cyberattack_info_api/
 ├── app/
 │   ├── main.py                 # FastAPI アプリ本体・ルーター include・lifespan のみに専念（定期ジョブ定義は core/scheduler_jobs.py）
 │   │                           # （/admin/* は持たない。各ドメインの router.py の admin_router に定義）
-│   ├── auth/                   # GitHub ログイン・ユーザー別Slack通知登録ドメイン（models・account_store・
-│   │                           # session・github_oauth・router。Issue #227でUserAccountテーブル追加）
+│   ├── auth/                   # GitHub ログイン・ユーザー別Slack通知登録・MCPトークンのドメイン（models・
+│   │                           # account_store・session・github_oauth・router。Issue #227でUserAccount、
+│   │                           # MCPトークンは mcp_token〈JWT〉・mcp_token_store〈台帳 mcp_tokens。失効・一覧〉）
 │   ├── core/                   # 横断的インフラ（config・database・auth・background・crawler_runner・
 │   │                           # crypto〈トークン暗号化〉・db_utils・notifications・pagination・
 │   │                           # repo_cleanup〈削除済みリポジトリのデータ削除、Issue #228〉・
@@ -19,7 +20,7 @@ cyberattack_info_api/
 │   │                           # github_http〈GitHub API認証ヘッダー・`GitHubApi`クライアントの共通化〉・
 │   │                           # issue_filing〈DEPSCAN/CODESCANのIssue起票共通処理〉・
 │   │                           # list_filters〈一覧APIの絞り込み条件の基底クラス〉・
-│   │                           # scheduler_jobs〈定期ジョブの定義と登録〉・共通 schemas。
+│   │                           # scheduler_jobs〈定期ジョブの定義と登録〉・security_headers〈nosniff等を全レスポンスに付与〉・共通 schemas。
 │   │                           # crawler_runnerは`CrawlJob`、notificationsは`Notifier`の Template Method）
 │   ├── kev/                    # CISA KEV ドメイン（models・schemas・crawler・filters〈一覧の絞り込み条件〉・router〈router + admin_router〉）
 │   ├── osv/                    # OSV ドメイン（models・schemas・crawler・filters・router〈router + admin_router〉）
@@ -31,11 +32,14 @@ cyberattack_info_api/
 │   │                           # 登録済み他ユーザー向けのper-user実行はuser_scan.py）
 │   ├── codescan/                # 自アプリコード脆弱性診断（CODESCAN）ドメイン（Semgrep静的解析 + gitleaks
 │   │                           # シークレット検知。github_client・issue_management・cvss_mapping含む）
+│   ├── mcp_server/             # AIエージェント向けリモートMCPサーバー（/mcp、Streamable HTTP。server〈ツール〉・
+│   │                           # auth〈admin/public/userの認証。台帳で失効確認〉。詳細は docs/mcp-server.md）
+│   ├── zapscan/                # OWASP ZAPの結果→GitHub Issue起票（`python -m app.zapscan`。docs/zap-scan.md）
 │   └── crawler_logs/           # クローラー実行ログドメイン（models・schemas・writer・router）
 ├── tests/                      # app/ と同じドメイン構成
 │   ├── conftest.py             # テスト用フィクスチャ (SQLite テスト DB、全サブフォルダに自動継承)
 │   ├── test_main.py            # app.main（health/root）テスト
-│   ├── core/ kev/ osv/ jvn/ depscan/ depsops/ codescan/ crawler_logs/
+│   ├── core/ auth/ kev/ osv/ jvn/ depscan/ depsops/ codescan/ mcp_server/ zapscan/ crawler_logs/
 ├── dashboard/               # Vercel デプロイの React ダッシュボード（App.tsx は組み立てのみ。タブ定義と
 │                           # TabBar/TabPanel/HeaderMenu は components/layout/、ページ送りは shared/TableControls）（KEV・OSV（Pub 含む 10 エコシステム）・JVN・
 │                           # DEPSCAN〈GitHub ログイン必須。Dependabot運用状況＝DEPSOPS の判定履歴も統合〉・
@@ -54,18 +58,22 @@ cyberattack_info_api/
 │       ├── daily-crawl.yml           # 毎日クロール (単一 cron UTC 19:05 で KEV → OSV → JVN → DEPSCAN → CODESCAN → DEPSOPS 順次実行)
 │       │                             # （ci.ymlにはdashboard-e2e＝PlaywrightのE2Eジョブも含む）
 │       ├── osv-scanner-scheduled.yml # OSV-Scanner: 本リポジトリ自身の依存関係を週次・mainマージ時にスキャン
-│       ├── osv-scanner-pr.yml        # OSV-Scanner: PRで新規導入された脆弱性のみを差分検出
-│       └── pip-audit.yml             # pip-audit: requirements.txtを週次・mainマージ時にスキャン
+│       ├── osv-scanner-pr.yml        # OSV-Scanner: PRで新規導入された脆弱性のみを差分検出（security-events: write が必須）
+│       ├── pip-audit.yml             # pip-audit: requirements.txtを週次・mainマージ時にスキャン
+│       ├── gitleaks.yml              # gitleaks: PR/mainのコミット範囲のシークレット検出（.gitleaks.toml適用）
+│       └── zap-scan.yml              # OWASP ZAP API Scan（手動＋定期。使い捨てAPIコンテナのみ対象）
 ├── deploy/                  # OCIデプロイ関連（deploy_to_oci.ps1・docker-compose.yml・Caddyfile・
 │   │                       # Grafanaプロビジョニング設定。秘密情報を含む.env/prometheus.ymlはgit管理外）
-│   └── grafana/             # 運用監視ダッシュボードの自動プロビジョニング設定・ダッシュボードJSON
+│   ├── grafana/             # 運用監視ダッシュボードの自動プロビジョニング設定・ダッシュボードJSON
+│   └── zap/                 # OWASP ZAP（docker-compose.yml・Dockerfile.api・run_zap_scan.ps1・reports/）
 ├── Dockerfile               # バックエンドのコンテナイメージ定義（OCI上でdocker composeがビルド）
 ├── .env.example         # 環境変数テンプレート
 ├── .python-version      # Python バージョン固定 (3.11)
 ├── requirements.txt     # 本番依存パッケージ
 ├── requirements-dev.txt # 開発・テスト依存パッケージ
 ├── semgrep-cli.txt      # semgrep（CODESCAN用の外部CLI）。Dockerfileの専用venvへ導入しアプリの依存と隔離
-├── pyproject.toml       # ruff / mypy / pytest 設定
+├── pyproject.toml       # ruff（S=bandit相当を含む）/ mypy / pytest 設定
+├── .gitleaks.toml       # gitleaks の除外設定（[allowlist] テーブル書式。CODESCAN と CI で使用）
 ├── security_report.html # セキュリティ脆弱性診断レポート
 └── CLAUDE.md            # Claude Code 向け開発ガイド
 ```
