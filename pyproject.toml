@@ -12,10 +12,15 @@ select = [
     "I",   # isort
     "B",   # flake8-bugbear
     "UP",  # pyupgrade
+    "S",   # flake8-bandit（セキュリティ上問題のあるコードパターンの検出）
 ]
 ignore = [
     "B008",  # FastAPI の Depends() をデフォルト引数として使う場合に必要
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# テストコードでは assert・ダミーの秘密値・一時パスの使用が正当なため、セキュリティ系ルールを除外する
+"tests/**" = ["S"]
 
 [tool.mypy]
 python_version = "3.10"

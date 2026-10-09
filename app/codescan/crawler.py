@@ -102,8 +102,10 @@ def _run_semgrep(target_dir: str) -> dict[str, Any]:
     タイムアウトを必ず設定する（超過時は `subprocess.TimeoutExpired` を送出し、
     呼び出し元 `scan_repo` の try/except でそのリポジトリのみスキップされる）。
     """
+    # S603/S607: semgrep は Dockerfile が /usr/local/bin に symlink する専用 venv の CLI を
+    # PATH 経由で呼ぶ設計（引数は固定値と一時ディレクトリのみで、ユーザー入力を含まない）
     result = subprocess.run(  # noqa: S603
-        [
+        [  # noqa: S607
             "semgrep",
             "--config=p/security-audit",
             "--config=p/secrets",

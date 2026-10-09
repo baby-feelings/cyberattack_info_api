@@ -134,5 +134,5 @@ def request_with_retry(
         )
         time.sleep(delay)
 
-    assert last_exc is not None  # ループを抜けるのは必ず例外発生後のため
+    assert last_exc is not None  # noqa: S101  # ループを抜けるのは必ず例外発生後のため（型の絞り込み）
     raise last_exc
