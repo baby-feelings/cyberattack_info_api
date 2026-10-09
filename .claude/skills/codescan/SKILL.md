@@ -104,18 +104,19 @@ DEPSCANは詳細なSlackダイジェスト（`notify_dependency_findings`）・I
 オーケストレーションでは、DEPSCANが行う「全体再スキャン検証後」というクローズ
 タイミングの前提が成立しないため）。
 
-## API認証: ログイン必須だがオーナー制限なし（Issue #219でrequire_public_api_keyから変更）
-自アプリの内部コード脆弱性は特定ユーザーに紐づく情報ではないため、DEPSCANの
-GitHubログインによる「本人所有リポジトリのみ」制限は不要。一方でダッシュボードの
-DEPSCAN/CODESCANタブ間でセッションを共有し、CODESCANも読み取りにGitHubログインを
-必須にする（要件変更、Issue #219）ため、当初の`require_public_api_key`から
-`app.core.auth.require_api_key_or_session`（`X-API-KEY`またはGitHubログイン
-セッションJWTのいずれかを要求する共通認証）に変更した。この関数はDEPSCANの
-`_resolve_access`と検証ロジックが同一（DRY原則で共通化）だが、CODESCANは戻り値
-（セッション認証時はログインユーザー名）を絞り込みには使わず「ログイン済みか」
-のみをゲートとして使う。`GET /api/codescan`・`GET /api/codescan/stats`はこの
-共通認証で保護する。`POST /admin/codescan-crawl`は他ドメインと同じ`require_api_key`
-（`API_KEY`のみ）で変更なし。
+## API認証: ログイン必須かつ本人所有リポジトリのみ（Issue #219でログイン必須化、#289で絞り込み追加）
+ダッシュボードのDEPSCAN/CODESCANタブ間でセッションを共有し、CODESCANも読み取りにGitHubログインを
+必須にする（Issue #219）ため、`app.core.auth.require_api_key_or_session`（`X-API-KEY`または
+GitHubログインセッションJWTのいずれかを要求する共通認証。DEPSCANの`_resolve_access`と共通、DRY）で
+`GET /api/codescan`・`/stats`を保護する。
+
+**セッション認証時は戻り値（ログインユーザー名）で本人所有リポジトリのみに強制的に絞り込む**
+（`flt.restrict_to_owner(forced_owner)`・statsは`repo_full_name LIKE '<user>/%'`）。当初は「内部コード
+脆弱性は特定ユーザーに紐づかない」として絞り込まず、ログインさえすれば任意のGitHubユーザーが全
+リポジトリの検知結果（リポジトリ名・脆弱箇所）を取得できたが、他の人に見せてはならないため
+DEPSCANと同じ方式に揃えた（`repo`で他人のリポジトリを指定すると403）。`X-API-KEY`（`API_KEY`）は
+従来どおり絞り込まない。`POST /admin/codescan-crawl`は`require_api_key`（`API_KEY`のみ）で変更なし。
+リモートMCPサーバー（`docs/mcp-server.md`）も同じREST経路を使うため同じ絞り込みが効く。
 
 フロントエンド側は`DepscanAuthGate.tsx`と共通の`useGithubSession`フック
 （`dashboard/src/hooks/useGithubSession.ts`）を使い、`localStorage`のキー
@@ -210,3 +211,11 @@ Semgrepは`--source`配下の`.semgrepignore`（`.gitignore`と同じgitignore�
 コード変更は不要（baby-feelings傘下の複数リポジトリで、Firebase/GCPクライアント
 APIキー〈`.gitleaks.toml`〉・Jekyllテンプレート変数〈`.semgrepignore`〉・自リポジトリの
 defusedxml誤検知〈`# nosemgrep`〉の3パターンで実際に運用している）。
+
+## 自リポジトリの `.gitleaks.toml`（allowlist）の書式
+`_run_gitleaks`は対象リポジトリのルートに`.gitleaks.toml`があれば`--config`で渡す。**gitleaks 8.xは
+allowlistを「テーブル」`[allowlist]`として読む**。配列`[[allowlist]]`だと`expected a map, got slice`で
+設定の読み込み自体に失敗する（本リポジトリで実際に発生。PRのgitleaks CIで発覚）。複数の除外を書く
+場合は`[[allowlists]]`（複数形、8.25以降）を使う。除外が効くことは`docker run ghcr.io/gitleaks/gitleaks
+:v8.30.1 git --log-opts="--all -- <path>" /repo`で確認できる（`dir`モードは設定を対象ディレクトリ内で
+探すためリポジトリルートの設定が使われない点に注意）。

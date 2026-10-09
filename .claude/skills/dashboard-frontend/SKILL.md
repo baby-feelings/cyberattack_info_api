@@ -97,6 +97,12 @@ CODESCAN追加後もキー名はあえて変更せず両ドメインで共有す
 登録（PUT）はバックエンド側で実際にテスト送信されるため、フォーム側は成功/失敗メッセージを
 そのまま表示するだけでよい（クライアント側でのURL妥当性検証はプレフィックスチェックのみ）。
 
+同じ設定画面の下段に`McpTokenSection.tsx`（リモートMCPサーバー用トークンの発行欄）がある。
+`api/auth.ts`の`issueMcpToken`（`POST /auth/mcp-token`、ログイン中のセッショントークンで本人専用の
+30日トークンを発行）を呼び、`claude mcp add ...`の登録コマンドと有効期限を**発行時の1回だけ**表示する
+（サーバーは保存しない）。コピーは`navigator.clipboard`。セッション（24時間）が切れていると401→
+「再ログインしてください」を表示する（その場合はGitHubログインをやり直してから発行）。
+
 ## index.css の CSS カスケードレイヤーに関する注意
 `*, *::before, *::after` の余白リセットは必ず `@layer base` の中に書くこと。
 `@layer` の外（unlayered）に書くと、CSS カスケードレイヤーの仕様上どんな `@layer utilities`
@@ -124,6 +130,9 @@ CODESCAN追加後もキー名はあえて変更せず両ドメインで共有す
   上書きは`api.override(method, path, handler)`、リクエスト検証は`api.requestsTo`/`lastQuery`。
 - **`api`フィクスチャは`{ auto: true }`必須**。テストが引数に取らないとモックが有効化されず、
   実サーバーのSPAフォールバックHTMLを`res.json()`して`UNREACHABLE`になる（実際にハマった）。
+- **ESLint**: `npm run lint`をCIで実行する（`--max-warnings 22`）。`react-hooks/set-state-in-effect`と
+  `react-refresh/only-export-components`は既存コードに多数あり、バグ検出ではないため警告に下げて件数を
+  固定した（歯止め。減らしたら上限も下げる）。`coverage/`等の生成物は対象外。
 - **シナリオ網羅率**: 網羅率の指標は「画面・機能・状態遷移のシナリオ」。`e2e/support/scenarios.ts`が
   カタログで、各テストは`scenario('KEV-01', ...)`でIDに紐づく。`scenario-coverage-reporter.ts`が
   合格数/総数を`playwright-report/scenario-coverage.html`に出力し、**90%未満なら全体を失敗**にする。
