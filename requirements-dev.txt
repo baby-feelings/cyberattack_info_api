@@ -15,4 +15,4 @@ Pygments>=2.21.0
 # OSV-Scanner が脆弱な古いバージョンとして解決してしまうため明示的に固定する
 # （PYSEC-2020-173 等、pip<26.2 の複数CVE。Issue #63対応時に発覚）
 pip>=26.2.1
-filelock>=3.32.6
+filelock>=4.0.10
