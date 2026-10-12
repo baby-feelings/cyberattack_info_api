@@ -3,7 +3,7 @@
 CODESCAN は GitHub ログイン必須化（Issue #219）により、require_public_api_key
 から require_api_key_or_session（X-API-KEY またはセッション JWT）に変更された。
 """
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 from app.auth.session import create_session_token
@@ -12,7 +12,7 @@ from tests.conftest import TEST_API_KEY
 
 HEADERS = {"X-API-KEY": TEST_API_KEY}
 _SESSION_HEADERS = {"Authorization": f"Bearer {create_session_token('octocat')}"}
-_NOW = datetime.now(timezone.utc)
+_NOW = datetime.now(UTC)
 
 
 def _make_finding(db_session, **kwargs) -> CodeFinding:

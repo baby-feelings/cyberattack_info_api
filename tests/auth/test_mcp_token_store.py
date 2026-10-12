@@ -1,6 +1,6 @@
 """app.auth.mcp_token_store（台帳）と /auth/mcp-token(s) エンドポイントのテスト。"""
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
 os.environ.setdefault("API_KEY", "test-api-key-for-pytest")
@@ -41,8 +41,8 @@ class TestStore:
         claims = verify_mcp_token(token)
         assert claims == McpClaims("alice", row.id)
         exp = row.expires_at
-        exp = exp if exp.tzinfo else exp.replace(tzinfo=timezone.utc)
-        assert timedelta(days=6) < exp - datetime.now(timezone.utc) <= timedelta(days=7)
+        exp = exp if exp.tzinfo else exp.replace(tzinfo=UTC)
+        assert timedelta(days=6) < exp - datetime.now(UTC) <= timedelta(days=7)
         assert token_status(row) == "active"
 
     def test_rejects_unsupported_days(self, db_session):
@@ -64,7 +64,7 @@ class TestStore:
 
     def test_old_expired_rows_are_cleaned_on_issue(self, db_session):
         old = McpToken(id="old", username="alice",
-                       expires_at=datetime.now(timezone.utc) - timedelta(days=60))
+                       expires_at=datetime.now(UTC) - timedelta(days=60))
         db_session.add(old)
         db_session.commit()
         issue_token(db_session, "alice", 30)
@@ -113,7 +113,7 @@ class TestStore:
 
     def test_status_expired(self, db_session):
         row = McpToken(id="e", username="alice",
-                       expires_at=datetime.now(timezone.utc) - timedelta(seconds=1))
+                       expires_at=datetime.now(UTC) - timedelta(seconds=1))
         assert token_status(row) == "expired"
 
 
@@ -147,8 +147,8 @@ class TestEndpoints:
         resp = client.post("/auth/mcp-token", json={"days": days}, headers=_session("alice"))
         assert resp.status_code == 200
         exp = datetime.fromisoformat(resp.json()["expires_at"])
-        exp = exp if exp.tzinfo else exp.replace(tzinfo=timezone.utc)
-        assert timedelta(days=days - 1) < exp - datetime.now(timezone.utc) <= timedelta(days=days)
+        exp = exp if exp.tzinfo else exp.replace(tzinfo=UTC)
+        assert timedelta(days=days - 1) < exp - datetime.now(UTC) <= timedelta(days=days)
 
     def test_issue_rejects_unsupported_days(self, client):
         resp = client.post("/auth/mcp-token", json={"days": 365}, headers=_session("alice"))

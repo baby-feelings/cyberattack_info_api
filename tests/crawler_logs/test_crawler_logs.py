@@ -2,7 +2,7 @@
 
 GET /api/crawler-logs エンドポイントおよび write_crawler_log ヘルパーを検証する。
 """
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 from app.crawler_logs.models import CrawlerLog
@@ -12,8 +12,8 @@ from tests.conftest import TEST_API_KEY
 HEADERS = {"X-API-KEY": TEST_API_KEY}
 
 # テスト用の固定日時
-_T0 = datetime(2026, 6, 15, 19, 0, 0, tzinfo=timezone.utc)
-_T1 = datetime(2026, 6, 15, 19, 1, 30, tzinfo=timezone.utc)  # 90 秒後
+_T0 = datetime(2026, 6, 15, 19, 0, 0, tzinfo=UTC)
+_T1 = datetime(2026, 6, 15, 19, 1, 30, tzinfo=UTC)  # 90 秒後
 
 
 def _make_log(db_session, **kwargs) -> CrawlerLog:
@@ -73,8 +73,8 @@ class TestListCrawlerLogs:
 
     def test_sorted_by_started_at_desc(self, client, db_session):
         """新しい順に返ること。"""
-        early = datetime(2026, 6, 14, 19, 0, 0, tzinfo=timezone.utc)
-        late  = datetime(2026, 6, 15, 19, 0, 0, tzinfo=timezone.utc)
+        early = datetime(2026, 6, 14, 19, 0, 0, tzinfo=UTC)
+        late  = datetime(2026, 6, 15, 19, 0, 0, tzinfo=UTC)
         _make_log(db_session, started_at=early, finished_at=early)
         _make_log(db_session, started_at=late,  finished_at=late)
         res = client.get("/api/crawler-logs", headers=HEADERS)
@@ -128,7 +128,7 @@ class TestListCrawlerLogs:
     def test_limit_parameter(self, client, db_session):
         """limit パラメータが機能すること。"""
         for i in range(5):
-            t = datetime(2026, 6, i + 10, 0, 0, 0, tzinfo=timezone.utc)
+            t = datetime(2026, 6, i + 10, 0, 0, 0, tzinfo=UTC)
             _make_log(db_session, started_at=t, finished_at=t)
         res = client.get("/api/crawler-logs?limit=3", headers=HEADERS)
         assert len(res.json()) == 3

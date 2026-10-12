@@ -5,7 +5,7 @@ OSV REST API (https://api.osv.dev/v1/) を使い、各エコシステムの主�
 APScheduler から毎日呼び出される。
 """
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -101,7 +101,7 @@ def _delete_old_osv_records(db: Session) -> int:
     Returns:
         削除件数
     """
-    cutoff = datetime.now(timezone.utc) - timedelta(days=settings.OSV_RETENTION_DAYS)
+    cutoff = datetime.now(UTC) - timedelta(days=settings.OSV_RETENTION_DAYS)
     deleted = (
         db.query(OsvVulnerability)
         .filter(OsvVulnerability.modified < cutoff)
@@ -267,7 +267,7 @@ def fetch_and_store_osv(days: int | None = None, *, force: bool = False) -> tupl
     """
     effective_days = days if days is not None else settings.OSV_DAYS
     logger.info("=== OSV crawler started (API mode, days=%d) ===", effective_days)
-    cutoff = datetime.now(timezone.utc) - timedelta(days=effective_days)
+    cutoff = datetime.now(UTC) - timedelta(days=effective_days)
 
     def _body(db: Session, counters: CrawlCounters) -> None:
         for ecosystem, packages in POPULAR_PACKAGES.items():

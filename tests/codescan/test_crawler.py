@@ -7,7 +7,7 @@ import io
 import os
 import subprocess
 import tarfile
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
@@ -31,7 +31,7 @@ from app.codescan.crawler import (  # noqa: E402
 from app.codescan.models import CodeFinding  # noqa: E402
 from app.core.crawler_runner import CrawlCounters  # noqa: E402
 
-_NOW = datetime.now(timezone.utc)
+_NOW = datetime.now(UTC)
 _RULE_ID = "python.lang.security.audit.hardcoded-password"
 
 _SAMPLE_SEMGREP_JSON = {

@@ -8,7 +8,7 @@
 import json
 import os
 from contextlib import asynccontextmanager
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import patch
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
@@ -38,7 +38,7 @@ from app.mcp_server.server import MAX_PER_PAGE, McpServer, _clean, _enforce_owne
 from app.osv.router import router as osv_router  # noqa: E402
 from tests.conftest import TestSessionLocal  # noqa: E402
 
-_NOW = datetime(2026, 10, 1, tzinfo=timezone.utc)
+_NOW = datetime(2026, 10, 1, tzinfo=UTC)
 _ADMIN = {"X-API-KEY": "test-api-key-for-pytest"}
 _PUBLIC_KEY = "public-key-for-mcp-test"
 _RPC_HEADERS = {"Accept": "application/json, text/event-stream"}
@@ -143,7 +143,7 @@ class TestAuthentication:
     def test_legacy_token_without_ledger_entry_is_rejected(self, mcp_client):
         # 署名は正しくても、台帳に無い（jti が未登録の）トークンは受け付けない
         token = create_mcp_token(
-            "alice", "not-in-ledger", datetime.now(timezone.utc) + timedelta(days=1),
+            "alice", "not-in-ledger", datetime.now(UTC) + timedelta(days=1),
         )
         headers = {"Authorization": f"Bearer {token}"}
         assert _rpc(mcp_client, "tools/list", headers=headers).status_code == 401
@@ -152,7 +152,7 @@ class TestAuthentication:
         # 他人の台帳IDを自分のユーザー名で署名しても通らない（所有者の一致を確認する）
         with TestSessionLocal() as db:
             _, row = issue_token(db, "bob", 30)
-        forged = create_mcp_token("alice", row.id, datetime.now(timezone.utc) + timedelta(days=1))
+        forged = create_mcp_token("alice", row.id, datetime.now(UTC) + timedelta(days=1))
         headers = {"Authorization": f"Bearer {forged}"}
         assert _rpc(mcp_client, "tools/list", headers=headers).status_code == 401
 
@@ -172,7 +172,7 @@ class TestAuthentication:
         app = FastAPI(lifespan=lifespan)
         server.mount(app)
         with TestClient(app) as c:
-            token = create_mcp_token("alice", "x", datetime.now(timezone.utc) + timedelta(days=1))
+            token = create_mcp_token("alice", "x", datetime.now(UTC) + timedelta(days=1))
             resp = _rpc(c, "tools/list", headers={"Authorization": f"Bearer {token}"})
             assert resp.status_code == 401
             # API キーによる認証は台帳に依存しないため影響を受けない

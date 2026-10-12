@@ -5,7 +5,7 @@ TestFileGithubIssues・TestCloseResolvedRepoIssues としてテストされて�
 モジュール分割に合わせて移動した（アサーション内容は変更していない）。
 """
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
@@ -20,7 +20,7 @@ from app.depscan.issue_management import (  # noqa: E402
 )
 from app.depscan.models import DependencyFinding  # noqa: E402
 
-_NOW = datetime.now(timezone.utc)
+_NOW = datetime.now(UTC)
 
 
 def _make_finding(db_session, **kwargs) -> DependencyFinding:

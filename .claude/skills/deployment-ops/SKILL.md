@@ -9,11 +9,11 @@ description: CI/CD（GitHub Actions）・OCI本番デプロイ手順・環境変
 PR 作成・main/develop へのプッシュで自動実行。3つのジョブが並列に動く。ほかに`gitleaks.yml`（PR/mainで
 シークレット検出）と`zap-scan.yml`（ZAP、手動+毎週月曜）が別ワークフローで動く（下記）。
 
-**`test`（バックエンド、Python 3.10 / 3.11 の matrix）**
+**`test`（バックエンド、Python 3.11 のみ。本番Dockerfile・`.python-version`と同じ。3.10は廃止）**
 1. `ruff check app/ tests/` — Linting（`S`=flake8-bandit相当を含む。testsは`S`除外）
 2. `mypy app/ --ignore-missing-imports` — 型チェック
 3. `pytest --cov=app --cov-fail-under=90` — テスト（カバレッジ 90% 未満で失敗）
-4. `htmlcov/` を Artifact として 30 日間保持（Python 3.11 のみ）
+4. `htmlcov/` を Artifact として 30 日間保持
 
 **`dashboard-test`（ダッシュボードのユニットテスト・ビルド）**
 `npm ci` → `npm run lint`（ESLint。警告数が`--max-warnings`を超えると失敗）→ `npm run test:coverage`（Vitest。statements/lines 90%・functions/branches 85%

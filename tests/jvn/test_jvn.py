@@ -2,7 +2,7 @@
 
 外部 MyJVN API への HTTP 通信はモックし、ロジックのみを検証する。
 """
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -14,7 +14,7 @@ from tests.conftest import TEST_API_KEY
 # ── テストデータ ───────────────────────────────────────────────────
 
 # days フィルタのデフォルト値以内に収まるよう実行時刻基準にする
-_NOW = datetime.now(timezone.utc)
+_NOW = datetime.now(UTC)
 
 
 def _make_jvn(
@@ -304,7 +304,7 @@ def test_upsert_jvn_update(db_session):
     db_session.add(_make_jvn(jvndb_id="JVNDB-2026-999002", title="旧タイトル"))
     db_session.commit()
 
-    new_modified = datetime(2026, 6, 19, 0, 0, 0, tzinfo=timezone.utc)
+    new_modified = datetime(2026, 6, 19, 0, 0, 0, tzinfo=UTC)
     entries = [
         {
             "jvndb_id": "JVNDB-2026-999002",
@@ -392,7 +392,7 @@ class TestDeleteOldJvnRecords:
         """保持期間（JVN_RETENTION_DAYS）を超えた古いレコードが削除されること。"""
         from app.jvn.crawler import _delete_old_jvn_records
 
-        old_dt = datetime(2000, 1, 1, tzinfo=timezone.utc)
+        old_dt = datetime(2000, 1, 1, tzinfo=UTC)
         db_session.add(_make_jvn(jvndb_id="JVNDB-2000-000001", date_last_modified=old_dt))
         db_session.commit()
 
@@ -772,7 +772,7 @@ def test_upsert_jvn_integrity_error_fallback(db_session):
     db_session.add(_make_jvn(jvndb_id="JVNDB-2026-999010"))
     db_session.commit()
 
-    new_modified = datetime(2026, 6, 19, 0, 0, 0, tzinfo=timezone.utc)
+    new_modified = datetime(2026, 6, 19, 0, 0, 0, tzinfo=UTC)
     entry = {
         "jvndb_id": "JVNDB-2026-999010",
         "title": "更新後タイトル",
@@ -874,7 +874,7 @@ class TestJvnVulnerabilityOutModelValidate:
 
         record = _make_jvn(
             jvndb_id="JVNDB-2026-999099",
-            fetched_at=datetime(2026, 9, 7, 9, 32, 44, tzinfo=timezone.utc),
+            fetched_at=datetime(2026, 9, 7, 9, 32, 44, tzinfo=UTC),
         )
         db_session.add(record)
         db_session.commit()

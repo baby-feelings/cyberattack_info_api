@@ -3,7 +3,7 @@
 GET /metrics の認証・record_crawler_run() によるGauge更新・
 write_crawler_log() からの呼び出し連携を検証する。
 """
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 from app.core.metrics import (
@@ -17,8 +17,8 @@ from app.core.metrics import (
 )
 from app.crawler_logs.writer import write_crawler_log
 
-_T0 = datetime(2026, 6, 15, 19, 0, 0, tzinfo=timezone.utc)
-_T1 = datetime(2026, 6, 15, 19, 1, 30, tzinfo=timezone.utc)  # 90 秒後
+_T0 = datetime(2026, 6, 15, 19, 0, 0, tzinfo=UTC)
+_T1 = datetime(2026, 6, 15, 19, 1, 30, tzinfo=UTC)  # 90 秒後
 
 
 class TestRecordCrawlerRun:

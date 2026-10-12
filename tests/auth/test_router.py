@@ -1,6 +1,6 @@
 """app.auth.router（GitHub ログイン API）のテスト。"""
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
@@ -12,7 +12,7 @@ from app.auth.account_store import get_account  # noqa: E402
 from app.auth.session import create_session_token  # noqa: E402
 from app.depscan.models import UserScan  # noqa: E402
 
-_NOW = datetime.now(timezone.utc)
+_NOW = datetime.now(UTC)
 
 
 class TestGithubLogin:

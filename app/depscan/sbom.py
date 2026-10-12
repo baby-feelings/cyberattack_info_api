@@ -9,7 +9,7 @@ SBOM/SCAツールとの相互運用性を高める。
 （スコープ外）。
 """
 import urllib.parse
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -114,7 +114,7 @@ def build_cyclonedx_sbom(
         "serialNumber": f"urn:uuid:{uuid4()}",
         "version": 1,
         "metadata": {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "component": {"type": "application", "name": repo_full_name},
         },
         "components": list(components.values()),
@@ -153,7 +153,7 @@ def build_spdx_sbom(
             }],
         })
 
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     return {
         "spdxVersion": "SPDX-2.3",
         "dataLicense": "CC0-1.0",

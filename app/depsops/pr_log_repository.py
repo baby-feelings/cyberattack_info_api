@@ -4,7 +4,7 @@
 （関心の分離）。履歴の記録・解消済み PR の検出と削除・肥大化対策の掃除をここに集約する。
 """
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -128,7 +128,7 @@ class PrLogRepository:
         Returns:
             削除件数
         """
-        cutoff = datetime.now(timezone.utc) - timedelta(days=settings.DEPSOPS_RETENTION_DAYS)
+        cutoff = datetime.now(UTC) - timedelta(days=settings.DEPSOPS_RETENTION_DAYS)
         deleted = (
             self._db.query(DependabotPrLog)
             .filter(DependabotPrLog.processed_at < cutoff)

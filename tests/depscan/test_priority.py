@@ -7,7 +7,7 @@ GET /api/depscan 経由の統合テスト（priority_reasons フィールド）�
 引き続き tests/depscan/test_depscan.py の TestListDepscanPriorityReasons に残す。
 """
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
 os.environ.setdefault("API_KEY", "test-api-key-for-pytest")
@@ -18,7 +18,7 @@ from app.depscan.priority import compute_priority_reasons, fetch_kev_map  # noqa
 from app.depscan.schemas import RepoAssetContextOut  # noqa: E402
 from app.kev.models import Vulnerability  # noqa: E402
 
-_NOW = datetime.now(timezone.utc)
+_NOW = datetime.now(UTC)
 
 
 def _make_finding(db_session, **kwargs) -> DependencyFinding:

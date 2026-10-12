@@ -3,6 +3,8 @@
 クラスのコンストラクタは FastAPI が `Query(...)` 既定値付きで呼ぶ想定のため、
 テストではすべての引数を明示して直接生成する。
 """
+from datetime import UTC
+
 import pytest
 from fastapi import HTTPException
 
@@ -60,8 +62,8 @@ class TestFeedListFilter:
         assert " or " in sql and "%log4j%" in sql
 
     def test_updated_since_filters_on_updated_at(self, db_session):
-        from datetime import datetime, timezone
-        flt = _jvn(updated_since=datetime(2026, 1, 2, tzinfo=timezone.utc))
+        from datetime import datetime
+        flt = _jvn(updated_since=datetime(2026, 1, 2, tzinfo=UTC))
         sql = _sql(flt.apply(db_session.query(flt.model)))
         assert "jvn_vulnerabilities.updated_at >=" in sql
 
@@ -77,10 +79,10 @@ class TestFeedListFilter:
 
 class TestKevListFilter:
     def test_applies_every_condition(self, db_session):
-        from datetime import datetime, timezone
+        from datetime import datetime
         flt = KevListFilter(
             search="micro", vendor="Microsoft", product="Exchange", min_epss=0.5,
-            updated_since=datetime(2026, 1, 2, tzinfo=timezone.utc),
+            updated_since=datetime(2026, 1, 2, tzinfo=UTC),
         )
         sql = _sql(flt.apply(db_session.query(Vulnerability)))
         assert "vulnerabilities.vendor_project = 'Microsoft'" in sql

@@ -3,7 +3,7 @@
 KEV向けの既存テストケース（tests/kev/test_taxii.py から移動）はそのまま残し、
 OSV/JVNコレクションのテストを追加する。
 """
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -40,7 +40,7 @@ def _make_osv_vuln(
     db: Session, osv_id: str = "GHSA-taxii-0001", ecosystem: str = "PyPI",
     package_name: str = "fastapi", **kwargs,
 ) -> OsvVulnerability:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     defaults = {
         "aliases": ["CVE-2026-12345"],
         "summary": "s",
@@ -64,7 +64,7 @@ def _make_osv_vuln(
 
 
 def _make_jvn_vuln(db: Session, jvndb_id: str = "JVNDB-2026-000001", **kwargs) -> JvnVulnerability:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     defaults = {
         "title": "t",
         "overview": "o",
@@ -189,11 +189,11 @@ class TestListObjectsKev:
     def test_filters_by_added_after(self, client: TestClient, db_session: Session, monkeypatch):
         monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
         old = _make_kev_vuln(db_session, cve_id="CVE-2026-20001")
-        old.updated_at = datetime.now(timezone.utc) - timedelta(days=10)
+        old.updated_at = datetime.now(UTC) - timedelta(days=10)
         db_session.commit()
         _make_kev_vuln(db_session, cve_id="CVE-2026-20002")
 
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+        cutoff = (datetime.now(UTC) - timedelta(days=1)).isoformat()
         res = client.get(
             f"/taxii2/{_API_ROOT}/collections/{_KEV_COLLECTION_ID}/objects/",
             params={"added_after": cutoff},
@@ -260,11 +260,11 @@ class TestListObjectsOsv:
     def test_filters_by_added_after(self, client: TestClient, db_session: Session, monkeypatch):
         monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
         old = _make_osv_vuln(db_session, osv_id="GHSA-old", package_name="pkg-old")
-        old.updated_at = datetime.now(timezone.utc) - timedelta(days=10)
+        old.updated_at = datetime.now(UTC) - timedelta(days=10)
         db_session.commit()
         _make_osv_vuln(db_session, osv_id="GHSA-new", package_name="pkg-new")
 
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+        cutoff = (datetime.now(UTC) - timedelta(days=1)).isoformat()
         res = client.get(
             f"/taxii2/{_API_ROOT}/collections/{_OSV_COLLECTION_ID}/objects/",
             params={"added_after": cutoff},
@@ -320,11 +320,11 @@ class TestListObjectsJvn:
     def test_filters_by_added_after(self, client: TestClient, db_session: Session, monkeypatch):
         monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
         old = _make_jvn_vuln(db_session, jvndb_id="JVNDB-2026-200001")
-        old.updated_at = datetime.now(timezone.utc) - timedelta(days=10)
+        old.updated_at = datetime.now(UTC) - timedelta(days=10)
         db_session.commit()
         _make_jvn_vuln(db_session, jvndb_id="JVNDB-2026-200002")
 
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+        cutoff = (datetime.now(UTC) - timedelta(days=1)).isoformat()
         res = client.get(
             f"/taxii2/{_API_ROOT}/collections/{_JVN_COLLECTION_ID}/objects/",
             params={"added_after": cutoff},

@@ -8,7 +8,7 @@
 **既存のオブジェクトID生成結果は一切変わらない**（値は移動前と同一）。
 """
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 # STIXオブジェクトIDを安定させるための名前空間UUID（uuid5用、DNS名前空間の
 # 標準UUID）。同じ自然キー（CVE ID等）に対して常に同じIDを生成することで、
@@ -25,5 +25,5 @@ def stix_timestamp(dt: datetime) -> str:
     元は app.kev.stix._stix_timestamp として定義されていたロジックをそのまま
     移動した（振る舞いは変更しない）。
     """
-    dt_utc = dt.astimezone(timezone.utc)
+    dt_utc = dt.astimezone(UTC)
     return dt_utc.strftime("%Y-%m-%dT%H:%M:%S.") + f"{dt_utc.microsecond // 1000:03d}Z"

@@ -1,5 +1,5 @@
 """app.core.repo_cleanup（削除済みリポジトリのデータ削除、Issue #228）のテスト。"""
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 from app.codescan.models import CodeFinding
@@ -8,7 +8,7 @@ from app.crawler_logs.models import CrawlerLog
 from app.depscan.models import DependencyFinding
 from app.depsops.models import DependabotPrLog
 
-_NOW = datetime.now(timezone.utc)
+_NOW = datetime.now(UTC)
 
 
 def _make_dependency_finding(db_session, **kwargs):

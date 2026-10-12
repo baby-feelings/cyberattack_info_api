@@ -1,11 +1,11 @@
 """app.codescan.user_scan.run_codescan_for_user（Issue #227）のテスト。"""
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 from app.codescan.models import CodeFinding
 from app.codescan.user_scan import run_codescan_for_user
 
-_NOW = datetime.now(timezone.utc)
+_NOW = datetime.now(UTC)
 
 
 def _finding(**kwargs):

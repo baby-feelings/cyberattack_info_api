@@ -5,7 +5,7 @@ app.depsops.runner・app.core.notifications.notify_dependabot_ops のテスト�
 外部HTTP通信（GitHub API）は全てモックする。
 """
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
@@ -431,11 +431,11 @@ class TestRunDependabotOpsDeduplication:
     def test_skips_when_already_succeeded_today(self, db_session):
         db_session.add(DependabotPrLog(
             repo_full_name="u/r", pr_number=1, title="t", action="merged",
-            processed_at=datetime.now(timezone.utc),
+            processed_at=datetime.now(UTC),
         ))
         db_session.add(CrawlerLog(
             crawler_type="DEPSOPS", status="success",
-            started_at=datetime.now(timezone.utc), finished_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC), finished_at=datetime.now(UTC),
             duration_seconds=1.0,
         ))
         db_session.commit()
@@ -449,7 +449,7 @@ class TestRunDependabotOpsDeduplication:
     def test_force_bypasses_the_skip(self, db_session):
         db_session.add(CrawlerLog(
             crawler_type="DEPSOPS", status="success",
-            started_at=datetime.now(timezone.utc), finished_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC), finished_at=datetime.now(UTC),
             duration_seconds=1.0,
         ))
         db_session.commit()
@@ -580,7 +580,7 @@ class TestRunDependabotOps:
         db_session.add(DependabotPrLog(
             repo_full_name="u/r1", pr_number=99, title="bump old from 1.0.0 to 1.0.1",
             action="flagged", reason="CI未設定のリポジトリ",
-            processed_at=datetime.now(timezone.utc) - timedelta(days=1),
+            processed_at=datetime.now(UTC) - timedelta(days=1),
         ))
         db_session.commit()
 
@@ -597,7 +597,7 @@ class TestRunDependabotOps:
         db_session.add(DependabotPrLog(
             repo_full_name="u/r1", pr_number=1, title="Bump x from 1.0.0 to 2.0.0",
             action="flagged", reason="メジャーバージョンアップ",
-            processed_at=datetime.now(timezone.utc) - timedelta(days=1),
+            processed_at=datetime.now(UTC) - timedelta(days=1),
         ))
         db_session.commit()
 
@@ -624,7 +624,7 @@ class TestRecordPrLogs:
         flagged = [
             {"repo_full_name": "u/r", "pr_number": 2, "title": "bump y", "reason": "メジャー"},
         ]
-        processed_at = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        processed_at = datetime(2026, 6, 1, tzinfo=UTC)
 
         PrLogRepository(db_session).record(merged, flagged, processed_at)
 
@@ -642,7 +642,7 @@ class TestRecordPrLogs:
             "repo_full_name": "u/r", "pr_number": 2, "title": "bump y", "reason": "メジャー",
             "is_security_update": False,
         }]
-        processed_at = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        processed_at = datetime(2026, 6, 1, tzinfo=UTC)
 
         PrLogRepository(db_session).record(merged, flagged, processed_at)
 
@@ -653,7 +653,7 @@ class TestRecordPrLogs:
     def test_missing_is_security_update_key_defaults_to_none(self, db_session):
         """alert取得自体に失敗したケース: キーが無くても例外にならずNoneになる。"""
         merged = [{"repo_full_name": "u/r", "pr_number": 1, "title": "bump x"}]
-        processed_at = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        processed_at = datetime(2026, 6, 1, tzinfo=UTC)
 
         PrLogRepository(db_session).record(merged, [], processed_at)
 
@@ -665,7 +665,7 @@ class TestRecordPrLogs:
             "repo_full_name": "u/r", "pr_number": 1, "title": "bump x",
             "compatibility_badge_url": "https://dependabot-badges.githubapp.com/badges/x",
         }]
-        processed_at = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        processed_at = datetime(2026, 6, 1, tzinfo=UTC)
 
         PrLogRepository(db_session).record(merged, [], processed_at)
 
@@ -675,7 +675,7 @@ class TestRecordPrLogs:
     def test_resolved_prs_have_all_rows_deleted_but_merged_rows_are_kept(self, db_session):
         """resolved（DEPSOPS外の要因で解消済みと判定したPR）は全行が削除され、
         他PRの"merged"（自動マージの記録）は残ること。"""
-        old = datetime(2026, 5, 31, tzinfo=timezone.utc)
+        old = datetime(2026, 5, 31, tzinfo=UTC)
         for n in (3, 3, 4):
             db_session.add(DependabotPrLog(
                 repo_full_name="u/r", pr_number=n, title="bump", action="flagged",
@@ -689,7 +689,7 @@ class TestRecordPrLogs:
         resolved = [{"repo_full_name": "u/r", "pr_number": 3, "title": "bump z"}]
 
         PrLogRepository(db_session).record(
-            [], [], datetime(2026, 6, 1, tzinfo=timezone.utc), resolved=resolved,
+            [], [], datetime(2026, 6, 1, tzinfo=UTC), resolved=resolved,
         )
 
         assert db_session.query(DependabotPrLog).filter_by(pr_number=3).count() == 0
@@ -703,26 +703,26 @@ class TestRecordPrLogs:
             "repo_full_name": "u/r", "pr_number": 2, "title": "bump y", "reason": "メジャー",
             "is_security_update": False,
         }]
-        day1 = datetime(2026, 6, 1, tzinfo=timezone.utc)
-        day2 = datetime(2026, 6, 2, tzinfo=timezone.utc)
+        day1 = datetime(2026, 6, 1, tzinfo=UTC)
+        day2 = datetime(2026, 6, 2, tzinfo=UTC)
 
         PrLogRepository(db_session).record([], flagged, day1)
         PrLogRepository(db_session).record([], flagged, day2)
 
         rows = db_session.query(DependabotPrLog).filter_by(pr_number=2).all()
         assert len(rows) == 1
-        assert rows[0].processed_at.replace(tzinfo=timezone.utc) == day2
+        assert rows[0].processed_at.replace(tzinfo=UTC) == day2
 
     def test_flagged_pr_with_changed_reason_appends_new_row(self, db_session):
         """理由が変わった場合は状態変化の履歴として新しい行が追記されること。"""
         base = {"repo_full_name": "u/r", "pr_number": 2, "title": "bump y"}
         PrLogRepository(db_session).record(
             [], [{**base, "reason": "CI未設定"}],
-            datetime(2026, 6, 1, tzinfo=timezone.utc),
+            datetime(2026, 6, 1, tzinfo=UTC),
         )
         PrLogRepository(db_session).record(
             [], [{**base, "reason": "メジャーバージョンアップ"}],
-            datetime(2026, 6, 2, tzinfo=timezone.utc),
+            datetime(2026, 6, 2, tzinfo=UTC),
         )
 
         rows = db_session.query(DependabotPrLog).filter_by(pr_number=2).order_by(
@@ -733,10 +733,10 @@ class TestRecordPrLogs:
     def test_flagged_after_merged_is_appended_not_merged_into_old_row(self, db_session):
         """直近の行が"merged"のPRが再度flaggedになった場合は新しい行として追記されること。"""
         base = {"repo_full_name": "u/r", "pr_number": 2, "title": "bump y"}
-        PrLogRepository(db_session).record([base], [], datetime(2026, 6, 1, tzinfo=timezone.utc))
+        PrLogRepository(db_session).record([base], [], datetime(2026, 6, 1, tzinfo=UTC))
         PrLogRepository(db_session).record(
             [], [{**base, "reason": "CI失敗"}],
-            datetime(2026, 6, 2, tzinfo=timezone.utc),
+            datetime(2026, 6, 2, tzinfo=UTC),
         )
 
         actions = [
@@ -752,7 +752,7 @@ class TestCleanupPrLogs:
         db.add(DependabotPrLog(
             repo_full_name=repo, pr_number=n, title="bump", action=action,
             reason=reason if action != "merged" else None, is_security_update=security,
-            processed_at=datetime(2026, 9, day, tzinfo=timezone.utc),
+            processed_at=datetime(2026, 9, day, tzinfo=UTC),
         ))
 
     def test_purge_legacy_closed_deletes_all_rows_of_closed_prs_only(self, db_session):
@@ -791,7 +791,7 @@ class TestCleanupPrLogs:
         assert deleted == 3
         rows = db_session.query(DependabotPrLog).filter_by(pr_number=1).all()
         assert len(rows) == 1
-        assert rows[0].processed_at.replace(tzinfo=timezone.utc).day == 4
+        assert rows[0].processed_at.replace(tzinfo=UTC).day == 4
         assert db_session.query(DependabotPrLog).filter_by(pr_number=2).count() == 1
 
     def test_collapse_preserves_history_when_reason_changes_in_between(self, db_session):
@@ -804,7 +804,7 @@ class TestCleanupPrLogs:
 
         assert PrLogRepository(db_session).collapse_duplicate_flagged() == 2
         days = sorted(
-            r.processed_at.replace(tzinfo=timezone.utc).day
+            r.processed_at.replace(tzinfo=UTC).day
             for r in db_session.query(DependabotPrLog).all()
         )
         assert days == [2, 4]
@@ -846,7 +846,7 @@ class TestFindResolvedFlaggedPrs:
         db_session.add(DependabotPrLog(
             repo_full_name="u/r1", pr_number=5, title="bump z from 1.0.0 to 2.0.0",
             action="flagged", reason="CI未設定のリポジトリ",
-            processed_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+            processed_at=datetime(2026, 6, 1, tzinfo=UTC),
         ))
         db_session.commit()
 
@@ -859,7 +859,7 @@ class TestFindResolvedFlaggedPrs:
     def test_ignores_pr_still_open(self, db_session):
         db_session.add(DependabotPrLog(
             repo_full_name="u/r1", pr_number=5, title="bump z",
-            action="flagged", processed_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+            action="flagged", processed_at=datetime(2026, 6, 1, tzinfo=UTC),
         ))
         db_session.commit()
 
@@ -870,7 +870,7 @@ class TestFindResolvedFlaggedPrs:
     def test_ignores_already_merged_pr(self, db_session):
         db_session.add(DependabotPrLog(
             repo_full_name="u/r1", pr_number=5, title="bump z",
-            action="merged", processed_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+            action="merged", processed_at=datetime(2026, 6, 1, tzinfo=UTC),
         ))
         db_session.commit()
 
@@ -883,11 +883,11 @@ class TestFindResolvedFlaggedPrs:
         db_session.add_all([
             DependabotPrLog(
                 repo_full_name="u/r1", pr_number=5, title="bump z",
-                action="flagged", processed_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+                action="flagged", processed_at=datetime(2026, 6, 1, tzinfo=UTC),
             ),
             DependabotPrLog(
                 repo_full_name="u/r1", pr_number=5, title="bump z",
-                action="merged", processed_at=datetime(2026, 6, 2, tzinfo=timezone.utc),
+                action="merged", processed_at=datetime(2026, 6, 2, tzinfo=UTC),
             ),
         ])
         db_session.commit()
@@ -899,7 +899,7 @@ class TestFindResolvedFlaggedPrs:
     def test_ignores_other_repos(self, db_session):
         db_session.add(DependabotPrLog(
             repo_full_name="u/other", pr_number=5, title="bump z",
-            action="flagged", processed_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+            action="flagged", processed_at=datetime(2026, 6, 1, tzinfo=UTC),
         ))
         db_session.commit()
 
@@ -912,11 +912,11 @@ class TestDeleteOldDepsopsRecords:
     def test_deletes_only_records_older_than_retention_period(self, db_session):
         old = DependabotPrLog(
             repo_full_name="u/r", pr_number=1, title="old", action="merged",
-            processed_at=datetime.now(timezone.utc) - timedelta(days=200),
+            processed_at=datetime.now(UTC) - timedelta(days=200),
         )
         recent = DependabotPrLog(
             repo_full_name="u/r", pr_number=2, title="recent", action="merged",
-            processed_at=datetime.now(timezone.utc) - timedelta(days=1),
+            processed_at=datetime.now(UTC) - timedelta(days=1),
         )
         db_session.add_all([old, recent])
         db_session.commit()
@@ -942,11 +942,11 @@ class TestListDepsops:
         db_session.add_all([
             DependabotPrLog(
                 repo_full_name="u/r1", pr_number=1, title="bump a", action="merged",
-                processed_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+                processed_at=datetime(2026, 6, 1, tzinfo=UTC),
             ),
             DependabotPrLog(
                 repo_full_name="u/r2", pr_number=2, title="bump b", action="flagged",
-                reason="メジャー", processed_at=datetime(2026, 6, 2, tzinfo=timezone.utc),
+                reason="メジャー", processed_at=datetime(2026, 6, 2, tzinfo=UTC),
             ),
         ])
         db_session.commit()
@@ -963,11 +963,11 @@ class TestListDepsops:
         db_session.add_all([
             DependabotPrLog(
                 repo_full_name="u/r1", pr_number=1, title="bump a", action="merged",
-                processed_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+                processed_at=datetime(2026, 6, 1, tzinfo=UTC),
             ),
             DependabotPrLog(
                 repo_full_name="u/r1", pr_number=2, title="bump b", action="flagged",
-                reason="メジャー", processed_at=datetime(2026, 6, 2, tzinfo=timezone.utc),
+                reason="メジャー", processed_at=datetime(2026, 6, 2, tzinfo=UTC),
             ),
         ])
         db_session.commit()
@@ -983,11 +983,11 @@ class TestListDepsops:
         db_session.add_all([
             DependabotPrLog(
                 repo_full_name="u/r1", pr_number=1, title="bump a", action="merged",
-                processed_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+                processed_at=datetime(2026, 6, 1, tzinfo=UTC),
             ),
             DependabotPrLog(
                 repo_full_name="u/r2", pr_number=1, title="bump a", action="merged",
-                processed_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+                processed_at=datetime(2026, 6, 1, tzinfo=UTC),
             ),
         ])
         db_session.commit()
@@ -1016,21 +1016,21 @@ class TestDepsopsStats:
             # u/r1#1: 古い判定はflagged、最新はmerged → 未解決に数えない
             DependabotPrLog(
                 repo_full_name="u/r1", pr_number=1, title="bump a", action="flagged",
-                reason="メジャー", processed_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+                reason="メジャー", processed_at=datetime(2026, 6, 1, tzinfo=UTC),
             ),
             DependabotPrLog(
                 repo_full_name="u/r1", pr_number=1, title="bump a", action="merged",
-                processed_at=datetime(2026, 6, 2, tzinfo=timezone.utc),
+                processed_at=datetime(2026, 6, 2, tzinfo=UTC),
             ),
             # u/r1#2: 最新がflagged → 未解決として数える
             DependabotPrLog(
                 repo_full_name="u/r1", pr_number=2, title="bump b", action="flagged",
-                reason="メジャー", processed_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+                reason="メジャー", processed_at=datetime(2026, 6, 1, tzinfo=UTC),
             ),
             # u/r2#1: 最新がflagged → 別リポジトリとして数える
             DependabotPrLog(
                 repo_full_name="u/r2", pr_number=1, title="bump c", action="flagged",
-                reason="メジャー", processed_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+                reason="メジャー", processed_at=datetime(2026, 6, 1, tzinfo=UTC),
             ),
         ])
         db_session.commit()
