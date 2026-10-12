@@ -10,8 +10,8 @@ AI エージェントの MCP 設定に貼り付けて使う。トークンは発
   指定しない `decode` で拒否するため、`decode_session_token` が受け付けない）
 - セッショントークンは MCP トークンとして使えない（`aud` が無いので `verify` が拒否する）
 
-JWT は `jti`（トークンID）を持ち、発行時に台帳（`app.auth.models.McpToken`）へ記録する。
-個別の失効・一覧・最終使用日時は台帳側で管理する（`app.auth.mcp_token_store`）。この
+JWT は `jti`（トークンID）を持ち、発行時に台帳（`app.mcp_server.models.McpToken`）へ記録する。
+個別の失効・一覧・最終使用日時は台帳側で管理する（`app.mcp_server.mcp_token_store`）。この
 モジュールは署名・期限・用途・必須クレームの検証だけを担い、失効の確認は呼び出し側が行う。
 """
 import logging

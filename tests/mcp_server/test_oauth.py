@@ -16,8 +16,8 @@ from fastapi.testclient import TestClient  # noqa: E402
 from mcp.server.auth.provider import RefreshToken, RegistrationError  # noqa: E402
 from mcp.shared.auth import OAuthClientInformationFull  # noqa: E402
 
-from app.auth.models import OAuthClient  # noqa: E402
 from app.mcp_server import oauth_clients, oauth_routes  # noqa: E402
+from app.mcp_server.models import OAuthClient  # noqa: E402
 from app.mcp_server.oauth_provider import McpOAuthProvider  # noqa: E402
 from app.mcp_server.oauth_routes import mount_oauth_routes  # noqa: E402
 from tests.conftest import TestSessionLocal  # noqa: E402

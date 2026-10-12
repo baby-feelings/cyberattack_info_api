@@ -19,11 +19,11 @@ os.environ.setdefault("SESSION_SECRET_KEY", "test-session-secret-key-for-pytest"
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app.auth.mcp_token import verify_mcp_token  # noqa: E402
-from app.auth.mcp_token_expiry import find_expiring_tokens  # noqa: E402
-from app.auth.mcp_token_store import is_usable, issue_token, list_tokens  # noqa: E402
-from app.auth.models import McpToken, OAuthAuthorization  # noqa: E402
 from app.mcp_server import oauth_flow  # noqa: E402
+from app.mcp_server.mcp_token import verify_mcp_token  # noqa: E402
+from app.mcp_server.mcp_token_expiry import find_expiring_tokens  # noqa: E402
+from app.mcp_server.mcp_token_store import is_usable, issue_token, list_tokens  # noqa: E402
+from app.mcp_server.models import McpToken, OAuthAuthorization  # noqa: E402
 from tests.mcp_server.conftest import ISSUER  # noqa: E402
 
 REDIRECT = "http://localhost:33418/callback"
@@ -406,7 +406,7 @@ class TestLedgerIntegration:
         assert find_expiring_tokens(db_session) == {}
 
     def test_oauth_token_can_be_revoked_individually(self, http, db_session):
-        from app.auth.mcp_token_store import revoke_token
+        from app.mcp_server.mcp_token_store import revoke_token
         client_id, code, verifier = _full_flow(http, login="alice")
         token = _token_request(http, client_id, code, verifier).json()["access_token"]
         claims = verify_mcp_token(token)

@@ -23,11 +23,12 @@ import threading
 import time
 from typing import Annotated
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.auth import external_login
 from app.auth.account_store import upsert_user_token
 from app.auth.github_oauth import (
     CALLBACK_PATH,
@@ -39,8 +40,6 @@ from app.auth.session import create_session_token, decode_session_token
 from app.core.config import settings
 from app.core.database import get_db
 from app.depscan.user_scan import run_depscan_for_user, should_rescan_for_user
-from app.mcp_server.oauth_consent import complete_github_login
-from app.mcp_server.oauth_flow import decode_state as decode_mcp_oauth_state
 
 logger = logging.getLogger(__name__)
 
@@ -106,23 +105,23 @@ def github_login() -> RedirectResponse:
 
 @router.get("/github/callback", summary="GitHub OAuth コールバック（内部利用）")
 def github_callback(
+    request: Request,
     db: Annotated[Session, Depends(get_db)],
     code: str = Query(...),
     state: str = Query(...),
     gh_oauth_state: str | None = Cookie(None),
-    # MCP の OAuth で同意画面を開いたブラウザの識別 Cookie（名前は oauth_consent.BROWSER_COOKIE）
-    mcp_oauth_consent: str | None = Cookie(None),
 ) -> Response:
     if not settings.GITHUB_OAUTH_CLIENT_ID or not settings.GITHUB_OAUTH_CLIENT_SECRET:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="GitHub OAuth is not configured.",
         )
-    # MCP サーバーの OAuth 2.1 ログイン（署名付き state）は、Cookie を使わず別処理へ
-    # （ダッシュボードのログイン用 state はランダム文字列のため、ここでは None になる）
-    mcp_request_id = decode_mcp_oauth_state(state)
-    if mcp_request_id is not None:
-        return complete_github_login(db, mcp_request_id, code, mcp_oauth_consent)
+    # 別の機能（MCP サーバーの OAuth 2.1 ログイン等）が登録した流れの state なら、その流れへ任せる
+    # （ダッシュボードのログイン用 state はランダム文字列のため、どの流れにも一致しない）
+    external = external_login.find(state)
+    if external is not None:
+        flow, identifier = external
+        return flow.complete(db, identifier, code, request)
 
     if not gh_oauth_state or not secrets.compare_digest(gh_oauth_state, state):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OAuth state.")

@@ -22,8 +22,6 @@ from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from mcp.server.fastmcp.exceptions import ToolError  # noqa: E402
 
-from app.auth.mcp_token import create_mcp_token  # noqa: E402
-from app.auth.mcp_token_store import issue_token, revoke_token  # noqa: E402
 from app.auth.session import create_session_token  # noqa: E402
 from app.codescan.models import CodeFinding  # noqa: E402
 from app.codescan.router import router as codescan_router  # noqa: E402
@@ -34,6 +32,8 @@ from app.jvn.router import router as jvn_router  # noqa: E402
 from app.kev.models import Vulnerability  # noqa: E402
 from app.kev.router import router as kev_router  # noqa: E402
 from app.mcp_server.auth import Principal  # noqa: E402
+from app.mcp_server.mcp_token import create_mcp_token  # noqa: E402
+from app.mcp_server.mcp_token_store import issue_token, revoke_token  # noqa: E402
 from app.mcp_server.server import MAX_PER_PAGE, McpServer, _clean, _enforce_owner  # noqa: E402
 from app.osv.router import router as osv_router  # noqa: E402
 from tests.conftest import TestSessionLocal  # noqa: E402

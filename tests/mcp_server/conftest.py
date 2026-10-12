@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from app.auth.router import router as auth_router
 from app.core.database import get_db
 from app.mcp_server import oauth_routes
+from app.mcp_server.management_router import router as mcp_management_router
 from tests.conftest import TestSessionLocal
 
 ISSUER = "https://api.example.test"
@@ -36,6 +37,7 @@ def http(db_session):
         with patch.object(oauth_routes.settings, "API_BASE_URL_FOR_OAUTH", ISSUER):
             assert oauth_routes.mount_oauth_routes(app, issuer=ISSUER)
         app.include_router(auth_router)
+        app.include_router(mcp_management_router)
         yield TestClient(app, base_url=ISSUER, follow_redirects=False)
     finally:
         oauth_routes.SessionLocal = original

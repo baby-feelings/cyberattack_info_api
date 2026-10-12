@@ -17,7 +17,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_username
-from app.auth.mcp_token_store import (
+from app.core.database import get_db
+from app.mcp_server.mcp_token_store import (
     DEFAULT_DAYS,
     MAX_ACTIVE_TOKENS,
     TooManyTokensError,
@@ -26,13 +27,12 @@ from app.auth.mcp_token_store import (
     revoke_token,
     token_status,
 )
-from app.auth.models import McpToken
-from app.core.database import get_db
+from app.mcp_server.models import McpToken
 from app.mcp_server.oauth_connections import disconnect, list_connections
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 class IssueMcpTokenRequest(BaseModel):

@@ -12,10 +12,10 @@ os.environ.setdefault("ENVIRONMENT", "development")
 os.environ.setdefault("GITHUB_USERNAME", "test-github-user")
 os.environ.setdefault("SESSION_SECRET_KEY", "test-session-secret-key-for-pytest")
 
-from app.auth.mcp_token import verify_mcp_token  # noqa: E402
-from app.auth.mcp_token_store import is_usable, issue_token  # noqa: E402
-from app.auth.models import OAuthRefreshToken  # noqa: E402
 from app.auth.session import create_session_token  # noqa: E402
+from app.mcp_server.mcp_token import verify_mcp_token  # noqa: E402
+from app.mcp_server.mcp_token_store import is_usable, issue_token  # noqa: E402
+from app.mcp_server.models import OAuthRefreshToken  # noqa: E402
 from tests.mcp_server.test_oauth_flow import (  # noqa: E402
     _full_flow,
     _register,

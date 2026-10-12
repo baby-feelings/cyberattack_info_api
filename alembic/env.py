@@ -15,6 +15,7 @@ from app.depscan import models as _depscan_models  # noqa: F401
 from app.depsops import models as _depsops_models  # noqa: F401
 from app.jvn import models as _jvn_models  # noqa: F401
 from app.kev import models as _kev_models  # noqa: F401
+from app.mcp_server import models as _mcp_models  # noqa: F401
 from app.osv import models as _osv_models  # noqa: F401
 
 # this is the Alembic Config object, which provides

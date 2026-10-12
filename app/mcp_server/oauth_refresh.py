@@ -16,8 +16,8 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import delete, update
 from sqlalchemy.orm import Session
 
-from app.auth.mcp_token_store import as_utc
-from app.auth.models import OAuthRefreshToken
+from app.mcp_server.mcp_token_store import as_utc
+from app.mcp_server.models import OAuthRefreshToken
 
 # リフレッシュトークンの有効期間（交換のたびに延びる）
 REFRESH_TTL = timedelta(days=30)

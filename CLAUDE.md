@@ -74,8 +74,8 @@ pip-audit -r requirements.txt --desc                   # 依存脆弱性確認�
 ```
 app/
 ├── main.py       # FastAPI アプリ・lifespan・ルーター include（定期ジョブは core/scheduler_jobs）
-├── auth/         # GitHubログイン・ユーザー別Slack通知登録（UserAccount/account_store。router.pyは
-│                 #   github_router/mcp_router/account_routerを束ね、認証の依存関数はdependencies.py）
+├── auth/         # GitHubログイン・ユーザーアカウント（UserAccount/account_store。router.pyは
+│                 #   github_router/account_routerを束ね、認証の依存関数はdependencies.py。mcp_serverを知らない）
 ├── core/         # 横断的インフラ: config/database/auth/background/crawler_runner/crypto/
 │                 #   db_utils/notifications/osv_client/registry_client/pagination/repo_cleanup/
 │                 #   user_crawl_runner/stix/taxii/schemas/github_http（GitHub API認証・
@@ -92,7 +92,8 @@ app/
 │                 #   必須〈DEPSCANとセッション共有〉。+github_client/issue_management/cvss_mapping。
 │                 #   CVSS計算式自体はapp.core.cvss）
 ├── mcp_server/   # AIエージェント向けリモートMCPサーバー（/mcp、Streamable HTTP。ツール=server.py・
-│                 #   認証=auth.py。DEPSCAN/CODESCANは本人所有リポジトリのみ。docs/mcp-server.md）
+│                 #   認証=auth.py。MCPトークンの台帳/JWT・OAuth 2.1・管理API（management_router）・
+│                 #   モデル（models）もここ。DEPSCAN/CODESCANは本人所有のみ。docs/mcp-server.md）
 ├── zapscan/      # OWASP ZAP（API Scan）の結果→GitHub Issue起票（`python -m app.zapscan`）。
 │                 #   スキャン自体は deploy/zap/（使い捨てAPIコンテナ向け。詳細は docs/zap-scan.md）
 └── crawler_logs/ # クローラー実行ログ

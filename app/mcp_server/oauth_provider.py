@@ -25,10 +25,10 @@ from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
-from app.auth.mcp_token import verify_mcp_token
-from app.auth.mcp_token_store import as_utc, issue_oauth_token, revoke_oauth_tokens
-from app.auth.models import McpToken
 from app.mcp_server import oauth_clients, oauth_flow, oauth_refresh
+from app.mcp_server.mcp_token import verify_mcp_token
+from app.mcp_server.mcp_token_store import as_utc, issue_oauth_token, revoke_oauth_tokens
+from app.mcp_server.models import McpToken
 
 logger = logging.getLogger(__name__)
 

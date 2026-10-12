@@ -17,10 +17,10 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy.orm import Session
 
 from app.auth.account_store import get_webhook_for_user
-from app.auth.mcp_token_store import as_utc
-from app.auth.models import McpToken
 from app.core.database import SessionLocal
 from app.core.notifications import notify_mcp_token_expiry
+from app.mcp_server.mcp_token_store import as_utc
+from app.mcp_server.models import McpToken
 
 logger = logging.getLogger(__name__)
 

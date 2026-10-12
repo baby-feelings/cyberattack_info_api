@@ -1,4 +1,4 @@
-"""app.auth.mcp_token_store（台帳）と /auth/mcp-token(s) エンドポイントのテスト。"""
+"""app.mcp_server.mcp_token_store（台帳）と /auth/mcp-token(s) エンドポイントのテスト。"""
 import os
 from datetime import UTC, datetime, timedelta
 
@@ -10,8 +10,9 @@ os.environ.setdefault("SESSION_SECRET_KEY", "test-session-secret-key-for-pytest"
 
 import pytest  # noqa: E402
 
-from app.auth.mcp_token import McpClaims, verify_mcp_token  # noqa: E402
-from app.auth.mcp_token_store import (  # noqa: E402
+from app.auth.session import create_session_token  # noqa: E402
+from app.mcp_server.mcp_token import McpClaims, verify_mcp_token  # noqa: E402
+from app.mcp_server.mcp_token_store import (  # noqa: E402
     MAX_ACTIVE_TOKENS,
     TooManyTokensError,
     is_usable,
@@ -20,8 +21,7 @@ from app.auth.mcp_token_store import (  # noqa: E402
     revoke_token,
     token_status,
 )
-from app.auth.models import McpToken  # noqa: E402
-from app.auth.session import create_session_token  # noqa: E402
+from app.mcp_server.models import McpToken  # noqa: E402
 
 
 @pytest.fixture(autouse=True)

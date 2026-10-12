@@ -15,7 +15,7 @@ from mcp.shared.auth import OAuthClientInformationFull
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from app.auth.models import OAuthClient
+from app.mcp_server.models import OAuthClient
 
 # 1 時間あたりの登録数の上限（全体。登録元 IP は SDK のハンドラーから見えないため全体で絞る）
 MAX_REGISTRATIONS_PER_HOUR = 60

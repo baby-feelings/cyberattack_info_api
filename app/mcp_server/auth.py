@@ -23,9 +23,9 @@ from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import Headers
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from app.auth.mcp_token import McpClaims, verify_mcp_token
-from app.auth.mcp_token_store import is_usable
 from app.core.config import settings
+from app.mcp_server.mcp_token import McpClaims, verify_mcp_token
+from app.mcp_server.mcp_token_store import is_usable
 
 logger = logging.getLogger(__name__)
 

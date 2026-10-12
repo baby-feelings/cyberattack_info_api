@@ -1,4 +1,4 @@
-"""app.auth.mcp_token_expiry（期限が近い MCP トークンの Slack 通知）のテスト。"""
+"""app.mcp_server.mcp_token_expiry（期限が近い MCP トークンの Slack 通知）のテスト。"""
 import os
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
@@ -13,18 +13,19 @@ os.environ.setdefault("SESSION_SECRET_KEY", "test-session-secret-key-for-pytest"
 import pytest  # noqa: E402
 
 from app.auth.account_store import set_slack_webhook, upsert_user_token  # noqa: E402
-from app.auth.mcp_token_expiry import (  # noqa: E402
+from app.auth.models import UserAccount  # noqa: E402
+from app.core.notifications import notify_mcp_token_expiry  # noqa: E402
+from app.mcp_server.mcp_token_expiry import (  # noqa: E402
     find_expiring_tokens,
     run_mcp_token_expiry_notices,
     send_expiry_notices,
 )
-from app.auth.models import McpToken, UserAccount  # noqa: E402
-from app.core.notifications import notify_mcp_token_expiry  # noqa: E402
+from app.mcp_server.models import McpToken  # noqa: E402
 from tests.conftest import TestSessionLocal  # noqa: E402
 
 _NOW = datetime(2026, 10, 12, 0, 0, tzinfo=UTC)
 _HOOK = "https://hooks.slack.com/services/T000/B000/XXXX"
-_SEND = "app.auth.mcp_token_expiry.notify_mcp_token_expiry"
+_SEND = "app.mcp_server.mcp_token_expiry.notify_mcp_token_expiry"
 
 
 def _token(db, token_id, username="alice", days=2, **kwargs) -> McpToken:
