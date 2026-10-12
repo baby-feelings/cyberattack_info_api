@@ -16,8 +16,9 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
-from app.mcp_server import oauth_clients, oauth_connections
 from app.mcp_server.models import OAuthRefreshToken
+from app.mcp_server.oauth import clients as oauth_clients
+from app.mcp_server.oauth import connections as oauth_connections
 
 logger = logging.getLogger(__name__)
 

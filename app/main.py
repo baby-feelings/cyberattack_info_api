@@ -35,7 +35,7 @@ from app.jvn.router import router as jvn_router
 from app.kev.router import admin_router as kev_admin_router
 from app.kev.router import router as kev_router
 from app.mcp_server.management_router import router as mcp_management_router
-from app.mcp_server.oauth_routes import mount_oauth_routes
+from app.mcp_server.oauth.routes import mount_oauth_routes
 from app.mcp_server.server import McpServer
 from app.osv.router import admin_router as osv_admin_router
 from app.osv.router import router as osv_router

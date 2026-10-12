@@ -94,7 +94,7 @@ app/
 │                 #   必須〈DEPSCANとセッション共有〉。+scanners〈Strategy〉/archive/repository/issue_management/cvss_mapping。
 │                 #   CVSS計算式自体はcodescan/cvss.py）
 ├── mcp_server/   # AIエージェント向けリモートMCPサーバー（/mcp、Streamable HTTP。組み立て=server.py・
-│                 #   ツール=tools/・REST窓口=gateway.py・認証=auth.py。MCPトークンの台帳/JWT・OAuth 2.1・管理API（management_router）・
+│                 #   ツール=tools/・REST窓口=gateway.py・認証=auth.py・OAuth 2.1=oauth/。MCPトークンの台帳/JWT・OAuth 2.1・管理API（management_router）・
 │                 #   モデル（models）もここ。DEPSCAN/CODESCANは本人所有のみ。docs/mcp-server.md）
 ├── zapscan/      # OWASP ZAP（API Scan）の結果→GitHub Issue起票（`python -m app.zapscan`）。
 │                 #   スキャン自体は deploy/zap/（使い捨てAPIコンテナ向け。詳細は docs/zap-scan.md）

@@ -15,7 +15,7 @@ from app.jobs.user_crawl_runner import run_user_crawls_for_all_accounts
 from app.jvn.crawler import fetch_and_store_jvn
 from app.kev.crawler import fetch_and_store_kev
 from app.mcp_server.mcp_token_expiry import run_mcp_token_expiry_notices
-from app.mcp_server.oauth_cleanup import run_oauth_cleanup
+from app.mcp_server.oauth.cleanup import run_oauth_cleanup
 from app.osv.crawler import fetch_and_store_osv
 
 

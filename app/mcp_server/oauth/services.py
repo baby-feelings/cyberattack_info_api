@@ -23,10 +23,12 @@ from mcp.server.auth.provider import (
 from mcp.shared.auth import OAuthClientInformationFull
 from sqlalchemy.orm import Session
 
-from app.mcp_server import oauth_clients, oauth_flow, oauth_refresh
 from app.mcp_server.mcp_token import verify_mcp_token
 from app.mcp_server.mcp_token_store import as_utc, issue_oauth_token, revoke_oauth_tokens
 from app.mcp_server.models import McpToken
+from app.mcp_server.oauth import clients as oauth_clients
+from app.mcp_server.oauth import flow as oauth_flow
+from app.mcp_server.oauth import refresh as oauth_refresh
 
 # 付与するスコープは読み取り専用の 1 種類のみ
 SCOPE = "mcp:read"

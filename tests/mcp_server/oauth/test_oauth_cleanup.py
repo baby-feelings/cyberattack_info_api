@@ -8,17 +8,18 @@ os.environ.setdefault("ENVIRONMENT", "development")
 os.environ.setdefault("GITHUB_USERNAME", "test-github-user")
 os.environ.setdefault("SESSION_SECRET_KEY", "test-session-secret-key-for-pytest")
 
-from app.mcp_server import oauth_cleanup, oauth_connections  # noqa: E402
 from app.mcp_server.mcp_token import verify_mcp_token  # noqa: E402
 from app.mcp_server.mcp_token_store import is_usable  # noqa: E402
 from app.mcp_server.models import McpToken, OAuthClient  # noqa: E402
-from app.mcp_server.oauth_cleanup import (  # noqa: E402
+from app.mcp_server.oauth import cleanup as oauth_cleanup  # noqa: E402
+from app.mcp_server.oauth import connections as oauth_connections  # noqa: E402
+from app.mcp_server.oauth.cleanup import (  # noqa: E402
     UNUSED_CONNECTION_TTL,
     disconnect_unused_connections,
     run_oauth_cleanup,
 )
 from tests.conftest import TestSessionLocal  # noqa: E402
-from tests.mcp_server.test_oauth_connections import _connect, _connections  # noqa: E402
+from tests.mcp_server.oauth.test_oauth_connections import _connect, _connections  # noqa: E402
 
 
 def _later(days: float) -> datetime:

@@ -1,4 +1,4 @@
-"""app.mcp_server.oauth_services（認可・交換・リフレッシュ・失効の判断）の単体テスト。
+"""app.mcp_server.oauth.services（認可・交換・リフレッシュ・失効の判断）の単体テスト。
 
 HTTP や async を介さず、`Session` を直接渡して判断だけを検証する（通しの流れは test_oauth_flow）。
 """
@@ -21,10 +21,11 @@ from mcp.server.auth.provider import (  # noqa: E402
 from mcp.shared.auth import OAuthClientInformationFull  # noqa: E402
 from pydantic import AnyUrl  # noqa: E402
 
-from app.mcp_server import oauth_clients, oauth_refresh  # noqa: E402
 from app.mcp_server.mcp_token import verify_mcp_token  # noqa: E402
 from app.mcp_server.mcp_token_store import is_usable, issue_token  # noqa: E402
-from app.mcp_server.oauth_services import (  # noqa: E402
+from app.mcp_server.oauth import clients as oauth_clients  # noqa: E402
+from app.mcp_server.oauth import refresh as oauth_refresh  # noqa: E402
+from app.mcp_server.oauth.services import (  # noqa: E402
     SCOPE,
     AccessTokenService,
     AuthorizationService,

@@ -11,7 +11,7 @@ os.environ.setdefault("SESSION_SECRET_KEY", "test-session-secret-key-for-pytest"
 
 from fastapi import FastAPI  # noqa: E402
 
-from app.mcp_server import oauth_routes  # noqa: E402
+from app.mcp_server.oauth import routes as oauth_routes  # noqa: E402
 from app.zapscan.openapi_extras import EXTRA_PATHS, extend_openapi  # noqa: E402
 
 _ISSUER = "https://api.example.test"

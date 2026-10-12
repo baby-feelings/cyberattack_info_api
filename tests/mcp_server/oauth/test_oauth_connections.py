@@ -16,7 +16,7 @@ from app.auth.session import create_session_token  # noqa: E402
 from app.mcp_server.mcp_token import verify_mcp_token  # noqa: E402
 from app.mcp_server.mcp_token_store import is_usable, issue_token  # noqa: E402
 from app.mcp_server.models import OAuthRefreshToken  # noqa: E402
-from tests.mcp_server.test_oauth_flow import (  # noqa: E402
+from tests.mcp_server.oauth.test_oauth_flow import (  # noqa: E402
     _full_flow,
     _register,
     _token_request,

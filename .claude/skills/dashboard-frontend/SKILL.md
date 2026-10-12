@@ -104,7 +104,7 @@ CODESCAN追加後もキー名はあえて変更せず両ドメインで共有す
 有効なものへの「失効」ボタン（`window.confirm`で確認。表示中のコマンドのトークンを失効したらコマンドも消す）を出す。
 上限（有効10個）超過の409だけはサーバーの説明文をそのまま表示し、他のエラーは固定文言（詳細を漏らさない）。
 コピーは`navigator.clipboard`。セッション（24時間）が切れていると401→「再ログインしてください」を表示する
-設定画面の並びは**OAuth欄が先、MCPトークン欄が後**（`SettingsPanel.tsx`。OAuthが推奨の接続方法で、トークンは「OAuth非対応のクライアント向け」）。`OAuthConnectionsSection.tsx`は、OAuth 2.1の登録コマンド（`claude mcp add --scope user --transport http ...`、トークン不要）を**接続が0件でも常に表示**し、接続中のアプリの一覧と「接続解除」を出す（`listOAuthConnections`・`disconnectOAuthClient`。一度も使われない接続は「未使用」と強調し、7日で自動解除される旨を添える=サーバーの`oauth_cleanup`ジョブ。アプリ名は登録時の自己申告のため、必ずReactのテキストとして出す）。`McpTokenSection.tsx`は失効済み・期限切れを折りたたみ、標準では有効なトークンだけを表示する（切替ボタン「失効済み・期限切れを表示（N件）」）。E2Eは`SET-13`・`SET-15`〜`SET-17`（GitHubログインをやり直してから発行）。一覧の初回取得は`setTimeout`経由で呼び、effect内の同期setStateによるESLint警告を増やさない。
+設定画面の並びは**OAuth欄が先、MCPトークン欄が後**（`SettingsPanel.tsx`。OAuthが推奨の接続方法で、トークンは「OAuth非対応のクライアント向け」）。`OAuthConnectionsSection.tsx`は、OAuth 2.1の登録コマンド（`claude mcp add --scope user --transport http ...`、トークン不要）を**接続が0件でも常に表示**し、接続中のアプリの一覧と「接続解除」を出す（`listOAuthConnections`・`disconnectOAuthClient`。一度も使われない接続は「未使用」と強調し、7日で自動解除される旨を添える=サーバーの`oauth/cleanup`ジョブ。アプリ名は登録時の自己申告のため、必ずReactのテキストとして出す）。`McpTokenSection.tsx`は失効済み・期限切れを折りたたみ、標準では有効なトークンだけを表示する（切替ボタン「失効済み・期限切れを表示（N件）」）。E2Eは`SET-13`・`SET-15`〜`SET-17`（GitHubログインをやり直してから発行）。一覧の初回取得は`setTimeout`経由で呼び、effect内の同期setStateによるESLint警告を増やさない。
 
 ## index.css の CSS カスケードレイヤーに関する注意
 `*, *::before, *::after` の余白リセットは必ず `@layer base` の中に書くこと。
