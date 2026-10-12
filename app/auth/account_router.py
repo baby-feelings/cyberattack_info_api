@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session
 from app.auth.account_store import clear_slack_webhook, get_account, set_slack_webhook
 from app.auth.dependencies import get_current_username
 from app.core.database import get_db
-from app.core.notifications import is_valid_slack_webhook_url, send_test_notification
+from app.core.notifications.slack import is_valid_slack_webhook_url
+from app.core.notifications.webhook_test import send_test_notification
 from app.depscan.user_scan import get_user_scan_status
 
 router = APIRouter()

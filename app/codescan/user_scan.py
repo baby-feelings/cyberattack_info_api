@@ -27,7 +27,7 @@ from app.codescan.crawler import (
 from app.codescan.issue_management import file_github_issues
 from app.core.database import SessionLocal
 from app.core.github.accounts import list_target_repos
-from app.core.notifications import notify_success
+from app.core.notifications.crawler import notify_success
 
 logger = logging.getLogger(__name__)
 

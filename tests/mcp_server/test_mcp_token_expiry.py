@@ -14,7 +14,7 @@ import pytest  # noqa: E402
 
 from app.auth.account_store import set_slack_webhook, upsert_user_token  # noqa: E402
 from app.auth.models import UserAccount  # noqa: E402
-from app.core.notifications import notify_mcp_token_expiry  # noqa: E402
+from app.core.notifications.mcp_token import notify_mcp_token_expiry  # noqa: E402
 from app.mcp_server.mcp_token_expiry import (  # noqa: E402
     find_expiring_tokens,
     run_mcp_token_expiry_notices,
@@ -127,7 +127,7 @@ class TestSendNotices:
 
 class TestMessageAndJob:
     def test_message_has_dates_and_guidance_but_no_secret(self):
-        with patch("app.core.notifications._send_slack", return_value=True) as mock_slack:
+        with patch("app.core.notifications.slack.send_slack", return_value=True) as mock_slack:
             assert notify_mcp_token_expiry(_HOOK, ["2026-10-14", "2026-10-13"]) is True
         message, url = mock_slack.call_args[0]
         assert url == _HOOK

@@ -16,7 +16,7 @@ import httpx  # noqa: E402
 
 from app.auth.session import create_session_token  # noqa: E402
 from app.core.github.repo import GitHubRepo  # noqa: E402
-from app.core.notifications import notify_dependency_findings  # noqa: E402
+from app.core.notifications.dependency_findings import notify_dependency_findings  # noqa: E402
 from app.depscan.crawler import (  # noqa: E402
     _discover_manifests,
     build_findings,
@@ -1116,12 +1116,12 @@ class TestNotifyDependencyFindings:
         return base
 
     def test_skips_when_no_webhook(self):
-        with patch("app.core.notifications._send_slack") as mock_send:
+        with patch("app.core.notifications.slack.send_slack") as mock_send:
             notify_dependency_findings([self._finding_dict()], recipients=[])
         mock_send.assert_not_called()
 
     def test_skips_when_empty(self):
-        with patch("app.core.notifications._send_slack") as mock_send:
+        with patch("app.core.notifications.slack.send_slack") as mock_send:
             notify_dependency_findings([], recipients=["https://hooks.slack.com/x"])
         mock_send.assert_not_called()
 
@@ -1130,7 +1130,7 @@ class TestNotifyDependencyFindings:
             self._finding_dict(repo_full_name="u/a", osv_id="GHSA-a"),
             self._finding_dict(repo_full_name="u/b", osv_id="GHSA-b"),
         ]
-        with patch("app.core.notifications._send_slack") as mock_send:
+        with patch("app.core.notifications.slack.send_slack") as mock_send:
             notify_dependency_findings(findings, recipients=["https://hooks.slack.com/x"])
         mock_send.assert_called_once()
         message = mock_send.call_args[0][0]
@@ -1145,7 +1145,7 @@ class TestNotifyDependencyFindings:
             self._finding_dict(osv_id="GHSA-b", severity="CRITICAL", fixed_versions=["3.5.0"]),
             self._finding_dict(osv_id="GHSA-c", severity="HIGH", fixed_versions=["3.4.8"]),
         ]
-        with patch("app.core.notifications._send_slack") as mock_send:
+        with patch("app.core.notifications.slack.send_slack") as mock_send:
             notify_dependency_findings(findings, recipients=["https://hooks.slack.com/x"])
         message = mock_send.call_args[0][0]
         # 3件のCVEが1行（1パッケージ）に集約されている
@@ -1162,7 +1162,7 @@ class TestNotifyDependencyFindings:
             self._finding_dict(package_name="critical-pkg", severity="CRITICAL", osv_id="GHSA-c"),
             self._finding_dict(package_name="high-pkg", severity="HIGH", osv_id="GHSA-h"),
         ]
-        with patch("app.core.notifications._send_slack") as mock_send:
+        with patch("app.core.notifications.slack.send_slack") as mock_send:
             notify_dependency_findings(findings, recipients=["https://hooks.slack.com/x"])
         message = mock_send.call_args[0][0]
         assert (
@@ -1177,7 +1177,7 @@ class TestNotifyDependencyFindings:
             self._finding_dict(repo_full_name=f"u/repo{i}", osv_id=f"GHSA-{i}")
             for i in range(20)
         ]
-        with patch("app.core.notifications._send_slack") as mock_send:
+        with patch("app.core.notifications.slack.send_slack") as mock_send:
             notify_dependency_findings(findings, recipients=["https://hooks.slack.com/x"])
         message = mock_send.call_args[0][0]
         for i in range(20):
@@ -1192,7 +1192,7 @@ class TestNotifyDependencyFindings:
             )
             for i in range(2000)
         ]
-        with patch("app.core.notifications._send_slack") as mock_send:
+        with patch("app.core.notifications.slack.send_slack") as mock_send:
             notify_dependency_findings(findings, recipients=["https://hooks.slack.com/x"])
         message = mock_send.call_args[0][0]
         assert len(message) <= 39000 + 100

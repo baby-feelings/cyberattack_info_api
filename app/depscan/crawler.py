@@ -17,7 +17,7 @@ from app.core.config import settings
 from app.core.crawler_runner import CrawlCounters, CrawlJob
 from app.core.github.accounts import list_target_repos
 from app.core.github.repo import GitHubRepo
-from app.core.notifications import notify_dependency_findings
+from app.core.notifications.dependency_findings import notify_dependency_findings
 from app.core.osv_client import fetch_vuln_by_id, parse_severity, query_versions_batch
 from app.core.registry_client import fetch_latest_version, is_newer_version
 from app.crawler_logs.writer import now_utc

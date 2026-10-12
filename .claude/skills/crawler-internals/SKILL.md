@@ -46,18 +46,26 @@ GET・PUT（`merge_pull_request`）・PATCH（`close_issue`）等の冪等な操
 4. crawl全体の即時リトライを追加すると、DEPSCAN/DEPSOPSが内部で呼ぶ
    非冪等なGitHub API呼び出し（Issue作成等）が重複実行されるリスクが増す
 
-## 通知関数の共通化（notifications.py）
+## 通知の構成（`app/core/notifications/` パッケージ）
+`slack`（送信`send_slack`・Webhook URL検証・`truncate_for_slack`）・`recipients`（送信先の解決）・
+`base`（`Notifier`と`CRAWLER_LABELS`）・用途別の`crawler`/`dependency_findings`/`dependabot_ops`/
+`mcp_token`/`webhook_test`に分かれる。テストは`patch("app.core.notifications.slack.send_slack")`の1か所で
+全通知の送信を差し替えられる（各Notifierは`slack.send_slack`をモジュール属性として呼ぶ）。
+
+### 通知関数の共通化
 `notify_success(crawler_type, inserted, updated, deleted)` と `notify_error(crawler_type, error)` の
 2 つの汎用関数に統合。各クローラー（KEV/OSV/JVN/DEPSCAN/DEPSOPS/CODESCAN）はこれらを直接呼び出す
 （`notify_new_vulnerabilities` 等のクローラー別ラッパーは廃止済み、DRY違反だったため削除）。
-エラーメッセージは `_sanitize_error()` で接続文字列マスク + 200 文字制限。
+エラーメッセージは `sanitize_error()`（`crawler.py`）で接続文字列マスク + 200 文字制限。
 
 **`Notifier`（Template Method）**: 全通知は抽象クラス`Notifier.send()`の共通フロー
 （`has_content`＝内容があるか→`default_recipients`＝`recipients`省略時の送信先→`build_message`＝本文→
-全送信先へ`_send_slack`）に載る。サブクラスは`CrawlerSuccessNotifier`・`CrawlerErrorNotifier`
-（既定の送信先は常に管理者）・`DependencyFindingsNotifier`・`DependabotOpsNotifier`の4つ。
+全送信先へ`slack.send_slack`）に載る。`send()`は全送信先への送信に成功したらTrueを返す（失敗した
+送信先があっても残りへは送る）。サブクラスは`CrawlerSuccessNotifier`・`CrawlerErrorNotifier`
+（既定の送信先は常に管理者）・`DependencyFindingsNotifier`・`DependabotOpsNotifier`に加え、送信先を
+明示指定する`McpTokenExpiryNotifier`（期限前通知）・`WebhookRegistrationNotifier`（登録時のテスト送信）。
 `notify_success`/`notify_error`/`notify_dependency_findings`/`notify_dependabot_ops`は
-従来のシグネチャのまま各Notifierを呼ぶ薄いラッパー（呼び出し側・テストのパッチ先は不変）。
+従来のシグネチャのまま各Notifierを呼ぶ薄いラッパー。
 新しい種類の通知は`Notifier`を継承して3メソッドを実装する。
 
 **送信先の解決（Issue #227）**: 固定の`SLACK_WEBHOOK_URL`環境変数は廃止し、
@@ -66,7 +74,7 @@ Webhook）から動的に解決する。`notify_success`等の検知結果通知
 通知有効な全登録ユーザーへブロードキャスト、DEPSCAN/DEPSOPS/CODESCANなら
 `GITHUB_USERNAME`自身の登録Webhookにのみ送る。**`notify_error`だけは例外的に、
 crawler_typeに関わらず常に管理者（`GITHUB_USERNAME`）自身の登録Webhookにのみ送る**
-（`_resolve_admin_recipient`）。クローラー内部のエラーは運用担当者が対応すべき情報
+（`recipients.resolve_admin_recipient`）。クローラー内部のエラーは運用担当者が対応すべき情報
 であり、KEV/OSV/JVNのようなグローバル種別であっても無関係な一般ユーザーへ
 ブロードキャストするとノイズ・情報漏洩になるため。
 
