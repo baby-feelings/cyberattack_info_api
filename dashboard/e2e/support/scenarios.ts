@@ -106,7 +106,8 @@ export const SCENARIOS = [
   { id: 'SET-13', area: '設定', title: '発行済みMCPトークンが一覧に表示され、個別に失効できる' },
   { id: 'SET-14', area: '設定', title: 'MCPトークンが上限に達していると説明が表示される' },
   { id: 'SET-15', area: '設定', title: 'OAuthで接続中のアプリが一覧に表示され、接続を解除できる' },
-  { id: 'SET-16', area: '設定', title: 'OAuthの接続が無いときは接続欄を表示しない' },
+  { id: 'SET-16', area: '設定', title: 'OAuthの接続が無くても推奨の登録コマンドを表示し、接続中の一覧は出さない' },
+  { id: 'SET-17', area: '設定', title: '設定画面はOAuth欄を先に、OAuth非対応向けのMCPトークン欄を後に表示する' },
 ] as const
 
 export type ScenarioId = (typeof SCENARIOS)[number]['id']

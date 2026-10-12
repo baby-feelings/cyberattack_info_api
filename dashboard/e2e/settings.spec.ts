@@ -203,9 +203,12 @@ scenario('SET-13', '発行済みMCPトークンが一覧に表示され、個別
   await expect(list.getByText('有効')).toBeVisible()
   await expect(list.getByText('未使用', { exact: false })).toBeVisible()
 
-  // 失効の確認ダイアログを承諾すると、状態が「失効済み」になり、表示中のコマンドも消える
+  // 失効の確認ダイアログを承諾すると、失効したトークンは折りたたまれ、表示を切り替えると
+  // 「失効済み」で見える。表示中のコマンドも消える
   page.once('dialog', (confirm) => void confirm.accept())
   await list.getByRole('button', { name: /を失効する/ }).click()
+  await expect(list.getByRole('listitem')).toHaveCount(0)
+  await dialog.getByRole('button', { name: '失効済み・期限切れを表示（1件）' }).click()
   await expect(list.getByText('失効済み')).toBeVisible()
   await expect(list.getByRole('button', { name: /を失効する/ })).toHaveCount(0)
   await expect(dialog.getByLabel('Claude Code に登録するコマンド')).toHaveCount(0)
@@ -261,14 +264,31 @@ scenario('SET-15', 'OAuthで接続中のアプリが一覧に表示され、接�
   expect(api.requestsTo('/auth/oauth-connections/client-1111', 'DELETE')).toHaveLength(1)
 })
 
-scenario('SET-16', 'OAuthの接続が無いときは接続欄を表示しない', async ({ page, api }) => {
+scenario('SET-16', 'OAuthの接続が無くても推奨の登録コマンドを表示し、接続中の一覧は出さない', async ({ page, api }) => {
   await seedSession(page)
   await page.goto('/')
   await openSettings(page)
   const dialog = page.getByRole('dialog', { name: '設定' })
 
-  // MCPトークン欄は出るが、OAuthの接続欄（見出し・一覧）は出ない
-  await expect(dialog.getByRole('heading', { name: 'MCPトークン' })).toBeVisible()
+  // OAuth欄（見出し・登録コマンド）は常に出るが、接続中のアプリの一覧は出ない
+  await expect(dialog.getByRole('heading', { name: 'OAuth で接続（推奨）' })).toBeVisible()
+  await expect(dialog.getByLabel('OAuth の登録コマンド')).toContainText('claude mcp add --scope user --transport http')
   await expect.poll(() => api.requestsTo('/auth/oauth-connections', 'GET').length).toBeGreaterThan(0)
-  await expect(dialog.getByRole('heading', { name: 'OAuth で接続中のアプリ' })).toHaveCount(0)
+  await expect(dialog.getByRole('list', { name: 'OAuthで接続中のアプリ' })).toHaveCount(0)
+})
+
+scenario('SET-17', '設定画面はOAuth欄を先に、OAuth非対応向けのMCPトークン欄を後に表示する', async ({ page }) => {
+  await seedSession(page)
+  await page.goto('/')
+  await openSettings(page)
+  const dialog = page.getByRole('dialog', { name: '設定' })
+
+  const oauth = dialog.getByRole('heading', { name: 'OAuth で接続（推奨）' })
+  const token = dialog.getByRole('heading', { name: 'MCPトークン（OAuth 非対応のクライアント向け）' })
+  await expect(oauth).toBeVisible()
+  await expect(token).toBeVisible()
+  // 画面上の位置: OAuth 欄がトークン欄より上
+  const oauthBox = await oauth.boundingBox()
+  const tokenBox = await token.boundingBox()
+  expect(oauthBox!.y).toBeLessThan(tokenBox!.y)
 })

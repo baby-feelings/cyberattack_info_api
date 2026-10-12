@@ -15,6 +15,7 @@ from app.depscan.crawler import fetch_and_scan_dependencies
 from app.depsops.runner import run_dependabot_ops
 from app.jvn.crawler import fetch_and_store_jvn
 from app.kev.crawler import fetch_and_store_kev
+from app.mcp_server.oauth_cleanup import run_oauth_cleanup
 from app.osv.crawler import fetch_and_store_osv
 
 
@@ -25,7 +26,7 @@ class TestBuildScheduledJobs:
         assert set(jobs) == {
             "cisa_kev_crawler", "osv_crawler", "jvn_crawler", "depscan_crawler",
             "codescan_crawler", "dependabot_ops", "repo_cleanup", "user_crawl",
-            "mcp_token_expiry_notice",
+            "mcp_token_expiry_notice", "oauth_cleanup",
         }
         expected = {
             "cisa_kev_crawler": (fetch_and_store_kev, settings.CRON_HOUR_UTC,
@@ -43,6 +44,8 @@ class TestBuildScheduledJobs:
             "mcp_token_expiry_notice": (run_mcp_token_expiry_notices,
                                         settings.MCP_EXPIRY_NOTICE_CRON_HOUR_UTC,
                                         settings.MCP_EXPIRY_NOTICE_CRON_MINUTE_UTC),
+            "oauth_cleanup": (run_oauth_cleanup, settings.OAUTH_CLEANUP_CRON_HOUR_UTC,
+                              settings.OAUTH_CLEANUP_CRON_MINUTE_UTC),
         }
         for job_id, (func, hour, minute) in expected.items():
             job = jobs[job_id]

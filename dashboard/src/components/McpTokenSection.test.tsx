@@ -79,15 +79,49 @@ describe('McpTokenSection', () => {
     render(<McpTokenSection authToken="tok" />)
 
     const list = await screen.findByRole('list', { name: '発行済みのMCPトークン' })
+    // 標準では有効なトークンだけを表示する（失効済み・期限切れは折りたたむ）
     const items = within(list).getAllByRole('listitem')
-    expect(items).toHaveLength(2)
+    expect(items).toHaveLength(1)
     expect(items[0]).toHaveTextContent('有効')
     expect(items[0]).toHaveTextContent('期限 2026-11-01')
     expect(items[0]).toHaveTextContent('最終使用 2026-10-05')
+    expect(within(list).getAllByRole('button', { name: /を失効する/ })).toHaveLength(1)
+  })
+
+  it('folds revoked and expired tokens and shows them on demand', async () => {
+    const user = userEvent.setup()
+    const EXPIRED: authApi.McpTokenInfo = { ...ACTIVE, id: 'tok-4444-dddd', status: 'expired' }
+    vi.mocked(authApi.listMcpTokens).mockResolvedValue([ACTIVE, REVOKED, EXPIRED])
+    render(<McpTokenSection authToken="tok" />)
+
+    const list = await screen.findByRole('list', { name: '発行済みのMCPトークン' })
+    expect(within(list).getAllByRole('listitem')).toHaveLength(1)
+
+    await user.click(screen.getByRole('button', { name: '失効済み・期限切れを表示（2件）' }))
+    const items = within(list).getAllByRole('listitem')
+    expect(items).toHaveLength(3)
     expect(items[1]).toHaveTextContent('失効済み')
     expect(items[1]).toHaveTextContent('未使用')
+    expect(items[2]).toHaveTextContent('期限切れ')
     // 失効ボタンは有効なトークンにだけ出る
     expect(within(list).getAllByRole('button', { name: /を失効する/ })).toHaveLength(1)
+
+    await user.click(screen.getByRole('button', { name: '失効済み・期限切れを隠す' }))
+    expect(within(list).getAllByRole('listitem')).toHaveLength(1)
+  })
+
+  it('has no fold toggle when every token is active', async () => {
+    vi.mocked(authApi.listMcpTokens).mockResolvedValue([ACTIVE])
+    render(<McpTokenSection authToken="tok" />)
+    await screen.findByRole('list', { name: '発行済みのMCPトークン' })
+    expect(screen.queryByRole('button', { name: /失効済み・期限切れを/ })).not.toBeInTheDocument()
+  })
+
+  it('is labelled as the option for clients without OAuth support', async () => {
+    render(<McpTokenSection authToken="tok" />)
+    expect(
+      await screen.findByRole('heading', { name: 'MCPトークン（OAuth 非対応のクライアント向け）' }),
+    ).toBeInTheDocument()
   })
 
   it('revokes a token after confirmation and refreshes the list', async () => {
@@ -101,6 +135,8 @@ describe('McpTokenSection', () => {
     await user.click(await screen.findByRole('button', { name: /を失効する/ }))
 
     expect(authApi.revokeMcpToken).toHaveBeenCalledWith('tok', 'tok-2222-bbbb')
+    // 失効したトークンは折りたたまれ、表示を切り替えると「失効済み」で見える
+    await user.click(await screen.findByRole('button', { name: '失効済み・期限切れを表示（1件）' }))
     expect(await screen.findByText('失効済み')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /を失効する/ })).not.toBeInTheDocument()
   })
