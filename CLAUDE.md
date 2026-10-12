@@ -85,8 +85,8 @@ app/
 ├── kev/          # CISA KEV（models/schemas/crawler/stix/router）
 ├── osv/          # OSV（10エコシステム対応、+packages.py）
 ├── jvn/          # JVN（MyJVN API / RDF-RSS）
-├── depscan/      # 依存ライブラリ脆弱性スキャン（+issue_management/priority/sbom/
-│                 #   user_scan/source_files/parsers/）
+├── depscan/      # 依存ライブラリ脆弱性スキャン（crawler=ジョブ組み立て+manifests/finding_builder/
+│                 #   reachability_scan/repository+issue_management/priority/sbom/user_scan/source_files/parsers/）
 ├── depsops/      # Dependabot PR 自動運用（runner/pr_judge/pr_log_repository/classify/github_client〈PR操作〉/user_scan）
 ├── codescan/     # 自アプリのコード脆弱性診断（Semgrep静的解析+gitleaksシークレット検知。GitHubログイン
 │                 #   必須〈DEPSCANとセッション共有〉。+scanners〈Strategy〉/archive/repository/issue_management/cvss_mapping。
