@@ -110,6 +110,11 @@ DBマイグレーションは`Dockerfile`の`CMD`（`python -m app.core.migrate 
 パイプライン停止でスクリプトごと中断され、本番が古いまま残る（実際に発生）。`| Out-String`で全体を受けて
 から`Select-String`で絞る。デプロイ後は`/health`・`/mcp`（401が返れば到達）で反映を確認する。
 
+**デプロイスクリプトはFail Fast**: 転送前に`deploy/.env`の必須キー（`BACKEND_DOMAIN`等）を検査し、
+各コマンドの終了コードを`Invoke-Checked`で判定し、最後に`/health`を待って確認する（いずれも失敗で
+停止）。「デプロイ完了」が出たら実際に反映されている。`deploy/.env`にキーを足すときは**既存の行を
+消さない**こと（`BACKEND_DOMAIN`を落とすとcaddyが再作成されず、旧設定のまま動き続ける）。
+
 ## デプロイ構成
 
 | 役割 | サービス | 備考 |

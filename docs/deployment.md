@@ -48,6 +48,12 @@ cd deploy
 SCPでコード一式を転送し、OCI上で `docker compose up -d --build` を実行する
 （`api-prod`・`caddy`・`prometheus`・`grafana`・`node-exporter`）。
 
+スクリプトは Fail Fast で動く: ①転送の前に `deploy/.env` の必須キー（`BACKEND_DOMAIN`・
+`GRAFANA_DOMAIN`・`GRAFANA_ADMIN_PASSWORD`）と `../.env.production` を確認し、欠けていれば止まる
+②ssh/scp/docker compose のいずれかが失敗したら、その場で止まる ③最後に
+`https://<BACKEND_DOMAIN>/health` を最大約1分待って確認し、応答しなければ失敗で終了する
+（以前は docker compose が失敗しても「デプロイ完了」と表示していた）。
+
 ## GitHub Secrets の設定
 
 | Secret 名 | 説明 |
