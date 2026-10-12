@@ -104,6 +104,9 @@ CODESCAN追加後もキー名はあえて変更せず両ドメインで共有す
 有効なものへの「失効」ボタン（`window.confirm`で確認。表示中のコマンドのトークンを失効したらコマンドも消す）を出す。
 上限（有効10個）超過の409だけはサーバーの説明文をそのまま表示し、他のエラーは固定文言（詳細を漏らさない）。
 コピーは`navigator.clipboard`。セッション（24時間）が切れていると401→「再ログインしてください」を表示する
+さらに下段に`OAuthConnectionsSection.tsx`（OAuth 2.1 で接続中のアプリの一覧と「接続解除」）を置く
+（`listOAuthConnections`・`disconnectOAuthClient`。接続が0件のときは**何も描画しない**=区切り線も出ない。
+アプリ名は登録時の自己申告のため、必ずReactのテキストとして出す）。E2Eは`SET-15`・`SET-16`
 （GitHubログインをやり直してから発行）。一覧の初回取得は`setTimeout`経由で呼び、effect内の同期setStateによる
 ESLint警告を増やさない。
 

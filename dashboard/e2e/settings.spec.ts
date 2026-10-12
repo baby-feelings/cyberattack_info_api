@@ -226,3 +226,49 @@ scenario('SET-14', 'MCPトークンが上限に達していると説明が表示
 
   await expect(dialog.getByText('有効なMCPトークンが上限（10個）に達しています。', { exact: false })).toBeVisible()
 })
+
+scenario('SET-15', 'OAuthで接続中のアプリが一覧に表示され、接続を解除できる', async ({ page, api }) => {
+  api.state.oauthConnections = [
+    {
+      client_id: 'client-1111', client_name: 'Claude Code',
+      connected_at: '2026-10-10T00:00:00+00:00', last_refreshed_at: '2026-10-12T00:00:00+00:00',
+      last_used_at: '2026-10-12T09:00:00+00:00', expires_at: '2026-11-11T00:00:00+00:00',
+    },
+    {
+      // 自己申告のアプリ名は HTML として解釈されず、そのままテキストで表示される
+      client_id: 'client-2222', client_name: '<img src=x onerror=alert(1)>',
+      connected_at: '2026-10-11T00:00:00+00:00', last_refreshed_at: '2026-10-11T00:00:00+00:00',
+      last_used_at: null, expires_at: '2026-11-10T00:00:00+00:00',
+    },
+  ]
+  await seedSession(page)
+  await page.goto('/')
+  await openSettings(page)
+  const dialog = page.getByRole('dialog', { name: '設定' })
+
+  const list = dialog.getByRole('list', { name: 'OAuthで接続中のアプリ' })
+  await expect(list.getByRole('listitem')).toHaveCount(2)
+  await expect(list.getByText('Claude Code')).toBeVisible()
+  await expect(list.getByText('最終使用 2026-10-12')).toBeVisible()
+  await expect(list.getByText('<img src=x onerror=alert(1)>')).toBeVisible()
+  await expect(list.locator('img')).toHaveCount(0)
+
+  // 解除の確認ダイアログを承諾すると、そのアプリが一覧から消える（もう一方は残る）
+  page.once('dialog', (confirm) => void confirm.accept())
+  await list.getByRole('button', { name: 'Claude Code の接続を解除する' }).click()
+  await expect(list.getByRole('listitem')).toHaveCount(1)
+  await expect(list.getByText('Claude Code')).toHaveCount(0)
+  expect(api.requestsTo('/auth/oauth-connections/client-1111', 'DELETE')).toHaveLength(1)
+})
+
+scenario('SET-16', 'OAuthの接続が無いときは接続欄を表示しない', async ({ page, api }) => {
+  await seedSession(page)
+  await page.goto('/')
+  await openSettings(page)
+  const dialog = page.getByRole('dialog', { name: '設定' })
+
+  // MCPトークン欄は出るが、OAuthの接続欄（見出し・一覧）は出ない
+  await expect(dialog.getByRole('heading', { name: 'MCPトークン' })).toBeVisible()
+  await expect.poll(() => api.requestsTo('/auth/oauth-connections', 'GET').length).toBeGreaterThan(0)
+  await expect(dialog.getByRole('heading', { name: 'OAuth で接続中のアプリ' })).toHaveCount(0)
+})

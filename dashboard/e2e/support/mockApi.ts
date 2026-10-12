@@ -39,6 +39,12 @@ export interface MockState {
     revoked_at: string | null; last_used_at: string | null
     status: 'active' | 'revoked' | 'expired'
   }>
+  // OAuth（MCP）で接続中のクライアント（GET で一覧・DELETE で解除）
+  oauthConnections: Array<{
+    client_id: string; client_name: string
+    connected_at: string | null; last_refreshed_at: string | null
+    last_used_at: string | null; expires_at: string | null
+  }>
   username: string
 }
 
@@ -78,6 +84,14 @@ function defaultResponse(req: RecordedRequest, state: MockState): MockResponse {
     row.status = 'revoked'
     row.revoked_at = '2026-10-10T01:00:00+00:00'
     return { body: { id: row.id, revoked: true } }
+  }
+
+  if (method === 'DELETE' && path.startsWith('/auth/oauth-connections/')) {
+    const id = decodeURIComponent(path.split('/').pop()!)
+    const index = state.oauthConnections.findIndex((c) => c.client_id === id)
+    if (index < 0) return { status: 404, body: { detail: 'Connection not found.' } }
+    state.oauthConnections.splice(index, 1)
+    return { body: { client_id: id, disconnected: true } }
   }
 
   switch (`${method} ${path}`) {
@@ -213,6 +227,8 @@ function defaultResponse(req: RecordedRequest, state: MockState): MockResponse {
     }
     case 'GET /auth/mcp-tokens':
       return { body: { tokens: state.mcpTokens } }
+    case 'GET /auth/oauth-connections':
+      return { body: { connections: state.oauthConnections } }
     case 'DELETE /auth/notification-settings':
       state.notification = { slack_webhook_url: null, notifications_enabled: false }
       return { body: state.notification }
@@ -229,6 +245,7 @@ export async function installMockApi(page: Page): Promise<MockApi> {
     crawlerLogId: 100,
     notification: { slack_webhook_url: null, notifications_enabled: false },
     mcpTokens: [],
+    oauthConnections: [],
     username: 'octocat',
   }
   const requests: RecordedRequest[] = []

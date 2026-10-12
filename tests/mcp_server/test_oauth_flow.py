@@ -90,10 +90,10 @@ def _token_request(http, client_id, code, verifier, redirect=REDIRECT):
     })
 
 
-def _full_flow(http, login="alice") -> tuple[str, str, str]:
+def _full_flow(http, login="alice", name="Claude Code") -> tuple[str, str, str]:
     """認可〜コード取得までを通し、(client_id, code, verifier) を返す。"""
     verifier, challenge = _pkce()
-    client_id = _register(http)
+    client_id = _register(http, name=name)
     loc = _authorize(http, client_id, challenge).headers["location"]
     state = _github_state(http, _request_id(loc))
     res = _callback(http, state, login)
