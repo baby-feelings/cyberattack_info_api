@@ -81,3 +81,8 @@ SCPでコード一式を転送し、OCI上で `docker compose up -d --build` を
 > 場合の二重バックアップとして維持している（削除済みリポジトリ掃除・登録済み他ユーザー向け実行は
 > APScheduler側のみ）。KEV/OSV/JVN/DEPSCAN/CODESCAN/DEPSOPSは今日（UTC日付）既に成功実行済みなら
 > 2回目の実行を自動的にスキップするため、この二重トリガー自体は無害（Issue #239）。
+
+### CODESCAN などを単独で再スキャンする
+`gh workflow run daily-crawl.yml -f target=codescan`（`target` は kev / osv / jvn / depscan / codescan /
+dependabot-ops / all）。同じUTC日に成功済みの種別は、既定では2回目がスキップされる。確実に再実行するには
+管理API `POST /admin/codescan-crawl?force=true`（`X-API-KEY` 必須）を使う。
