@@ -13,12 +13,10 @@ from pydantic import AnyHttpUrl
 
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.mcp_server.oauth_provider import McpOAuthProvider
+from app.mcp_server.oauth_consent import build_consent_router
+from app.mcp_server.oauth_provider import SCOPE, McpOAuthProvider
 
 logger = logging.getLogger(__name__)
-
-# 付与するスコープは読み取り専用の 1 種類のみ（書き込み・管理系は対象外）
-SCOPE = "mcp:read"
 
 
 def mount_oauth_routes(app: FastAPI, issuer: str | None = None) -> bool:
@@ -28,7 +26,7 @@ def mount_oauth_routes(app: FastAPI, issuer: str | None = None) -> bool:
         return False
 
     issuer_url = AnyHttpUrl(issuer)
-    provider = McpOAuthProvider(SessionLocal)
+    provider = McpOAuthProvider(SessionLocal, issuer)
     routes = create_auth_routes(
         provider=provider,
         issuer_url=issuer_url,
@@ -44,5 +42,7 @@ def mount_oauth_routes(app: FastAPI, issuer: str | None = None) -> bool:
         resource_name="cyberattack-info MCP",
     )
     app.router.routes.extend(routes)
+    # 同意画面（/oauth/consent）。GitHub ログイン後の認可コード発行は /auth/github/callback が担う
+    app.include_router(build_consent_router(SessionLocal))
     logger.info("MCP OAuth endpoints enabled (issuer=%s)", issuer)
     return True

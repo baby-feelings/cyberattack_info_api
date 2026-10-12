@@ -12,7 +12,7 @@ os.environ.setdefault("SESSION_SECRET_KEY", "test-session-secret-key-for-pytest"
 import pytest  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
-from mcp.server.auth.provider import AuthorizeError, RegistrationError, TokenError  # noqa: E402
+from mcp.server.auth.provider import RegistrationError, TokenError  # noqa: E402
 from mcp.shared.auth import OAuthClientInformationFull  # noqa: E402
 
 from app.auth.models import OAuthClient  # noqa: E402
@@ -108,7 +108,7 @@ class TestClientStore:
 
 class TestProvider:
     def test_register_and_get(self):
-        provider = McpOAuthProvider(TestSessionLocal)
+        provider = McpOAuthProvider(TestSessionLocal, ISSUER)
 
         async def scenario():
             await provider.register_client(_client("p1"))
@@ -117,18 +117,13 @@ class TestProvider:
 
         asyncio.run(scenario())
 
-    def test_authorization_and_tokens_not_available_yet(self):
-        provider = McpOAuthProvider(TestSessionLocal)
+    def test_refresh_not_supported_yet(self):
+        provider = McpOAuthProvider(TestSessionLocal, ISSUER)
         c = _client()
 
         async def scenario():
-            with pytest.raises(AuthorizeError):
-                await provider.authorize(c, None)  # type: ignore[arg-type]
-            with pytest.raises(TokenError):
-                await provider.exchange_authorization_code(c, None)  # type: ignore[arg-type]
             with pytest.raises(TokenError):
                 await provider.exchange_refresh_token(c, None, [])  # type: ignore[arg-type]
-            assert await provider.load_authorization_code(c, "x") is None
             assert await provider.load_refresh_token(c, "x") is None
             assert await provider.load_access_token("x") is None
             assert await provider.revoke_token(None) is None  # type: ignore[arg-type]
@@ -173,12 +168,3 @@ class TestRoutes:
             "redirect_uris": ["https://app.example.test/cb"], "scope": "admin",
         })
         assert res.status_code == 400
-
-    def test_authorize_unavailable_yet(self, http, db_session):
-        oauth_clients.save_client(db_session, _client("c1", uris=("https://app.example.test/cb",)))
-        res = http.get("/authorize", params={
-            "client_id": "c1", "response_type": "code", "redirect_uri": "https://app.example.test/cb",
-            "code_challenge": "x" * 43, "code_challenge_method": "S256", "state": "s",
-        }, follow_redirects=False)
-        # 認可は未実装のため、コードは発行されない（エラーとしてクライアントへ返す）
-        assert "code=" not in res.headers.get("location", "")

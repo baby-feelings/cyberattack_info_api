@@ -86,6 +86,11 @@ class McpToken(Base):
         DateTime(timezone=True), nullable=True,
     )
 
+    # OAuth 2.1 で発行されたトークンなら、発行先クライアントのID（手動発行なら null）。
+    # OAuth のトークンは短命（1時間）で頻繁に発行されるため、手動発行トークンの一覧・上限・
+    # 期限前通知の対象から外す（Issue #303）
+    oauth_client_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
 
 class OAuthClient(Base):
     """OAuth 2.1 の動的クライアント登録（RFC 7591）で登録されたクライアント（Issue #303）。
@@ -111,3 +116,40 @@ class OAuthClient(Base):
 
     # 最後に認可・トークン交換に使われた日時（未使用の登録を自動削除する判定に使う）
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class OAuthAuthorization(Base):
+    """OAuth 2.1 の認可リクエスト〜認可コードの1件分（Issue #303）。
+
+    1行が次の順に進む。
+    1. `/authorize` で作成（`username`・`code_hash` は null。同意画面と GitHub ログインの待ち）
+    2. 本人の GitHub ログイン完了で `username` と `code_hash` を設定し、期限を認可コード用に更新
+    3. `/token` での交換時に削除（認可コードは一度しか使えない）
+    認可コード本体は保存せず、SHA-256 のハッシュだけを持つ。
+    """
+
+    __tablename__ = "oauth_authorizations"
+
+    # 認可リクエストID（同意画面の URL に載せる推測不能な値）
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    client_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    redirect_uri: Mapped[str] = mapped_column(Text, nullable=False)
+    redirect_uri_provided_explicitly: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    # クライアントが渡した state（そのままリダイレクト先へ返す）
+    state: Mapped[str | None] = mapped_column(Text, nullable=True)
+    code_challenge: Mapped[str] = mapped_column(String(128), nullable=False)
+    # 空白区切りのスコープ
+    scope: Mapped[str] = mapped_column(String(255), nullable=False)
+    # RFC 8707 のリソース指標（null か、この MCP サーバーの URL）
+    resource: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # 認可した本人（GitHub ユーザー名）と、認可コードのハッシュ。ログイン完了までは null
+    username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    code_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False,
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True,
+    )

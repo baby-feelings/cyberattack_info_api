@@ -33,7 +33,12 @@ def find_expiring_tokens(db: Session, now: datetime | None = None) -> dict[str, 
     now = now or datetime.now(UTC)
     rows = (
         db.query(McpToken)
-        .filter(McpToken.revoked_at.is_(None), McpToken.expiry_notified_at.is_(None))
+        .filter(
+            McpToken.revoked_at.is_(None),
+            McpToken.expiry_notified_at.is_(None),
+            # OAuth の短命トークン（1時間）は自動更新される前提のため、通知の対象外
+            McpToken.oauth_client_id.is_(None),
+        )
         .all()
     )
     by_user: dict[str, list[McpToken]] = defaultdict(list)

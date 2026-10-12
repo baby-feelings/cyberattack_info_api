@@ -27,7 +27,7 @@ import time
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Body, Cookie, Depends, HTTPException, Query, status
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -39,6 +39,7 @@ from app.auth.account_store import (
     upsert_user_token,
 )
 from app.auth.github_oauth import (
+    CALLBACK_PATH,
     build_authorize_url,
     exchange_code_for_token,
     get_authenticated_user_login,
@@ -58,12 +59,14 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.notifications import is_valid_slack_webhook_url, send_test_notification
 from app.depscan.user_scan import get_user_scan_status, run_depscan_for_user, should_rescan_for_user
+from app.mcp_server.oauth_consent import complete_github_login
+from app.mcp_server.oauth_flow import decode_state as decode_mcp_oauth_state
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-_CALLBACK_PATH = "/auth/github/callback"
+_CALLBACK_PATH = CALLBACK_PATH
 _STATE_COOKIE = "gh_oauth_state"
 
 # 交換コード（使い捨て・短命）のインメモリストア: {code: (session_token, expires_at)}。
@@ -151,12 +154,18 @@ def github_callback(
     code: str = Query(...),
     state: str = Query(...),
     gh_oauth_state: str | None = Cookie(None),
-) -> RedirectResponse:
+) -> Response:
     if not settings.GITHUB_OAUTH_CLIENT_ID or not settings.GITHUB_OAUTH_CLIENT_SECRET:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="GitHub OAuth is not configured.",
         )
+    # MCP サーバーの OAuth 2.1 ログイン（署名付き state）は、Cookie を使わず別処理へ
+    # （ダッシュボードのログイン用 state はランダム文字列のため、ここでは None になる）
+    mcp_request_id = decode_mcp_oauth_state(state)
+    if mcp_request_id is not None:
+        return complete_github_login(db, mcp_request_id, code)
+
     if not gh_oauth_state or not secrets.compare_digest(gh_oauth_state, state):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OAuth state.")
 

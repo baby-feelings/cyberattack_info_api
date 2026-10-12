@@ -68,15 +68,7 @@ def issue_token(db: Session, username: str, days: int = DEFAULT_DAYS) -> tuple[s
     now = _now()
 
     # 古い行（失効・期限切れから一定期間を過ぎたもの）を掃除してから数える
-    cutoff = now - _RETENTION
-    # synchronize_session=False: SQLite は tz 情報を落とすため、Python 側での比較評価を避ける
-    db.execute(
-        delete(McpToken).where(
-            McpToken.username == username,
-            ((McpToken.revoked_at.is_not(None)) & (McpToken.revoked_at < cutoff))
-            | (McpToken.expires_at < cutoff),
-        ).execution_options(synchronize_session=False),
-    )
+    _purge_stale(db, username, now)
     active = [t for t in _own_tokens(db, username) if token_status(t, now) == "active"]
     if len(active) >= MAX_ACTIVE_TOKENS:
         db.rollback()
@@ -90,14 +82,52 @@ def issue_token(db: Session, username: str, days: int = DEFAULT_DAYS) -> tuple[s
 
 
 def _own_tokens(db: Session, username: str) -> list[McpToken]:
-    return db.query(McpToken).filter(McpToken.username == username).all()
+    """本人が手動で発行したトークン（OAuth 経由の短命トークンは含めない）。"""
+    return (
+        db.query(McpToken)
+        .filter(McpToken.username == username, McpToken.oauth_client_id.is_(None))
+        .all()
+    )
+
+
+def issue_oauth_token(
+    db: Session, username: str, client_id: str, lifetime: timedelta,
+) -> tuple[str, McpToken]:
+    """OAuth 2.1 のトークン交換で、短命のアクセストークンを発行し台帳へ記録する。
+
+    手動発行の上限（MAX_ACTIVE_TOKENS）の対象外。台帳に記録するため、個別の失効・
+    `/mcp` での有効性確認は手動発行のトークンと同じ仕組みで効く。
+    """
+    now = _now()
+    _purge_stale(db, username, now)
+    row = McpToken(
+        id=str(uuid.uuid4()), username=username, oauth_client_id=client_id,
+        expires_at=now + lifetime,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return create_mcp_token(username, row.id, as_utc(row.expires_at)), row
+
+
+def _purge_stale(db: Session, username: str, now: datetime) -> None:
+    """失効・期限切れから一定期間（_RETENTION）を過ぎた本人の行を掃除する。"""
+    cutoff = now - _RETENTION
+    # synchronize_session=False: SQLite は tz 情報を落とすため、Python 側での比較評価を避ける
+    db.execute(
+        delete(McpToken).where(
+            McpToken.username == username,
+            ((McpToken.revoked_at.is_not(None)) & (McpToken.revoked_at < cutoff))
+            | (McpToken.expires_at < cutoff),
+        ).execution_options(synchronize_session=False),
+    )
 
 
 def list_tokens(db: Session, username: str) -> list[McpToken]:
     """本人のトークンを、新しい順に返す（他のユーザーのものは含まない）。"""
     return (
         db.query(McpToken)
-        .filter(McpToken.username == username)
+        .filter(McpToken.username == username, McpToken.oauth_client_id.is_(None))
         .order_by(McpToken.created_at.desc())
         .limit(_LIST_LIMIT)
         .all()
