@@ -87,6 +87,11 @@ claude mcp add --transport http cyberattack-info https://<API のドメイン>/m
   見えない**（本人の GitHub ログインと同意が必須）。悪用対策: redirect_uri は https か
   ループバックの http のみ・1 クライアント 5 件まで、1 時間 60 件・総数 1000 件の上限、
   未使用のまま 30 日を過ぎた登録は自動削除、スコープは `mcp:read` のみ
+- **構成**: `oauth_provider.McpOAuthProvider` は SDK との橋渡し（async への変換・SDK の型への詰め替え・
+  DB セッションの管理）だけを担い、判断は `oauth_services` の同期サービス（`AuthorizationService`=
+  `/authorize` の検証・認可コードの取得と交換、`RefreshService`=リフレッシュのローテーション・許可の
+  取り消し、`AccessTokenService`=アクセストークンの取得と失効）にある。`Session` を引数に取るため、
+  async や HTTP を介さず単体でテストできる（`tests/mcp_server/test_oauth_services.py`）
 - **PR2（実装済み）**: 認可フロー。`/authorize`（SDK）→ 同意画面 `GET/POST /oauth/consent`
   （バックエンドの HTML）→ GitHub ログイン → 既存の `/auth/github/callback` → 認可コード → `/token`
   - GitHub のログインは**スコープなし**（本人確認だけ。リポジトリの内容は読まず、GitHub の
