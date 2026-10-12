@@ -170,6 +170,16 @@ class TestConsentPage:
         assert "localhost:33418" in page.text
         assert page.headers["cache-control"] == "no-store"
 
+    def test_csp_allows_only_the_pages_own_style_hash(self, http):
+        import re
+        page = http.get("/oauth/consent", params={"request_id": "nope"})  # エラーページにも付く
+        csp = page.headers["content-security-policy"]
+        style = re.search(r"<style>(.*?)</style>", page.text, re.S).group(1)
+        digest = base64.b64encode(hashlib.sha256(style.encode()).digest()).decode()
+        assert f"style-src 'sha256-{digest}'" in csp  # ページのスタイルと、許可したハッシュが一致
+        assert "default-src 'none'" in csp and "frame-ancestors 'none'" in csp
+        assert "unsafe-inline" not in csp and "script-src" not in csp  # スクリプトは一切許さない
+
     def test_unknown_request_id_is_rejected(self, http):
         assert http.get("/oauth/consent", params={"request_id": "nope"}).status_code == 400
         assert http.get("/oauth/consent").status_code == 400

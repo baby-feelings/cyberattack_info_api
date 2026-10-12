@@ -23,6 +23,11 @@ services:
       GITHUB_OAUTH_CLIENT_ID: zap-scan-dummy-client-id
       GITHUB_OAUTH_CLIENT_SECRET: zap-scan-dummy-client-secret
       SESSION_SECRET_KEY: zap-scan-dummy-session-secret-key-32bytes
+      # OAuth 2.1（/register・/authorize・/token・/oauth/consent 等）を有効にして診断対象に含める。
+      # issuer は GitHub コールバック（API_BASE_URL_FOR_OAUTH）と同じホストが必須（起動時に検証される）。
+      # http が許されるのは localhost のみ。ZAP は http://api:8000 で到達するが、ルートの診断には影響しない
+      MCP_OAUTH_ISSUER: http://localhost:8000
+      API_BASE_URL_FOR_OAUTH: http://localhost:8000
     networks: [scan]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/openapi.json')"]

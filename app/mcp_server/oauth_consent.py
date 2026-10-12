@@ -14,6 +14,8 @@
 - フレーム埋め込みは全レスポンスの `X-Frame-Options: DENY`（core/security_headers）で防ぐ
 - フォームの本文は urlencoded で、依存を増やさないため手で解析する（小さな上限付き）
 """
+import base64
+import hashlib
 import html
 import logging
 from collections.abc import Callable
@@ -53,23 +55,37 @@ _NO_STORE = {"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"}
 BROWSER_COOKIE = "mcp_oauth_consent"
 
 
+# ページのスタイル。CSP では `unsafe-inline` を許さず、この文字列のハッシュだけを許可する
+_STYLE = (
+    "body{font-family:system-ui,sans-serif;max-width:34rem;margin:2rem auto;"
+    "padding:0 1rem;line-height:1.6}"
+    "dl{background:#f4f4f5;padding:.8rem 1rem;border-radius:.5rem}"
+    "dt{font-weight:600;margin-top:.4rem}dd{margin:0 0 .2rem 0;word-break:break-all}"
+    "button{font-size:1rem;padding:.6rem 1.2rem;margin-right:.6rem;border-radius:.4rem;"
+    "border:1px solid #888;cursor:pointer}"
+    "button.primary{background:#1f6feb;color:#fff;border-color:#1f6feb}"
+    ".note{font-size:.9rem;color:#555}"
+)
+_STYLE_HASH = base64.b64encode(hashlib.sha256(_STYLE.encode()).digest()).decode()
+
+# 外部リソース・スクリプトは一切読み込まない（スタイルは上のハッシュのみ許可）。
+# フレーム埋め込みも禁止。form-action は付けない（許可後の GitHub・拒否後の戻り先への
+# リダイレクトを妨げるため）
+_CSP = (
+    f"default-src 'none'; style-src 'sha256-{_STYLE_HASH}'; "
+    "frame-ancestors 'none'; base-uri 'none'"
+)
+
+
 def _page(title: str, body: str, status_code: int = 200) -> HTMLResponse:
     """最小限のスタイルだけを持つ HTML ページ（外部リソースは読み込まない）。"""
     doc = f"""<!doctype html>
 <html lang="ja"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{html.escape(title)}</title>
-<style>
-body{{font-family:system-ui,sans-serif;max-width:34rem;margin:2rem auto;
-padding:0 1rem;line-height:1.6}}
-dl{{background:#f4f4f5;padding:.8rem 1rem;border-radius:.5rem}}
-dt{{font-weight:600;margin-top:.4rem}} dd{{margin:0 0 .2rem 0;word-break:break-all}}
-button{{font-size:1rem;padding:.6rem 1.2rem;margin-right:.6rem;border-radius:.4rem;
-border:1px solid #888;cursor:pointer}}
-button.primary{{background:#1f6feb;color:#fff;border-color:#1f6feb}}
-.note{{font-size:.9rem;color:#555}}
-</style></head><body>{body}</body></html>"""
-    return HTMLResponse(doc, status_code=status_code, headers=_NO_STORE)
+<style>{_STYLE}</style></head><body>{body}</body></html>"""
+    headers = {**_NO_STORE, "Content-Security-Policy": _CSP}
+    return HTMLResponse(doc, status_code=status_code, headers=headers)
 
 
 def _error_page(message: str, status_code: int = 400) -> HTMLResponse:

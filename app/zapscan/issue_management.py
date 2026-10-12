@@ -24,6 +24,15 @@ RISK_LABELS: dict[int, str] = {0: "Informational", 1: "Low", 2: "Medium", 3: "Hi
 # 1アラートあたり本文に載せる検出URLの最大数（本文が肥大化しないようにする）
 _MAX_URIS_PER_ALERT = 5
 
+# 検討のうえ許容しているアラート（ZAP の pluginid → 理由）。Issue を起票しない。
+# 追加するときは理由を必ず書き、docs/zap-scan.md にも記録する
+ACCEPTED_ALERTS: dict[str, str] = {
+    # OAuth 同意画面（/oauth/consent）の CSP に form-action を付けない。付けると、許可・拒否の
+    # 送信後のリダイレクト（GitHub・クライアントの戻り先）を Chrome がブロックしうるため。
+    # 画面の文字列はすべてエスケープ済みで、フォームを差し替えられる注入点はない
+    "10055": "CSP: Failure to Define Directive with No Fallback（form-action を意図的に省略）",
+}
+
 
 def parse_alerts(report_path: Path, min_risk: int) -> list[dict[str, Any]]:
     """zap-report.json から、リスクが min_risk 以上のアラートを抽出する。
@@ -42,6 +51,8 @@ def parse_alerts(report_path: Path, min_risk: int) -> list[dict[str, Any]]:
             risk = int(alert.get("riskcode", 0))
             if risk < min_risk:
                 continue
+            if str(alert.get("pluginid", "")) in ACCEPTED_ALERTS:
+                continue  # 検討のうえ許容しているもの（理由は ACCEPTED_ALERTS）
             alerts.append(
                 {
                     "name": alert.get("name") or alert.get("alert", ""),

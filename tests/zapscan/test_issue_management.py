@@ -48,6 +48,18 @@ class TestParseAlerts:
         assert alert["uris"] == ["http://api:8000/a"]
         assert "<p>" not in alert["solution"]
 
+    def test_skips_accepted_alerts_only(self, tmp_path):
+        accepted = _alert("CSP: Failure to Define Directive with No Fallback", 2, ["http://a/x"])
+        accepted["pluginid"] = "10055"  # 許容している（理由は ACCEPTED_ALERTS）
+        other = _alert("Real finding", 2, ["http://a/y"])
+        other["pluginid"] = "10038"  # 同じ Medium でも、許容リストに無ければ起票対象
+        alerts = parse_alerts(_write_report(tmp_path, [accepted, other]), min_risk=2)
+        assert [a["name"] for a in alerts] == ["Real finding"]
+
+    def test_accepted_alerts_all_have_a_reason(self):
+        from app.zapscan.issue_management import ACCEPTED_ALERTS
+        assert ACCEPTED_ALERTS and all(reason.strip() for reason in ACCEPTED_ALERTS.values())
+
     def test_returns_empty_when_no_alerts(self, tmp_path):
         assert parse_alerts(_write_report(tmp_path, []), min_risk=0) == []
 

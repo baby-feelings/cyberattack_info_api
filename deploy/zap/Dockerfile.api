@@ -12,9 +12,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app/ ./app/
 COPY alembic.ini .
 COPY alembic/ ./alembic/
+# ZAP 専用の起動ファイル（/mcp・OAuth の定義を OpenAPI に足す。本番では使わない）
+COPY deploy/zap/zap_app.py ./zap_app.py
 
 ENV PYTHONUNBUFFERED=1
 EXPOSE 8000
 
 # テーブルは lifespan の create_all が SQLite に作るため、マイグレーションは実行しない
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "zap_app:app", "--host", "0.0.0.0", "--port", "8000"]
