@@ -47,7 +47,7 @@ class CodeFinding(Base):
 
     # Semgrep のルールID（例: python.lang.security.audit.hardcoded-password）。
     # gitleaks 由来のレコードは Semgrep とのルールID衝突を避けるため
-    # "gitleaks:<RuleID>" のプレフィックスを付与する（app.codescan.crawler._parse_gitleaks_results）
+    # "gitleaks:<RuleID>" のプレフィックスを付与する（app.codescan.scanners.GitleaksScanner.parse）
     rule_id: Mapped[str] = mapped_column(String(500), nullable=False)
 
     # 検知内容の説明（Semgrepの extra.message）
