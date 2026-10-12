@@ -74,6 +74,19 @@ claude mcp add --transport http cyberattack-info https://<API のドメイン>/m
 - **CODESCAN の REST も同時に絞り込み対象にした**: これまでログイン済みなら誰でも全リポジトリの検知結果を
   取得できた。DEPSCAN と同様に、ログイン中ユーザー本人のリポジトリのみに強制した
 
+## OAuth 2.1 対応（実装中。Issue #303）
+貼り付け不要で接続できるよう、MCP 標準の OAuth 2.1 認可フローに段階的に対応する。
+`MCP_OAUTH_ISSUER` が空（既定）の間は何も公開されず、従来のトークン方式のみ動く。
+
+- **PR1（実装済み）**: 認可サーバーのメタデータ（`/.well-known/oauth-authorization-server`、
+  `oauth-protected-resource/mcp`）と動的クライアント登録（`/register`、`oauth_clients` テーブル）。
+  `/authorize`・`/token` は未実装で、呼ぶとエラーを返す（認可が通ることはない）
+- 登録は誰でも呼べる（標準クライアントはログイン前に登録するため）が、**登録だけではデータは
+  見えない**（PR2 以降で本人の GitHub ログインと同意が必須）。悪用対策: redirect_uri は https か
+  ループバックの http のみ・1 クライアント 5 件まで、1 時間 60 件・総数 1000 件の上限、
+  未使用のまま 30 日を過ぎた登録は自動削除、スコープは `mcp:read` のみ
+- PR2: 認可画面（バックエンドの HTML）→ GitHub ログイン → 認可コード → `/token`（PKCE 必須）
+- PR3: リフレッシュトークンのローテーション・失効、ダッシュボードの表示
+
 ## 今後
 
-- OAuth 2.1（MCP 標準の認可フロー）に対応すれば、トークンの貼り付けが不要になる
