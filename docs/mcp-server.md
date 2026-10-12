@@ -59,8 +59,11 @@ claude mcp add --transport http cyberattack-info https://<API のドメイン>/m
 
 ## 設計メモ
 
-- **実装**: `app/mcp_server/`（`server.py` = ツール、`auth.py` = 認証）。ツールはアプリ自身の REST を
-  プロセス内（ASGI）で呼ぶ。検索・検証・所有者による絞り込みのロジックを複製しない
+- **実装**: `app/mcp_server/`（`server.py` = サーバーの組み立て、`tools/` = ツール〈`public`=KEV/OSV/JVN・
+  `private`=DEPSCAN/CODESCAN・`identity`=whoami〉、`gateway.py` = REST への窓口〈`RestGateway`。認証ヘッダーの
+  決定・パラメータ整形・応答の所有者検証〉、`auth.py` = 認証）。ツールはアプリ自身の REST を
+  プロセス内（ASGI）で呼ぶ。検索・検証・所有者による絞り込みのロジックを複製しない。ツールを足すときは
+  該当グループの `tools/*.py` に追加する
 - **ステートレス**: セッションをサーバーに持たない（再起動や複数台構成で壊れない）
 - **トークン**: `app/mcp_server/mcp_token.py`（JWT: sub・jti・aud・exp）。ダッシュボードのセッション（24 時間）とは
   `aud` で区別し、相互に流用できない

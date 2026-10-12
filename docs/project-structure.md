@@ -34,8 +34,8 @@ cyberattack_info_api/
 │   │                           # 登録済み他ユーザー向けのper-user実行はuser_scan.py）
 │   ├── codescan/                # 自アプリコード脆弱性診断（CODESCAN）ドメイン（Semgrep静的解析 + gitleaks
 │   │                           # シークレット検知。issue_management・cvss_mapping含む）
-│   ├── mcp_server/             # AIエージェント向けリモートMCPサーバー（/mcp、Streamable HTTP。server〈ツール〉・
-│   │                           # auth〈admin/public/userの認証。台帳で失効確認〉。詳細は docs/mcp-server.md）
+│   ├── mcp_server/             # AIエージェント向けリモートMCPサーバー（/mcp、Streamable HTTP。server〈組み立て〉・
+│   │                           # tools〈public/private/identity〉・gateway〈RestGateway〉・auth〈admin/public/userの認証。台帳で失効確認〉。詳細は docs/mcp-server.md）
 │   ├── zapscan/                # OWASP ZAPの結果→GitHub Issue起票（`python -m app.zapscan`。docs/zap-scan.md）
 │   └── crawler_logs/           # クローラー実行ログドメイン（models・schemas・writer・router）
 ├── tests/                      # app/ と同じドメイン構成
