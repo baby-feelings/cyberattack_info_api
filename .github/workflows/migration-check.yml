@@ -50,6 +50,8 @@ jobs:
       API_KEY: ci-dummy-api-key
       GITHUB_USERNAME: ci-dummy-user
       ENVIRONMENT: development
+      # alembic コマンドが、リポジトリ直下の app パッケージ（alembic/env.py が import する）を見つけるため
+      PYTHONPATH: .
 
     steps:
       - name: Checkout code
