@@ -52,3 +52,7 @@ git push -u origin feature/your-feature-name
 
 定期実行: pip-audit・OSV-Scanner（毎週）、OWASP ZAP（毎週月曜 03:00 JST。`docs/zap-scan.md`）、
 DEPSCAN/CODESCAN（毎日）。
+
+依存の向きは `tests/test_dependency_rules.py` が検査する（`auth` は `mcp_server` を、`core` は個別の
+ドメインを、CODESCAN・DEPSOPS は DEPSCAN を import してはならない）。新しいモジュールを足す・移すときは、
+このテストが通ることを確認する（例外は理由つきでテスト内に明記）。
