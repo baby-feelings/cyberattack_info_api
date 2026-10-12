@@ -17,6 +17,8 @@ test.db
 dashboard
 tests
 deploy
+# ZAP スキャン用イメージ（deploy/zap/Dockerfile.api）だけが COPY する起動ファイル。本番イメージは COPY しない
+!deploy/zap/zap_app.py
 *.md
 .claude
 .code-review-graph

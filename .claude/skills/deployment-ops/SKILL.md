@@ -45,6 +45,8 @@ Vercelのプレビューは`dashboard/vercel.json`の`ignoreCommand`でダッシ
 **`zap-scan.yml`**: OWASP ZAP API Scanを`workflow_dispatch`と毎週月曜03:00 JSTで実行。使い捨てのAPI
 コンテナ（SQLite・ダミー鍵・外部通信なし、`deploy/zap/`）だけを対象にし、本番には向けない。レポートを
 artifactに保存し、Medium以上を`python -m app.zapscan`でIssue起票（詳細は`docs/zap-scan.md`）。
+FastAPIのOpenAPIに載らない`/mcp`・OAuth 2.1のルートは、ZAP専用の起動ファイル`deploy/zap/zap_app.py`が
+`app/zapscan/openapi_extras.py`の定義を足して診断対象に含める（ZAPのコンテナだけOAuthを有効化）。
 
 **注意（dashboardの依存追加）:** Windowsで`npm install <pkg>`すると、Linux向けの
 `@emnapi/*`・`tslib`（wasm系optional依存）が`package-lock.json`から欠落し、CIの`npm ci`が
