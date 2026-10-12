@@ -5,7 +5,7 @@ GitHub OAuth ログイン成功後、ログインした GitHub ユーザー名�
 リポジトリのみに絞った DEPSCAN データへのアクセスを許可する。
 """
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 
@@ -21,7 +21,7 @@ def create_session_token(username: str) -> str:
     """ログイン済み GitHub ユーザー名を埋め込んだセッショントークンを発行する。"""
     payload = {
         "sub": username,
-        "exp": datetime.now(timezone.utc) + timedelta(hours=_EXPIRES_HOURS),
+        "exp": datetime.now(UTC) + timedelta(hours=_EXPIRES_HOURS),
     }
     return jwt.encode(payload, settings.SESSION_SECRET_KEY, algorithm=_ALGORITHM)
 

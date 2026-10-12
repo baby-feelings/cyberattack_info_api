@@ -1,5 +1,5 @@
 """app.kev.stix（STIX 2.1 Vulnerability SDO変換、Issue #134）のテスト。"""
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 from app.kev.models import Vulnerability
 from app.kev.stix import build_stix_bundle, build_stix_vulnerability, stix_vulnerability_id
@@ -60,7 +60,7 @@ class TestBuildStixVulnerability:
         assert stix_obj["created"].startswith("2026-03-15T00:00:00.000Z")
 
     def test_modified_uses_updated_at_when_present(self):
-        updated = datetime(2026, 7, 1, 12, 30, tzinfo=timezone.utc)
+        updated = datetime(2026, 7, 1, 12, 30, tzinfo=UTC)
         stix_obj = build_stix_vulnerability(_vuln(updated_at=updated))
         assert stix_obj["modified"] == "2026-07-01T12:30:00.000Z"
 

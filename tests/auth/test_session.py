@@ -1,6 +1,6 @@
 """app.auth.session（セッショントークンの発行・検証）のテスト。"""
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
@@ -32,7 +32,7 @@ class TestCreateAndDecodeSessionToken:
     def test_expired_token_returns_none(self):
         with patch("app.auth.session.settings.SESSION_SECRET_KEY", "secret"):
             expired = jwt.encode(
-                {"sub": "octocat", "exp": datetime.now(timezone.utc) - timedelta(hours=1)},
+                {"sub": "octocat", "exp": datetime.now(UTC) - timedelta(hours=1)},
                 "secret", algorithm="HS256",
             )
             assert decode_session_token(expired) is None

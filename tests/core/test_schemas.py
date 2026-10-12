@@ -4,7 +4,7 @@ JVN/OSVスキーマ共通の基底クラス。ORMオブジェクトのdatetime�
 ISO文字列に変換する挙動と、新フィールド追加時の実装漏れを構造的に防ぐ
 （フィールドを手動列挙しない）という設計意図を直接検証する。
 """
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.core.schemas import OrmDatetimeModel
 
@@ -25,13 +25,13 @@ class _FakeOrmObject:
 
 
 def test_converts_datetime_attribute_to_iso_string():
-    obj = _FakeOrmObject(name="x", created_at=datetime(2026, 1, 1, tzinfo=timezone.utc))
+    obj = _FakeOrmObject(name="x", created_at=datetime(2026, 1, 1, tzinfo=UTC))
     result = _Sample.model_validate(obj)
     assert result.created_at == "2026-01-01T00:00:00+00:00"
 
 
 def test_leaves_non_datetime_attributes_untouched():
-    obj = _FakeOrmObject(name="x", created_at=datetime(2026, 1, 1, tzinfo=timezone.utc), note="hi")
+    obj = _FakeOrmObject(name="x", created_at=datetime(2026, 1, 1, tzinfo=UTC), note="hi")
     result = _Sample.model_validate(obj)
     assert result.name == "x"
     assert result.note == "hi"
@@ -59,7 +59,7 @@ def test_missing_attribute_on_orm_object_falls_back_to_none():
     class _FakeMissingAttr:
         def __init__(self):
             self.name = "x"
-            self.created_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+            self.created_at = datetime(2026, 1, 1, tzinfo=UTC)
             # note 属性を意図的に持たせない
 
     result = _Sample.model_validate(_FakeMissingAttr())

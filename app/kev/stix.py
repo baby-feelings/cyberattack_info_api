@@ -15,7 +15,7 @@ OSV/JVNへの拡張はIssue #134の後続対応として実装済み。OSV/JVN�
 生成結果は変更していない）。
 """
 import uuid
-from datetime import date, datetime, time, timezone
+from datetime import UTC, date, datetime, time
 from typing import Any
 
 from app.core.stix import STIX_ID_NAMESPACE, stix_timestamp
@@ -34,7 +34,7 @@ def stix_vulnerability_id(cve_id: str) -> str:
 
 
 def _to_datetime(d: date) -> datetime:
-    return datetime.combine(d, time.min, tzinfo=timezone.utc)
+    return datetime.combine(d, time.min, tzinfo=UTC)
 
 
 def build_stix_vulnerability(vuln: Vulnerability) -> dict[str, Any]:

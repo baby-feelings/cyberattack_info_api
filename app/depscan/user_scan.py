@@ -12,7 +12,7 @@ Issue が飛ぶと驚きになるため、Principle of Least Astonishment を優
 登録済みユーザーにのみオプトインで有効化する）。
 """
 import logging
-from datetime import timedelta, timezone
+from datetime import UTC, timedelta
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -60,7 +60,7 @@ def _older_than(dt: Any, minutes: int = 0, hours: int = 0) -> bool:
     PostgreSQL（本番）・SQLite（開発/テスト）どちらでも比較できるよう補完する。
     """
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     cutoff = now_utc() - timedelta(hours=hours, minutes=minutes)
     return dt < cutoff
 

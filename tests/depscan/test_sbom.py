@@ -1,10 +1,10 @@
 """app.depscan.sbom（CycloneDX/SPDX SBOMエクスポート、Issue #133）のテスト。"""
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.depscan.models import DependencyFinding
 from app.depscan.sbom import build_cyclonedx_sbom, build_purl, build_spdx_sbom
 
-_NOW = datetime.now(timezone.utc)
+_NOW = datetime.now(UTC)
 
 
 def _finding(**kwargs) -> DependencyFinding:

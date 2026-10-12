@@ -6,7 +6,7 @@ GET /api/osv/{osv_id} – OSV ID 個別取得（Issue #134：`format=stix` でST
 """
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, Security
@@ -110,7 +110,7 @@ def get_osv_stats(
     days: int = Query(30, ge=1, le=365, description="集計対象の日数"),
 ) -> OsvStatsResponse:
     """エコシステム・重要度・月別の統計を集計して返す。"""
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff = datetime.now(UTC) - timedelta(days=days)
     base = db.query(OsvVulnerability).filter(OsvVulnerability.modified >= cutoff)
 
     total = base.count()

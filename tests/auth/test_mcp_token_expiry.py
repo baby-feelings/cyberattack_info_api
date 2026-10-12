@@ -1,6 +1,6 @@
 """app.auth.mcp_token_expiry（期限が近い MCP トークンの Slack 通知）のテスト。"""
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
@@ -22,7 +22,7 @@ from app.auth.models import McpToken, UserAccount  # noqa: E402
 from app.core.notifications import notify_mcp_token_expiry  # noqa: E402
 from tests.conftest import TestSessionLocal  # noqa: E402
 
-_NOW = datetime(2026, 10, 12, 0, 0, tzinfo=timezone.utc)
+_NOW = datetime(2026, 10, 12, 0, 0, tzinfo=UTC)
 _HOOK = "https://hooks.slack.com/services/T000/B000/XXXX"
 _SEND = "app.auth.mcp_token_expiry.notify_mcp_token_expiry"
 
@@ -137,7 +137,7 @@ class TestMessageAndJob:
     def test_job_runs_with_given_session_factory(self, db_session):
         _register(db_session)
         row = McpToken(id="t1", username="alice",
-                       expires_at=datetime.now(timezone.utc) + timedelta(days=1))
+                       expires_at=datetime.now(UTC) + timedelta(days=1))
         db_session.add(row)
         db_session.commit()
         with patch(_SEND, return_value=True) as mock_send:

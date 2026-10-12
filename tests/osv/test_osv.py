@@ -5,7 +5,7 @@ GET /api/osv/stats  – 統計情報取得
 クローラーヘルパー関数・API クライアントのユニットテスト
 """
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
@@ -26,7 +26,7 @@ TEST_API_KEY = "test-api-key-for-pytest"
 HEADERS = {"X-API-KEY": TEST_API_KEY}
 
 # テスト用の OSV エントリを生成するヘルパー（days フィルタの範囲内に収まるよう実行時刻基準にする）
-_NOW = datetime.now(timezone.utc)
+_NOW = datetime.now(UTC)
 
 
 def _make_osv(db_session, **kwargs):
@@ -184,7 +184,7 @@ class TestListOsv:
 
     def test_days_filter_excludes_old(self, client, db_session):
         """days フィルタで古いデータが除外されること。"""
-        old_dt = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        old_dt = datetime(2020, 1, 1, tzinfo=UTC)
         _make_osv(db_session, osv_id="GHSA-old-001", modified=old_dt, published=old_dt)
         res = client.get("/api/osv?days=90", headers=HEADERS)
         assert res.json()["total"] == 0
@@ -322,7 +322,7 @@ class TestBuildRecords:
         return base
 
     def test_basic_record(self):
-        modified = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        modified = datetime(2026, 6, 1, tzinfo=UTC)
         records = _build_records(self._vuln(), modified)
         assert len(records) == 1
         r = records[0]
@@ -340,14 +340,14 @@ class TestBuildRecords:
     def test_withdrawn_field_is_parsed(self):
         """OSVスキーマのwithdrawnフィールド（撤回日時）がパースされること。"""
         vuln = self._vuln(withdrawn="2026-07-15T00:00:00Z")
-        modified = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        modified = datetime(2026, 6, 1, tzinfo=UTC)
         records = _build_records(vuln, modified)
-        assert records[0]["withdrawn_at"] == datetime(2026, 7, 15, tzinfo=timezone.utc)
+        assert records[0]["withdrawn_at"] == datetime(2026, 7, 15, tzinfo=UTC)
 
     def test_malformed_withdrawn_field_is_ignored(self):
         """withdrawnが不正な形式の場合はNoneとして扱う。"""
         vuln = self._vuln(withdrawn="not-a-date")
-        modified = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        modified = datetime(2026, 6, 1, tzinfo=UTC)
         records = _build_records(vuln, modified)
         assert records[0]["withdrawn_at"] is None
 
@@ -358,7 +358,7 @@ class TestBuildRecords:
             {"package": {"name": "pkg-a", "ecosystem": "PyPI"}, "versions": [], "ranges": []},
             {"package": {"name": "pkg-b", "ecosystem": "npm"}, "versions": [], "ranges": []},
         ]
-        modified = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        modified = datetime(2026, 6, 1, tzinfo=UTC)
         records = _build_records(vuln, modified)
         assert len(records) == 2
         ecosystems = {r["ecosystem"] for r in records}
@@ -368,7 +368,7 @@ class TestBuildRecords:
         """参考リンクは最大 5 件に制限されること。"""
         vuln = self._vuln()
         vuln["references"] = [{"url": f"https://example.com/{i}"} for i in range(10)]
-        modified = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        modified = datetime(2026, 6, 1, tzinfo=UTC)
         records = _build_records(vuln, modified)
         assert len(records[0]["references"]) == 5
 
@@ -376,7 +376,7 @@ class TestBuildRecords:
         """影響バージョンは最大 30 件に制限されること。"""
         vuln = self._vuln()
         vuln["affected"][0]["versions"] = [str(i) for i in range(50)]
-        modified = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        modified = datetime(2026, 6, 1, tzinfo=UTC)
         records = _build_records(vuln, modified)
         assert len(records[0]["affected_versions"]) == 30
 
@@ -384,7 +384,7 @@ class TestBuildRecords:
         """affected が空の場合はレコードなし。"""
         vuln = self._vuln()
         vuln["affected"] = []
-        modified = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        modified = datetime(2026, 6, 1, tzinfo=UTC)
         records = _build_records(vuln, modified)
         assert records == []
 
@@ -392,7 +392,7 @@ class TestBuildRecords:
 class TestBuildRecordsEdgeCases:
     def test_invalid_published_falls_back_to_modified(self):
         """published が不正な場合は modified で代替されること。"""
-        modified = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        modified = datetime(2026, 6, 1, tzinfo=UTC)
         vuln = {
             "id": "GHSA-pub-err",
             "published": "not-a-valid-date",
@@ -410,7 +410,7 @@ class TestBuildRecordsEdgeCases:
 
     def test_missing_pkg_name_skipped(self):
         """パッケージ名が空の affected エントリはスキップされること。"""
-        modified = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        modified = datetime(2026, 6, 1, tzinfo=UTC)
         vuln = {
             "id": "GHSA-no-name",
             "published": "2026-06-01T00:00:00Z",
@@ -430,7 +430,7 @@ class TestBuildRecordsEdgeCases:
 
     def test_missing_ecosystem_skipped(self):
         """エコシステムが空の affected エントリはスキップされること。"""
-        modified = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        modified = datetime(2026, 6, 1, tzinfo=UTC)
         vuln = {
             "id": "GHSA-no-eco",
             "published": "2026-06-01T00:00:00Z",
@@ -453,7 +453,7 @@ class TestBuildRecordsEdgeCases:
 
 class TestUpsertOsvRecords:
     def _make_rec(self, **kwargs) -> dict:
-        dt = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        dt = datetime(2026, 6, 1, tzinfo=UTC)
         base = {
             "osv_id": "GHSA-upsert-001",
             "ecosystem": "PyPI",
@@ -482,8 +482,8 @@ class TestUpsertOsvRecords:
 
     def test_update_changed_record(self, db_session):
         """modified が変化した既存レコードが更新されること。"""
-        old_dt = datetime(2026, 1, 1, tzinfo=timezone.utc)
-        new_dt = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        old_dt = datetime(2026, 1, 1, tzinfo=UTC)
+        new_dt = datetime(2026, 6, 1, tzinfo=UTC)
         _make_osv(
             db_session,
             osv_id="GHSA-upd-chg",
@@ -499,13 +499,13 @@ class TestUpsertOsvRecords:
 
     def test_fetched_at_refreshed_even_when_unchanged(self, db_session):
         """modified が変化していなくても、fetched_atは毎回のクロールで更新されることを確認する。"""
-        old_dt = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        old_dt = datetime(2026, 1, 1, tzinfo=UTC)
         record = _make_osv(
             db_session, osv_id="GHSA-fetched-refresh", package_name="testpkg",
             modified=old_dt, published=old_dt, fetched_at=old_dt,
         )
 
-        new_fetched_at = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        new_fetched_at = datetime(2026, 6, 1, tzinfo=UTC)
         # SQLite はタイムゾーン情報を保持せず naive で返すため、DBから読み戻した
         # modified をそのまま使い、tzinfo有無の差で不等号判定されないようにする
         rec = self._make_rec(
@@ -644,7 +644,7 @@ class TestFetchAndStoreOsv:
 class TestDeleteOldOsvRecords:
     def test_deletes_old_records(self, db_session):
         """保持期間（OSV_RETENTION_DAYS）を超えた古いレコードが削除されること。"""
-        old_dt = datetime(2000, 1, 1, tzinfo=timezone.utc)
+        old_dt = datetime(2000, 1, 1, tzinfo=UTC)
         _make_osv(db_session, osv_id="GHSA-old-del-001", modified=old_dt, published=old_dt)
         count_before = db_session.query(OsvVulnerability).count()
         assert count_before == 1
@@ -657,7 +657,7 @@ class TestDeleteOldOsvRecords:
 
     def test_keeps_recent_records(self, db_session):
         """保持期間内の新しいレコードは削除されないこと。"""
-        recent_dt = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        recent_dt = datetime(2026, 6, 1, tzinfo=UTC)
         _make_osv(db_session, osv_id="GHSA-recent-keep", modified=recent_dt, published=recent_dt)
 
         deleted = _delete_old_osv_records(db_session)
@@ -668,8 +668,8 @@ class TestDeleteOldOsvRecords:
 
     def test_mixed_records(self, db_session):
         """古いレコードのみ削除され、新しいレコードは残ること。"""
-        old_dt = datetime(2000, 1, 1, tzinfo=timezone.utc)
-        recent_dt = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        old_dt = datetime(2000, 1, 1, tzinfo=UTC)
+        recent_dt = datetime(2026, 6, 1, tzinfo=UTC)
         _make_osv(db_session, osv_id="GHSA-old-mix", modified=old_dt, published=old_dt)
         _make_osv(
             db_session,
@@ -732,7 +732,7 @@ class TestUpsertOsvRecordsCommitFailure:
     """_upsert_osv_records の定期コミット・最終コミット失敗パスをカバーする。"""
 
     def _make_rec(self, osv_id="GHSA-cf-001", pkg="testpkg", **kwargs) -> dict:
-        dt = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        dt = datetime(2026, 6, 1, tzinfo=UTC)
         base = {
             "osv_id": osv_id,
             "ecosystem": "PyPI",
@@ -934,8 +934,8 @@ class TestOsvVulnerabilityOutModelValidate:
         record = _make_osv(
             db_session,
             osv_id="GHSA-fetched-serialize",
-            withdrawn_at=datetime(2026, 2, 1, tzinfo=timezone.utc),
-            fetched_at=datetime(2026, 9, 7, 9, 32, 44, tzinfo=timezone.utc),
+            withdrawn_at=datetime(2026, 2, 1, tzinfo=UTC),
+            fetched_at=datetime(2026, 9, 7, 9, 32, 44, tzinfo=UTC),
         )
         # SQLiteはtz情報を保持せず返すため、日時部分のみ比較する
         result = OsvVulnerabilityOut.model_validate(record)
@@ -1022,7 +1022,7 @@ class TestOsvRecordHelpers:
     def test_common_fields_cap_references_and_fall_back_published_to_modified(self):
         from app.osv.crawler import _vuln_common_fields
 
-        modified = datetime(2026, 2, 1, tzinfo=timezone.utc)
+        modified = datetime(2026, 2, 1, tzinfo=UTC)
         vuln = {
             "id": "GHSA-x", "aliases": ["CVE-1", "", None],
             "summary": "  s  ", "details": "",
@@ -1040,7 +1040,7 @@ class TestOsvRecordHelpers:
         assert common["withdrawn_at"] is not None
 
     def test_build_records_shares_common_fields_across_affected_packages(self):
-        modified = datetime(2026, 2, 1, tzinfo=timezone.utc)
+        modified = datetime(2026, 2, 1, tzinfo=UTC)
         vuln = {
             "id": "GHSA-multi",
             "affected": [

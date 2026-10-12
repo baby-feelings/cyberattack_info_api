@@ -1,5 +1,5 @@
 """app.osv.stix（STIX 2.1 Vulnerability SDO変換、Issue #134のOSV拡張）のテスト。"""
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.osv.models import OsvVulnerability
 from app.osv.stix import build_stix_bundle, build_stix_vulnerability, stix_vulnerability_id
@@ -18,8 +18,8 @@ def _vuln(**kwargs) -> OsvVulnerability:
         "affected_versions": ["0.1.0"],
         "fixed_versions": ["0.2.0"],
         "references": [],
-        "published": datetime(2026, 6, 1, tzinfo=timezone.utc),
-        "modified": datetime(2026, 6, 2, tzinfo=timezone.utc),
+        "published": datetime(2026, 6, 1, tzinfo=UTC),
+        "modified": datetime(2026, 6, 2, tzinfo=UTC),
     }
     defaults.update(kwargs)
     return OsvVulnerability(**defaults)
@@ -87,8 +87,8 @@ class TestBuildStixVulnerability:
 
     def test_created_and_modified_use_published_and_modified(self):
         stix_obj = build_stix_vulnerability(_vuln(
-            published=datetime(2026, 3, 15, 1, 2, 3, tzinfo=timezone.utc),
-            modified=datetime(2026, 4, 1, 4, 5, 6, tzinfo=timezone.utc),
+            published=datetime(2026, 3, 15, 1, 2, 3, tzinfo=UTC),
+            modified=datetime(2026, 4, 1, 4, 5, 6, tzinfo=UTC),
         ))
         assert stix_obj["created"] == "2026-03-15T01:02:03.000Z"
         assert stix_obj["modified"] == "2026-04-01T04:05:06.000Z"

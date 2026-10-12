@@ -1,5 +1,5 @@
 """app.jvn.stix（STIX 2.1 Vulnerability SDO変換、Issue #134のJVN拡張）のテスト。"""
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.jvn.models import JvnVulnerability
 from app.jvn.stix import build_stix_bundle, build_stix_vulnerability, stix_vulnerability_id
@@ -17,8 +17,8 @@ def _vuln(**kwargs) -> JvnVulnerability:
         "affected_products": [],
         "references": [],
         "jvn_url": "https://jvndb.jvn.jp/ja/contents/2026/JVNDB-2026-000001.html",
-        "date_published": datetime(2026, 6, 1, tzinfo=timezone.utc),
-        "date_last_modified": datetime(2026, 6, 2, tzinfo=timezone.utc),
+        "date_published": datetime(2026, 6, 1, tzinfo=UTC),
+        "date_last_modified": datetime(2026, 6, 2, tzinfo=UTC),
     }
     defaults.update(kwargs)
     return JvnVulnerability(**defaults)
@@ -65,8 +65,8 @@ class TestBuildStixVulnerability:
 
     def test_created_and_modified_use_date_published_and_last_modified(self):
         stix_obj = build_stix_vulnerability(_vuln(
-            date_published=datetime(2026, 3, 15, 1, 2, 3, tzinfo=timezone.utc),
-            date_last_modified=datetime(2026, 4, 1, 4, 5, 6, tzinfo=timezone.utc),
+            date_published=datetime(2026, 3, 15, 1, 2, 3, tzinfo=UTC),
+            date_last_modified=datetime(2026, 4, 1, 4, 5, 6, tzinfo=UTC),
         ))
         assert stix_obj["created"] == "2026-03-15T01:02:03.000Z"
         assert stix_obj["modified"] == "2026-04-01T04:05:06.000Z"

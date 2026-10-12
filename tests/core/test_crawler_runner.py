@@ -6,7 +6,7 @@ Issue #239: APScheduler（毎日自動実行）とGitHub Actionsのdaily-crawl.y
 DEPSCAN/CODESCANはUpsertのため実害が薄いが、DEPSOPSは実行ごとに1行追記する
 ログ設計のため件数が二重に膨れ上がっていた（本番で総件数2388件中約半数が重複）。
 """
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 from app.core.crawler_runner import CrawlCounters, CrawlJob, already_succeeded_today, run_crawler
@@ -29,30 +29,30 @@ class TestAlreadySucceededToday:
         assert already_succeeded_today("KEV") is False
 
     def test_returns_true_when_succeeded_earlier_today(self, db_session):
-        _make_log(db_session, "KEV", "success", datetime.now(timezone.utc))
+        _make_log(db_session, "KEV", "success", datetime.now(UTC))
         assert already_succeeded_today("KEV") is True
 
     def test_returns_false_when_only_failed_today(self, db_session):
         """今日の実行が全て失敗（error）なら、まだ成功していないので実行を許可する。"""
-        _make_log(db_session, "KEV", "error", datetime.now(timezone.utc))
+        _make_log(db_session, "KEV", "error", datetime.now(UTC))
         assert already_succeeded_today("KEV") is False
 
     def test_returns_false_when_success_was_yesterday(self, db_session):
         """前日の成功は「今日」の判定に含めない（UTC日付境界で区切る）。"""
-        yesterday = datetime.now(timezone.utc) - timedelta(days=1)
+        yesterday = datetime.now(UTC) - timedelta(days=1)
         _make_log(db_session, "KEV", "success", yesterday)
         assert already_succeeded_today("KEV") is False
 
     def test_is_scoped_to_the_specific_crawler_type(self, db_session):
         """他のクローラー種別の成功記録には影響されない。"""
-        _make_log(db_session, "OSV", "success", datetime.now(timezone.utc))
+        _make_log(db_session, "OSV", "success", datetime.now(UTC))
         assert already_succeeded_today("KEV") is False
 
 
 class TestRunCrawlerDeduplication:
     def test_skips_body_when_already_succeeded_today(self, db_session):
         """今日既に成功済みなら body を呼ばずに (0, 0, 0) を返す（force未指定）。"""
-        _make_log(db_session, "KEV", "success", datetime.now(timezone.utc))
+        _make_log(db_session, "KEV", "success", datetime.now(UTC))
         mock_body = MagicMock()
 
         result = run_crawler("KEV", mock_body)
@@ -62,7 +62,7 @@ class TestRunCrawlerDeduplication:
 
     def test_force_bypasses_the_skip(self, db_session):
         """force=True なら今日成功済みでも body を実行する（動作確認用の手動再実行）。"""
-        _make_log(db_session, "KEV", "success", datetime.now(timezone.utc))
+        _make_log(db_session, "KEV", "success", datetime.now(UTC))
 
         def _body(db, counters: CrawlCounters) -> None:
             counters.inserted = 5
@@ -153,7 +153,7 @@ class TestCrawlJob:
         mock_notify.assert_called_once_with("KEV", 4, 0, 0)
 
     def test_skip_returns_skipped_result_without_executing(self, db_session):
-        _make_log(db_session, "DEPSCAN", "success", datetime.now(timezone.utc))
+        _make_log(db_session, "DEPSCAN", "success", datetime.now(UTC))
         job = _FakeJob()
 
         assert job.run() == (-1, -1, -1)

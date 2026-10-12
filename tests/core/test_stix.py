@@ -1,5 +1,5 @@
 """app.core.stix（STIX 2.1変換の共通処理、Issue #134のOSV/JVN拡張）のテスト。"""
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 
 from app.core.stix import STIX_ID_NAMESPACE, stix_timestamp
 
@@ -14,7 +14,7 @@ class TestStixIdNamespace:
 
 class TestStixTimestamp:
     def test_formats_as_rfc3339_with_millis_and_z_suffix(self):
-        dt = datetime(2026, 3, 15, 12, 30, 45, 123456, tzinfo=timezone.utc)
+        dt = datetime(2026, 3, 15, 12, 30, 45, 123456, tzinfo=UTC)
         assert stix_timestamp(dt) == "2026-03-15T12:30:45.123Z"
 
     def test_converts_non_utc_timezone_to_utc(self):
@@ -26,5 +26,5 @@ class TestStixTimestamp:
         assert stix_timestamp(dt) == "2026-03-15T12:30:00.000Z"
 
     def test_truncates_microseconds_to_milliseconds(self):
-        dt = datetime(2026, 1, 1, 0, 0, 0, 999_999, tzinfo=timezone.utc)
+        dt = datetime(2026, 1, 1, 0, 0, 0, 999_999, tzinfo=UTC)
         assert stix_timestamp(dt) == "2026-01-01T00:00:00.999Z"

@@ -6,7 +6,7 @@
 """
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Final
 
 from sqlalchemy import delete
@@ -39,12 +39,12 @@ class TooManyTokensError(Exception):
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def as_utc(dt: datetime) -> datetime:
     """SQLite は tz 情報を落とすため、UTC として解釈して aware にそろえる。"""
-    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
 
 
 def token_status(token: McpToken, now: datetime | None = None) -> str:

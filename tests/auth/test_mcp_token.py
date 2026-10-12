@@ -1,6 +1,6 @@
 """app.auth.mcp_token（MCP トークン JWT の発行・検証）のテスト。"""
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
@@ -19,7 +19,7 @@ _AUD = "cyberattack-info-mcp"
 
 
 def _future() -> datetime:
-    return datetime.now(timezone.utc) + timedelta(days=1)
+    return datetime.now(UTC) + timedelta(days=1)
 
 
 def _encode(payload: dict, key: str | None = None) -> str:
@@ -39,7 +39,7 @@ class TestMcpTokenJwt:
         assert decode_session_token(create_mcp_token("alice", "tok-1", _future())) is None
 
     def test_expired_token_is_rejected(self):
-        past = datetime.now(timezone.utc) - timedelta(seconds=1)
+        past = datetime.now(UTC) - timedelta(seconds=1)
         assert verify_mcp_token(create_mcp_token("alice", "tok-1", past)) is None
 
     def test_wrong_signature_is_rejected(self):

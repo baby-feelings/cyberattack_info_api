@@ -18,7 +18,7 @@ import logging
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, time, timezone
+from datetime import UTC, datetime, time
 
 from sqlalchemy.orm import Session
 
@@ -47,7 +47,7 @@ def already_succeeded_today(crawler_type: CrawlerType) -> bool:
     """
     db = SessionLocal()
     try:
-        today_start_utc = datetime.combine(now_utc().date(), time.min, tzinfo=timezone.utc)
+        today_start_utc = datetime.combine(now_utc().date(), time.min, tzinfo=UTC)
         existing = (
             db.query(CrawlerLog)
             .filter(

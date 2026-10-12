@@ -5,7 +5,7 @@ GitHub API クライアント・クローラーロジック・Slack通知のユ�
 外部 HTTP 通信（GitHub API・OSV API）はすべてモックする。
 """
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
@@ -45,7 +45,7 @@ from app.kev.models import Vulnerability  # noqa: E402
 TEST_API_KEY = "test-api-key-for-pytest"
 HEADERS = {"X-API-KEY": TEST_API_KEY}
 
-_NOW = datetime.now(timezone.utc)
+_NOW = datetime.now(UTC)
 
 
 def _make_finding(db_session, **kwargs) -> DependencyFinding:
@@ -1214,13 +1214,13 @@ class TestFetchAndScanDependenciesDeduplication:
     """Issue #239: APScheduler・GitHub Actionsの二重トリガー対策。"""
 
     def test_skips_when_already_succeeded_today(self, db_session):
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from app.crawler_logs.models import CrawlerLog
 
         db_session.add(CrawlerLog(
             crawler_type="DEPSCAN", status="success",
-            started_at=datetime.now(timezone.utc), finished_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC), finished_at=datetime.now(UTC),
             duration_seconds=1.0,
         ))
         db_session.commit()
@@ -1232,13 +1232,13 @@ class TestFetchAndScanDependenciesDeduplication:
         mock_collect.assert_not_called()
 
     def test_force_bypasses_the_skip(self, db_session):
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from app.crawler_logs.models import CrawlerLog
 
         db_session.add(CrawlerLog(
             crawler_type="DEPSCAN", status="success",
-            started_at=datetime.now(timezone.utc), finished_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC), finished_at=datetime.now(UTC),
             duration_seconds=1.0,
         ))
         db_session.commit()

@@ -12,7 +12,7 @@
 import logging
 from collections import defaultdict
 from collections.abc import Callable
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
@@ -30,7 +30,7 @@ NOTICE_WINDOW = timedelta(days=3)
 
 def find_expiring_tokens(db: Session, now: datetime | None = None) -> dict[str, list[McpToken]]:
     """期限が近い（残り NOTICE_WINDOW 以内）未通知の有効トークンを、ユーザーごとに返す。"""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     rows = (
         db.query(McpToken)
         .filter(McpToken.revoked_at.is_(None), McpToken.expiry_notified_at.is_(None))
@@ -46,7 +46,7 @@ def find_expiring_tokens(db: Session, now: datetime | None = None) -> dict[str, 
 
 def send_expiry_notices(db: Session, now: datetime | None = None) -> int:
     """期限前通知を送り、送れたユーザーのトークンを「通知済み」にする。送ったユーザー数を返す。"""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     sent = 0
     for username, tokens in find_expiring_tokens(db, now).items():
         webhook = get_webhook_for_user(db, username)

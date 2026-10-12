@@ -12,7 +12,7 @@ FastAPI は `Depends()` に渡したクラスの `__init__` 引数をクエリ�
 - `RepoFindingFilter`: DEPSCAN / CODESCAN 共通（リポジトリ・オーナー・重要度・解決状態）
 """
 from collections.abc import Callable
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any, ClassVar, Literal
 
 from fastapi import HTTPException, status
@@ -46,7 +46,7 @@ class FeedListFilter:
 
     def base_query(self, db: Any) -> SaQuery[Any]:
         """直近 `days` 日以内に更新されたレコードに絞った出発点のクエリ。"""
-        cutoff = datetime.now(timezone.utc) - timedelta(days=self.days)
+        cutoff = datetime.now(UTC) - timedelta(days=self.days)
         return db.query(self.model).filter(getattr(self.model, self.date_column) >= cutoff)
 
     def apply(self, query: SaQuery[Any]) -> SaQuery[Any]:
