@@ -5,6 +5,13 @@ description: Reactダッシュボード（dashboard/）のアーキテクチャ�
 
 # ダッシュボード（React）内部実装リファレンス
 
+## 認証付きAPI呼び出しの共通化（`api/auth/request.ts`）
+ログイン中ユーザーとして呼ぶAPIは、どれも「Bearerヘッダー→401ならUnauthorizedError→他の失敗はError」の同じ形だったため
+`authorizedFetch(path, authToken, errorLabel, {method, body, explain})`に集約した。`explain`は、サーバーの説明文
+（`detail`）をそのまま画面に出してよいステータス（上限超過409・登録できないWebhook=`'any'`）だけに指定する
+（それ以外は固定文言で、内部の詳細を出さない）。交換コードの交換（`exchangeAuthCode`）はまだログイン前なので使わない。
+テスト用の`jsonResponse`は`src/test/http.ts`（カバレッジの対象外）。
+
 ## タブ切り替え UI（App.tsx）
 KEV / OSV / JVN / DEPSCAN / CODESCAN の 5 データソースは、画面下部固定のタブバーで切り替え
 表示する構成（縦並び表示ではない）。DEPSOPS（Dependabot 運用状況）に専用タブは作らず、DEPSCAN
@@ -92,13 +99,13 @@ CODESCAN追加後もキー名はあえて変更せず両ドメインで共有す
 `SettingsPanel.tsx`（Issue #227: ユーザー別Slack通知登録画面）も同じ`useGithubSession()`
 を引数無しで呼ぶ第三の利用箇所。ヘッダー右上のハンバーガーメニュー（`HeaderMenu.tsx`の
 `menuOpen` state と`App.tsx`の`settingsOpen` state）から開くモーダルとして実装しており、タブ切り替えとは
-独立した表示（下部固定タブバーとは別のUI階層）。`api/auth.ts`の
+独立した表示（下部固定タブバーとは別のUI階層）。`api/auth/`（`session.ts`）の
 `fetchNotificationSettings`/`putNotificationSettings`/`deleteNotificationSettings`を使い、
 登録（PUT）はバックエンド側で実際にテスト送信されるため、フォーム側は成功/失敗メッセージを
 そのまま表示するだけでよい（クライアント側でのURL妥当性検証はプレフィックスチェックのみ）。
 
 同じ設定画面の下段に`McpTokenSection.tsx`（リモートMCPサーバー用トークンの発行欄）がある。
-`api/auth.ts`の`issueMcpToken(authToken, days)`（`POST /auth/mcp-token`、有効期限は7/30/90日の選択式）・
+`api/auth/mcpTokens.ts`の`issueMcpToken(authToken, days)`（`POST /auth/mcp-token`、有効期限は7/30/90日の選択式）・
 `listMcpTokens`・`revokeMcpToken`を使い、`claude mcp add ...`の登録コマンドと有効期限を**発行時の1回だけ**
 表示する（トークン本体はサーバーに保存されない）。下段に発行済みトークンの一覧（状態・期限・最終使用日）と
 有効なものへの「失効」ボタン（`window.confirm`で確認。表示中のコマンドのトークンを失効したらコマンドも消す）を出す。
@@ -118,7 +125,7 @@ CODESCAN追加後もキー名はあえて変更せず両ドメインで共有す
 
 ## APIクライアントの分割構成（dashboard/src/api/）
 `client.ts`（元は451行の単一ファイル）は、ドメインごとに `shared.ts`/`kev.ts`/`osv.ts`/
-`jvn.ts`/`depscan.ts`/`depsops.ts`/`codescan.ts`/`crawlerLogs.ts`/`auth.ts` に分割し、
+`jvn.ts`/`depscan.ts`/`depsops.ts`/`codescan.ts`/`crawlerLogs.ts`/`auth/`（`session`・`notifications`・`mcpTokens`・`oauthConnections`の4モジュール+共通の`request.ts`）に分割し、
 `client.ts`自体はバーレル（re-export）として残している。既存の`import { xxx } from
 '../api/client'`は全て動き続ける。新しいAPI呼び出し関数を追加する場合は対応ドメインの
 ファイルに追加すること。
