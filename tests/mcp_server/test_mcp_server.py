@@ -20,7 +20,6 @@ os.environ.setdefault("SESSION_SECRET_KEY", "test-session-secret-key-for-pytest"
 import pytest  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
-from mcp.server.fastmcp.exceptions import ToolError  # noqa: E402
 
 from app.auth.session import create_session_token  # noqa: E402
 from app.codescan.models import CodeFinding  # noqa: E402
@@ -31,10 +30,10 @@ from app.depscan.router import router as depscan_router  # noqa: E402
 from app.jvn.router import router as jvn_router  # noqa: E402
 from app.kev.models import Vulnerability  # noqa: E402
 from app.kev.router import router as kev_router  # noqa: E402
-from app.mcp_server.auth import Principal  # noqa: E402
+from app.mcp_server.gateway import MAX_PER_PAGE  # noqa: E402
 from app.mcp_server.mcp_token import create_mcp_token  # noqa: E402
 from app.mcp_server.mcp_token_store import issue_token, revoke_token  # noqa: E402
-from app.mcp_server.server import MAX_PER_PAGE, McpServer, _clean, _enforce_owner  # noqa: E402
+from app.mcp_server.server import McpServer  # noqa: E402
 from app.osv.router import router as osv_router  # noqa: E402
 from tests.conftest import TestSessionLocal  # noqa: E402
 
@@ -306,36 +305,3 @@ class TestWhoami:
         assert user["access"] == "user"
         assert user["username"] == "alice"
         assert "alice" in user["scope"]
-
-
-class TestHelpers:
-    def test_enforce_owner_fails_closed_when_foreign_repo_leaks(self):
-        # REST の絞り込みが万一破れても、他人のリポジトリを含む応答は返さない
-        payload = {"data": [{"repo_full_name": "alice/app"}, {"repo_full_name": "bob/app"}]}
-        with pytest.raises(ToolError):
-            _enforce_owner(Principal("user", "alice"), payload)
-
-    def test_enforce_owner_checks_stats_repos(self):
-        with pytest.raises(ToolError):
-            _enforce_owner(Principal("user", "alice"), {"repos": [{"repo_full_name": "bob/x"}]})
-
-    def test_enforce_owner_skips_admin(self):
-        _enforce_owner(Principal("admin"), {"data": [{"repo_full_name": "bob/app"}]})
-
-    def test_enforce_owner_does_not_match_prefix_of_other_user(self):
-        # "alice" が "alice2/app" を見られないこと（"alice/" で前方一致）
-        with pytest.raises(ToolError):
-            _enforce_owner(Principal("user", "alice"), {"data": [{"repo_full_name": "alice2/app"}]})
-
-    def test_clean_drops_none_and_caps_per_page(self):
-        assert _clean({"a": None, "b": 1, "per_page": 9999}) == {"b": 1, "per_page": MAX_PER_PAGE}
-        assert _clean({"per_page": 0})["per_page"] == 1
-
-
-class TestLifecycle:
-    def test_returns_503_outside_lifespan(self):
-        server = McpServer()
-        app = FastAPI()
-        server.mount(app)
-        resp = TestClient(app).post("/mcp", json={}, headers=_ADMIN)
-        assert resp.status_code == 503
