@@ -117,7 +117,7 @@ def build_consent_router(session_factory: SessionFactory) -> APIRouter:
             row = oauth_flow.load_pending(db, request_id)
             if row is None:
                 return _error_page("認可リクエストが無効か、期限切れです。")
-            # 最初に開いたブラウザに紐づける。紐づけ済みなら、同じブラウザ（Cookie 一致）だけ表示する
+            # 最初に開いたブラウザに紐づける。紐づけ済みなら、同じブラウザ（Cookie 一致）だけ表示
             new_nonce = oauth_flow.bind_browser(db, row)
             if new_nonce is None and not oauth_flow.is_bound_to(row, browser_nonce):
                 return _error_page("この認可リクエストは、別のブラウザで開かれています。", 403)
