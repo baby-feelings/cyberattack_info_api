@@ -17,7 +17,11 @@ useDefault = true
 # gitleaks 8.x は allowlist をテーブル（配列ではない）として読む。
 # 配列表記 [[allowlist]] だと "expected a map, got slice" で設定の読み込みに失敗する
 [allowlist]
-description = "CODESCANのgitleaks結果パース処理を検証するためのテスト用ダミーAWSキー（実データではない）"
+description = "テスト用のダミー値（実データではない）: CODESCANのgitleaks結果パース検証用AWSキー、tests/配下のダミーFernet鍵"
 paths = [
   '''tests/codescan/test_crawler\.py''',
+]
+# pytest 用に tests/conftest.py 等が設定するダミーの暗号鍵（本番の鍵ではない）
+regexes = [
+  '''c0eGxtqQBhGVNn9Fews4q_WLHX0gkNbLg0MbuS_bUIc=''',
 ]

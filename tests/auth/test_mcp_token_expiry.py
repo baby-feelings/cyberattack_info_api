@@ -8,7 +8,7 @@ os.environ.setdefault("API_KEY", "test-api-key-for-pytest")
 os.environ.setdefault("ENVIRONMENT", "development")
 os.environ.setdefault("GITHUB_USERNAME", "test-github-user")
 os.environ.setdefault("SESSION_SECRET_KEY", "test-session-secret-key-for-pytest")
-os.environ.setdefault("TOKEN_ENCRYPTION_KEY", "c0eGxtqQBhGVNn9Fews4q_WLHX0gkNbLg0MbuS_bUIc=")
+# TOKEN_ENCRYPTION_KEY は tests/conftest.py が先に設定する（鍵の文字列はここに書かない）
 
 import pytest  # noqa: E402
 
