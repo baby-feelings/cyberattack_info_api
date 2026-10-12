@@ -104,6 +104,9 @@ class Settings(BaseSettings):
     # DEPSOPSの定期実行時刻（UTC）。DEPSOPSの後段: JST 8:30 = UTC 23:30
     USER_CRAWL_CRON_HOUR_UTC: int = 23
     USER_CRAWL_CRON_MINUTE_UTC: int = 30
+    # MCPトークンの期限前通知: 毎日 UTC 23:45（JST 翌日 8:45）
+    MCP_EXPIRY_NOTICE_CRON_HOUR_UTC: int = 23
+    MCP_EXPIRY_NOTICE_CRON_MINUTE_UTC: int = 45
 
     model_config = SettingsConfigDict(
         # 環境に応じて .env.development または .env.production を使用

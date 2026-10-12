@@ -373,6 +373,26 @@ def send_test_notification(webhook_url: str, username: str) -> bool:
     return _send_slack(message, webhook_url)
 
 
+def notify_mcp_token_expiry(webhook_url: str, expiry_dates: list[str]) -> bool:
+    """MCP トークンの期限が近いことを、そのユーザー本人の Webhook にだけ通知する。
+
+    トークン本体は載せない。再発行の手順だけを案内する。送信に成功したかを返す
+    （呼び出し側は成功したときだけ「通知済み」にする）。
+
+    Args:
+        expiry_dates: 期限が近いトークンの有効期限（YYYY-MM-DD）の一覧。
+    """
+    lines = "\n".join(f">• 有効期限 {d}" for d in sorted(expiry_dates))
+    message = (
+        f":hourglass_flowing_sand: *MCPトークンの期限が近づいています*（{len(expiry_dates)}件）\n"
+        f"{lines}\n"
+        ">期限が切れると、AIエージェントからのMCP接続が401になります。"
+        "ダッシュボードの「設定」→「MCPトークン」で再発行し、登録し直してください。\n"
+        f">詳細: {DASHBOARD_URL}"
+    )
+    return _send_slack(message, webhook_url)
+
+
 # ── Slack 送信 ────────────────────────────────────────────────────
 
 

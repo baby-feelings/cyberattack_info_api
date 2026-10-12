@@ -80,3 +80,8 @@ class McpToken(Base):
 
     # 最終使用日時（MCP 接続で認証が通った最新の時刻。書き込みの頻度を抑えるため分単位で間引く）
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # 期限が近いことを Slack で通知した日時（1トークンにつき通知は1回。未通知なら null）
+    expiry_notified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+    )

@@ -98,6 +98,7 @@ export function McpTokenSection({ authToken }: { authToken: string }) {
         <p className="text-xs text-slate-500 leading-relaxed">
           AIエージェントからこのAPIをMCPサーバーとして使うためのトークンです。
           このトークンで参照できるDEPSCAN・CODESCANは、あなたが所有するリポジトリのみです。
+          Slack通知を登録すると、期限の3日前にお知らせします。
         </p>
       </div>
 

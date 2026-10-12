@@ -14,6 +14,7 @@ from typing import Any
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
+from app.auth.mcp_token_expiry import run_mcp_token_expiry_notices
 from app.codescan.crawler import fetch_and_scan_code
 from app.core.config import settings
 from app.core.repo_cleanup import run_repo_cleanup
@@ -73,6 +74,11 @@ def build_scheduled_jobs() -> list[ScheduledJob]:
         ScheduledJob(
             "user_crawl", "USER_CRAWL", run_user_crawls_for_all_accounts,
             settings.USER_CRAWL_CRON_HOUR_UTC, settings.USER_CRAWL_CRON_MINUTE_UTC,
+        ),
+        # MCPトークンの期限前通知（Slack）: 登録ユーザー向けクロールの後段に配置
+        ScheduledJob(
+            "mcp_token_expiry_notice", "MCP_EXPIRY_NOTICE", run_mcp_token_expiry_notices,
+            settings.MCP_EXPIRY_NOTICE_CRON_HOUR_UTC, settings.MCP_EXPIRY_NOTICE_CRON_MINUTE_UTC,
         ),
     ]
 
