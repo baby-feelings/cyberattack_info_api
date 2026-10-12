@@ -154,6 +154,8 @@ def github_callback(
     code: str = Query(...),
     state: str = Query(...),
     gh_oauth_state: str | None = Cookie(None),
+    # MCP の OAuth で同意画面を開いたブラウザの識別 Cookie（名前は oauth_consent.BROWSER_COOKIE）
+    mcp_oauth_consent: str | None = Cookie(None),
 ) -> Response:
     if not settings.GITHUB_OAUTH_CLIENT_ID or not settings.GITHUB_OAUTH_CLIENT_SECRET:
         raise HTTPException(
@@ -164,7 +166,7 @@ def github_callback(
     # （ダッシュボードのログイン用 state はランダム文字列のため、ここでは None になる）
     mcp_request_id = decode_mcp_oauth_state(state)
     if mcp_request_id is not None:
-        return complete_github_login(db, mcp_request_id, code)
+        return complete_github_login(db, mcp_request_id, code, mcp_oauth_consent)
 
     if not gh_oauth_state or not secrets.compare_digest(gh_oauth_state, state):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OAuth state.")

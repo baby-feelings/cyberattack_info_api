@@ -47,8 +47,10 @@ _MAX_NAME_CHARS = 80
 
 _NO_STORE = {"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"}
 
-# 同意画面を開いたブラウザを識別する Cookie（許可・拒否の送信元の確認用。10 分で失効）
-_BROWSER_COOKIE = "mcp_oauth_consent"
+# 同意画面を開いたブラウザを識別する Cookie（許可・拒否の送信と、GitHub から戻るコールバックで、
+# 同じブラウザかを確認する。10 分で失効）。コールバックは別パス（/auth/github/callback）のため
+# パスは / にする（HttpOnly・Secure。GitHub からの遷移は最上位の GET なので SameSite=Lax でも届く）
+BROWSER_COOKIE = "mcp_oauth_consent"
 
 
 def _page(title: str, body: str, status_code: int = 200) -> HTMLResponse:
@@ -127,8 +129,8 @@ def build_consent_router(session_factory: SessionFactory) -> APIRouter:
             if new_nonce is not None:
                 max_age = int(oauth_flow.REQUEST_TTL.total_seconds())
                 page.set_cookie(
-                    _BROWSER_COOKIE, new_nonce, max_age=max_age,
-                    path=CONSENT_PATH, httponly=True, secure=True, samesite="lax",
+                    BROWSER_COOKIE, new_nonce, max_age=max_age,
+                    path="/", httponly=True, secure=True, samesite="lax",
                 )
             return page
 
@@ -159,7 +161,7 @@ def build_consent_router(session_factory: SessionFactory) -> APIRouter:
 
     @router.get(CONSENT_PATH)
     def consent_page(request: Request, request_id: str = "") -> Response:
-        return _show(request_id, request.cookies.get(_BROWSER_COOKIE))
+        return _show(request_id, request.cookies.get(BROWSER_COOKIE))
 
     @router.post(CONSENT_PATH)
     async def consent_submit(request: Request) -> Response:
@@ -170,21 +172,29 @@ def build_consent_router(session_factory: SessionFactory) -> APIRouter:
         request_id = (form.get("request_id") or [""])[0]
         action = (form.get("action") or [""])[0]
         return await run_in_threadpool(
-            _decide, request_id, action, request.cookies.get(_BROWSER_COOKIE),
+            _decide, request_id, action, request.cookies.get(BROWSER_COOKIE),
         )
 
     return router
 
 
-def complete_github_login(db: Session, request_id: str, github_code: str) -> Response:
+def complete_github_login(
+    db: Session, request_id: str, github_code: str, browser_nonce: str | None,
+) -> Response:
     """GitHub のコールバック（MCP 用の state）: 本人を確認し、認可コードを発行して戻す。
 
     ダッシュボードのログイン（`/auth/github/callback` の通常経路）とは別物で、GitHub の
     アクセストークンは保存せず、ユーザー名の取得だけに使って捨てる。
+
+    **同意画面を開いたブラウザからの戻りだけを受け付ける**（Cookie で確認。state は攻撃者も
+    自分の認可リクエスト分を入手できるため、これが無いと、被害者に攻撃者の state 付きの GitHub
+    認可 URL を踏ませて、被害者の本人確認を攻撃者の認可リクエストに紐づけられる）。
     """
     row = oauth_flow.load_pending(db, request_id)
     if row is None:
         return _error_page("認可リクエストが無効か、期限切れです。")
+    if not oauth_flow.is_bound_to(row, browser_nonce):
+        return _error_page("同意画面を開いたブラウザから操作してください。", 403)
     redirect_uri, state = row.redirect_uri, row.state
     try:
         access_token = exchange_code_for_token(
@@ -199,4 +209,6 @@ def complete_github_login(db: Session, request_id: str, github_code: str) -> Res
 
     code = oauth_flow.complete_request(db, row, username)
     logger.info("MCP OAuth: authorization code issued for %s", username)
-    return _redirect_with(redirect_uri, state, code=code)
+    response = _redirect_with(redirect_uri, state, code=code)
+    response.delete_cookie(BROWSER_COOKIE, path="/")  # 使い終わった識別 Cookie は消す
+    return response

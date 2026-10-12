@@ -2,6 +2,7 @@
 import asyncio
 import os
 from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
 os.environ.setdefault("API_KEY", "test-api-key-for-pytest")
@@ -16,7 +17,7 @@ from mcp.server.auth.provider import RegistrationError, TokenError  # noqa: E402
 from mcp.shared.auth import OAuthClientInformationFull  # noqa: E402
 
 from app.auth.models import OAuthClient  # noqa: E402
-from app.mcp_server import oauth_clients  # noqa: E402
+from app.mcp_server import oauth_clients, oauth_routes  # noqa: E402
 from app.mcp_server.oauth_provider import McpOAuthProvider  # noqa: E402
 from app.mcp_server.oauth_routes import mount_oauth_routes  # noqa: E402
 from tests.conftest import TestSessionLocal  # noqa: E402
@@ -41,12 +42,12 @@ def _clean(db_session):
 def http() -> TestClient:
     """OAuth を有効にした最小の FastAPI アプリ（DB はテスト用）。"""
     app = FastAPI()
-    from app.mcp_server import oauth_routes
-
     original = oauth_routes.SessionLocal
     oauth_routes.SessionLocal = TestSessionLocal
     try:
-        assert mount_oauth_routes(app, issuer=ISSUER)
+        # issuer は GitHub コールバックと同じホストであることが必須（起動時に検証される）
+        with patch.object(oauth_routes.settings, "API_BASE_URL_FOR_OAUTH", ISSUER):
+            assert mount_oauth_routes(app, issuer=ISSUER)
         yield TestClient(app, base_url=ISSUER)
     finally:
         oauth_routes.SessionLocal = original
@@ -137,6 +138,14 @@ class TestRoutes:
         before = len(app.router.routes)  # FastAPI 既定のルート（/docs 等）
         assert mount_oauth_routes(app, issuer="") is False
         assert len(app.router.routes) == before
+
+    def test_issuer_host_must_match_github_callback_host(self):
+        # Cookie はホスト単位。ホストが違うと、コールバックで同意画面のブラウザを確認できない
+        app = FastAPI()
+        other = "https://other.example.test"
+        with patch.object(oauth_routes.settings, "API_BASE_URL_FOR_OAUTH", other):
+            with pytest.raises(ValueError, match="same host"):
+                mount_oauth_routes(app, issuer=ISSUER)
 
     def test_metadata(self, http):
         body = http.get("/.well-known/oauth-authorization-server").json()

@@ -5,6 +5,7 @@
 保護リソースのメタデータ（`/.well-known/oauth-protected-resource/mcp`）を FastAPI に追加する。
 """
 import logging
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI
 from mcp.server.auth.routes import create_auth_routes, create_protected_resource_routes
@@ -24,6 +25,16 @@ def mount_oauth_routes(app: FastAPI, issuer: str | None = None) -> bool:
     issuer = (issuer if issuer is not None else settings.MCP_OAUTH_ISSUER).rstrip("/")
     if not issuer:
         return False
+
+    # 同意画面を開いたブラウザの Cookie を、GitHub から戻るコールバックでも確認する。
+    # Cookie はホスト単位のため、issuer とコールバックのホストが違うと確認できず、攻撃者の
+    # 認可リクエストに被害者の本人確認を紐づける攻撃を防げない。誤設定のまま起動させない
+    callback_host = urlsplit(settings.API_BASE_URL_FOR_OAUTH).netloc
+    if urlsplit(issuer).netloc != callback_host:
+        raise ValueError(
+            "MCP_OAUTH_ISSUER must use the same host as API_BASE_URL_FOR_OAUTH "
+            f"({callback_host}) so the consent browser cookie reaches the GitHub callback",
+        )
 
     issuer_url = AnyHttpUrl(issuer)
     provider = McpOAuthProvider(SessionLocal, issuer)

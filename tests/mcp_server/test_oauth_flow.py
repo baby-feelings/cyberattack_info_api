@@ -57,7 +57,9 @@ def http(db_session):
     original = oauth_routes.SessionLocal
     oauth_routes.SessionLocal = TestSessionLocal
     try:
-        assert oauth_routes.mount_oauth_routes(app, issuer=ISSUER)
+        # issuer は GitHub コールバックと同じホストであることが必須（起動時に検証される）
+        with patch.object(oauth_routes.settings, "API_BASE_URL_FOR_OAUTH", ISSUER):
+            assert oauth_routes.mount_oauth_routes(app, issuer=ISSUER)
         app.include_router(auth_router)
         yield TestClient(app, base_url=ISSUER, follow_redirects=False)
     finally:
@@ -230,7 +232,8 @@ class TestBrowserBinding:
         cookie = page.headers["set-cookie"].lower()
         assert "mcp_oauth_consent=" in cookie
         assert "httponly" in cookie and "secure" in cookie
-        assert "samesite=lax" in cookie and "path=/oauth/consent" in cookie
+        # コールバック（/auth/github/callback）にも届くよう、パスは /
+        assert "samesite=lax" in cookie and "path=/;" in cookie.replace("path=/ ", "path=/;")
 
     def test_post_without_opening_the_page_is_rejected(self, http, db_session):
         rid = self._pending(http)
@@ -254,6 +257,29 @@ class TestBrowserBinding:
                             headers={"content-type": "application/x-www-form-urlencoded"})
         assert res.status_code == 403
         assert db_session.get(OAuthAuthorization, rid) is not None
+
+    def test_github_callback_from_another_browser_is_rejected(self, http, db_session):
+        """攻撃の再現: 攻撃者が自分の認可リクエストの state を、被害者のブラウザに踏ませる。
+
+        攻撃者の認可リクエストに被害者の本人確認が紐づくと、被害者のトークンを攻撃者が
+        入手できてしまう。同意画面を開いたブラウザ（Cookie）でなければ、コールバックは拒否する。
+        """
+        rid = self._pending(http)
+        # 攻撃者のブラウザ（http）が、自分の分を許可して state を得る
+        state = _github_state(http, rid)
+        victim = TestClient(http.app, base_url=ISSUER, follow_redirects=False)  # Cookie なし
+        res = _callback(victim, state, login="victim")
+        assert res.status_code == 403
+        row = db_session.get(OAuthAuthorization, rid)
+        # 何も発行されない
+        assert row is not None and row.username is None and row.code_hash is None
+
+    def test_callback_clears_the_cookie_on_success(self, http):
+        rid = self._pending(http)
+        res = _callback(http, _github_state(http, rid))
+        assert res.status_code == 302
+        assert "mcp_oauth_consent=" in res.headers["set-cookie"].lower()
+        assert "max-age=0" in res.headers["set-cookie"].lower()
 
     def test_same_browser_can_reopen_the_page(self, http):
         rid = self._pending(http)
