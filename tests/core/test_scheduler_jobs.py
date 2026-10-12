@@ -5,6 +5,7 @@
 """
 from unittest.mock import MagicMock
 
+from app.auth.mcp_token_expiry import run_mcp_token_expiry_notices
 from app.codescan.crawler import fetch_and_scan_code
 from app.core.config import settings
 from app.core.repo_cleanup import run_repo_cleanup
@@ -18,12 +19,13 @@ from app.osv.crawler import fetch_and_store_osv
 
 
 class TestBuildScheduledJobs:
-    def test_defines_the_same_eight_jobs_as_before(self):
+    def test_defines_the_expected_jobs(self):
         jobs = {j.job_id: j for j in build_scheduled_jobs()}
 
         assert set(jobs) == {
             "cisa_kev_crawler", "osv_crawler", "jvn_crawler", "depscan_crawler",
             "codescan_crawler", "dependabot_ops", "repo_cleanup", "user_crawl",
+            "mcp_token_expiry_notice",
         }
         expected = {
             "cisa_kev_crawler": (fetch_and_store_kev, settings.CRON_HOUR_UTC,
@@ -38,6 +40,9 @@ class TestBuildScheduledJobs:
                              settings.REPO_CLEANUP_CRON_MINUTE_UTC),
             "user_crawl": (run_user_crawls_for_all_accounts, settings.USER_CRAWL_CRON_HOUR_UTC,
                            settings.USER_CRAWL_CRON_MINUTE_UTC),
+            "mcp_token_expiry_notice": (run_mcp_token_expiry_notices,
+                                        settings.MCP_EXPIRY_NOTICE_CRON_HOUR_UTC,
+                                        settings.MCP_EXPIRY_NOTICE_CRON_MINUTE_UTC),
         }
         for job_id, (func, hour, minute) in expected.items():
             job = jobs[job_id]

@@ -42,7 +42,7 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _aware(dt: datetime) -> datetime:
+def as_utc(dt: datetime) -> datetime:
     """SQLite は tz 情報を落とすため、UTC として解釈して aware にそろえる。"""
     return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
 
@@ -51,7 +51,7 @@ def token_status(token: McpToken, now: datetime | None = None) -> str:
     """トークンの状態: revoked（失効）> expired（期限切れ）> active（有効）。"""
     if token.revoked_at is not None:
         return "revoked"
-    if _aware(token.expires_at) <= (now or _now()):
+    if as_utc(token.expires_at) <= (now or _now()):
         return "expired"
     return "active"
 
@@ -86,7 +86,7 @@ def issue_token(db: Session, username: str, days: int = DEFAULT_DAYS) -> tuple[s
     db.add(row)
     db.commit()
     db.refresh(row)
-    return create_mcp_token(username, row.id, _aware(row.expires_at)), row
+    return create_mcp_token(username, row.id, as_utc(row.expires_at)), row
 
 
 def _own_tokens(db: Session, username: str) -> list[McpToken]:
@@ -128,7 +128,7 @@ def is_usable(db: Session, claims: McpClaims) -> bool:
     if row is None or row.username != claims.username or row.revoked_at is not None:
         return False
     now = _now()
-    if row.last_used_at is None or now - _aware(row.last_used_at) >= _TOUCH_INTERVAL:
+    if row.last_used_at is None or now - as_utc(row.last_used_at) >= _TOUCH_INTERVAL:
         row.last_used_at = now
         db.commit()
     return True
