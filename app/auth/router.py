@@ -59,6 +59,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.notifications import is_valid_slack_webhook_url, send_test_notification
 from app.depscan.user_scan import get_user_scan_status, run_depscan_for_user, should_rescan_for_user
+from app.mcp_server.oauth_connections import disconnect, list_connections
 from app.mcp_server.oauth_consent import complete_github_login
 from app.mcp_server.oauth_flow import decode_state as decode_mcp_oauth_state
 
@@ -300,6 +301,41 @@ def revoke_mcp_token(
     if not revoke_token(db, username, token_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Token not found.")
     return {"id": token_id, "revoked": True}
+
+
+@router.get(
+    "/oauth-connections",
+    summary="OAuth（MCP）で接続中のクライアントの一覧（自分が許可したもののみ）",
+)
+def list_oauth_connections(
+    db: Annotated[Session, Depends(get_db)],
+    username: Annotated[str, Depends(get_current_username)],
+) -> dict:
+    """ログイン中ユーザー本人が OAuth で許可したクライアント（Claude Code 等）を返す。
+
+    クライアント名は登録時の自己申告（未確認）。他のユーザーのものは含まない。
+    """
+    return {"connections": list_connections(db, username)}
+
+
+@router.delete(
+    "/oauth-connections/{client_id}",
+    summary="OAuth で接続中のクライアントを解除する（許可をすべて取り消す）",
+)
+def disconnect_oauth_client(
+    client_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    username: Annotated[str, Depends(get_current_username)],
+) -> dict:
+    """そのクライアントへの本人の許可（リフレッシュトークンと発行済みアクセストークン）を取り消す。
+
+    以後そのクライアントは再認可が必要になる。他のユーザーの許可・存在しないクライアントは
+    どちらも 404（他人の接続の存在を推測させない）。手動発行の MCP トークンには触れない。
+    """
+    if not disconnect(db, username, client_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connection not found.")
+    logger.info("OAuth connection disconnected: user=%s client=%s", username, client_id)
+    return {"client_id": client_id, "disconnected": True}
 
 
 @router.get("/scan-status", summary="ログイン中ユーザーのオンデマンドスキャン進捗を取得")

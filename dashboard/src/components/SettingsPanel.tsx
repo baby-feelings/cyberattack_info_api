@@ -6,6 +6,7 @@ import {
 } from '../api/auth'
 import { UnauthorizedError } from '../api/shared'
 import { McpTokenSection } from './McpTokenSection'
+import { OAuthConnectionsSection } from './OAuthConnectionsSection'
 
 // 設定画面（Issue #227）: ログイン中ユーザー自身のSlack Webhook通知を登録・解除する。
 // DEPSCAN/CODESCANと同じGitHubログインセッション（useGithubSession）を共有するため、
@@ -60,6 +61,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             <div className="pt-5 border-t border-slate-800">
               <McpTokenSection authToken={session.token} />
             </div>
+            {/* OAuth で接続中のアプリ。1件も無いときは何も描画しない（区切り線も出ない） */}
+            <OAuthConnectionsSection authToken={session.token} />
           </div>
         )}
 

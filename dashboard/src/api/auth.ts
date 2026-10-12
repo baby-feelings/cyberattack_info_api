@@ -151,3 +151,33 @@ export async function revokeMcpToken(authToken: string, tokenId: string): Promis
   if (res.status === 401) throw new UnauthorizedError('Session token is invalid or expired')
   if (!res.ok) throw new Error(`MCP token revoke error ${res.status}`)
 }
+
+// OAuth（MCP）で接続中のクライアント（Claude Code 等）。クライアント名は登録時の自己申告（未確認）
+export interface OAuthConnection {
+  client_id: string
+  client_name: string
+  connected_at: string | null
+  last_refreshed_at: string | null
+  last_used_at: string | null
+  expires_at: string | null
+}
+
+// 自分が OAuth で許可したクライアントの一覧（他のユーザーのものは含まれない）
+export async function listOAuthConnections(authToken: string): Promise<OAuthConnection[]> {
+  const res = await fetch(`${BASE_URL}/auth/oauth-connections`, {
+    headers: { Authorization: `Bearer ${authToken}` },
+  })
+  if (res.status === 401) throw new UnauthorizedError('Session token is invalid or expired')
+  if (!res.ok) throw new Error(`OAuth connections error ${res.status}`)
+  return (await res.json()).connections
+}
+
+// 接続を解除する（そのクライアントへの許可をすべて取り消す。以後は再認可が必要）
+export async function disconnectOAuthClient(authToken: string, clientId: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/auth/oauth-connections/${encodeURIComponent(clientId)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${authToken}` },
+  })
+  if (res.status === 401) throw new UnauthorizedError('Session token is invalid or expired')
+  if (!res.ok) throw new Error(`OAuth disconnect error ${res.status}`)
+}
