@@ -1,7 +1,8 @@
 """依存ライブラリ脆弱性検知結果（DependencyFinding 相当）の共通整形ロジック。
 
-Slack 通知（app.core.notifications）と GitHub Issue 自動起票（app.depscan.crawler）の
-両方から、同じ「パッケージ単位に集約した見やすい行」を再利用するために切り出す。
+Slack 通知（app.core.notifications.dependency_findings）と
+GitHub Issue 自動起票（app.depscan.crawler）の両方から、同じ「パッケージ単位に集約した
+見やすい行」を再利用するために切り出す。
 """
 from typing import Any
 

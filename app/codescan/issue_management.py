@@ -12,7 +12,7 @@ from typing import Any
 
 from app.core.config import settings
 from app.core.issue_filing import file_or_update_repo_issues
-from app.core.notifications import DASHBOARD_URL
+from app.core.notifications.slack import DASHBOARD_URL
 from app.crawler_logs.writer import now_utc
 
 # GitHub Issue自動起票時のタイトル（Open Issue検索の一致キーも兼ねる）。

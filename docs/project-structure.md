@@ -16,7 +16,7 @@ cyberattack_info_api/
 │   │                           # external_login は、ログインの戻りを別機能（MCP の OAuth）が引き受ける登録口
 │   │                           # （auth は mcp_server を知らない。依存は mcp_server → auth の一方向）
 │   ├── core/                   # 横断的インフラ（config・database・auth・background・crawler_runner・
-│   │                           # crypto〈トークン暗号化〉・db_utils・notifications・pagination・
+│   │                           # crypto〈トークン暗号化〉・db_utils・notifications/〈slack・recipients・base・用途別〉・pagination・
 │   │                           # repo_cleanup〈削除済みリポジトリのデータ削除、Issue #228〉・
 │   │                           # user_crawl_runner〈登録済み他ユーザー向け定期実行、Issue #227〉・
 │   │                           # github/〈api=`GitHubApi`・repo=`GitHubRepo`〈1リポジトリへの共通操作〉・accounts=所有リポジトリ一覧〉・

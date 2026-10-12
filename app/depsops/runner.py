@@ -22,7 +22,7 @@ from app.core.config import settings
 from app.core.crawler_runner import CrawlCounters, CrawlJob
 from app.core.github.accounts import list_target_repos
 from app.core.github.repo import GitHubRepo
-from app.core.notifications import notify_dependabot_ops
+from app.core.notifications.dependabot_ops import notify_dependabot_ops
 from app.crawler_logs.writer import now_utc
 from app.depsops.github_client import (
     has_ci_workflows,

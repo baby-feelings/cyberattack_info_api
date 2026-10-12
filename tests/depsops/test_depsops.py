@@ -16,7 +16,7 @@ import httpx  # noqa: E402
 import pytest  # noqa: E402
 
 from app.core.github.repo import GitHubRepo  # noqa: E402
-from app.core.notifications import notify_dependabot_ops  # noqa: E402
+from app.core.notifications.dependabot_ops import notify_dependabot_ops  # noqa: E402
 from app.crawler_logs.models import CrawlerLog  # noqa: E402
 from app.depsops.classify import classify_bump  # noqa: E402
 from app.depsops.github_client import (  # noqa: E402
@@ -1056,12 +1056,12 @@ class TestDepsopsStats:
 class TestNotifyDependabotOps:
     def test_skips_when_no_webhook(self):
         merged = [{"repo_full_name": "u/r", "pr_number": 1, "title": "bump x"}]
-        with patch("app.core.notifications._send_slack") as mock_send:
+        with patch("app.core.notifications.slack.send_slack") as mock_send:
             notify_dependabot_ops(merged, [], recipients=[])
         mock_send.assert_not_called()
 
     def test_skips_when_both_empty(self):
-        with patch("app.core.notifications._send_slack") as mock_send:
+        with patch("app.core.notifications.slack.send_slack") as mock_send:
             notify_dependabot_ops([], [], recipients=["https://hooks.slack.com/x"])
         mock_send.assert_not_called()
 
@@ -1070,7 +1070,7 @@ class TestNotifyDependabotOps:
         flagged = [
             {"repo_full_name": "u/r2", "pr_number": 2, "title": "bump y", "reason": "メジャー"},
         ]
-        with patch("app.core.notifications._send_slack") as mock_send:
+        with patch("app.core.notifications.slack.send_slack") as mock_send:
             notify_dependabot_ops(merged, flagged, recipients=["https://hooks.slack.com/x"])
         message = mock_send.call_args[0][0]
         assert "u/r1" in message and "bump x" in message

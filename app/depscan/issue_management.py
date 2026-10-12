@@ -15,7 +15,7 @@ from app.core.config import settings
 from app.core.finding_format import format_package_lines
 from app.core.github.repo import GitHubRepo
 from app.core.issue_filing import file_or_update_repo_issues
-from app.core.notifications import DASHBOARD_URL
+from app.core.notifications.slack import DASHBOARD_URL
 from app.crawler_logs.writer import now_utc
 from app.depscan.models import DependencyFinding
 

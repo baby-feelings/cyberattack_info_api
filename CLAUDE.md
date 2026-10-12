@@ -81,7 +81,7 @@ app/
 │                 #   user_crawl_runner/stix/taxii/schemas/github/（`GitHubApi`・`GitHubRepo`
 │                 #   〈1リポジトリへの共通操作〉・`list_target_repos`）/issue_filing（Issue起票共通化）/list_filters（一覧の絞り込み
 │                 #   基底）/scheduler_jobs（定期ジョブ定義）。crawler_runner=`CrawlJob`・
-│                 #   notifications=`Notifier`（いずれもTemplate Method）
+│                 #   notifications/=`Notifier`（いずれもTemplate Method。slack/recipients/base＋用途別）
 ├── kev/          # CISA KEV（models/schemas/crawler/stix/router）
 ├── osv/          # OSV（10エコシステム対応、+packages.py）
 ├── jvn/          # JVN（MyJVN API / RDF-RSS）

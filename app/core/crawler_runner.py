@@ -23,7 +23,7 @@ from datetime import UTC, datetime, time
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
-from app.core.notifications import notify_error, notify_success
+from app.core.notifications.crawler import notify_error, notify_success
 from app.core.types import CrawlerType
 from app.crawler_logs.models import CrawlerLog
 from app.crawler_logs.writer import now_utc, write_crawler_log

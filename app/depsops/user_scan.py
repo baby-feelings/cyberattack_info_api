@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
 from app.core.github.accounts import list_target_repos
-from app.core.notifications import notify_dependabot_ops
+from app.core.notifications.dependabot_ops import notify_dependabot_ops
 from app.crawler_logs.writer import now_utc
 from app.depsops.pr_log_repository import PrLogRepository
 from app.depsops.runner import scan_target_repos

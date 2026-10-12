@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.account_store import get_webhook_for_user
 from app.core.database import SessionLocal
-from app.core.notifications import notify_mcp_token_expiry
+from app.core.notifications.mcp_token import notify_mcp_token_expiry
 from app.mcp_server.mcp_token_store import as_utc
 from app.mcp_server.models import McpToken
 
