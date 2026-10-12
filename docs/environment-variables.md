@@ -33,6 +33,7 @@
 | `TOKEN_ENCRYPTION_KEY` | - | ユーザー別Slack通知登録（Issue #227）用、GitHubアクセストークンをDBへ暗号化保存するFernet鍵。未設定時は登録済みユーザーの定期実行（DEPSCAN/CODESCAN/DEPSOPS）が機能しない |
 | `FRONTEND_URL` | - | OAuth コールバック後にリダイレクトするダッシュボード URL（デフォルト: Vercel の本番URL） |
 | `API_BASE_URL_FOR_OAUTH` | - | OAuth の `redirect_uri` 組み立てに使う本 API 自身の公開 URL。GitHub OAuth App の Authorization callback URL と一致させる必要がある（デフォルト・現在値: OCI インスタンスの URL） |
+| `MCP_OAUTH_ISSUER` | - | MCP サーバーを OAuth 2.1 の認可サーバーとして公開する際の issuer URL（`https://...`、末尾スラッシュなし。Issue #303）。空なら OAuth 機能は無効（デフォルト）。ドメイン変更時は `BACKEND_DOMAIN`・`API_BASE_URL_FOR_OAUTH`・GitHub OAuth App の callback URL とあわせて更新する |
 | `METRICS_API_KEY` | - | 運用監視（Prometheus）用の `/metrics` エンドポイント保護キー（`Authorization: Bearer` で認証）。未設定時は `/metrics` 自体が `503` を返すのみ |
 
 設定手順は [deployment.md](deployment.md) を参照。

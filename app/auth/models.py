@@ -85,3 +85,29 @@ class McpToken(Base):
     expiry_notified_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True,
     )
+
+
+class OAuthClient(Base):
+    """OAuth 2.1 の動的クライアント登録（RFC 7591）で登録されたクライアント（Issue #303）。
+
+    MCP クライアント（Claude Code 等）は、ログイン前に `/register` を呼んで自分を登録する。
+    登録しただけではデータは見えない（本人の GitHub ログインと同意が別途必要）。
+    クライアント情報（SDK の `OAuthClientInformationFull`）は JSON 文字列で保存する。
+    `client_secret` は SDK の仕様上クライアントへ返す必要があるため、そのまま保持する
+    （公開クライアントは `token_endpoint_auth_method=none` で秘密を持たない）。
+    """
+
+    __tablename__ = "oauth_clients"
+
+    # クライアントID（SDK が UUID4 で発行する）
+    client_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+
+    # OAuthClientInformationFull の JSON
+    client_info_json: Mapped[str] = mapped_column(Text, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True,
+    )
+
+    # 最後に認可・トークン交換に使われた日時（未使用の登録を自動削除する判定に使う）
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

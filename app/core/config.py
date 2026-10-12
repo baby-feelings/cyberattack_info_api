@@ -90,6 +90,11 @@ class Settings(BaseSettings):
     # リクエストヘッダーから動的に推測せず固定値を持つ）
     API_BASE_URL_FOR_OAUTH: str = "https://168.138.213.240.nip.io"
 
+    # MCP サーバーを OAuth 2.1 の認可サーバーとして公開する際の issuer URL（Issue #303）。
+    # 空なら OAuth 機能は無効（従来の貼り付け方式のトークンのみ）。ドメイン変更時はこの値を
+    # 新しい公開 URL（https://...、末尾スラッシュなし）にする
+    MCP_OAUTH_ISSUER: str = ""
+
     # 運用監視（Prometheus）用のメトリクスエンドポイント保護キー。
     # 未設定時は /metrics 自体を無効化する（他の外部連携機能と同じ opt-in パターン）
     METRICS_API_KEY: str = ""

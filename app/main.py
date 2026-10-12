@@ -35,6 +35,7 @@ from app.jvn.router import admin_router as jvn_admin_router
 from app.jvn.router import router as jvn_router
 from app.kev.router import admin_router as kev_admin_router
 from app.kev.router import router as kev_router
+from app.mcp_server.oauth_routes import mount_oauth_routes
 from app.mcp_server.server import McpServer
 from app.osv.router import admin_router as osv_admin_router
 from app.osv.router import router as osv_router
@@ -147,6 +148,8 @@ app.include_router(metrics_router)
 app.include_router(taxii_router)
 # リモート MCP サーバー（POST /mcp。認証は McpAuthMiddleware）
 mcp_server.mount(app)
+# OAuth 2.1 の認可サーバー（MCP_OAUTH_ISSUER 設定時のみ。未設定なら何も公開しない）
+mount_oauth_routes(app)
 
 
 # ──────────────────────────────────────────────
