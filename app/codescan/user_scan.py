@@ -8,23 +8,15 @@
 CODESCAN には DEPSCAN のようなオンデマンドスキャン進捗ポーリングUIが無いため、
 `UserScan` 相当の進捗テーブルは持たない（ログのみ）。
 """
-import json
 import logging
-import subprocess
-import tarfile
 from typing import Any
 
-import httpx
 from sqlalchemy.orm import Session
 
 from app.auth.account_store import get_webhook_for_user
-from app.codescan.crawler import (
-    FindingKey,
-    resolve_stale_repo_findings,
-    scan_repo,
-    upsert_repo_findings,
-)
+from app.codescan.crawler import SCAN_ERRORS, scan_repo
 from app.codescan.issue_management import file_github_issues
+from app.codescan.repository import CodeFindingRepository
 from app.core.database import SessionLocal
 from app.core.github.accounts import list_target_repos
 from app.core.notifications.crawler import notify_success
@@ -39,6 +31,7 @@ def run_codescan_for_user(username: str, token: str) -> None:
     """
     logger.info("=== CODESCAN (for %s) started ===", username)
     db: Session = SessionLocal()
+    repository = CodeFindingRepository(db)
     new_count = 0
     all_new_snapshots: list[dict[str, Any]] = []
     try:
@@ -50,23 +43,16 @@ def run_codescan_for_user(username: str, token: str) -> None:
             default_branch = repo_info.get("default_branch") or "main"
             try:
                 records = scan_repo(full_name, default_branch, token)
-            except (httpx.HTTPError, subprocess.TimeoutExpired, tarfile.TarError,
-                     json.JSONDecodeError, OSError) as exc:
+            except SCAN_ERRORS as exc:
                 logger.warning(
                     "CODESCAN (for %s): failed to scan %s, skipping: %s",
                     username, full_name, exc,
                 )
                 continue
 
-            inserted, new_snapshots = upsert_repo_findings(db, full_name, records)
-            new_count += inserted
-            all_new_snapshots.extend(new_snapshots)
-
-            current_keys: set[FindingKey] = {
-                (r["repo_full_name"], r["file_path"], r["rule_id"], r["line_start"])
-                for r in records
-            }
-            resolve_stale_repo_findings(db, full_name, current_keys)
+            result = repository.sync(full_name, records)
+            new_count += result.inserted
+            all_new_snapshots.extend(result.new_snapshots)
 
         webhook = get_webhook_for_user(db, username)
         if webhook:

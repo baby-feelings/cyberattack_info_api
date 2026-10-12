@@ -1,10 +1,10 @@
 # gitleaks（CODESCAN、Issue #219）向けallowlist設定。
 #
-# app/codescan/crawler.py の _run_gitleaks が、対象リポジトリのルートに
+# app/codescan/scanners.py の GitleaksScanner.run が、対象リポジトリのルートに
 # このファイルが存在する場合に自動的に --config で渡す。
 #
-# ここで除外するのは、tests/codescan/test_crawler.py 内の
-# gitleaks検知結果パース処理（_parse_gitleaks_results）をテストするために
+# ここで除外するのは、tests/codescan/ 内（support.py のサンプル出力と、それを検証する
+# test_scanners.py）の gitleaks検知結果パース処理（GitleaksScanner.parse）をテストするために
 # 用意したダミーのAWSアクセスキー（実在の認証情報ではない）。gitleaksが
 # 自リポジトリを毎回のCODESCANスキャン対象に含めるたび、このテストデータを
 # 本物のシークレットとして検知しGitHub Issueを起票し続けていた（Issue #221）。
@@ -19,7 +19,8 @@ useDefault = true
 [allowlist]
 description = "テスト用のダミー値（実データではない）: CODESCANのgitleaks結果パース検証用AWSキー、tests/配下のダミーFernet鍵"
 paths = [
-  '''tests/codescan/test_crawler\.py''',
+  '''tests/codescan/support\.py''',
+  '''tests/codescan/test_scanners\.py''',
 ]
 # pytest 用に tests/conftest.py 等が設定するダミーの暗号鍵（本番の鍵ではない）
 regexes = [

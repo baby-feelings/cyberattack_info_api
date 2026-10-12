@@ -14,6 +14,14 @@ DEPSCANと完全に同じ（`GITHUB_USERNAME`配下、fork・archived除外）�
 `app.core.github.accounts.list_target_repos`をそのまま再利用する（DRY原則、
 重複実装しない。CODESCANはDEPSCANに依存せず、共通部分は`core/github`にある）。
 
+## 構成（役割ごとのモジュール）
+`crawler.py`は走査の組み立てだけ（`scan_repo`・`_run_codescan_body`・`fetch_and_scan_code`）。実装は役割ごとに分かれる:
+`archive.py`（`RepoArchive`=tarballの展開と一時ディレクトリの削除）・`scanners.py`（`Scanner`の
+Strategy: `SemgrepScanner`/`GitleaksScanner`。`run`=ツール実行、`parse`=レコード化、`scan`=その連結。
+ツールを足すときは`Scanner`を継承して`default_scanners`に加える）・`repository.py`
+（`CodeFindingRepository`: `sync`=Upsert+検知されなくなったものを解決済みに、`delete_old_resolved`）。
+`SCAN_ERRORS`（1リポジトリの検査で起こりうる例外の組）は`crawler.py`の毎日実行と`user_scan.py`が共有する。
+
 ## ソースコード取得は tarball 方式（ファイル単位APIではない）
 `GitHubRepo.tree`/`file_content`はファイル単位のAPI呼び出しを要し、
 リポジトリ全体のソース取得には非効率。CODESCANは`GitHubRepo.tarball`
@@ -23,7 +31,7 @@ DEPSCANと完全に同じ（`GITHUB_USERNAME`配下、fork・archived除外）�
 実データを返す）。取得したtar.gzは`tempfile.TemporaryDirectory()`に展開してから
 Semgrepでスキャンし、`with`ブロックを抜ける際に確実に削除される。パストラバーサル
 対策として`tarfile.extractall(..., filter="data")`（PEP 706）で安全に展開する
-（`app.codescan.crawler._extract_tarball`）。`git`コマンドはDockerイメージに
+（`app.codescan.archive.extract_tarball`（`RepoArchive`が一時ディレクトリの削除まで担う））。`git`コマンドはDockerイメージに
 追加していない（tarball方式なら不要）。
 
 ## semgrep は専用venvに隔離して導入する（requirements.txtに入れない）
@@ -40,7 +48,7 @@ Dockerfileで`>=2.15.1`に上書きしている（pip checkは警告するがsem
 開発環境ではラッパーをモックする。
 
 ## Semgrep 実行は薄いラッパー関数に分離し、テストはそれをモックする
-`app.codescan.crawler._run_semgrep`が実際の`subprocess.run(["semgrep", ...])`
+`app.codescan.scanners.SemgrepScanner.run`が実際の`subprocess.run(["semgrep", ...])`
 呼び出しを閉じ込める薄いラッパー。1リポジトリあたりのタイムアウトを
 `timeout=300`（サブプロセス全体）+ `--timeout 120`（Semgrep内部の1ルール×
 1ファイルあたり）の二段で必ず設定する（OCI本番は1 OCPU/6GBの限られたリソース
@@ -48,7 +56,7 @@ Dockerfileで`>=2.15.1`に上書きしている（pip checkは警告するがsem
 全体を圧迫するリスクがある）。タイムアウト・パース失敗等はリポジトリ単位で
 `app.codescan.crawler._run_codescan_body`のtry/exceptによりスキップされ、
 CODESCAN全体は継続する（DEPSCANのGitHub API呼び出し失敗時と同じper-repoパターン）。
-Windows開発環境にSemgrepバイナリが無くてもテストできるよう、`_run_semgrep`
+Windows開発環境にSemgrepバイナリが無くてもテストできるよう、`SemgrepScanner.run`
 自体をモックするテスト設計にしている（`tests/codescan/test_crawler.py`）。
 
 ## CVSS 3.1 スコアは「ベストエフォートの近似値」であり精度を保証しない
@@ -74,7 +82,7 @@ CVSS 7.0以上はダッシュボード（`CodescanRow.tsx`のCvssBadge）で赤�
 の複合ユニーク制約（Semgrepには安定した検知ID的なものが無いため）。DEPSCANは
 「今回の全リポジトリ横断スキャンで検知されなくなったfinding」を一括で解決済みに
 するが、CODESCANは`_run_codescan_body`のループ内でリポジトリを1つずつtarball
-取得→スキャンするため、`app.codescan.crawler.resolve_stale_repo_findings`は
+取得→スキャンするため、`app.codescan.repository.CodeFindingRepository.resolve_stale`は
 **そのリポジトリのスキャンが成功した直後に、そのリポジトリだけを対象に**
 解決判定を行う設計にした（あるリポジトリのスキャンが失敗してスキップされた場合、
 そのリポジトリの既存findingを誤って解決済みにしないため）。
@@ -128,7 +136,7 @@ DEPSCAN/CODESCANのどちらのタブでログインしても両方閲覧でき�
 ## gitleaksによるシークレット検知の統合（Issue #219）
 Semgrep（`p/security-audit` + `p/secrets`）に加え、専用のシークレット検知ツール
 gitleaks（https://github.com/gitleaks/gitleaks )も同じtarball展開先に対して実行
-する。`app.codescan.crawler._run_gitleaks`が`subprocess.run(["gitleaks", "detect",
+する。`app.codescan.scanners.GitleaksScanner.run`が`subprocess.run(["gitleaks", "detect",
 "--source", ..., "--no-git", "--report-format", "json", "--report-path", ...,
 "--exit-code", "0"])`を呼ぶ薄いラッパー（Semgrepと同じ「ラッパー自体をモックして
 テストする」方針）。`--no-git`必須（tarball展開のためGit履歴が無く、gitleaksを
@@ -144,7 +152,7 @@ gitleaks（https://github.com/gitleaks/gitleaks )も同じtarball展開先に対
 
 **Upsertキーの衝突回避**: `CodeFinding`のUpsert基準キー`(repo_full_name,
 file_path, rule_id, line_start)`は据え置きだが、gitleaks由来のfindingは
-`rule_id`に`"gitleaks:"`プレフィックスを付与する（`_parse_gitleaks_results`）。
+`rule_id`に`"gitleaks:"`プレフィックスを付与する（`GitleaksScanner.parse`）。
 SemgrepのcheckID（`python.lang.security....`のような命名規則）との衝突リスクは
 低いが、明示的にツール由来を区別できるようにするため。`CodeFinding.tool`カラム
 （`"semgrep"` / `"gitleaks"`、既存レコードとの後方互換のため`server_default=
@@ -155,7 +163,7 @@ SemgrepのcheckID（`python.lang.security....`のような命名規則）との�
 gitleaksのJSON出力には検知したシークレットの実際の値（`Secret`フィールド、
 マッチした認証情報そのもの）が平文で含まれる。これをそのまま保存・返却すると、
 自アプリの脆弱性診断APIが実際の認証情報を漏洩させるという本末転倒な事故になる。
-そのため`_parse_gitleaks_results`は`Secret`・`Match`フィールドを一切参照せず、
+そのため`GitleaksScanner.parse`は`Secret`・`Match`フィールドを一切参照せず、
 `code_snippet`相当のフィールドには gitleaks の`Description`（ルールの説明。例:
 「AWS Access Key」）のみを固定文言「検知内容: {Description}」として格納する。
 `tests/codescan/test_crawler.py`の`TestParseGitleaksResults`に、実際のシークレット
@@ -174,7 +182,7 @@ GitHub Releasesから本番環境（OCI Ampere A1 = Linux ARM64）向けのプ�
 でバージョンを固定する。バージョンを上げる場合は
 https://api.github.com/repos/gitleaks/gitleaks/releases/latest で最新版を確認し、
 Dockerfileの`ARG GITLEAKS_VERSION`を更新すること。Windows開発環境にはgitleaks
-バイナリが無い前提でテストは`_run_gitleaks`自体をモックして書く。
+バイナリが無い前提でテストは`GitleaksScanner.run`自体をモックして書く。
 
 **ファイルパスはrepo_root基準の相対パスへ正規化する（Issue #222で発覚したバグ）**:
 gitleaksのJSON出力の`File`フィールドは、環境によってはtarball展開先の絶対パス
@@ -182,9 +190,9 @@ gitleaksのJSON出力の`File`フィールドは、環境によってはtarball�
 をそのまま返す。これをUpsertキーの`file_path`にそのまま使うと、
 `tempfile.TemporaryDirectory()`のパスがスキャンごとに変わるためUpsertの自然キー
 が毎回一致せず、findingが際限なく重複蓄積する実害があった（本番データで発覚）。
-`_parse_gitleaks_results(full_name, gitleaks_results, repo_root)`は`repo_root`
+`GitleaksScanner.parse(full_name, raw, repo_root)`は`repo_root`
 引数を受け取り、`File`が絶対パスの場合のみ`os.path.relpath(raw_path, repo_root)`
-で相対パスへ正規化する（`_parse_semgrep_results`が元々行っていたのと同じパターン
+で相対パスへ正規化する（`SemgrepScanner.parse`が元々行っていたのと同じパターン
 に合わせた）。
 
 **リポジトリ単位のgitleaks allowlist自動検出（Issue #221）**: gitleaksは
@@ -192,7 +200,7 @@ gitleaksのJSON出力の`File`フィールドは、環境によってはtarball�
 明示的に`--config`で渡さない限りデフォルトルールのみが適用される。本リポジトリ
 自身がCODESCANのスキャン対象に含まれる場合、`tests/codescan/test_crawler.py`内の
 テスト用ダミーシークレットまで誤検知してしまい、スキャンのたびにGitHub Issueが
-再起票され続ける問題が実際に発生した。対応として`_run_gitleaks(target_dir)`が
+再起票され続ける問題が実際に発生した。対応として`GitleaksScanner.run(target_dir)`が
 `target_dir`直下に`.gitleaks.toml`が存在するかを`os.path.isfile`で確認し、
 存在すれば`["--config", repo_config_path]`をコマンドに追加する。これにより
 CODESCANのスキャン対象となる各baby-feelingsリポジトリが、自分自身の
@@ -213,7 +221,7 @@ APIキー〈`.gitleaks.toml`〉・Jekyllテンプレート変数〈`.semgrepigno
 defusedxml誤検知〈`# nosemgrep`〉の3パターンで実際に運用している）。
 
 ## 自リポジトリの `.gitleaks.toml`（allowlist）の書式
-`_run_gitleaks`は対象リポジトリのルートに`.gitleaks.toml`があれば`--config`で渡す。**gitleaks 8.xは
+`GitleaksScanner.run`は対象リポジトリのルートに`.gitleaks.toml`があれば`--config`で渡す。**gitleaks 8.xは
 allowlistを「テーブル」`[allowlist]`として読む**。配列`[[allowlist]]`だと`expected a map, got slice`で
 設定の読み込み自体に失敗する（本リポジトリで実際に発生。PRのgitleaks CIで発覚）。複数の除外を書く
 場合は`[[allowlists]]`（複数形、8.25以降）を使う。除外が効くことは`docker run ghcr.io/gitleaks/gitleaks

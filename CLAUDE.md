@@ -89,7 +89,7 @@ app/
 │                 #   user_scan/source_files/parsers/）
 ├── depsops/      # Dependabot PR 自動運用（runner/pr_judge/pr_log_repository/classify/github_client〈PR操作〉/user_scan）
 ├── codescan/     # 自アプリのコード脆弱性診断（Semgrep静的解析+gitleaksシークレット検知。GitHubログイン
-│                 #   必須〈DEPSCANとセッション共有〉。+issue_management/cvss_mapping。
+│                 #   必須〈DEPSCANとセッション共有〉。+scanners〈Strategy〉/archive/repository/issue_management/cvss_mapping。
 │                 #   CVSS計算式自体はapp.core.cvss）
 ├── mcp_server/   # AIエージェント向けリモートMCPサーバー（/mcp、Streamable HTTP。組み立て=server.py・
 │                 #   ツール=tools/・REST窓口=gateway.py・認証=auth.py。MCPトークンの台帳/JWT・OAuth 2.1・管理API（management_router）・
