@@ -8,8 +8,17 @@ name: Semgrep — Static Analysis
 on:
   pull_request:
     branches: [main]
+    # ドキュメントだけの変更では実行しない（ソースが変わらないため）
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - ".claude/skills/**"
   push:
     branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - ".claude/skills/**"
 
 permissions:
   contents: read
