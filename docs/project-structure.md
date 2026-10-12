@@ -11,7 +11,9 @@ cyberattack_info_api/
 │   ├── main.py                 # FastAPI アプリ本体・ルーター include・lifespan のみに専念（定期ジョブ定義は core/scheduler_jobs.py）
 │   │                           # （/admin/* は持たない。各ドメインの router.py の admin_router に定義）
 │   ├── auth/                   # GitHub ログイン・ユーザー別Slack通知登録・MCPトークンのドメイン（models・
-│   │                           # account_store・session・github_oauth・router。Issue #227でUserAccount、
+│   │                           # account_store・session・github_oauth。router.pyは github_router〈ログイン・交換コード〉・
+│   │                           # mcp_router〈MCPトークン・OAuth接続〉・account_router〈スキャン進捗・通知設定〉を束ね、
+│   │                           # 認証の依存関数は dependencies。Issue #227でUserAccount、
 │   │                           # MCPトークンは mcp_token〈JWT〉・mcp_token_store〈台帳 mcp_tokens。失効・一覧〉）
 │   ├── core/                   # 横断的インフラ（config・database・auth・background・crawler_runner・
 │   │                           # crypto〈トークン暗号化〉・db_utils・notifications・pagination・

@@ -74,8 +74,8 @@ def _github_state(http, request_id: str) -> str:
 
 
 def _callback(http, state: str, login="alice"):
-    with patch("app.auth.router.settings.GITHUB_OAUTH_CLIENT_ID", "gh-client"), \
-         patch("app.auth.router.settings.GITHUB_OAUTH_CLIENT_SECRET", "gh-secret"), \
+    with patch("app.auth.github_router.settings.GITHUB_OAUTH_CLIENT_ID", "gh-client"), \
+         patch("app.auth.github_router.settings.GITHUB_OAUTH_CLIENT_SECRET", "gh-secret"), \
          patch(f"{_GH}.settings.GITHUB_OAUTH_CLIENT_ID", "gh-client"), \
          patch(f"{_GH}.settings.GITHUB_OAUTH_CLIENT_SECRET", "gh-secret"), \
          patch(f"{_GH}.exchange_code_for_token", return_value="gho_dummy"), \
@@ -298,8 +298,8 @@ class TestAuthorizeValidation:
 class TestCallbackSecurity:
     def test_state_not_signed_by_us_falls_back_to_dashboard_flow(self, http):
         # ダッシュボードのログイン用 state（ランダム値）は Cookie 検証へ進み、Cookie が無ければ 400
-        with patch("app.auth.router.settings.GITHUB_OAUTH_CLIENT_ID", "gh-client"), \
-             patch("app.auth.router.settings.GITHUB_OAUTH_CLIENT_SECRET", "gh-secret"):
+        with patch("app.auth.github_router.settings.GITHUB_OAUTH_CLIENT_ID", "gh-client"), \
+             patch("app.auth.github_router.settings.GITHUB_OAUTH_CLIENT_SECRET", "gh-secret"):
             res = http.get("/auth/github/callback", params={"code": "c", "state": "random"})
         assert res.status_code == 400
 
@@ -341,8 +341,8 @@ class TestCallbackSecurity:
         loc = _authorize(http, _register(http), challenge).headers["location"]
         rid = _request_id(loc)
         state = _github_state(http, rid)
-        with patch("app.auth.router.settings.GITHUB_OAUTH_CLIENT_ID", "gh-client"), \
-             patch("app.auth.router.settings.GITHUB_OAUTH_CLIENT_SECRET", "gh-secret"), \
+        with patch("app.auth.github_router.settings.GITHUB_OAUTH_CLIENT_ID", "gh-client"), \
+             patch("app.auth.github_router.settings.GITHUB_OAUTH_CLIENT_SECRET", "gh-secret"), \
              patch(f"{_GH}.settings.GITHUB_OAUTH_CLIENT_ID", "gh-client"), \
              patch(f"{_GH}.exchange_code_for_token", side_effect=httpx.ConnectError("x")):
             res = http.get("/auth/github/callback", params={"code": "c", "state": state})

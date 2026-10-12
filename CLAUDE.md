@@ -74,7 +74,8 @@ pip-audit -r requirements.txt --desc                   # 依存脆弱性確認�
 ```
 app/
 ├── main.py       # FastAPI アプリ・lifespan・ルーター include（定期ジョブは core/scheduler_jobs）
-├── auth/         # GitHubログイン・ユーザー別Slack通知登録（UserAccount/account_store）
+├── auth/         # GitHubログイン・ユーザー別Slack通知登録（UserAccount/account_store。router.pyは
+│                 #   github_router/mcp_router/account_routerを束ね、認証の依存関数はdependencies.py）
 ├── core/         # 横断的インフラ: config/database/auth/background/crawler_runner/crypto/
 │                 #   db_utils/notifications/osv_client/registry_client/pagination/repo_cleanup/
 │                 #   user_crawl_runner/stix/taxii/schemas/github_http（GitHub API認証・
