@@ -10,6 +10,8 @@ import httpx  # noqa: E402
 
 from app.codescan.issue_management import file_github_issues  # noqa: E402
 
+_REPO = "app.core.github.repo.GitHubRepo"
+
 
 def _finding(**kwargs) -> dict:
     base = {
@@ -31,41 +33,40 @@ class TestFileGithubIssues:
     # いるため、モックはそちら側を対象にする（DEPSCAN 側テストと同じ方針）
 
     def test_does_nothing_when_no_new_findings(self):
-        with patch("app.core.issue_filing.find_open_issue") as mock_find:
+        with patch(f"{_REPO}.find_open_issue", autospec=True) as mock_find:
             file_github_issues([])
         mock_find.assert_not_called()
 
     def test_creates_issue_when_none_open(self):
-        with patch("app.core.issue_filing.find_open_issue", return_value=None), \
-             patch("app.core.issue_filing.create_issue") as mock_create, \
-             patch("app.core.issue_filing.add_issue_comment") as mock_comment:
+        with patch(f"{_REPO}.find_open_issue", autospec=True, return_value=None), \
+             patch(f"{_REPO}.create_issue", autospec=True) as mock_create, \
+             patch(f"{_REPO}.add_issue_comment", autospec=True) as mock_comment:
             file_github_issues([_finding()])
         mock_create.assert_called_once()
         args = mock_create.call_args[0]
-        assert args[0] == "baby-feelings"
-        assert args[1] == "baby_grow"
-        assert "CODESCAN" in args[2]  # 固定タイトルにCODESCANを含む
-        assert "hardcoded-password" in args[3]
+        assert args[0].full_name == "baby-feelings/baby_grow"
+        assert "CODESCAN" in args[1]  # 固定タイトルにCODESCANを含む
+        assert "hardcoded-password" in args[2]
         mock_comment.assert_not_called()
 
     def test_uses_codescan_specific_title_distinct_from_depscan(self):
         with patch(
-            "app.core.issue_filing.find_open_issue", return_value=None,
+            f"{_REPO}.find_open_issue", autospec=True, return_value=None,
         ) as mock_find, \
-             patch("app.core.issue_filing.create_issue"), \
-             patch("app.core.issue_filing.add_issue_comment"):
+             patch(f"{_REPO}.create_issue", autospec=True), \
+             patch(f"{_REPO}.add_issue_comment", autospec=True):
             file_github_issues([_finding()])
-        title = mock_find.call_args[0][2]
+        title = mock_find.call_args[0][1]
         assert "DEPSCAN" not in title
         assert "CODESCAN" in title
 
     def test_comments_on_existing_open_issue(self):
-        with patch("app.core.issue_filing.find_open_issue", return_value=7), \
-             patch("app.core.issue_filing.create_issue") as mock_create, \
-             patch("app.core.issue_filing.add_issue_comment") as mock_comment:
+        with patch(f"{_REPO}.find_open_issue", autospec=True, return_value=7), \
+             patch(f"{_REPO}.create_issue", autospec=True) as mock_create, \
+             patch(f"{_REPO}.add_issue_comment", autospec=True) as mock_comment:
             file_github_issues([_finding()])
         mock_comment.assert_called_once()
-        assert mock_comment.call_args[0][2] == 7
+        assert mock_comment.call_args[0][1] == 7
         mock_create.assert_not_called()
 
     def test_groups_by_repo(self):
@@ -73,9 +74,9 @@ class TestFileGithubIssues:
             _finding(repo_full_name="u/a"),
             _finding(repo_full_name="u/b"),
         ]
-        with patch("app.core.issue_filing.find_open_issue", return_value=None), \
-             patch("app.core.issue_filing.create_issue") as mock_create, \
-             patch("app.core.issue_filing.add_issue_comment"):
+        with patch(f"{_REPO}.find_open_issue", autospec=True, return_value=None), \
+             patch(f"{_REPO}.create_issue", autospec=True) as mock_create, \
+             patch(f"{_REPO}.add_issue_comment", autospec=True):
             file_github_issues(findings)
         assert mock_create.call_count == 2
 
@@ -84,17 +85,17 @@ class TestFileGithubIssues:
             _finding(file_path="b.py", severity="INFO"),
             _finding(file_path="a.py", severity="ERROR"),
         ]
-        with patch("app.core.issue_filing.find_open_issue", return_value=None), \
-             patch("app.core.issue_filing.create_issue") as mock_create, \
-             patch("app.core.issue_filing.add_issue_comment"):
+        with patch(f"{_REPO}.find_open_issue", autospec=True, return_value=None), \
+             patch(f"{_REPO}.create_issue", autospec=True) as mock_create, \
+             patch(f"{_REPO}.add_issue_comment", autospec=True):
             file_github_issues(findings)
-        body = mock_create.call_args[0][3]
+        body = mock_create.call_args[0][2]
         assert body.index("a.py") < body.index("b.py")
 
     def test_http_error_does_not_raise(self):
         """権限不足等でIssue作成が失敗しても、CODESCAN全体を失敗させない。"""
         with patch(
-            "app.core.issue_filing.find_open_issue",
+            f"{_REPO}.find_open_issue", autospec=True,
             side_effect=httpx.HTTPStatusError("403", request=MagicMock(), response=MagicMock()),
         ):
             file_github_issues([_finding()])  # 例外を送出しないことを確認

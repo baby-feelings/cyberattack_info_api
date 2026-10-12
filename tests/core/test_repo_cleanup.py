@@ -11,6 +11,9 @@ from app.depsops.models import DependabotPrLog
 _NOW = datetime.now(UTC)
 
 
+_REPO = "app.core.github.repo.GitHubRepo"
+
+
 def _make_dependency_finding(db_session, **kwargs):
     defaults = {
         "repo_full_name": "baby-feelings/deleted-repo",
@@ -59,7 +62,7 @@ class TestPurgeDeletedRepos:
         _make_code_finding(db_session)
         _make_pr_log(db_session)
 
-        with patch("app.core.repo_cleanup.repo_exists", return_value=False):
+        with patch(f"{_REPO}.exists", return_value=False):
             purged = purge_deleted_repos("baby-feelings", "token", current_repo_full_names=set())
 
         assert purged == 1
@@ -71,7 +74,7 @@ class TestPurgeDeletedRepos:
         """アーカイブ化・可視性変更等で一覧から除外されているだけの場合は削除しない。"""
         _make_dependency_finding(db_session)
 
-        with patch("app.core.repo_cleanup.repo_exists", return_value=True):
+        with patch(f"{_REPO}.exists", return_value=True):
             purged = purge_deleted_repos("baby-feelings", "token", current_repo_full_names=set())
 
         assert purged == 0
@@ -81,7 +84,7 @@ class TestPurgeDeletedRepos:
         """一時的なAPIエラー等で判定できない場合は安全側に倒し削除しない。"""
         _make_dependency_finding(db_session)
 
-        with patch("app.core.repo_cleanup.repo_exists", return_value=None):
+        with patch(f"{_REPO}.exists", return_value=None):
             purged = purge_deleted_repos("baby-feelings", "token", current_repo_full_names=set())
 
         assert purged == 0
@@ -90,7 +93,7 @@ class TestPurgeDeletedRepos:
     def test_skips_repos_present_in_current_scan(self, db_session):
         _make_dependency_finding(db_session, repo_full_name="baby-feelings/still-there")
 
-        with patch("app.core.repo_cleanup.repo_exists") as mock_exists:
+        with patch(f"{_REPO}.exists") as mock_exists:
             purged = purge_deleted_repos(
                 "baby-feelings", "token",
                 current_repo_full_names={"baby-feelings/still-there"},
@@ -103,7 +106,7 @@ class TestPurgeDeletedRepos:
         """他オーナーのリポジトリは対象にしない。"""
         _make_dependency_finding(db_session, repo_full_name="other-owner/repo")
 
-        with patch("app.core.repo_cleanup.repo_exists") as mock_exists:
+        with patch(f"{_REPO}.exists") as mock_exists:
             purged = purge_deleted_repos("baby-feelings", "token", current_repo_full_names=set())
 
         assert purged == 0
@@ -121,7 +124,7 @@ class TestRunRepoCleanup:
         repos = [{"full_name": "baby-feelings/kept-repo"}]
 
         with patch("app.core.repo_cleanup.list_target_repos", return_value=repos), \
-             patch("app.core.repo_cleanup.repo_exists", return_value=False):
+             patch(f"{_REPO}.exists", return_value=False):
             purged = run_repo_cleanup()
 
         assert purged == 1

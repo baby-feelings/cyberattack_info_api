@@ -22,8 +22,9 @@ from sqlalchemy.orm import Session
 from app.codescan.models import CodeFinding
 from app.core.config import settings
 from app.core.database import SessionLocal
+from app.core.github.accounts import list_target_repos
+from app.core.github.repo import GitHubRepo
 from app.crawler_logs.writer import now_utc, write_crawler_log
-from app.depscan.github_client import list_target_repos, repo_exists
 from app.depscan.models import DependencyFinding
 from app.depsops.models import DependabotPrLog
 
@@ -93,8 +94,7 @@ def purge_deleted_repos(username: str, token: str, current_repo_full_names: set[
 
         purged = 0
         for full_name in candidates:
-            owner, repo = full_name.split("/", 1)
-            exists = repo_exists(owner, repo, token)
+            exists = GitHubRepo.from_full_name(full_name, token).exists()
             if exists is False:
                 counts = _purge_repo_data(db, full_name)
                 total = sum(counts.values())

@@ -43,14 +43,14 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.codescan.cvss_mapping import estimate_cvss_vector
-from app.codescan.github_client import download_repo_tarball
 from app.codescan.issue_management import file_github_issues
 from app.codescan.models import CodeFinding
 from app.core.config import settings
 from app.core.crawler_runner import CrawlCounters, run_crawler
 from app.core.cvss import calculate_base_score
+from app.core.github.accounts import list_target_repos
+from app.core.github.repo import GitHubRepo
 from app.crawler_logs.writer import now_utc
-from app.depscan.github_client import list_target_repos
 
 logger = logging.getLogger(__name__)
 
@@ -320,8 +320,7 @@ def scan_repo(full_name: str, branch: str, token: str) -> list[dict[str, Any]]:
     両ツールの検知結果を丸ごと失ってしまうため）。tarball 取得・展開の失敗は
     リポジトリ単位の障害として呼び出し元 `_run_codescan_body` に伝播させる。
     """
-    owner, repo = full_name.split("/", 1)
-    tarball_bytes = download_repo_tarball(owner, repo, token, branch)
+    tarball_bytes = GitHubRepo.from_full_name(full_name, token).tarball(branch)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         repo_root = _extract_tarball(tarball_bytes, tmpdir)

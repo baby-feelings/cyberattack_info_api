@@ -70,6 +70,9 @@ _SAMPLE_GITLEAKS_JSON = [
 ]
 
 
+_REPO = "app.core.github.repo.GitHubRepo"
+
+
 def _make_finding(db_session, **kwargs) -> CodeFinding:
     defaults = {
         "repo_full_name": "baby-feelings/baby_grow",
@@ -341,7 +344,7 @@ class TestParseGitleaksResults:
 class TestScanRepo:
     def test_downloads_extracts_runs_semgrep_and_gitleaks_and_parses(self):
         tarball = _make_tarball({"app/main.py": "x = 1"}, top_dir="owner-repo-sha")
-        with patch("app.codescan.crawler.download_repo_tarball", return_value=tarball), \
+        with patch(f"{_REPO}.tarball", return_value=tarball), \
              patch("app.codescan.crawler._run_semgrep", return_value=_SAMPLE_SEMGREP_JSON), \
              patch("app.codescan.crawler._run_gitleaks", return_value=_SAMPLE_GITLEAKS_JSON):
             records = scan_repo("owner/repo", "main", "token")
@@ -352,7 +355,7 @@ class TestScanRepo:
 
     def test_gitleaks_failure_does_not_lose_semgrep_results(self):
         tarball = _make_tarball({"app/main.py": "x = 1"}, top_dir="owner-repo-sha")
-        with patch("app.codescan.crawler.download_repo_tarball", return_value=tarball), \
+        with patch(f"{_REPO}.tarball", return_value=tarball), \
              patch("app.codescan.crawler._run_semgrep", return_value=_SAMPLE_SEMGREP_JSON), \
              patch(
                  "app.codescan.crawler._run_gitleaks",
@@ -364,7 +367,7 @@ class TestScanRepo:
 
     def test_semgrep_failure_does_not_lose_gitleaks_results(self):
         tarball = _make_tarball({"app/main.py": "x = 1"}, top_dir="owner-repo-sha")
-        with patch("app.codescan.crawler.download_repo_tarball", return_value=tarball), \
+        with patch(f"{_REPO}.tarball", return_value=tarball), \
              patch(
                  "app.codescan.crawler._run_semgrep",
                  side_effect=subprocess.TimeoutExpired(cmd="semgrep", timeout=300),

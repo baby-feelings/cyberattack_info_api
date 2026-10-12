@@ -20,9 +20,10 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.crawler_runner import CrawlCounters, CrawlJob
+from app.core.github.accounts import list_target_repos
+from app.core.github.repo import GitHubRepo
 from app.core.notifications import notify_dependabot_ops
 from app.crawler_logs.writer import now_utc
-from app.depscan.github_client import list_target_repos
 from app.depsops.github_client import (
     has_ci_workflows,
     list_open_dependabot_alerts,
@@ -53,14 +54,14 @@ def _process_repo(
         error_countとしてカウントする（他リポジトリの処理は継続する既存挙動を維持）。
     """
     token = token if token is not None else settings.GITHUB_TOKEN
-    owner, repo = full_name.split("/", 1)
+    repo = GitHubRepo.from_full_name(full_name, token)
     merged: list[dict[str, Any]] = []
     flagged: list[dict[str, Any]] = []
     resolved: list[dict[str, Any]] = []
     error_count = 0
 
     try:
-        prs = list_open_dependabot_prs(owner, repo, token)
+        prs = list_open_dependabot_prs(repo)
     except httpx.HTTPError as exc:
         logger.warning("DEPSOPS: failed to list PRs for %s: %s", full_name, exc)
         return merged, flagged, resolved, error_count + 1
@@ -74,7 +75,7 @@ def _process_repo(
     if not prs:
         return merged, flagged, resolved, error_count
 
-    has_ci = has_ci_workflows(owner, repo, token)
+    has_ci = has_ci_workflows(repo)
     logger.info(
         "DEPSOPS: %s has %d open Dependabot PR(s), CI=%s",
         full_name, len(prs), has_ci,
@@ -85,7 +86,7 @@ def _process_repo(
     # 失敗しても DEPSOPS 本来のマージ判定は継続する（判定不能 = None のまま）
     alert_package_names: set[str] | None
     try:
-        alerts = list_open_dependabot_alerts(owner, repo, token)
+        alerts = list_open_dependabot_alerts(repo)
         alert_package_names = {a["dependency"]["package"]["name"] for a in alerts}
     except httpx.HTTPError as exc:
         logger.warning(
@@ -93,9 +94,7 @@ def _process_repo(
         )
         alert_package_names = None
 
-    judge = PrJudge(
-        full_name, owner, repo, token, has_ci=has_ci, alert_package_names=alert_package_names,
-    )
+    judge = PrJudge(repo, has_ci=has_ci, alert_package_names=alert_package_names)
     for pr in prs:
         try:
             action, item = judge.judge(pr)

@@ -13,7 +13,7 @@ from typing import Any
 
 import httpx
 
-from app.depscan.github_client import add_issue_comment, create_issue, find_open_issue
+from app.core.github.repo import GitHubRepo
 
 logger = logging.getLogger(__name__)
 
@@ -48,18 +48,18 @@ def file_or_update_repo_issues(
         by_repo.setdefault(finding["repo_full_name"], []).append(finding)
 
     for full_name, findings in by_repo.items():
-        owner, repo = full_name.split("/", 1)
+        repo = GitHubRepo.from_full_name(full_name, token)
         body = format_body(findings)
         try:
-            issue_number = find_open_issue(owner, repo, issue_title, token)
+            issue_number = repo.find_open_issue(issue_title)
             if issue_number is not None:
-                add_issue_comment(owner, repo, issue_number, body, token)
+                repo.add_issue_comment(issue_number, body)
                 logger.info(
                     "%s: added comment to existing issue #%d in %s",
                     log_prefix, issue_number, full_name,
                 )
             else:
-                issue = create_issue(owner, repo, issue_title, body, token)
+                issue = repo.create_issue(issue_title, body)
                 logger.info(
                     "%s: created issue #%s in %s", log_prefix, issue.get("number"), full_name,
                 )

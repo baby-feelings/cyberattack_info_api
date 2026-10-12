@@ -12,6 +12,8 @@ os.environ.setdefault("GITHUB_USERNAME", "test-github-user")
 from app.zapscan.__main__ import main  # noqa: E402
 from app.zapscan.issue_management import file_github_issues, parse_alerts  # noqa: E402
 
+_REPO = "app.core.github.repo.GitHubRepo"
+
 
 def _alert(name: str, riskcode: int, uris: list[str], cweid: str = "693") -> dict:
     return {
@@ -72,24 +74,24 @@ class TestFileGithubIssues:
         }]
 
     def test_does_nothing_without_alerts(self):
-        with patch("app.core.issue_filing.find_open_issue") as mock_find:
+        with patch(f"{_REPO}.find_open_issue", autospec=True) as mock_find:
             file_github_issues([], "owner/repo", token="t")
         mock_find.assert_not_called()
 
     def test_creates_issue_in_target_repo(self):
-        with patch("app.core.issue_filing.find_open_issue", return_value=None), \
-             patch("app.core.issue_filing.create_issue") as mock_create:
+        with patch(f"{_REPO}.find_open_issue", autospec=True, return_value=None), \
+             patch(f"{_REPO}.create_issue", autospec=True) as mock_create:
             file_github_issues(self._alerts(), "owner/repo", token="t")
         args = mock_create.call_args[0]
-        assert (args[0], args[1]) == ("owner", "repo")
-        assert "ZAP" in args[2]
-        assert "Missing header" in args[3]
-        assert "ほか2件" in args[3]  # URL は最大5件まで、残りは件数表示
+        assert (args[0].owner, args[0].name) == ("owner", "repo")
+        assert "ZAP" in args[1]
+        assert "Missing header" in args[2]
+        assert "ほか2件" in args[2]  # URL は最大5件まで、残りは件数表示
 
     def test_comments_on_existing_open_issue(self):
-        with patch("app.core.issue_filing.find_open_issue", return_value=12), \
-             patch("app.core.issue_filing.add_issue_comment") as mock_comment, \
-             patch("app.core.issue_filing.create_issue") as mock_create:
+        with patch(f"{_REPO}.find_open_issue", autospec=True, return_value=12), \
+             patch(f"{_REPO}.add_issue_comment", autospec=True) as mock_comment, \
+             patch(f"{_REPO}.create_issue", autospec=True) as mock_create:
             file_github_issues(self._alerts(), "owner/repo", token="t")
         mock_comment.assert_called_once()
         mock_create.assert_not_called()

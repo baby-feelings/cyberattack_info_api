@@ -11,13 +11,13 @@ DEPSCAN（`app/depscan/`）が「依存ライブラリの既知脆弱性」を O
 （SQLi・ハードコード認証情報・XSS等）を Semgrep（`p/security-audit` + `p/secrets`、
 Semgrep Registryの無料公開ルールセット）で静的解析する。対象リポジトリ一覧は
 DEPSCANと完全に同じ（`GITHUB_USERNAME`配下、fork・archived除外）ため
-`app.depscan.github_client.list_target_repos`をそのまま再利用する（DRY原則、
-重複実装しない）。
+`app.core.github.accounts.list_target_repos`をそのまま再利用する（DRY原則、
+重複実装しない。CODESCANはDEPSCANに依存せず、共通部分は`core/github`にある）。
 
 ## ソースコード取得は tarball 方式（ファイル単位APIではない）
-DEPSCANの`get_repo_tree`/`get_file_content`はファイル単位のAPI呼び出しを要し、
-リポジトリ全体のソース取得には非効率。CODESCANは`app.codescan.github_client
-.download_repo_tarball`でGitHubの`GET /repos/{owner}/{repo}/tarball/{ref}`
+`GitHubRepo.tree`/`file_content`はファイル単位のAPI呼び出しを要し、
+リポジトリ全体のソース取得には非効率。CODESCANは`GitHubRepo.tarball`
+（`app.core.github.repo`）でGitHubの`GET /repos/{owner}/{repo}/tarball/{ref}`
 エンドポイントを使い、リポジトリ全体を1回のHTTP呼び出しで取得する（httpxの
 `follow_redirects=True`が必須。tarballエンドポイントは302リダイレクト経由で
 実データを返す）。取得したtar.gzは`tempfile.TemporaryDirectory()`に展開してから
