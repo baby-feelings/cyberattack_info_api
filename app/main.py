@@ -35,6 +35,7 @@ from app.jvn.router import admin_router as jvn_admin_router
 from app.jvn.router import router as jvn_router
 from app.kev.router import admin_router as kev_admin_router
 from app.kev.router import router as kev_router
+from app.mcp_server.management_router import router as mcp_management_router
 from app.mcp_server.oauth_routes import mount_oauth_routes
 from app.mcp_server.server import McpServer
 from app.osv.router import admin_router as osv_admin_router
@@ -129,6 +130,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 
 # ルーター登録
 app.include_router(auth_router)
+app.include_router(mcp_management_router)
 app.include_router(kev_router)
 app.include_router(osv_router)
 app.include_router(jvn_router)

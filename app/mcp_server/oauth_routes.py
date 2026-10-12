@@ -7,17 +7,26 @@
 import logging
 from urllib.parse import urlsplit
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import Response
 from mcp.server.auth.routes import create_auth_routes, create_protected_resource_routes
 from mcp.server.auth.settings import ClientRegistrationOptions, RevocationOptions
 from pydantic import AnyHttpUrl
+from sqlalchemy.orm import Session
 
+from app.auth import external_login
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.mcp_server.oauth_consent import build_consent_router
+from app.mcp_server.oauth_consent import BROWSER_COOKIE, build_consent_router, complete_github_login
+from app.mcp_server.oauth_flow import decode_state
 from app.mcp_server.oauth_provider import SCOPE, McpOAuthProvider
 
 logger = logging.getLogger(__name__)
+
+
+def _complete_github_login(db: Session, request_id: str, code: str, request: Request) -> Response:
+    """GitHub のコールバック（MCP 用の state）を、同意画面のブラウザ Cookie つきで完了する。"""
+    return complete_github_login(db, request_id, code, request.cookies.get(BROWSER_COOKIE))
 
 
 def mount_oauth_routes(app: FastAPI, issuer: str | None = None) -> bool:
@@ -55,5 +64,9 @@ def mount_oauth_routes(app: FastAPI, issuer: str | None = None) -> bool:
     app.router.routes.extend(routes)
     # 同意画面（/oauth/consent）。GitHub ログイン後の認可コード発行は /auth/github/callback が担う
     app.include_router(build_consent_router(SessionLocal))
+    # GitHub ログインの戻り（/auth/github/callback）のうち MCP 用の state を、こちらで引き受ける
+    external_login.register(external_login.ExternalLoginFlow(
+        name="mcp-oauth", decode_state=decode_state, complete=_complete_github_login,
+    ))
     logger.info("MCP OAuth endpoints enabled (issuer=%s)", issuer)
     return True

@@ -14,9 +14,9 @@ from typing import Any
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.auth.mcp_token_store import as_utc, revoke_oauth_tokens
-from app.auth.models import McpToken, OAuthClient, OAuthRefreshToken
 from app.mcp_server import oauth_refresh
+from app.mcp_server.mcp_token_store import as_utc, revoke_oauth_tokens
+from app.mcp_server.models import McpToken, OAuthClient, OAuthRefreshToken
 
 # クライアント名が無い（自己申告されなかった）ときの表示
 _NO_NAME = "（名前なし）"

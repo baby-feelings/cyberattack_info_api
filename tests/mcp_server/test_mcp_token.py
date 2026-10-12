@@ -1,4 +1,4 @@
-"""app.auth.mcp_token（MCP トークン JWT の発行・検証）のテスト。"""
+"""app.mcp_server.mcp_token（MCP トークン JWT の発行・検証）のテスト。"""
 import os
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
@@ -11,9 +11,9 @@ os.environ.setdefault("SESSION_SECRET_KEY", "test-session-secret-key-for-pytest"
 
 import jwt  # noqa: E402
 
-from app.auth.mcp_token import McpClaims, create_mcp_token, verify_mcp_token  # noqa: E402
 from app.auth.session import create_session_token, decode_session_token  # noqa: E402
 from app.core.config import settings  # noqa: E402
+from app.mcp_server.mcp_token import McpClaims, create_mcp_token, verify_mcp_token  # noqa: E402
 
 _AUD = "cyberattack-info-mcp"
 
@@ -54,7 +54,7 @@ class TestMcpTokenJwt:
 
     def test_rejected_when_secret_not_configured(self):
         token = create_mcp_token("alice", "tok-1", _future())
-        with patch("app.auth.mcp_token.settings.SESSION_SECRET_KEY", ""):
+        with patch("app.mcp_server.mcp_token.settings.SESSION_SECRET_KEY", ""):
             assert verify_mcp_token(token) is None
 
     def test_legacy_token_without_jti_is_rejected(self):

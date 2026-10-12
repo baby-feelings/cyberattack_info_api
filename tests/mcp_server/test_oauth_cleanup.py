@@ -8,10 +8,10 @@ os.environ.setdefault("ENVIRONMENT", "development")
 os.environ.setdefault("GITHUB_USERNAME", "test-github-user")
 os.environ.setdefault("SESSION_SECRET_KEY", "test-session-secret-key-for-pytest")
 
-from app.auth.mcp_token import verify_mcp_token  # noqa: E402
-from app.auth.mcp_token_store import is_usable  # noqa: E402
-from app.auth.models import McpToken, OAuthClient  # noqa: E402
 from app.mcp_server import oauth_cleanup, oauth_connections  # noqa: E402
+from app.mcp_server.mcp_token import verify_mcp_token  # noqa: E402
+from app.mcp_server.mcp_token_store import is_usable  # noqa: E402
+from app.mcp_server.models import McpToken, OAuthClient  # noqa: E402
 from app.mcp_server.oauth_cleanup import (  # noqa: E402
     UNUSED_CONNECTION_TTL,
     disconnect_unused_connections,
@@ -65,7 +65,7 @@ class TestDisconnectUnusedConnections:
         assert unused_client != other_client
 
     def test_does_not_touch_manually_issued_tokens(self, http, db_session):
-        from app.auth.mcp_token_store import issue_token
+        from app.mcp_server.mcp_token_store import issue_token
 
         manual, _ = issue_token(db_session, "alice", 30)
         _connect(http, "alice")

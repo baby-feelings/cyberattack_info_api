@@ -19,9 +19,9 @@ from mcp.server.auth.provider import AuthorizationParams
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
-from app.auth.mcp_token_store import as_utc
-from app.auth.models import OAuthAuthorization
 from app.core.config import settings
+from app.mcp_server.mcp_token_store import as_utc
+from app.mcp_server.models import OAuthAuthorization
 
 # 同意画面と GitHub ログインを済ませるまでの猶予
 REQUEST_TTL = timedelta(minutes=10)

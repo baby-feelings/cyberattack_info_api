@@ -5,7 +5,6 @@
 """
 from unittest.mock import MagicMock
 
-from app.auth.mcp_token_expiry import run_mcp_token_expiry_notices
 from app.codescan.crawler import fetch_and_scan_code
 from app.core.config import settings
 from app.core.repo_cleanup import run_repo_cleanup
@@ -15,6 +14,7 @@ from app.depscan.crawler import fetch_and_scan_dependencies
 from app.depsops.runner import run_dependabot_ops
 from app.jvn.crawler import fetch_and_store_jvn
 from app.kev.crawler import fetch_and_store_kev
+from app.mcp_server.mcp_token_expiry import run_mcp_token_expiry_notices
 from app.mcp_server.oauth_cleanup import run_oauth_cleanup
 from app.osv.crawler import fetch_and_store_osv
 

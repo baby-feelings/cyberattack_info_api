@@ -12,8 +12,8 @@ from typing import Final
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
-from app.auth.mcp_token import McpClaims, create_mcp_token
-from app.auth.models import McpToken
+from app.mcp_server.mcp_token import McpClaims, create_mcp_token
+from app.mcp_server.models import McpToken
 
 logger = logging.getLogger(__name__)
 

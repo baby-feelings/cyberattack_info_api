@@ -62,9 +62,9 @@ claude mcp add --transport http cyberattack-info https://<API のドメイン>/m
 - **実装**: `app/mcp_server/`（`server.py` = ツール、`auth.py` = 認証）。ツールはアプリ自身の REST を
   プロセス内（ASGI）で呼ぶ。検索・検証・所有者による絞り込みのロジックを複製しない
 - **ステートレス**: セッションをサーバーに持たない（再起動や複数台構成で壊れない）
-- **トークン**: `app/auth/mcp_token.py`（JWT: sub・jti・aud・exp）。ダッシュボードのセッション（24 時間）とは
+- **トークン**: `app/mcp_server/mcp_token.py`（JWT: sub・jti・aud・exp）。ダッシュボードのセッション（24 時間）とは
   `aud` で区別し、相互に流用できない
-- **台帳**: `app/auth/mcp_token_store.py`・テーブル `mcp_tokens`（トークンID=jti・ユーザー・期限・失効日時・
+- **台帳**: `app/mcp_server/mcp_token_store.py`・テーブル `mcp_tokens`（トークンID=jti・ユーザー・期限・失効日時・
   最終使用日時。トークン本体は保存しない）。接続のたびに、署名・期限に加えて「台帳にあり、発行者本人の
   もので、失効していない」ことを確認する。台帳に無い（jti の無い旧形式を含む）トークンは 401。台帳の確認に
   失敗したら fail closed（拒否）。最終使用日時は 5 分間隔で更新する
