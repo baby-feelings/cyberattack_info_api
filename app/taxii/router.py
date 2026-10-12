@@ -6,7 +6,7 @@ SIEM/TIPからの購読を想定した、最小構成のTAXII 2.1サーバー実
 （discovery・api-root・collections・objects）を提供する。
 
 当初はKEV専用（app.kev.taxii）として実装したが、TAXIIはKEV固有ではなく
-複数ドメインを跨ぐ配信機構であるため app.core.taxii へ移動し、コレクション
+複数ドメインを跨ぐ配信機構であるため app.taxii.router へ移動し、コレクション
 レジストリパターンでKEV/OSV/JVNの3ドメインに対応する。
 
 対応範囲: 配信（読み取り専用）のみ。以下はスコープ外
@@ -33,7 +33,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, Security
 from sqlalchemy.orm import Session
 
-from app.core.auth import require_public_api_key
+from app.auth.api_key import require_public_api_key
 from app.core.database import get_db
 from app.jvn.models import JvnVulnerability
 from app.jvn.stix import build_stix_vulnerability as build_jvn_stix_vulnerability

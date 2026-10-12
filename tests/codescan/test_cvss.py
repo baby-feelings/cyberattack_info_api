@@ -1,11 +1,11 @@
-"""app.core.cvss（CVSS 3.1 基本値計算）のテスト。
+"""app.codescan.cvss（CVSS 3.1 基本値計算）のテスト。
 
 NVD が公開している既知のベクター例とスコアの組み合わせで、計算式の正確性を検証する。
 参照値は CVSS 3.1 仕様書・NVD の CVSS v3 計算機で広く用いられる例。
 """
 import pytest
 
-from app.core.cvss import calculate_base_score, parse_vector
+from app.codescan.cvss import calculate_base_score, parse_vector
 
 
 class TestParseVector:

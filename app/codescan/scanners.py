@@ -19,8 +19,8 @@ import tempfile
 from abc import ABC, abstractmethod
 from typing import Any
 
+from app.codescan.cvss import calculate_base_score
 from app.codescan.cvss_mapping import estimate_cvss_vector
-from app.core.cvss import calculate_base_score
 from app.crawler_logs.writer import now_utc
 
 logger = logging.getLogger(__name__)
@@ -102,7 +102,7 @@ class SemgrepScanner(Scanner):
         """Semgrep の JSON 出力を `CodeFinding` 相当のレコード辞書リストへ変換する。
 
         CVSS 3.1 スコア・ベクターはこの時点で `app.codescan.cvss_mapping`
-        （ベストエフォート推定）+ `app.core.cvss`（正式な計算式）により算出する。
+        （ベストエフォート推定）+ `app.codescan.cvss`（正式な計算式）により算出する。
         """
         now = now_utc()
         records: list[dict[str, Any]] = []

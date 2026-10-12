@@ -113,7 +113,7 @@ def run_depscan_for_user(username: str, token: str) -> None:
 
     `fetch_and_scan_dependencies`（baby-feelings 向けの毎日の定期実行）とは独立した
     エントリポイント。進捗は `UserScan` テーブルに記録し、フロントエンドが
-    `GET /auth/scan-status` でポーリングできるようにする。`app.core.user_crawl_runner`
+    `GET /auth/scan-status` でポーリングできるようにする。`app.jobs.user_crawl_runner`
     （登録済み他ユーザーの定期実行、Issue #227）からも同じ関数を再利用する。
     """
     logger.info("=== DEPSCAN (on-demand for %s) started ===", username)

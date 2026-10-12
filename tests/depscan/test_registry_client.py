@@ -1,4 +1,4 @@
-"""app.core.registry_client（パッケージレジストリの最新バージョン取得）のユニットテスト。
+"""app.depscan.registry_client（パッケージレジストリの最新バージョン取得）のユニットテスト。
 
 DEPSCAN が「OSV に last_affected しか無い脆弱性」の修正版を補うために使う。
 取得失敗は例外にせず None を返す（ベストエフォート）ことと、版の大小比較が
@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from app.core.registry_client import fetch_latest_version, is_newer_version
+from app.depscan.registry_client import fetch_latest_version, is_newer_version
 
 
 def _mock_client(json_body=None, error: Exception | None = None) -> MagicMock:
@@ -26,7 +26,7 @@ def _mock_client(json_body=None, error: Exception | None = None) -> MagicMock:
 
 def _fetch(ecosystem: str, name: str, body) -> tuple[str | None, MagicMock]:
     client = _mock_client(body)
-    with patch("app.core.registry_client.httpx.Client", return_value=client):
+    with patch("app.depscan.registry_client.httpx.Client", return_value=client):
         return fetch_latest_version(ecosystem, name), client
 
 
@@ -84,7 +84,7 @@ class TestFetchLatestVersion:
         assert latest == "1.6.0"
 
     def test_unsupported_ecosystem_returns_none_without_request(self):
-        with patch("app.core.registry_client.httpx.Client") as client_cls:
+        with patch("app.depscan.registry_client.httpx.Client") as client_cls:
             assert fetch_latest_version("Maven", "com.example:lib") is None
         client_cls.assert_not_called()
 
@@ -92,13 +92,15 @@ class TestFetchLatestVersion:
         error = httpx.HTTPStatusError(
             "404", request=MagicMock(), response=MagicMock(status_code=404, headers={}),
         )
-        with patch("app.core.registry_client.httpx.Client", return_value=_mock_client(error=error)):
+        with patch(
+            "app.depscan.registry_client.httpx.Client", return_value=_mock_client(error=error),
+        ):
             assert fetch_latest_version("PyPI", "no-such-package") is None
 
     def test_connection_error_returns_none(self):
         client = _mock_client()
         client.get.side_effect = httpx.ConnectError("down")
-        with patch("app.core.registry_client.httpx.Client", return_value=client), \
+        with patch("app.depscan.registry_client.httpx.Client", return_value=client), \
                 patch("app.core.retry.time.sleep"):
             assert fetch_latest_version("PyPI", "pkg") is None
 

@@ -9,6 +9,7 @@ import logging
 from fastapi import HTTPException, Security, status
 from fastapi.security import APIKeyHeader
 
+from app.auth.dependencies import bearer_header
 from app.auth.session import decode_session_token
 from app.core.config import settings
 
@@ -16,8 +17,6 @@ logger = logging.getLogger(__name__)
 
 # X-API-KEY ヘッダーを読み取る Security スキーム
 _api_key_header = APIKeyHeader(name="X-API-KEY", auto_error=False)
-# Authorization ヘッダー（`Bearer <session token>`）を読み取る Security スキーム
-_bearer_header = APIKeyHeader(name="Authorization", auto_error=False)
 
 
 def require_api_key(api_key: str = Security(_api_key_header)) -> str:
@@ -71,7 +70,7 @@ def require_public_api_key(api_key: str = Security(_api_key_header)) -> str:
 
 def require_api_key_or_session(
     api_key: str = Security(_api_key_header),
-    authorization: str = Security(_bearer_header),
+    authorization: str = Security(bearer_header),
 ) -> str | None:
     """`X-API-KEY`（フルアクセス）または `Authorization: Bearer <セッションJWT>`
     （GitHub ログイン済みの任意のユーザー）のいずれかを要求する共通認証依存関数。

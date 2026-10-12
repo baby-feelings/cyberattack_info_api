@@ -8,9 +8,9 @@ import logging
 from fastapi import APIRouter, Security
 from pydantic import BaseModel
 
-from app.core.auth import require_api_key
+from app.auth.api_key import require_api_key
 from app.core.background import run_in_background
-from app.core.user_crawl_runner import run_user_crawls_for_all_accounts
+from app.jobs.user_crawl_runner import run_user_crawls_for_all_accounts
 
 logger = logging.getLogger(__name__)
 

@@ -86,7 +86,7 @@ def estimate_cvss_vector(severity: str, cwe_list: list[str] | None) -> str:
             無い場合は None または空リスト
 
     Returns:
-        CVSS 3.1 ベクター文字列（`app.core.cvss.calculate_base_score` に渡せる形式）
+        CVSS 3.1 ベクター文字列（`app.codescan.cvss.calculate_base_score` に渡せる形式）
     """
     for cwe_num in _extract_cwe_numbers(cwe_list):
         if cwe_num in _CWE_VECTOR_MAP:

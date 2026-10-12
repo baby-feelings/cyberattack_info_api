@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, Security
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.core.auth import require_api_key, require_api_key_or_session, require_public_api_key
+from app.auth.api_key import require_api_key, require_api_key_or_session, require_public_api_key
 from app.core.background import run_in_background
 from app.core.database import get_db
 from app.core.pagination import paginate
@@ -65,7 +65,7 @@ def trigger_depscan_crawl(
     return {"message": "Dependency vulnerability scan started in background"}
 
 # `X-API-KEY` または `Authorization: Bearer <session token>` を検証する。
-# 検証ロジック自体は app.core.auth.require_api_key_or_session に共通化されている
+# 検証ロジック自体は app.auth.api_key.require_api_key_or_session に共通化されている
 # （DRY原則）。DEPSCAN はその戻り値（セッション認証時はログインユーザー名、API
 # キー認証時は None）を、呼び出し側で本人所有リポジトリへの絞り込みに使う。
 _resolve_access = require_api_key_or_session

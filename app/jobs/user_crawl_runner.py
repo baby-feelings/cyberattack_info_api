@@ -20,9 +20,9 @@ from app.codescan.user_scan import run_codescan_for_user
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.github.accounts import list_target_repos
-from app.core.repo_cleanup import purge_deleted_repos
 from app.depscan.user_scan import run_depscan_for_user
 from app.depsops.user_scan import run_dependabot_ops_for_user
+from app.jobs.repo_cleanup import purge_deleted_repos
 
 logger = logging.getLogger(__name__)
 

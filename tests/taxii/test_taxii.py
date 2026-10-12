@@ -1,4 +1,4 @@
-"""app.core.taxii（TAXII 2.1配信、Issue #134のOSV/JVN拡張）のテスト。
+"""app.taxii.router（TAXII 2.1配信、Issue #134のOSV/JVN拡張）のテスト。
 
 KEV向けの既存テストケース（tests/kev/test_taxii.py から移動）はそのまま残し、
 OSV/JVNコレクションのテストを追加する。
@@ -92,7 +92,7 @@ class TestDiscovery:
         assert res.status_code == 403
 
     def test_returns_discovery_document(self, client: TestClient, monkeypatch):
-        monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+        monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
         res = client.get("/taxii2/", headers=_HEADERS)
         assert res.status_code == 200
         assert res.headers["content-type"] == "application/taxii+json;version=2.1"
@@ -103,20 +103,20 @@ class TestDiscovery:
 
 class TestApiRootInfo:
     def test_returns_info_for_known_root(self, client: TestClient, monkeypatch):
-        monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+        monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
         res = client.get(f"/taxii2/{_API_ROOT}/", headers=_HEADERS)
         assert res.status_code == 200
         assert "application/taxii+json;version=2.1" in res.json()["versions"]
 
     def test_404_for_unknown_root(self, client: TestClient, monkeypatch):
-        monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+        monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
         res = client.get("/taxii2/unknown-root/", headers=_HEADERS)
         assert res.status_code == 404
 
 
 class TestListCollections:
     def test_returns_kev_osv_jvn_collections(self, client: TestClient, monkeypatch):
-        monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+        monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
         res = client.get(f"/taxii2/{_API_ROOT}/collections/", headers=_HEADERS)
         assert res.status_code == 200
         collections = res.json()["collections"]
@@ -126,14 +126,14 @@ class TestListCollections:
         assert all(c["can_write"] is False for c in collections)
 
     def test_404_for_unknown_root(self, client: TestClient, monkeypatch):
-        monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+        monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
         res = client.get("/taxii2/unknown-root/collections/", headers=_HEADERS)
         assert res.status_code == 404
 
 
 class TestGetCollection:
     def test_returns_kev_collection_info(self, client: TestClient, monkeypatch):
-        monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+        monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
         res = client.get(
             f"/taxii2/{_API_ROOT}/collections/{_KEV_COLLECTION_ID}/", headers=_HEADERS,
         )
@@ -141,7 +141,7 @@ class TestGetCollection:
         assert res.json()["id"] == _KEV_COLLECTION_ID
 
     def test_returns_osv_collection_info(self, client: TestClient, monkeypatch):
-        monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+        monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
         res = client.get(
             f"/taxii2/{_API_ROOT}/collections/{_OSV_COLLECTION_ID}/", headers=_HEADERS,
         )
@@ -149,7 +149,7 @@ class TestGetCollection:
         assert res.json()["id"] == _OSV_COLLECTION_ID
 
     def test_returns_jvn_collection_info(self, client: TestClient, monkeypatch):
-        monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+        monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
         res = client.get(
             f"/taxii2/{_API_ROOT}/collections/{_JVN_COLLECTION_ID}/", headers=_HEADERS,
         )
@@ -157,7 +157,7 @@ class TestGetCollection:
         assert res.json()["id"] == _JVN_COLLECTION_ID
 
     def test_404_for_unknown_collection(self, client: TestClient, monkeypatch):
-        monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+        monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
         res = client.get(
             f"/taxii2/{_API_ROOT}/collections/00000000-0000-0000-0000-000000000000/",
             headers=_HEADERS,
@@ -165,7 +165,7 @@ class TestGetCollection:
         assert res.status_code == 404
 
     def test_404_for_unknown_root(self, client: TestClient, monkeypatch):
-        monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+        monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
         res = client.get(
             f"/taxii2/unknown-root/collections/{_KEV_COLLECTION_ID}/", headers=_HEADERS,
         )
@@ -174,7 +174,7 @@ class TestGetCollection:
 
 class TestListObjectsKev:
     def test_returns_stix_objects(self, client: TestClient, db_session: Session, monkeypatch):
-        monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+        monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
         _make_kev_vuln(db_session, cve_id="CVE-2026-10001")
         _make_kev_vuln(db_session, cve_id="CVE-2026-10002")
 
@@ -187,7 +187,7 @@ class TestListObjectsKev:
         assert all(obj["type"] == "vulnerability" for obj in objects)
 
     def test_filters_by_added_after(self, client: TestClient, db_session: Session, monkeypatch):
-        monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+        monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
         old = _make_kev_vuln(db_session, cve_id="CVE-2026-20001")
         old.updated_at = datetime.now(UTC) - timedelta(days=10)
         db_session.commit()
@@ -203,7 +203,7 @@ class TestListObjectsKev:
         assert names == {"CVE-2026-20002"}
 
     def test_respects_limit(self, client: TestClient, db_session: Session, monkeypatch):
-        monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+        monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
         for i in range(3):
             _make_kev_vuln(db_session, cve_id=f"CVE-2026-3000{i}")
 
@@ -220,7 +220,7 @@ class TestListObjectsKev:
 
 class TestGetObjectKev:
     def test_returns_matching_object(self, client: TestClient, db_session: Session, monkeypatch):
-        monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+        monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
         _make_kev_vuln(db_session, cve_id="CVE-2026-40001")
         object_id = kev_stix_vulnerability_id("CVE-2026-40001")
 
@@ -234,7 +234,7 @@ class TestGetObjectKev:
         assert objects[0]["name"] == "CVE-2026-40001"
 
     def test_404_for_unknown_object(self, client: TestClient, monkeypatch):
-        monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+        monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
         res = client.get(
             f"/taxii2/{_API_ROOT}/collections/{_KEV_COLLECTION_ID}/objects/"
             "vulnerability--00000000-0000-0000-0000-000000000000/",
@@ -245,7 +245,7 @@ class TestGetObjectKev:
 
 class TestListObjectsOsv:
     def test_returns_stix_objects(self, client: TestClient, db_session: Session, monkeypatch):
-        monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+        monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
         _make_osv_vuln(db_session, osv_id="GHSA-0001", package_name="pkg-a")
         _make_osv_vuln(db_session, osv_id="GHSA-0002", package_name="pkg-b")
 
@@ -258,7 +258,7 @@ class TestListObjectsOsv:
         assert all(obj["type"] == "vulnerability" for obj in objects)
 
     def test_filters_by_added_after(self, client: TestClient, db_session: Session, monkeypatch):
-        monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+        monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
         old = _make_osv_vuln(db_session, osv_id="GHSA-old", package_name="pkg-old")
         old.updated_at = datetime.now(UTC) - timedelta(days=10)
         db_session.commit()
@@ -280,7 +280,7 @@ class TestListObjectsOsv:
 
 class TestGetObjectOsv:
     def test_returns_matching_object(self, client: TestClient, db_session: Session, monkeypatch):
-        monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+        monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
         _make_osv_vuln(db_session, osv_id="GHSA-50001", ecosystem="PyPI", package_name="fastapi")
         object_id = osv_stix_vulnerability_id("GHSA-50001", "PyPI", "fastapi")
 
@@ -294,7 +294,7 @@ class TestGetObjectOsv:
         assert objects[0]["name"] == "GHSA-50001"
 
     def test_404_for_unknown_object(self, client: TestClient, monkeypatch):
-        monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+        monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
         res = client.get(
             f"/taxii2/{_API_ROOT}/collections/{_OSV_COLLECTION_ID}/objects/"
             "vulnerability--00000000-0000-0000-0000-000000000000/",
@@ -305,7 +305,7 @@ class TestGetObjectOsv:
 
 class TestListObjectsJvn:
     def test_returns_stix_objects(self, client: TestClient, db_session: Session, monkeypatch):
-        monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+        monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
         _make_jvn_vuln(db_session, jvndb_id="JVNDB-2026-100001")
         _make_jvn_vuln(db_session, jvndb_id="JVNDB-2026-100002")
 
@@ -318,7 +318,7 @@ class TestListObjectsJvn:
         assert all(obj["type"] == "vulnerability" for obj in objects)
 
     def test_filters_by_added_after(self, client: TestClient, db_session: Session, monkeypatch):
-        monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+        monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
         old = _make_jvn_vuln(db_session, jvndb_id="JVNDB-2026-200001")
         old.updated_at = datetime.now(UTC) - timedelta(days=10)
         db_session.commit()
@@ -340,7 +340,7 @@ class TestListObjectsJvn:
 
 class TestGetObjectJvn:
     def test_returns_matching_object(self, client: TestClient, db_session: Session, monkeypatch):
-        monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+        monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
         _make_jvn_vuln(db_session, jvndb_id="JVNDB-2026-300001")
         object_id = jvn_stix_vulnerability_id("JVNDB-2026-300001")
 
@@ -354,7 +354,7 @@ class TestGetObjectJvn:
         assert objects[0]["name"] == "JVNDB-2026-300001"
 
     def test_404_for_unknown_object(self, client: TestClient, monkeypatch):
-        monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+        monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
         res = client.get(
             f"/taxii2/{_API_ROOT}/collections/{_JVN_COLLECTION_ID}/objects/"
             "vulnerability--00000000-0000-0000-0000-000000000000/",

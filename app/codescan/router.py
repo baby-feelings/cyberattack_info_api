@@ -4,7 +4,7 @@ GET /api/codescan        – 検知結果一覧（リポジトリ・重要度・
 GET /api/codescan/stats  – リポジトリ別・重要度別の統計情報（未解決分のみ集計）
 
 ダッシュボードの DEPSCAN/CODESCAN タブ間でセッションを共有し、両方とも GitHub ログインを
-必須にする（Issue #219）ため、`app.core.auth.require_api_key_or_session`（`X-API-KEY` または
+必須にする（Issue #219）ため、`app.auth.api_key.require_api_key_or_session`（`X-API-KEY` または
 GitHub ログインセッション JWT のいずれかを要求する共通認証）で保護する。
 
 検知結果にはリポジトリ名・脆弱な箇所が含まれるため、DEPSCAN と同様に、セッション認証時は
@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, Query, Security
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.auth.api_key import require_api_key, require_api_key_or_session
 from app.codescan.crawler import fetch_and_scan_code
 from app.codescan.filters import CodescanListFilter
 from app.codescan.models import CodeFinding
@@ -28,7 +29,6 @@ from app.codescan.schemas import (
     CodescanCrawlResponse,
     RepoStat,
 )
-from app.core.auth import require_api_key, require_api_key_or_session
 from app.core.background import run_in_background
 from app.core.database import get_db
 from app.core.pagination import paginate

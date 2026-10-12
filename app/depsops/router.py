@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Query, Security
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.core.auth import require_api_key, require_public_api_key
+from app.auth.api_key import require_api_key, require_public_api_key
 from app.core.background import run_in_background
 from app.core.database import get_db
 from app.core.pagination import paginate

@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 def run_codescan_for_user(username: str, token: str) -> None:
     """GitHub ログインしたユーザー自身のリポジトリを CODESCAN でスキャンする。
 
-    `app.core.user_crawl_runner`（登録済み他ユーザーの定期実行）から呼ばれる。
+    `app.jobs.user_crawl_runner`（登録済み他ユーザーの定期実行）から呼ばれる。
     """
     logger.info("=== CODESCAN (for %s) started ===", username)
     db: Session = SessionLocal()

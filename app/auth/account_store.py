@@ -2,7 +2,7 @@
 DB アクセスをまとめたモジュール（Issue #227）。
 
 `app.auth.router`（ログイン時のトークン保存・設定画面API）と
-`app.core.user_crawl_runner`（登録済みユーザーの定期実行）の両方から使う。
+`app.jobs.user_crawl_runner`（登録済みユーザーの定期実行）の両方から使う。
 """
 import logging
 
@@ -90,7 +90,7 @@ def get_webhook_for_user(db: Session, username: str) -> str | None:
 
 def list_other_registered_accounts(db: Session, exclude_username: str) -> list[UserAccount]:
     """GITHUB_USERNAME（毎日クロールの対象アカウント）以外で、トークンが
-    保存されている登録済みユーザー一覧を返す（`app.core.user_crawl_runner` が
+    保存されている登録済みユーザー一覧を返す（`app.jobs.user_crawl_runner` が
     定期実行の対象を決めるために使う）。
     """
     return (
