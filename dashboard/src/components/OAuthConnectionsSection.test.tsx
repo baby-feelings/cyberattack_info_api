@@ -30,11 +30,29 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks())
 
 describe('OAuthConnectionsSection', () => {
-  it('接続が1件も無いときは何も表示しない', async () => {
+  it('接続が1件も無くても、推奨の接続方法と登録コマンドを表示する（一覧は出さない）', async () => {
     mockList.mockResolvedValue([])
-    const { container } = render(<OAuthConnectionsSection authToken="t" />)
+    render(<OAuthConnectionsSection authToken="t" />)
     await waitFor(() => expect(mockList).toHaveBeenCalledWith('t'))
-    expect(container).toBeEmptyDOMElement()
+    expect(screen.getByRole('heading', { name: 'OAuth で接続（推奨）' })).toBeInTheDocument()
+    expect(screen.getByLabelText('OAuth の登録コマンド')).toHaveTextContent(
+      /^claude mcp add --scope user --transport http cyberattack-info .+\/mcp$/,
+    )
+    expect(screen.queryByRole('list', { name: 'OAuthで接続中のアプリ' })).not.toBeInTheDocument()
+    expect(screen.queryByText('接続中のアプリ')).not.toBeInTheDocument()
+  })
+
+  it('登録コマンドにトークンを含めない（OAuth は貼り付け不要）', async () => {
+    mockList.mockResolvedValue([])
+    render(<OAuthConnectionsSection authToken="secret-session-token" />)
+    await waitFor(() => expect(mockList).toHaveBeenCalled())
+    expect(screen.getByLabelText('OAuth の登録コマンド')).not.toHaveTextContent(/Bearer|secret-session-token/)
+  })
+
+  it('未使用の接続は自動で解除される旨を表示する', async () => {
+    mockList.mockResolvedValue([{ ...CONN, last_used_at: null }])
+    render(<OAuthConnectionsSection authToken="t" />)
+    expect(await screen.findByText(/7日後に自動で解除されます/)).toBeInTheDocument()
   })
 
   it('接続中のアプリを、名前・接続日・最終使用・許可の期限つきで表示する', async () => {

@@ -112,6 +112,9 @@ class Settings(BaseSettings):
     # MCPトークンの期限前通知: 毎日 UTC 23:45（JST 翌日 8:45）
     MCP_EXPIRY_NOTICE_CRON_HOUR_UTC: int = 23
     MCP_EXPIRY_NOTICE_CRON_MINUTE_UTC: int = 45
+    # 使われない OAuth 接続・登録の自動整理: 毎日 UTC 23:50（JST 翌日 8:50）
+    OAUTH_CLEANUP_CRON_HOUR_UTC: int = 23
+    OAUTH_CLEANUP_CRON_MINUTE_UTC: int = 50
 
     model_config = SettingsConfigDict(
         # 環境に応じて .env.development または .env.production を使用

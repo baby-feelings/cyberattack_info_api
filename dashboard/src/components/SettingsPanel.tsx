@@ -58,11 +58,11 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
         ) : (
           <div className="space-y-6">
             <NotificationSettingsForm authToken={session.token} username={session.username} />
+            {/* 推奨の接続方法（OAuth）を先に、OAuth 非対応のクライアント向けのトークンを後に置く */}
+            <OAuthConnectionsSection authToken={session.token} />
             <div className="pt-5 border-t border-slate-800">
               <McpTokenSection authToken={session.token} />
             </div>
-            {/* OAuth で接続中のアプリ。1件も無いときは何も描画しない（区切り線も出ない） */}
-            <OAuthConnectionsSection authToken={session.token} />
           </div>
         )}
 

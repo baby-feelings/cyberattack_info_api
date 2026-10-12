@@ -23,6 +23,10 @@ export function McpTokenSection({ authToken }: { authToken: string }) {
   const [issuing, setIssuing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  // 失効済み・期限切れは一覧が長くなるため、標準では隠す（有効なトークンだけを見せる）
+  const [showInactive, setShowInactive] = useState(false)
+  const inactiveCount = tokens.filter((t) => t.status !== 'active').length
+  const visibleTokens = showInactive ? tokens : tokens.filter((t) => t.status === 'active')
 
   const reload = useCallback(async () => {
     try {
@@ -94,9 +98,12 @@ export function McpTokenSection({ authToken }: { authToken: string }) {
   return (
     <div className="space-y-3">
       <div>
-        <h3 className="text-sm font-medium text-slate-200 mb-1">MCPトークン</h3>
+        <h3 className="text-sm font-medium text-slate-200 mb-1">
+          MCPトークン（OAuth 非対応のクライアント向け）
+        </h3>
         <p className="text-xs text-slate-500 leading-relaxed">
-          AIエージェントからこのAPIをMCPサーバーとして使うためのトークンです。
+          OAuth に対応していないクライアントやスクリプトから、このAPIをMCPサーバーとして使うための
+          トークンです。OAuth で接続できる場合は、上の OAuth を使ってください。
           このトークンで参照できるDEPSCAN・CODESCANは、あなたが所有するリポジトリのみです。
           Slack通知を登録すると、期限の3日前にお知らせします。
         </p>
@@ -156,9 +163,20 @@ export function McpTokenSection({ authToken }: { authToken: string }) {
 
       {tokens.length > 0 && (
         <div>
-          <h4 className="text-xs text-slate-500 mb-1.5">発行済みのトークン</h4>
+          <div className="flex items-center justify-between mb-1.5">
+            <h4 className="text-xs text-slate-500">発行済みのトークン</h4>
+            {inactiveCount > 0 && (
+              <button
+                onClick={() => setShowInactive((v) => !v)}
+                aria-pressed={showInactive}
+                className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+              >
+                {showInactive ? '失効済み・期限切れを隠す' : `失効済み・期限切れを表示（${inactiveCount}件）`}
+              </button>
+            )}
+          </div>
           <ul className="space-y-1.5" aria-label="発行済みのMCPトークン">
-            {tokens.map((t) => (
+            {visibleTokens.map((t) => (
               <li
                 key={t.id}
                 className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-slate-800/60 border border-slate-800"

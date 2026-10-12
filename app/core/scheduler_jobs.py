@@ -23,6 +23,7 @@ from app.depscan.crawler import fetch_and_scan_dependencies
 from app.depsops.runner import run_dependabot_ops
 from app.jvn.crawler import fetch_and_store_jvn
 from app.kev.crawler import fetch_and_store_kev
+from app.mcp_server.oauth_cleanup import run_oauth_cleanup
 from app.osv.crawler import fetch_and_store_osv
 
 logger = logging.getLogger(__name__)
@@ -79,6 +80,11 @@ def build_scheduled_jobs() -> list[ScheduledJob]:
         ScheduledJob(
             "mcp_token_expiry_notice", "MCP_EXPIRY_NOTICE", run_mcp_token_expiry_notices,
             settings.MCP_EXPIRY_NOTICE_CRON_HOUR_UTC, settings.MCP_EXPIRY_NOTICE_CRON_MINUTE_UTC,
+        ),
+        # 使われない OAuth 接続・登録の自動整理: 期限前通知の後段に配置
+        ScheduledJob(
+            "oauth_cleanup", "OAUTH_CLEANUP", run_oauth_cleanup,
+            settings.OAUTH_CLEANUP_CRON_HOUR_UTC, settings.OAUTH_CLEANUP_CRON_MINUTE_UTC,
         ),
     ]
 
