@@ -5,6 +5,16 @@ description: DEPSCAN（GitHub全リポジトリの依存ライブラリ脆弱性
 
 # DEPSCAN / DEPSOPS 内部実装リファレンス
 
+
+## 構成（役割ごとのモジュール）
+`crawler.py`はジョブの組み立てだけ（`_DepscanJob`=`CrawlJob`のTemplate Method・`fetch_and_scan_dependencies`）。
+実装は役割ごとに分かれる: `manifests.py`（ロックファイルの収集とパース。`collect_dependencies`）・
+`finding_builder.py`（OSV照合と検知レコードの構築。`FindingBuilder`/`build_findings`）・
+`reachability_scan.py`（到達可能性の付与。判定自体の純粋な解析は`reachability.py`）・
+`repository.py`（`DependencyFindingRepository`: `sync`=Upsert+検知されなくなったものを解決済みに、
+`delete_old_resolved`。`repo_owner_prefix`で他人のリポジトリを解決済みにしない）。
+毎日クロールと`user_scan.py`（オンデマンド・ユーザー別）が同じ部品を使う。
+
 ## DEPSCAN はリアルタイムで OSV API に照合する（事前クロール済みデータには頼らない）
 既存の `OsvVulnerability` テーブルは `POPULAR_PACKAGES`（各エコシステム50〜60件の主要パッケージ）しか
 収録していないため、GitHub 上の自作アプリが依存する任意のパッケージを検知するには不十分。
@@ -49,7 +59,7 @@ Issue として起票する（Slack通知と同じ `new_snapshots` を使用）�
 `close_resolved_repo_issues` が、DEPSCAN の再スキャンで「そのリポジトリの未解決 finding が
 実際に0件になったこと」を確認できたタイミングで Open な DEPSCAN Issue を自動的にクローズする。
 トリガーを **DEPSCAN の再スキャン検証後**とし、DEPSOPS の PR マージ直後に即座にクローズしない
-設計（マージしただけでは本当に脆弱性が解消されたか未検証のため）。`resolve_stale_findings`
+設計（マージしただけでは本当に脆弱性が解消されたか未検証のため）。`DependencyFindingRepository.resolve_stale`
 が返す `affected_repos`（今回1件以上解決したリポジトリの集合）を候補として受け取り、そのリポジトリ
 に絞って再度 DB に問い合わせてから判定する（無関係なリポジトリへの無駄な GitHub API 呼び出しを
 避けるため）。クローズ前に `add_issue_comment` で解決報告コメントを追加してから `close_issue`
@@ -64,7 +74,7 @@ Issue として起票する（Slack通知と同じ `new_snapshots` を使用）�
 パッケージ名からソース内識別子への変換精度はエコシステムにより差が大きく、Maven・
 Packagist・Hexは最も精度が低いbest-effort。`get_source_files`が対象リポジトリの
 ソースを取得（`_MAX_SOURCE_FILES=200`件・`_MAX_SOURCE_FILE_SIZE=300_000`バイト上限）し、
-`_apply_reachability`がリポジトリ×エコシステムごとに1回だけ使い回す。取得失敗は
+`reachability_scan.apply_reachability`がリポジトリ×エコシステムごとに1回だけ使い回す。取得失敗は
 `"unknown"`のまま残す。再スキャンのたびに既存レコードの`reachability`も再計算・上書きする。
 
 ## DEPSCAN の資産コンテキスト（Issue #131：多層リスク優先度づけ）
@@ -72,7 +82,7 @@ Packagist・Hexは最も精度が低いbest-effort。`get_source_files`が対象
 露出しているか」を組み合わせてこそ、対応の優先度を正しく判断できる（SSVC的な意思決定支援）。
 
 - **`DependencyFinding.repo_visibility`**（`"public"`/`"private"`）: GitHub APIの
-  `private`フィールドから`collect_dependencies`が自動導出し、スキャンのたびに上書き
+  `private`フィールドから`manifests.collect_dependencies`が自動導出し、スキャンのたびに上書き
   （手動設定不要）
 - **`RepoAssetContext`テーブル**（`app/depscan/models.py`）: `is_production`・
   `is_internet_facing`・`importance`（`"high"`/`"medium"`/`"low"`）を管理者が
@@ -119,7 +129,7 @@ OWASP Top 10:2025「ソフトウェアサプライチェーンの失敗」対策
 - レスポンスの`Content-Type`は`application/vnd.cyclonedx+json`・`application/spdx+json`
 
 ## DEPSCAN の解決済みレコードは保持期間超過で自動削除する（未解決は対象外）
-`app.depscan.crawler._delete_old_depscan_records` が、`resolved_at` が
+`app.depscan.repository.DependencyFindingRepository.delete_old_resolved` が、`resolved_at` が
 `DEPSCAN_RETENTION_DAYS`（既定180日）より古いレコードのみを削除する。**未解決のレコードは
 経過期間に関わらず削除しない**（対応が必要な情報のため履歴として残す）。
 
@@ -269,7 +279,7 @@ Organization全体への一括デフォルト設定が無い）:
   直近24時間以内に完了済みなら再スキャンをスキップ。Slack通知・GitHub Issue起票は、
   本人がSlack Webhookを登録して通知を有効にしている場合のみ行う（Issue #227、詳細は
   下記セクション）。未登録のまま単にログインしただけでは一切通知・起票しない
-- **`resolve_stale_findings`のクロスユーザー事故防止**: `repo_owner_prefix`引数で
+- **`DependencyFindingRepository.resolve_stale`のクロスユーザー事故防止**: `repo_owner_prefix`引数で
   そのユーザーのリポジトリのみに絞り込む（無絞り込みだと他ユーザーのfindingを誤って
   解決済み扱いにする）
 - **フロントエンド**（`DepscanAuthGate.tsx`）: ネットワーク瞬断等の一時的エラーでは

@@ -1,411 +1,32 @@
-"""依存ライブラリ脆弱性スキャナー（DEPSCAN）モジュール。
+"""依存ライブラリ脆弱性スキャナー（DEPSCAN）のジョブの組み立て。
 
-GitHub 上の自作アプリ全リポジトリのロックファイルを取得・パースし、
-OSV API とリアルタイム照合して脆弱な依存パッケージを検知する。
-検知結果は DependencyFinding テーブルに保存し、新規分のみ Slack 通知する。
-APScheduler から毎日呼び出される。
+GitHub 上の自作アプリ全リポジトリのロックファイルを取得・パースし、OSV API とリアルタイム照合して
+脆弱な依存パッケージを検知する。検知結果は DependencyFinding テーブルに保存し、新規分のみ
+Slack 通知する。APScheduler から毎日呼び出される。
+
+このモジュールは実行の流れ（`_DepscanJob`。`CrawlJob` の Template Method）の組み立てだけを担う。
+役割ごとの実装は次にある。
+
+- `manifests`: ロックファイルの収集とパース
+- `finding_builder`: OSV への照合と検知レコードの構築
+- `reachability_scan`: 到達可能性（import レベル）の付与
+- `repository`: 検知結果の永続化（Upsert・解決済み化・保持期間超過の削除）
 """
 import logging
-import re
-from datetime import timedelta
 from typing import Any
 
-import httpx
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.crawler_runner import CrawlCounters, CrawlJob
-from app.core.github.accounts import list_target_repos
-from app.core.github.repo import GitHubRepo
 from app.core.notifications.dependency_findings import notify_dependency_findings
-from app.core.osv_client import fetch_vuln_by_id, parse_severity, query_versions_batch
-from app.core.registry_client import fetch_latest_version, is_newer_version
-from app.crawler_logs.writer import now_utc
+from app.depscan.finding_builder import build_findings
 from app.depscan.issue_management import close_resolved_repo_issues, file_github_issues
-from app.depscan.models import DependencyFinding
-from app.depscan.parsers import LOCKFILE_FILENAMES, parse_manifest
-from app.depscan.reachability import SOURCE_EXTENSIONS, check_reachability
-from app.depscan.source_files import collect_source_files
+from app.depscan.manifests import collect_dependencies
+from app.depscan.reachability_scan import apply_reachability
+from app.depscan.repository import DependencyFindingRepository
 
 logger = logging.getLogger(__name__)
-
-# (repo_full_name, ecosystem, package_name, osv_id) キー型のエイリアス
-FindingKey = tuple[str, str, str, str]
-# (ecosystem, package_name, version) キー型のエイリアス
-DepKey = tuple[str, str, str]
-
-
-def _discover_manifests(repo: GitHubRepo, default_branch: str) -> list[str]:
-    """リポジトリ内の対応ロックファイルのパス一覧を返す（サブディレクトリ含む）。"""
-    try:
-        paths = repo.tree(default_branch)
-    except httpx.HTTPError as exc:
-        logger.warning("Failed to get tree for %s: %s", repo.full_name, exc)
-        return []
-    return [p for p in paths if p.rsplit("/", 1)[-1] in LOCKFILE_FILENAMES]
-
-
-def collect_dependencies(
-    username: str, token: str,
-) -> tuple[dict[DepKey, list[tuple[str, str]]], int, dict[str, str]]:
-    """全対象リポジトリからロックファイルを収集・パースする。
-
-    Returns:
-        (
-            {(ecosystem, package_name, version): [(repo_full_name, manifest_path), ...]},
-            スキャンしたリポジトリ数,
-            {repo_full_name: "public"/"private"}（Issue #131: 資産コンテキストのrepo_visibility用。
-            GitHub APIの"private"フィールドから導出する）,
-        )
-    """
-    dep_to_repos: dict[DepKey, list[tuple[str, str]]] = {}
-    repos = list_target_repos(username, token)
-    logger.info("DEPSCAN: %d target repos to scan", len(repos))
-
-    repo_visibility: dict[str, str] = {
-        repo_info["full_name"]: "private" if repo_info.get("private") else "public"
-        for repo_info in repos
-    }
-
-    for i, repo_info in enumerate(repos, start=1):
-        full_name = repo_info["full_name"]
-        repo = GitHubRepo.from_full_name(full_name, token)
-        default_branch = repo_info.get("default_branch") or "main"
-        logger.info("DEPSCAN: [%d/%d] scanning %s", i, len(repos), full_name)
-
-        manifest_paths = _discover_manifests(repo, default_branch)
-        if manifest_paths:
-            logger.info(
-                "DEPSCAN: [%d/%d] %s: %d manifest(s) found: %s",
-                i, len(repos), full_name, len(manifest_paths), manifest_paths,
-            )
-
-        for path in manifest_paths:
-            filename = path.rsplit("/", 1)[-1]
-            try:
-                content = repo.file_content(path)
-            except httpx.HTTPError as exc:
-                logger.warning("Failed to fetch %s in %s: %s", path, full_name, exc)
-                continue
-
-            for ref in parse_manifest(filename, content):
-                key = (ref.ecosystem, ref.name, ref.version)
-                dep_to_repos.setdefault(key, []).append((full_name, path))
-
-    logger.info("DEPSCAN: repo scan complete, %d unique dependencies found", len(dep_to_repos))
-    return dep_to_repos, len(repos), repo_visibility
-
-
-def _normalize_package_name(name: str) -> str:
-    """OSV の package.name とロックファイル上の名前を突き合わせるための正規化。"""
-    return re.sub(r"[-_.]+", "-", name).lower()
-
-
-def _last_affected_versions(
-    vuln: dict[str, Any], ecosystem: str, package_name: str,
-) -> list[str]:
-    """OSV エントリのうち、対象パッケージの affected から last_affected を集める。"""
-    target = _normalize_package_name(package_name)
-    return [
-        event["last_affected"]
-        for affected in vuln.get("affected", [])
-        if (affected.get("package") or {}).get("ecosystem") == ecosystem
-        and _normalize_package_name((affected.get("package") or {}).get("name", "")) == target
-        for rng in affected.get("ranges", [])
-        for event in rng.get("events", [])
-        if "last_affected" in event
-    ]
-
-
-def _infer_fixed_versions(
-    vuln: dict[str, Any], ecosystem: str, package_name: str,
-    latest_cache: dict[tuple[str, str], str | None],
-) -> list[str]:
-    """OSV に `fixed` が無く `last_affected` だけある脆弱性の修正版をレジストリから補う。
-
-    OSV が影響範囲の上限しか載せていない場合（例: accelerate、影響は 1.14.0 まで）、
-    修正版が空のため「修正版なし」と誤表示されていた。レジストリの最新版が
-    last_affected より新しければ、それは影響を受けないため修正版の目安として返す。
-    判定できない場合（last_affected なし・最新版を取得できない・版の比較に確信が持てない）
-    は空リストを返し、従来どおり修正版なしとして扱う。
-    """
-    last_versions = _last_affected_versions(vuln, ecosystem, package_name)
-    if not last_versions:
-        return []
-
-    cache_key = (ecosystem, package_name)
-    if cache_key not in latest_cache:
-        latest_cache[cache_key] = fetch_latest_version(ecosystem, package_name)
-    latest = latest_cache[cache_key]
-    if latest is None:
-        return []
-
-    # 全ての last_affected より新しい場合のみ（一部の範囲だけ超えていても確信は持てない）
-    if all(is_newer_version(latest, last) for last in last_versions):
-        return [latest]
-    return []
-
-
-class FindingBuilder:
-    """パッケージ×バージョンの OSV 照合結果から、DependencyFinding レコード辞書を構築する。
-
-    OSV の脆弱性詳細（複数パッケージが同じ ID を参照しうる）とレジストリの最新版
-    （修正版の補完用）は、同じ実行内で何度も引かないようインスタンスにキャッシュする。
-    """
-
-    def __init__(self, repo_visibility: dict[str, str] | None = None) -> None:
-        self._repo_visibility = repo_visibility or {}
-        self._vuln_cache: dict[str, dict[str, Any] | None] = {}
-        self._latest_cache: dict[tuple[str, str], str | None] = {}
-
-    def _get_vuln(self, osv_id: str) -> dict[str, Any] | None:
-        """脆弱性詳細を取得する（キャッシュ付き。取得失敗は None として記録し再取得しない）。"""
-        if osv_id not in self._vuln_cache:
-            try:
-                self._vuln_cache[osv_id] = fetch_vuln_by_id(osv_id)
-            except httpx.HTTPError as exc:
-                logger.warning("Failed to fetch vuln %s: %s", osv_id, exc)
-                self._vuln_cache[osv_id] = None
-        return self._vuln_cache[osv_id]
-
-    def _fixed_versions(
-        self, vuln: dict[str, Any], ecosystem: str, package_name: str,
-    ) -> list[str]:
-        """OSV の `fixed` を集める。無ければレジストリの最新版から補完を試みる。"""
-        fixed_versions = sorted({
-            event["fixed"]
-            for affected in vuln.get("affected", [])
-            for rng in affected.get("ranges", [])
-            for event in rng.get("events", [])
-            if "fixed" in event
-        })
-        if fixed_versions:
-            return fixed_versions
-        return _infer_fixed_versions(vuln, ecosystem, package_name, self._latest_cache)
-
-    @staticmethod
-    def _cve_ids(vuln: dict[str, Any]) -> list[str]:
-        """aliases から CVE 形式のみ抽出する。
-
-        OSV ID だけでは CVE と直接対応しないため保存しておく
-        （Issue #135: KEV 掲載有無・EPSS スコアとの突合に使う）。
-        """
-        return sorted({alias for alias in vuln.get("aliases", []) if alias.startswith("CVE-")})
-
-    def build(self, dep_to_repos: dict[DepKey, list[tuple[str, str]]]) -> list[dict[str, Any]]:
-        """パッケージ×バージョンを OSV に照合し、検知レコード辞書のリストを返す。"""
-        hits = query_versions_batch(list(dep_to_repos.keys()))
-        if not hits:
-            return []
-
-        records: list[dict[str, Any]] = []
-        now = now_utc()
-
-        for key, osv_ids in hits.items():
-            ecosystem, package_name, version = key
-            for osv_id in osv_ids:
-                vuln = self._get_vuln(osv_id)
-                if vuln is None:
-                    continue
-
-                severity, cvss_score = parse_severity(vuln)
-                shared = {
-                    "ecosystem": ecosystem,
-                    "package_name": package_name,
-                    "installed_version": version,
-                    "osv_id": osv_id,
-                    "severity": severity,
-                    "cvss_score": cvss_score,
-                    "summary": (vuln.get("summary") or "").strip(),
-                    "fixed_versions": self._fixed_versions(vuln, ecosystem, package_name),
-                    "cve_ids": self._cve_ids(vuln),
-                    # apply_reachability が上書きする。呼び出し自体が失敗した場合の
-                    # フォールバック値として "unknown" を既定にしておく
-                    "reachability": "unknown",
-                    "detected_at": now,
-                }
-                for repo_full_name, manifest_path in dep_to_repos[key]:
-                    records.append({
-                        **shared,
-                        "repo_full_name": repo_full_name,
-                        "manifest_path": manifest_path,
-                        "repo_visibility": self._repo_visibility.get(repo_full_name),
-                    })
-
-        return records
-
-
-def build_findings(
-    dep_to_repos: dict[DepKey, list[tuple[str, str]]],
-    repo_visibility: dict[str, str] | None = None,
-) -> list[dict[str, Any]]:
-    """パッケージ×バージョンを OSV に照合し、DependencyFinding レコード辞書のリストを構築する。"""
-    return FindingBuilder(repo_visibility).build(dep_to_repos)
-
-
-def _apply_reachability(
-    records: list[dict[str, Any]], username: str, token: str,
-) -> None:
-    """検知レコードに到達可能性（import レベル）を付与する（records を in-place 更新）。
-
-    リポジトリ×エコシステム単位でソースファイルを1回だけ取得し、同じリポジトリの
-    複数レコードで使い回す（GitHub API 呼び出し削減）。取得失敗時は "unknown" のまま
-    据え置き、DEPSCAN 全体は失敗させない。
-    """
-    if not records:
-        return
-
-    by_repo: dict[str, set[str]] = {}
-    for rec in records:
-        by_repo.setdefault(rec["repo_full_name"], set()).add(rec["ecosystem"])
-
-    branch_map = {
-        repo_info["full_name"]: repo_info.get("default_branch") or "main"
-        for repo_info in list_target_repos(username, token)
-    }
-
-    source_cache: dict[tuple[str, str], dict[str, str]] = {}
-    for full_name, ecosystems in by_repo.items():
-        repo = GitHubRepo.from_full_name(full_name, token)
-        default_branch = branch_map.get(full_name, "main")
-        for ecosystem in ecosystems:
-            extensions = SOURCE_EXTENSIONS.get(ecosystem)
-            if extensions is None:
-                continue
-            try:
-                source_cache[(full_name, ecosystem)] = collect_source_files(
-                    repo, default_branch, extensions,
-                )
-            except httpx.HTTPError as exc:
-                logger.warning(
-                    "Reachability: failed to fetch source for %s (%s): %s",
-                    full_name, ecosystem, exc,
-                )
-
-    for rec in records:
-        source_files = source_cache.get((rec["repo_full_name"], rec["ecosystem"]))
-        if source_files is None:
-            continue  # 取得失敗・対象外エコシステム: "unknown" のまま据え置く
-        rec["reachability"] = check_reachability(
-            rec["ecosystem"], rec["package_name"], source_files,
-        )
-
-
-def upsert_findings(
-    db: Session, records: list[dict[str, Any]],
-) -> tuple[int, list[dict[str, Any]]]:
-    """DependencyFinding を Upsert する。
-
-    Returns:
-        (新規挿入件数, 新規挿入されたレコードのスナップショット辞書リスト)
-        スナップショットは Slack 通知用（DB セッションクローズ後の
-        DetachedInstanceError を避けるため ORM オブジェクトではなく辞書で返す）
-    """
-    inserted = 0
-    new_snapshots: list[dict[str, Any]] = []
-    seen_keys: set[FindingKey] = set()
-
-    for rec in records:
-        key: FindingKey = (
-            rec["repo_full_name"], rec["ecosystem"], rec["package_name"], rec["osv_id"],
-        )
-        if key in seen_keys:
-            continue
-        seen_keys.add(key)
-
-        existing = (
-            db.query(DependencyFinding)
-            .filter(
-                DependencyFinding.repo_full_name == rec["repo_full_name"],
-                DependencyFinding.ecosystem == rec["ecosystem"],
-                DependencyFinding.package_name == rec["package_name"],
-                DependencyFinding.osv_id == rec["osv_id"],
-            )
-            .first()
-        )
-
-        if existing is None:
-            db.add(DependencyFinding(**rec))
-            inserted += 1
-            new_snapshots.append(rec)
-        elif existing.resolved_at is not None:
-            # 一度解決した後に再発したケース：解決フラグを解除して情報を更新
-            for field, value in rec.items():
-                setattr(existing, field, value)
-            existing.resolved_at = None
-        else:
-            # 既存の未解決レコード: 到達可能性はソースコードの変化を反映するため、
-            # repo_visibilityはリポジトリの公開設定変更を反映するため、cve_idsは
-            # OSV側のalias追加を反映するため、毎回のスキャンで更新する
-            # （他のフィールドは安定しているため更新しない）
-            existing.reachability = rec.get("reachability")
-            existing.repo_visibility = rec.get("repo_visibility")
-            existing.cve_ids = rec.get("cve_ids", [])
-            # 修正版は、新たに判明した（レジストリからの補完を含む）場合のみ反映する。
-            # 一時的にレジストリを引けなかった回に空で上書きしてしまわないようにするため
-            if rec.get("fixed_versions"):
-                existing.fixed_versions = rec["fixed_versions"]
-
-    db.commit()
-    return inserted, new_snapshots
-
-
-def resolve_stale_findings(
-    db: Session, current_keys: set[FindingKey], repo_owner_prefix: str | None = None,
-) -> tuple[int, set[str]]:
-    """今回のスキャンで検知されなくなった未解決 Finding を解決済みにする。
-
-    Args:
-        repo_owner_prefix: 指定した場合、`"{prefix}/"` から始まるリポジトリのみを
-            対象にする（オンデマンドの個人スキャンが、無関係な他リポジトリの
-            未解決レコードまで誤って解決済みにしてしまわないようにするため）。
-
-    Returns:
-        (解決件数, 今回1件以上解決した repo_full_name の集合)。
-        後者は close_resolved_repo_issues が「Issue クローズ判定が必要な
-        リポジトリ」を絞り込むために使う（何も解決していないリポジトリを
-        毎回チェックする無駄を避けるため）。
-    """
-    resolved = 0
-    affected_repos: set[str] = set()
-    now = now_utc()
-    query = db.query(DependencyFinding).filter(DependencyFinding.resolved_at.is_(None))
-    if repo_owner_prefix is not None:
-        query = query.filter(DependencyFinding.repo_full_name.like(f"{repo_owner_prefix}/%"))
-    open_findings = query.all()
-    for finding in open_findings:
-        key: FindingKey = (
-            finding.repo_full_name, finding.ecosystem, finding.package_name, finding.osv_id,
-        )
-        if key not in current_keys:
-            finding.resolved_at = now
-            resolved += 1
-            affected_repos.add(finding.repo_full_name)
-    db.commit()
-    return resolved, affected_repos
-
-
-def _delete_old_depscan_records(db: Session) -> int:
-    """保持期間（DEPSCAN_RETENTION_DAYS）を超えて解決済みのままの DEPSCAN レコードを削除する。
-
-    resolved_at が cutoff より古い（=解決済みのまま長期間経過した）レコードのみを
-    対象とする。未解決のレコードは対応が必要な情報のため、経過期間に関わらず削除しない。
-
-    Returns:
-        削除件数
-    """
-    cutoff = now_utc() - timedelta(days=settings.DEPSCAN_RETENTION_DAYS)
-    deleted = (
-        db.query(DependencyFinding)
-        .filter(
-            DependencyFinding.resolved_at.is_not(None),
-            DependencyFinding.resolved_at < cutoff,
-        )
-        .delete(synchronize_session=False)
-    )
-    db.commit()
-    logger.info("DEPSCAN old resolved records deleted: %d (resolved_at < %s)", deleted, cutoff)
-    return deleted
 
 
 class _DepscanJob(CrawlJob):
@@ -434,27 +55,24 @@ class _DepscanJob(CrawlJob):
 
         # 到達可能性の判定失敗はクロール全体を失敗させない（"unknown" のまま据え置く）
         try:
-            _apply_reachability(records, settings.GITHUB_USERNAME, settings.GITHUB_TOKEN)
+            apply_reachability(records, settings.GITHUB_USERNAME, settings.GITHUB_TOKEN)
         except Exception as exc:
             logger.error("Failed to compute reachability: %s", exc, exc_info=True)
 
-        counters.inserted, self.new_snapshots = upsert_findings(db, records)
-
-        current_keys: set[FindingKey] = {
-            (r["repo_full_name"], r["ecosystem"], r["package_name"], r["osv_id"])
-            for r in records
-        }
-        counters.deleted, resolved_repos = resolve_stale_findings(db, current_keys)
+        repository = DependencyFindingRepository(db)
+        result = repository.sync(records)
+        counters.inserted, self.new_snapshots = result.inserted, result.new_snapshots
+        counters.deleted = result.resolved
 
         # Issue クローズ失敗はクロール全体を失敗させない（Issue起票と同じ方針）
         try:
-            close_resolved_repo_issues(db, resolved_repos)
+            close_resolved_repo_issues(db, result.resolved_repos)
         except Exception as exc:
             logger.error("Failed to close resolved GitHub issues: %s", exc, exc_info=True)
 
         # 保持期間超過の削除失敗はクロール全体を失敗させない（KEV/OSV/JVN と同様の方針）
         try:
-            counters.updated = _delete_old_depscan_records(db)
+            counters.updated = repository.delete_old_resolved()
         except Exception as exc:
             logger.error("Failed to delete old DEPSCAN records: %s", exc, exc_info=True)
 

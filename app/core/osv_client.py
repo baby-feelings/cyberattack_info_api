@@ -2,7 +2,7 @@
 
 OSV エコシステム固有のビジネスロジック（DB Upsert 等）は持たず、OSV API
 (https://api.osv.dev/v1/) への問い合わせと結果の整形のみを担う。
-`app.osv.crawler`（OSV 自体のクロール）と `app.depscan.crawler`
+`app.osv.crawler`（OSV 自体のクロール）と `app.depscan.finding_builder`
 （依存ライブラリ脆弱性スキャンでのリアルタイム照合）の両方から利用される。
 """
 from typing import Any

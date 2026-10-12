@@ -1,37 +1,21 @@
 """依存ライブラリ脆弱性スキャン（DEPSCAN）機能のテスト。
 
-GET /api/depscan・/api/depscan/stats・POST /admin/depscan-crawl のテストに加え、
-GitHub API クライアント・クローラーロジック・Slack通知のユニットテストを含む。
-外部 HTTP 通信（GitHub API・OSV API）はすべてモックする。
+GET /api/depscan・/api/depscan/stats・POST /admin/depscan-crawl など、API（router）のテスト。
+クローラー・リポジトリ・ユーザースキャン等のユニットテストは、モジュールごとの test_*.py にある。
 """
 import os
-from datetime import UTC, datetime, timedelta
-from unittest.mock import MagicMock, patch
+from datetime import UTC, datetime
+from unittest.mock import patch
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
 os.environ.setdefault("API_KEY", "test-api-key-for-pytest")
 os.environ.setdefault("ENVIRONMENT", "development")
 
-import httpx  # noqa: E402
 
 from app.auth.session import create_session_token  # noqa: E402
-from app.core.github.repo import GitHubRepo  # noqa: E402
-from app.core.notifications.dependency_findings import notify_dependency_findings  # noqa: E402
-from app.depscan.crawler import (  # noqa: E402
-    _discover_manifests,
-    build_findings,
-    collect_dependencies,
-    fetch_and_scan_dependencies,
-    resolve_stale_findings,
-    upsert_findings,
-)
-from app.depscan.models import DependencyFinding, RepoAssetContext, UserScan  # noqa: E402
-from app.depscan.user_scan import (  # noqa: E402
-    get_user_scan_status,
-    run_depscan_for_user,
-    should_rescan_for_user,
-)
+from app.depscan.models import RepoAssetContext  # noqa: E402
 from app.kev.models import Vulnerability  # noqa: E402
+from tests.depscan.support import make_finding  # noqa: E402
 
 TEST_API_KEY = "test-api-key-for-pytest"
 HEADERS = {"X-API-KEY": TEST_API_KEY}
@@ -42,46 +26,10 @@ _NOW = datetime.now(UTC)
 _REPO = "app.core.github.repo.GitHubRepo"
 
 
-def _make_finding(db_session, **kwargs) -> DependencyFinding:
-    defaults = {
-        "repo_full_name": "baby-feelings/baby_grow",
-        "ecosystem": "PyPI",
-        "package_name": "cryptography",
-        "installed_version": "3.4.7",
-        "osv_id": "GHSA-test-0001",
-        "severity": "HIGH",
-        "cvss_score": 7.5,
-        "summary": "Test vulnerability",
-        "fixed_versions": ["3.4.8"],
-        "manifest_path": "requirements.txt",
-        "detected_at": _NOW,
-        "resolved_at": None,
-    }
-    defaults.update(kwargs)
-    record = DependencyFinding(**defaults)
-    db_session.add(record)
-    db_session.commit()
-    return record
 
 
-def _mock_httpx_client(get_return=None, post_return=None, patch_return=None) -> MagicMock:
-    mock_client = MagicMock()
-    mock_client.__enter__ = MagicMock(return_value=mock_client)
-    mock_client.__exit__ = MagicMock(return_value=False)
-    if get_return is not None:
-        mock_client.get = MagicMock(return_value=get_return)
-    if post_return is not None:
-        mock_client.post = MagicMock(return_value=post_return)
-    if patch_return is not None:
-        mock_client.patch = MagicMock(return_value=patch_return)
-    return mock_client
 
 
-def _mock_response(json_data) -> MagicMock:
-    resp = MagicMock()
-    resp.raise_for_status = MagicMock()
-    resp.json.return_value = json_data
-    return resp
 
 
 # ──────────────────────────────────────────────────────────────
@@ -100,7 +48,7 @@ class TestListDepscan:
         assert res.status_code == 403
 
     def test_returns_record(self, client, db_session):
-        _make_finding(db_session)
+        make_finding(db_session)
         res = client.get("/api/depscan", headers=HEADERS)
         body = res.json()
         assert body["total"] == 1
@@ -108,16 +56,16 @@ class TestListDepscan:
         assert body["data"][0]["resolved_at"] is None
 
     def test_filter_by_repo(self, client, db_session):
-        _make_finding(db_session, repo_full_name="baby-feelings/repo-a", osv_id="GHSA-a")
-        _make_finding(db_session, repo_full_name="baby-feelings/repo-b", osv_id="GHSA-b")
+        make_finding(db_session, repo_full_name="baby-feelings/repo-a", osv_id="GHSA-a")
+        make_finding(db_session, repo_full_name="baby-feelings/repo-b", osv_id="GHSA-b")
         res = client.get("/api/depscan?repo=baby-feelings/repo-a", headers=HEADERS)
         body = res.json()
         assert body["total"] == 1
         assert body["data"][0]["repo_full_name"] == "baby-feelings/repo-a"
 
     def test_filter_by_owner(self, client, db_session):
-        _make_finding(db_session, repo_full_name="baby-feelings/repo-a", osv_id="GHSA-a")
-        _make_finding(db_session, repo_full_name="other-owner/repo-b", osv_id="GHSA-b")
+        make_finding(db_session, repo_full_name="baby-feelings/repo-a", osv_id="GHSA-a")
+        make_finding(db_session, repo_full_name="other-owner/repo-b", osv_id="GHSA-b")
         res = client.get("/api/depscan?owner=baby-feelings", headers=HEADERS)
         body = res.json()
         assert body["total"] == 1
@@ -125,26 +73,26 @@ class TestListDepscan:
 
     def test_filter_by_owner_does_not_match_substring(self, client, db_session):
         """`owner` はリポジトリオーナー単位の一致（前方一致 + '/'）で、部分文字列一致ではない。"""
-        _make_finding(db_session, repo_full_name="baby-feelings-fork/repo-a", osv_id="GHSA-a")
+        make_finding(db_session, repo_full_name="baby-feelings-fork/repo-a", osv_id="GHSA-a")
         res = client.get("/api/depscan?owner=baby-feelings", headers=HEADERS)
         assert res.json()["total"] == 0
 
     def test_filter_by_ecosystem(self, client, db_session):
-        _make_finding(db_session, ecosystem="PyPI", osv_id="GHSA-py")
-        _make_finding(db_session, ecosystem="npm", package_name="axios", osv_id="GHSA-npm")
+        make_finding(db_session, ecosystem="PyPI", osv_id="GHSA-py")
+        make_finding(db_session, ecosystem="npm", package_name="axios", osv_id="GHSA-npm")
         res = client.get("/api/depscan?ecosystem=npm", headers=HEADERS)
         body = res.json()
         assert body["total"] == 1
         assert body["data"][0]["ecosystem"] == "npm"
 
     def test_filter_by_severity_case_insensitive(self, client, db_session):
-        _make_finding(db_session, severity="CRITICAL", osv_id="GHSA-crit")
+        make_finding(db_session, severity="CRITICAL", osv_id="GHSA-crit")
         res = client.get("/api/depscan?severity=critical", headers=HEADERS)
         assert res.json()["total"] == 1
 
     def test_filter_by_resolved(self, client, db_session):
-        _make_finding(db_session, osv_id="GHSA-open")
-        _make_finding(db_session, osv_id="GHSA-resolved", resolved_at=_NOW)
+        make_finding(db_session, osv_id="GHSA-open")
+        make_finding(db_session, osv_id="GHSA-resolved", resolved_at=_NOW)
         res_open = client.get("/api/depscan?resolved=false", headers=HEADERS)
         res_resolved = client.get("/api/depscan?resolved=true", headers=HEADERS)
         assert res_open.json()["total"] == 1
@@ -153,14 +101,14 @@ class TestListDepscan:
 
     def test_pagination(self, client, db_session):
         for i in range(3):
-            _make_finding(db_session, osv_id=f"GHSA-{i}")
+            make_finding(db_session, osv_id=f"GHSA-{i}")
         res = client.get("/api/depscan?per_page=2&page=1", headers=HEADERS)
         assert len(res.json()["data"]) == 2
 
     def test_session_token_forces_owner_scope(self, client, db_session):
         """セッショントークン認証時、owner指定に関わらずログインユーザー本人のみに絞り込まれる。"""
-        _make_finding(db_session, repo_full_name="octocat/repo-a", osv_id="GHSA-mine")
-        _make_finding(db_session, repo_full_name="baby-feelings/baby_grow", osv_id="GHSA-others")
+        make_finding(db_session, repo_full_name="octocat/repo-a", osv_id="GHSA-mine")
+        make_finding(db_session, repo_full_name="baby-feelings/baby_grow", osv_id="GHSA-others")
         with patch("app.auth.session.settings.SESSION_SECRET_KEY", "test-secret"):
             token = create_session_token("octocat")
             res = client.get(
@@ -188,13 +136,13 @@ class TestListDepscan:
 
     def test_returns_repo_visibility(self, client, db_session):
         """Issue #131: repo_visibilityフィールドがそのまま返ること。"""
-        _make_finding(db_session, repo_visibility="private")
+        make_finding(db_session, repo_visibility="private")
         res = client.get("/api/depscan", headers=HEADERS)
         assert res.json()["data"][0]["repo_visibility"] == "private"
 
     def test_asset_context_null_when_not_configured(self, client, db_session):
         """Issue #131: 資産コンテキスト未設定のリポジトリはnullを返すこと。"""
-        _make_finding(db_session)
+        make_finding(db_session)
         res = client.get("/api/depscan", headers=HEADERS)
         assert res.json()["data"][0]["asset_context"] is None
 
@@ -202,7 +150,7 @@ class TestListDepscan:
         """Issue #131: 設定済みの資産コンテキストが検知結果に埋め込まれること。"""
         from app.depscan.models import RepoAssetContext
 
-        _make_finding(db_session, repo_full_name="baby-feelings/prod-app", osv_id="GHSA-ctx")
+        make_finding(db_session, repo_full_name="baby-feelings/prod-app", osv_id="GHSA-ctx")
         db_session.add(RepoAssetContext(
             repo_full_name="baby-feelings/prod-app",
             is_production=True,
@@ -229,8 +177,8 @@ class TestDepscanStats:
         assert res.status_code == 403
 
     def test_counts_unresolved_only(self, client, db_session):
-        _make_finding(db_session, repo_full_name="baby-feelings/repo-a", osv_id="GHSA-open")
-        _make_finding(
+        make_finding(db_session, repo_full_name="baby-feelings/repo-a", osv_id="GHSA-open")
+        make_finding(
             db_session, repo_full_name="baby-feelings/repo-a",
             osv_id="GHSA-resolved", resolved_at=_NOW,
         )
@@ -240,8 +188,8 @@ class TestDepscanStats:
         assert body["repos"] == [{"repo_full_name": "baby-feelings/repo-a", "count": 1}]
 
     def test_session_token_forces_owner_scope(self, client, db_session):
-        _make_finding(db_session, repo_full_name="octocat/repo-a", osv_id="GHSA-mine")
-        _make_finding(db_session, repo_full_name="baby-feelings/baby_grow", osv_id="GHSA-others")
+        make_finding(db_session, repo_full_name="octocat/repo-a", osv_id="GHSA-mine")
+        make_finding(db_session, repo_full_name="baby-feelings/baby_grow", osv_id="GHSA-others")
         with patch("app.auth.session.settings.SESSION_SECRET_KEY", "test-secret"):
             token = create_session_token("octocat")
             res = client.get(
@@ -400,7 +348,7 @@ class TestListDepscanPriorityReasons:
     """GET /api/depscan の priority_reasons フィールド（統合テスト）。"""
 
     def test_empty_list_when_no_signals(self, client, db_session):
-        _make_finding(db_session)
+        make_finding(db_session)
         res = client.get("/api/depscan", headers=HEADERS)
         assert res.json()["data"][0]["priority_reasons"] == []
 
@@ -411,7 +359,7 @@ class TestListDepscanPriorityReasons:
             date_added=_NOW.date(), epss_score=0.8,
         ))
         db_session.commit()
-        _make_finding(db_session, cve_ids=["CVE-2024-0001"])
+        make_finding(db_session, cve_ids=["CVE-2024-0001"])
 
         res = client.get("/api/depscan", headers=HEADERS)
         reasons = res.json()["data"][0]["priority_reasons"]
@@ -419,7 +367,7 @@ class TestListDepscanPriorityReasons:
         assert "epss_high" in reasons
 
     def test_includes_asset_context_reasons(self, client, db_session):
-        _make_finding(db_session, repo_full_name="baby-feelings/prod-app")
+        make_finding(db_session, repo_full_name="baby-feelings/prod-app")
         db_session.add(RepoAssetContext(
             repo_full_name="baby-feelings/prod-app",
             is_production=True, is_internet_facing=True, importance="high",
@@ -437,7 +385,7 @@ class TestListDepscanPurl:
     """GET /api/depscan の purl フィールド（Issue #133、統合テスト）。"""
 
     def test_includes_purl(self, client, db_session):
-        _make_finding(db_session, ecosystem="PyPI", package_name="cryptography",
+        make_finding(db_session, ecosystem="PyPI", package_name="cryptography",
                        installed_version="3.4.7")
         res = client.get("/api/depscan", headers=HEADERS)
         assert res.json()["data"][0]["purl"] == "pkg:pypi/cryptography@3.4.7"
@@ -458,7 +406,7 @@ class TestExportDepscanSbom:
         assert res.status_code == 422
 
     def test_cyclonedx_export(self, client, db_session):
-        _make_finding(db_session)
+        make_finding(db_session)
         res = client.get(
             "/api/depscan/export?repo=baby-feelings/baby_grow&format=cyclonedx",
             headers=HEADERS,
@@ -470,7 +418,7 @@ class TestExportDepscanSbom:
         assert len(body["components"]) == 1
 
     def test_spdx_export(self, client, db_session):
-        _make_finding(db_session)
+        make_finding(db_session)
         res = client.get(
             "/api/depscan/export?repo=baby-feelings/baby_grow&format=spdx",
             headers=HEADERS,
@@ -482,7 +430,7 @@ class TestExportDepscanSbom:
         assert len(body["packages"]) == 1
 
     def test_defaults_to_cyclonedx_when_format_omitted(self, client, db_session):
-        _make_finding(db_session)
+        make_finding(db_session)
         res = client.get(
             "/api/depscan/export?repo=baby-feelings/baby_grow", headers=HEADERS,
         )
@@ -495,8 +443,8 @@ class TestExportDepscanSbom:
         assert res.status_code == 422
 
     def test_only_includes_matching_repo(self, client, db_session):
-        _make_finding(db_session, repo_full_name="baby-feelings/repo-a", osv_id="GHSA-a")
-        _make_finding(db_session, repo_full_name="baby-feelings/repo-b", osv_id="GHSA-b")
+        make_finding(db_session, repo_full_name="baby-feelings/repo-a", osv_id="GHSA-a")
+        make_finding(db_session, repo_full_name="baby-feelings/repo-b", osv_id="GHSA-b")
         res = client.get(
             "/api/depscan/export?repo=baby-feelings/repo-a", headers=HEADERS,
         )
@@ -505,8 +453,8 @@ class TestExportDepscanSbom:
         assert body["vulnerabilities"][0]["id"] == "GHSA-a"
 
     def test_filters_by_resolved(self, client, db_session):
-        _make_finding(db_session, osv_id="GHSA-open", resolved_at=None)
-        _make_finding(db_session, osv_id="GHSA-resolved", resolved_at=_NOW)
+        make_finding(db_session, osv_id="GHSA-open", resolved_at=None)
+        make_finding(db_session, osv_id="GHSA-resolved", resolved_at=_NOW)
         res = client.get(
             "/api/depscan/export?repo=baby-feelings/baby_grow&resolved=false",
             headers=HEADERS,
@@ -516,8 +464,8 @@ class TestExportDepscanSbom:
         assert body["vulnerabilities"][0]["id"] == "GHSA-open"
 
     def test_filters_by_resolved_true(self, client, db_session):
-        _make_finding(db_session, osv_id="GHSA-open", resolved_at=None)
-        _make_finding(db_session, osv_id="GHSA-resolved", resolved_at=_NOW)
+        make_finding(db_session, osv_id="GHSA-open", resolved_at=None)
+        make_finding(db_session, osv_id="GHSA-resolved", resolved_at=_NOW)
         res = client.get(
             "/api/depscan/export?repo=baby-feelings/baby_grow&resolved=true",
             headers=HEADERS,
@@ -534,7 +482,7 @@ class TestExportDepscanSbom:
         assert res.json()["components"] == []
 
     def test_session_token_forces_owner_scope(self, client, db_session):
-        _make_finding(db_session, repo_full_name="octocat/repo-a", osv_id="GHSA-mine")
+        make_finding(db_session, repo_full_name="octocat/repo-a", osv_id="GHSA-mine")
         with patch("app.auth.session.settings.SESSION_SECRET_KEY", "test-secret"):
             token = create_session_token("octocat")
             res = client.get(
@@ -544,7 +492,7 @@ class TestExportDepscanSbom:
         assert res.status_code == 200
 
     def test_session_token_rejects_other_owners_repo(self, client, db_session):
-        _make_finding(db_session, repo_full_name="baby-feelings/baby_grow")
+        make_finding(db_session, repo_full_name="baby-feelings/baby_grow")
         with patch("app.auth.session.settings.SESSION_SECRET_KEY", "test-secret"):
             token = create_session_token("octocat")
             res = client.get(
@@ -559,538 +507,24 @@ class TestExportDepscanSbom:
 # ──────────────────────────────────────────────────────────────
 
 
-class TestDiscoverManifests:
-    def test_filters_by_known_filenames(self):
-        with patch(
-            f"{_REPO}.tree",
-            return_value=["requirements.txt", "app/main.py", "dashboard/package-lock.json"],
-        ):
-            manifests = _discover_manifests(GitHubRepo("owner", "repo", "token"), "main")
-        assert manifests == ["requirements.txt", "dashboard/package-lock.json"]
 
-    def test_http_error_returns_empty(self):
-        with patch(
-            f"{_REPO}.tree",
-            side_effect=httpx.HTTPStatusError("500", request=MagicMock(), response=MagicMock()),
-        ):
-            assert _discover_manifests(GitHubRepo("owner", "repo", "token"), "main") == []
 
 
-class TestCollectDependencies:
-    def test_aggregates_across_repos(self):
-        repos = [{"full_name": "u/repo1", "default_branch": "main"}]
-        with patch("app.depscan.crawler.list_target_repos", return_value=repos), \
-             patch("app.depscan.crawler._discover_manifests", return_value=["requirements.txt"]), \
-             patch(f"{_REPO}.file_content", return_value="fastapi==0.115.6\n"):
-            dep_to_repos, repos_scanned, repo_visibility = collect_dependencies("u", "token")
 
-        assert repos_scanned == 1
-        assert dep_to_repos[("PyPI", "fastapi", "0.115.6")] == [("u/repo1", "requirements.txt")]
-        assert repo_visibility == {"u/repo1": "public"}
 
-    def test_fetch_failure_skips_file(self):
-        repos = [{"full_name": "u/repo1", "default_branch": "main"}]
-        with patch("app.depscan.crawler.list_target_repos", return_value=repos), \
-             patch("app.depscan.crawler._discover_manifests", return_value=["requirements.txt"]), \
-             patch(
-                 f"{_REPO}.file_content",
-                 side_effect=httpx.HTTPStatusError(
-                     "404", request=MagicMock(), response=MagicMock()
-                 ),
-             ):
-            dep_to_repos, repos_scanned, repo_visibility = collect_dependencies("u", "token")
-        assert dep_to_repos == {}
-        assert repos_scanned == 1
 
-    def test_repo_visibility_derived_from_private_field(self):
-        """Issue #131: GitHub APIの"private"フィールドからrepo_visibilityを導出すること。"""
-        repos = [
-            {"full_name": "u/public-repo", "default_branch": "main", "private": False},
-            {"full_name": "u/private-repo", "default_branch": "main", "private": True},
-        ]
-        with patch("app.depscan.crawler.list_target_repos", return_value=repos), \
-             patch("app.depscan.crawler._discover_manifests", return_value=[]):
-            _, _, repo_visibility = collect_dependencies("u", "token")
-        assert repo_visibility == {"u/public-repo": "public", "u/private-repo": "private"}
 
 
-class TestBuildFindings:
-    def test_builds_records_from_hits(self):
-        dep_to_repos = {("PyPI", "cryptography", "3.4.7"): [("u/repo1", "requirements.txt")]}
-        vuln = {
-            "id": "GHSA-crypto-001",
-            "summary": "Vulnerable crypto",
-            "affected": [
-                {"ranges": [{"events": [{"introduced": "0"}, {"fixed": "3.4.8"}]}]}
-            ],
-            "database_specific": {"severity": "HIGH"},
-        }
-        with patch(
-            "app.depscan.crawler.query_versions_batch",
-            return_value={("PyPI", "cryptography", "3.4.7"): ["GHSA-crypto-001"]},
-        ), patch("app.depscan.crawler.fetch_vuln_by_id", return_value=vuln):
-            records = build_findings(dep_to_repos)
 
-        assert len(records) == 1
-        rec = records[0]
-        assert rec["repo_full_name"] == "u/repo1"
-        assert rec["osv_id"] == "GHSA-crypto-001"
-        assert rec["severity"] == "HIGH"
-        assert rec["fixed_versions"] == ["3.4.8"]
 
-    def test_no_hits_returns_empty(self):
-        with patch("app.depscan.crawler.query_versions_batch", return_value={}):
-            assert build_findings({("PyPI", "pkg", "1.0.0"): [("u/r", "requirements.txt")]}) == []
 
-    def test_vuln_fetch_failure_skipped(self):
-        dep_to_repos = {("PyPI", "pkg", "1.0.0"): [("u/r", "requirements.txt")]}
-        with patch(
-            "app.depscan.crawler.query_versions_batch",
-            return_value={("PyPI", "pkg", "1.0.0"): ["GHSA-x"]},
-        ), patch(
-            "app.depscan.crawler.fetch_vuln_by_id",
-            side_effect=httpx.HTTPStatusError("500", request=MagicMock(), response=MagicMock()),
-        ):
-            assert build_findings(dep_to_repos) == []
 
-    def test_default_reachability_is_unknown(self):
-        """_apply_reachabilityで上書きされる前のフォールバック既定値。"""
-        dep_to_repos = {("PyPI", "cryptography", "3.4.7"): [("u/repo1", "requirements.txt")]}
-        vuln = {"id": "GHSA-x", "summary": "vuln", "affected": []}
-        with patch(
-            "app.depscan.crawler.query_versions_batch",
-            return_value={("PyPI", "cryptography", "3.4.7"): ["GHSA-x"]},
-        ), patch("app.depscan.crawler.fetch_vuln_by_id", return_value=vuln):
-            records = build_findings(dep_to_repos)
-        assert records[0]["reachability"] == "unknown"
 
-    def test_sets_repo_visibility_from_map(self):
-        """Issue #131: repo_visibilityマップの値がレコードに反映されること。"""
-        dep_to_repos = {("PyPI", "cryptography", "3.4.7"): [("u/repo1", "requirements.txt")]}
-        vuln = {"id": "GHSA-x", "summary": "vuln", "affected": []}
-        with patch(
-            "app.depscan.crawler.query_versions_batch",
-            return_value={("PyPI", "cryptography", "3.4.7"): ["GHSA-x"]},
-        ), patch("app.depscan.crawler.fetch_vuln_by_id", return_value=vuln):
-            records = build_findings(dep_to_repos, {"u/repo1": "private"})
-        assert records[0]["repo_visibility"] == "private"
 
-    def test_repo_visibility_none_when_map_missing_entry(self):
-        """repo_visibilityマップが渡されない/該当リポジトリが無い場合はNoneのまま。"""
-        dep_to_repos = {("PyPI", "cryptography", "3.4.7"): [("u/repo1", "requirements.txt")]}
-        vuln = {"id": "GHSA-x", "summary": "vuln", "affected": []}
-        with patch(
-            "app.depscan.crawler.query_versions_batch",
-            return_value={("PyPI", "cryptography", "3.4.7"): ["GHSA-x"]},
-        ), patch("app.depscan.crawler.fetch_vuln_by_id", return_value=vuln):
-            records = build_findings(dep_to_repos)
-        assert records[0]["repo_visibility"] is None
 
 
-class TestBuildFindingsInfersFixedVersion:
-    """OSVに`fixed`が無く`last_affected`だけの脆弱性は、レジストリの最新版で修正版を補う。"""
 
-    KEY = ("PyPI", "accelerate", "1.12.0")
 
-    @staticmethod
-    def _vuln(events, pkg="accelerate", ecosystem="PyPI") -> dict:
-        return {
-            "id": "PYSEC-2026-3804", "summary": "path traversal",
-            "affected": [{
-                "package": {"name": pkg, "ecosystem": ecosystem},
-                "ranges": [{"type": "ECOSYSTEM", "events": events}],
-            }],
-        }
-
-    def _run(self, vuln, latest, key=None, dep_to_repos=None):
-        key = key or self.KEY
-        dep_to_repos = dep_to_repos or {key: [("u/r", "requirements.txt")]}
-        with (
-            patch(
-                "app.depscan.crawler.query_versions_batch",
-                return_value={key: [vuln["id"]]},
-            ),
-            patch("app.depscan.crawler.fetch_vuln_by_id", return_value=vuln),
-            patch("app.depscan.crawler.fetch_latest_version", return_value=latest) as fetch,
-        ):
-            return build_findings(dep_to_repos), fetch
-
-    def test_latest_newer_than_last_affected_becomes_fixed_version(self):
-        vuln = self._vuln([{"introduced": "0"}, {"last_affected": "1.14.0"}])
-        records, _ = self._run(vuln, "1.15.0")
-        assert records[0]["fixed_versions"] == ["1.15.0"]
-
-    def test_latest_not_newer_leaves_fixed_versions_empty(self):
-        """最新版がまだ影響範囲内（修正版が未公開）なら補わない。"""
-        vuln = self._vuln([{"introduced": "0"}, {"last_affected": "1.14.0"}])
-        records, _ = self._run(vuln, "1.14.0")
-        assert records[0]["fixed_versions"] == []
-
-    def test_registry_failure_leaves_fixed_versions_empty(self):
-        vuln = self._vuln([{"introduced": "0"}, {"last_affected": "1.14.0"}])
-        records, _ = self._run(vuln, None)
-        assert records[0]["fixed_versions"] == []
-
-    def test_prerelease_latest_is_not_trusted(self):
-        vuln = self._vuln([{"introduced": "0"}, {"last_affected": "1.14.0"}])
-        records, _ = self._run(vuln, "2.0.0rc1")
-        assert records[0]["fixed_versions"] == []
-
-    def test_explicit_fixed_event_is_never_replaced_or_looked_up(self):
-        vuln = self._vuln([{"introduced": "0"}, {"fixed": "1.13.0"}])
-        records, fetch = self._run(vuln, "9.9.9")
-        assert records[0]["fixed_versions"] == ["1.13.0"]
-        fetch.assert_not_called()
-
-    def test_no_last_affected_does_not_query_registry(self):
-        vuln = self._vuln([{"introduced": "0"}])
-        records, fetch = self._run(vuln, "9.9.9")
-        assert records[0]["fixed_versions"] == []
-        fetch.assert_not_called()
-
-    def test_only_last_affected_of_the_same_package_is_used(self):
-        """同じ脆弱性が別パッケージ/別エコシステムの last_affected を含んでいても無視する。"""
-        vuln = self._vuln([{"introduced": "0"}, {"last_affected": "99.0.0"}], pkg="other")
-        records, fetch = self._run(vuln, "1.15.0")
-        assert records[0]["fixed_versions"] == []
-        fetch.assert_not_called()
-
-    def test_package_name_matched_with_pypi_normalization(self):
-        vuln = self._vuln([{"introduced": "0"}, {"last_affected": "1.14.0"}], pkg="My_Pkg")
-        key = ("PyPI", "my-pkg", "1.0.0")
-        records, _ = self._run(vuln, "1.15.0", key=key)
-        assert records[0]["fixed_versions"] == ["1.15.0"]
-
-    def test_latest_must_exceed_every_last_affected(self):
-        vuln = self._vuln([{"introduced": "0"}, {"last_affected": "1.14.0"}])
-        vuln["affected"][0]["ranges"].append(
-            {"type": "ECOSYSTEM", "events": [{"introduced": "2.0.0"}, {"last_affected": "2.3.0"}]},
-        )
-        records, _ = self._run(vuln, "1.15.0")
-        assert records[0]["fixed_versions"] == []
-
-    def test_registry_is_queried_once_per_package(self):
-        """同じパッケージ×複数リポジトリ/複数脆弱性でもレジストリは1回だけ引く。"""
-        vuln = self._vuln([{"introduced": "0"}, {"last_affected": "1.14.0"}])
-        dep_to_repos = {self.KEY: [("u/r1", "requirements.txt"), ("u/r2", "requirements.txt")]}
-        records, fetch = self._run(vuln, "1.15.0", dep_to_repos=dep_to_repos)
-        assert len(records) == 2
-        assert fetch.call_count == 1
-
-
-class TestApplyReachability:
-    def test_updates_records_using_fetched_source(self):
-        records = [
-            {"repo_full_name": "u/r", "ecosystem": "PyPI", "package_name": "requests"},
-        ]
-        repos = [{"full_name": "u/r", "default_branch": "main"}]
-        with patch("app.depscan.crawler.list_target_repos", return_value=repos), \
-             patch(
-                 "app.depscan.crawler.collect_source_files",
-                 return_value={"app/main.py": "import requests\n"},
-             ):
-            from app.depscan.crawler import _apply_reachability
-            _apply_reachability(records, "user", "token")
-
-        assert records[0]["reachability"] == "reachable"
-
-    def test_shares_fetched_source_across_findings_in_same_repo_and_ecosystem(self):
-        records = [
-            {"repo_full_name": "u/r", "ecosystem": "PyPI", "package_name": "requests"},
-            {"repo_full_name": "u/r", "ecosystem": "PyPI", "package_name": "flask"},
-        ]
-        repos = [{"full_name": "u/r", "default_branch": "main"}]
-        with patch("app.depscan.crawler.list_target_repos", return_value=repos), \
-             patch(
-                 "app.depscan.crawler.collect_source_files",
-                 return_value={"app/main.py": "import requests\n"},
-             ) as mock_get_source:
-            from app.depscan.crawler import _apply_reachability
-            _apply_reachability(records, "user", "token")
-
-        mock_get_source.assert_called_once()
-        assert records[0]["reachability"] == "reachable"
-        assert records[1]["reachability"] == "unreachable"
-
-    def test_source_fetch_failure_leaves_reachability_unchanged(self):
-        records = [
-            {
-                "repo_full_name": "u/r", "ecosystem": "PyPI", "package_name": "requests",
-                "reachability": "unknown",
-            },
-        ]
-        repos = [{"full_name": "u/r", "default_branch": "main"}]
-        http_error = httpx.HTTPStatusError("500", request=MagicMock(), response=MagicMock())
-        with patch("app.depscan.crawler.list_target_repos", return_value=repos), \
-             patch("app.depscan.crawler.collect_source_files", side_effect=http_error):
-            from app.depscan.crawler import _apply_reachability
-            _apply_reachability(records, "user", "token")
-
-        assert records[0]["reachability"] == "unknown"
-
-    def test_empty_records_does_not_call_github(self):
-        with patch("app.depscan.crawler.list_target_repos") as mock_list:
-            from app.depscan.crawler import _apply_reachability
-            _apply_reachability([], "user", "token")
-        mock_list.assert_not_called()
-
-
-class TestUpsertFindings:
-    def _rec(self, **kwargs):
-        base = {
-            "repo_full_name": "baby-feelings/baby_grow",
-            "ecosystem": "PyPI",
-            "package_name": "cryptography",
-            "installed_version": "3.4.7",
-            "osv_id": "GHSA-001",
-            "severity": "HIGH",
-            "cvss_score": 7.5,
-            "summary": "vuln",
-            "fixed_versions": ["3.4.8"],
-            "manifest_path": "requirements.txt",
-            "detected_at": _NOW,
-        }
-        base.update(kwargs)
-        return base
-
-    def test_inserts_new_finding(self, db_session):
-        inserted, snapshots = upsert_findings(db_session, [self._rec()])
-        assert inserted == 1
-        assert snapshots[0]["osv_id"] == "GHSA-001"
-        assert db_session.query(DependencyFinding).count() == 1
-
-    def test_dedupes_within_batch(self, db_session):
-        inserted, _ = upsert_findings(db_session, [self._rec(), self._rec()])
-        assert inserted == 1
-
-    def test_reopens_resolved_finding(self, db_session):
-        _make_finding(db_session, osv_id="GHSA-001", resolved_at=_NOW)
-        inserted, snapshots = upsert_findings(db_session, [self._rec()])
-        assert inserted == 0
-        assert snapshots == []
-        reopened = db_session.query(DependencyFinding).filter_by(osv_id="GHSA-001").first()
-        assert reopened.resolved_at is None
-
-    def test_existing_open_finding_not_reinserted(self, db_session):
-        _make_finding(db_session, osv_id="GHSA-001")
-        inserted, snapshots = upsert_findings(db_session, [self._rec()])
-        assert inserted == 0
-        assert snapshots == []
-
-    def test_existing_open_finding_refreshes_reachability_only(self, db_session):
-        """既存の未解決findingは、到達可能性だけ毎回更新し他フィールドは据え置く。"""
-        _make_finding(
-            db_session, osv_id="GHSA-001", reachability="unreachable", summary="old summary",
-        )
-        upsert_findings(
-            db_session, [self._rec(reachability="reachable", summary="new summary")],
-        )
-        finding = db_session.query(DependencyFinding).filter_by(osv_id="GHSA-001").first()
-        assert finding.reachability == "reachable"
-        assert finding.summary == "old summary"  # 到達可能性以外は更新されない
-
-    def test_existing_open_finding_gets_newly_inferred_fixed_versions(self, db_session):
-        """以前は修正版が空だった未解決findingに、後から判明した修正版を反映する。"""
-        _make_finding(db_session, osv_id="GHSA-001", fixed_versions=[])
-        upsert_findings(db_session, [self._rec(fixed_versions=["1.15.0"])])
-        finding = db_session.query(DependencyFinding).filter_by(osv_id="GHSA-001").first()
-        assert finding.fixed_versions == ["1.15.0"]
-
-    def test_existing_fixed_versions_not_wiped_when_lookup_returns_nothing(self, db_session):
-        """レジストリを一時的に引けず空になった回に、既知の修正版を消さない。"""
-        _make_finding(db_session, osv_id="GHSA-001", fixed_versions=["1.15.0"])
-        upsert_findings(db_session, [self._rec(fixed_versions=[])])
-        finding = db_session.query(DependencyFinding).filter_by(osv_id="GHSA-001").first()
-        assert finding.fixed_versions == ["1.15.0"]
-
-
-class TestResolveStaleFindings:
-    def test_marks_missing_findings_resolved(self, db_session):
-        _make_finding(db_session, osv_id="GHSA-stale")
-        resolved, affected_repos = resolve_stale_findings(db_session, current_keys=set())
-        assert resolved == 1
-        assert affected_repos == {"baby-feelings/baby_grow"}
-        finding = db_session.query(DependencyFinding).filter_by(osv_id="GHSA-stale").first()
-        assert finding.resolved_at is not None
-
-    def test_keeps_current_findings_open(self, db_session):
-        _make_finding(db_session, osv_id="GHSA-current")
-        key = ("baby-feelings/baby_grow", "PyPI", "cryptography", "GHSA-current")
-        resolved, affected_repos = resolve_stale_findings(db_session, current_keys={key})
-        assert resolved == 0
-        assert affected_repos == set()
-
-    def test_repo_owner_prefix_scopes_to_matching_repos_only(self, db_session):
-        """repo_owner_prefix指定時、他オーナーの未解決findingには一切影響しない。"""
-        _make_finding(
-            db_session, repo_full_name="baby-feelings/baby_grow", osv_id="GHSA-baby-feelings",
-        )
-        _make_finding(db_session, repo_full_name="octocat/hello-world", osv_id="GHSA-octocat")
-
-        resolved, affected_repos = resolve_stale_findings(
-            db_session, current_keys=set(), repo_owner_prefix="octocat",
-        )
-
-        assert resolved == 1
-        assert affected_repos == {"octocat/hello-world"}
-        baby_feelings_finding = (
-            db_session.query(DependencyFinding).filter_by(osv_id="GHSA-baby-feelings").first()
-        )
-        octocat_finding = (
-            db_session.query(DependencyFinding).filter_by(osv_id="GHSA-octocat").first()
-        )
-        assert baby_feelings_finding.resolved_at is None
-        assert octocat_finding.resolved_at is not None
-
-
-class TestDeleteOldDepscanRecords:
-    def test_deletes_old_resolved_records(self, db_session):
-        """保持期間（DEPSCAN_RETENTION_DAYS）を超えて解決済みのレコードが削除されること。"""
-        from app.depscan.crawler import _delete_old_depscan_records
-
-        old_resolved = _NOW - timedelta(days=181)
-        _make_finding(db_session, osv_id="GHSA-old-resolved", resolved_at=old_resolved)
-
-        deleted = _delete_old_depscan_records(db_session)
-
-        assert deleted == 1
-        assert db_session.query(DependencyFinding).count() == 0
-
-    def test_keeps_recently_resolved_records(self, db_session):
-        """保持期間内に解決したレコードは削除されないこと。"""
-        from app.depscan.crawler import _delete_old_depscan_records
-
-        recent_resolved = _NOW - timedelta(days=1)
-        _make_finding(db_session, osv_id="GHSA-recent-resolved", resolved_at=recent_resolved)
-
-        deleted = _delete_old_depscan_records(db_session)
-
-        assert deleted == 0
-        assert db_session.query(DependencyFinding).count() == 1
-
-    def test_keeps_unresolved_records_regardless_of_age(self, db_session):
-        """未解決のレコードは detected_at がどれだけ古くても削除されないこと。"""
-        from app.depscan.crawler import _delete_old_depscan_records
-
-        very_old = _NOW - timedelta(days=1000)
-        _make_finding(
-            db_session, osv_id="GHSA-unresolved-old", detected_at=very_old, resolved_at=None,
-        )
-
-        deleted = _delete_old_depscan_records(db_session)
-
-        assert deleted == 0
-        assert db_session.query(DependencyFinding).count() == 1
-
-    def test_empty_db_returns_zero(self, db_session):
-        from app.depscan.crawler import _delete_old_depscan_records
-
-        assert _delete_old_depscan_records(db_session) == 0
-
-
-class TestFetchAndScanDependenciesDeduplication:
-    """Issue #239: APScheduler・GitHub Actionsの二重トリガー対策。"""
-
-    def test_skips_when_already_succeeded_today(self, db_session):
-        from datetime import datetime
-
-        from app.crawler_logs.models import CrawlerLog
-
-        db_session.add(CrawlerLog(
-            crawler_type="DEPSCAN", status="success",
-            started_at=datetime.now(UTC), finished_at=datetime.now(UTC),
-            duration_seconds=1.0,
-        ))
-        db_session.commit()
-
-        with patch("app.depscan.crawler.collect_dependencies") as mock_collect:
-            result = fetch_and_scan_dependencies()
-
-        assert result == (0, 0, 0)
-        mock_collect.assert_not_called()
-
-    def test_force_bypasses_the_skip(self, db_session):
-        from datetime import datetime
-
-        from app.crawler_logs.models import CrawlerLog
-
-        db_session.add(CrawlerLog(
-            crawler_type="DEPSCAN", status="success",
-            started_at=datetime.now(UTC), finished_at=datetime.now(UTC),
-            duration_seconds=1.0,
-        ))
-        db_session.commit()
-
-        with patch(
-            "app.depscan.crawler.collect_dependencies", return_value=({}, 0, {}),
-        ), patch(
-            "app.depscan.crawler.build_findings", return_value=[],
-        ), patch("app.core.crawler_runner.SessionLocal", return_value=db_session), \
-           patch("app.depscan.crawler._apply_reachability"), \
-           patch("app.depscan.crawler.notify_dependency_findings"), \
-           patch("app.depscan.crawler.file_github_issues"):
-            db_session.close = MagicMock()
-            new_count, resolved_count, repos_scanned = fetch_and_scan_dependencies(force=True)
-
-        assert repos_scanned == 0
-
-
-class TestFetchAndScanDependencies:
-    def test_success_path(self, db_session):
-        with patch(
-            "app.depscan.crawler.collect_dependencies",
-            return_value=(
-                {("PyPI", "pkg", "1.0.0"): [("u/r", "requirements.txt")]}, 1, {"u/r": "public"},
-            ),
-        ), patch(
-            "app.depscan.crawler.build_findings",
-            return_value=[{
-                "repo_full_name": "u/r", "ecosystem": "PyPI", "package_name": "pkg",
-                "installed_version": "1.0.0", "osv_id": "GHSA-001", "severity": "HIGH",
-                "cvss_score": 7.5, "summary": "vuln", "fixed_versions": [],
-                "manifest_path": "requirements.txt", "detected_at": _NOW,
-            }],
-        ), patch("app.core.crawler_runner.SessionLocal", return_value=db_session), \
-           patch("app.depscan.crawler._apply_reachability") as mock_reachability, \
-           patch("app.depscan.crawler.notify_dependency_findings") as mock_notify, \
-           patch("app.depscan.crawler.file_github_issues") as mock_file_issues:
-            new_count, resolved_count, repos_scanned = fetch_and_scan_dependencies()
-
-        assert new_count == 1
-        assert repos_scanned == 1
-        mock_reachability.assert_called_once()
-        mock_notify.assert_called_once()
-        mock_file_issues.assert_called_once()
-
-    def test_delete_failure_does_not_fail_crawler(self, db_session):
-        """_delete_old_depscan_records が失敗してもクローラー全体はエラーにならないこと。"""
-        with patch(
-            "app.depscan.crawler.collect_dependencies", return_value=({}, 0, {}),
-        ), patch(
-            "app.depscan.crawler.build_findings", return_value=[],
-        ), patch("app.core.crawler_runner.SessionLocal", return_value=db_session), \
-           patch("app.depscan.crawler._apply_reachability"), \
-           patch(
-               "app.depscan.crawler._delete_old_depscan_records",
-               side_effect=Exception("delete failed"),
-           ), \
-           patch("app.depscan.crawler.notify_dependency_findings"), \
-           patch("app.depscan.crawler.file_github_issues"):
-            new_count, resolved_count, repos_scanned = fetch_and_scan_dependencies()
-
-        assert new_count == 0
-        assert repos_scanned == 0
-
-    def test_error_path_logs_and_notifies(self, db_session):
-        with patch(
-            "app.depscan.crawler.collect_dependencies",
-            side_effect=RuntimeError("GitHub API down"),
-        ), patch("app.core.crawler_runner.SessionLocal", return_value=db_session), \
-           patch("app.core.crawler_runner.notify_error") as mock_notify_error:
-            import pytest
-            with pytest.raises(RuntimeError):
-                fetch_and_scan_dependencies()
-        mock_notify_error.assert_called_once()
 
 
 # app.depscan.issue_management のテスト（_file_github_issues・
@@ -1098,368 +532,13 @@ class TestFetchAndScanDependencies:
 
 
 # ──────────────────────────────────────────────────────────────
-# app.core.notifications.notify_dependency_findings
-# ──────────────────────────────────────────────────────────────
-
-
-class TestNotifyDependencyFindings:
-    def _finding_dict(self, **kwargs):
-        base = {
-            "repo_full_name": "baby-feelings/baby_grow",
-            "package_name": "cryptography",
-            "installed_version": "3.4.7",
-            "severity": "HIGH",
-            "fixed_versions": ["3.4.8"],
-            "osv_id": "GHSA-001",
-        }
-        base.update(kwargs)
-        return base
-
-    def test_skips_when_no_webhook(self):
-        with patch("app.core.notifications.slack.send_slack") as mock_send:
-            notify_dependency_findings([self._finding_dict()], recipients=[])
-        mock_send.assert_not_called()
-
-    def test_skips_when_empty(self):
-        with patch("app.core.notifications.slack.send_slack") as mock_send:
-            notify_dependency_findings([], recipients=["https://hooks.slack.com/x"])
-        mock_send.assert_not_called()
-
-    def test_sends_digest_grouped_by_repo(self):
-        findings = [
-            self._finding_dict(repo_full_name="u/a", osv_id="GHSA-a"),
-            self._finding_dict(repo_full_name="u/b", osv_id="GHSA-b"),
-        ]
-        with patch("app.core.notifications.slack.send_slack") as mock_send:
-            notify_dependency_findings(findings, recipients=["https://hooks.slack.com/x"])
-        mock_send.assert_called_once()
-        message = mock_send.call_args[0][0]
-        assert "u/a" in message
-        assert "u/b" in message
-        assert "cryptography" in message
-
-    def test_consolidates_same_package_into_one_line(self):
-        """同一パッケージ×バージョンの複数CVEは1行に集約され、件数・重大度内訳を表示する。"""
-        findings = [
-            self._finding_dict(osv_id="GHSA-a", severity="HIGH", fixed_versions=["3.4.8"]),
-            self._finding_dict(osv_id="GHSA-b", severity="CRITICAL", fixed_versions=["3.5.0"]),
-            self._finding_dict(osv_id="GHSA-c", severity="HIGH", fixed_versions=["3.4.8"]),
-        ]
-        with patch("app.core.notifications.slack.send_slack") as mock_send:
-            notify_dependency_findings(findings, recipients=["https://hooks.slack.com/x"])
-        message = mock_send.call_args[0][0]
-        # 3件のCVEが1行（1パッケージ）に集約されている
-        assert message.count("cryptography 3.4.7") == 1
-        assert "CRITICAL×1" in message
-        assert "HIGH×2" in message
-        assert "計3件" in message
-        assert "3.4.8" in message and "3.5.0" in message
-
-    def test_sorts_packages_by_severity_within_repo(self):
-        """リポジトリ内はCRITICAL→HIGH→...の重大度順に並ぶ。"""
-        findings = [
-            self._finding_dict(package_name="low-pkg", severity="LOW", osv_id="GHSA-l"),
-            self._finding_dict(package_name="critical-pkg", severity="CRITICAL", osv_id="GHSA-c"),
-            self._finding_dict(package_name="high-pkg", severity="HIGH", osv_id="GHSA-h"),
-        ]
-        with patch("app.core.notifications.slack.send_slack") as mock_send:
-            notify_dependency_findings(findings, recipients=["https://hooks.slack.com/x"])
-        message = mock_send.call_args[0][0]
-        assert (
-            message.index("critical-pkg")
-            < message.index("high-pkg")
-            < message.index("low-pkg")
-        )
-
-    def test_no_repo_limit(self):
-        """対象リポジトリ数が多くても省略せず全リポジトリを表示する。"""
-        findings = [
-            self._finding_dict(repo_full_name=f"u/repo{i}", osv_id=f"GHSA-{i}")
-            for i in range(20)
-        ]
-        with patch("app.core.notifications.slack.send_slack") as mock_send:
-            notify_dependency_findings(findings, recipients=["https://hooks.slack.com/x"])
-        message = mock_send.call_args[0][0]
-        for i in range(20):
-            assert f"u/repo{i}" in message
-        assert "他" not in message
-
-    def test_truncates_overly_long_message(self):
-        """Slack の文字数上限を超える場合、行の途中で切らずに省略する。"""
-        findings = [
-            self._finding_dict(
-                repo_full_name=f"u/repo{i}", package_name=f"pkg-{i}", osv_id=f"GHSA-{i}",
-            )
-            for i in range(2000)
-        ]
-        with patch("app.core.notifications.slack.send_slack") as mock_send:
-            notify_dependency_findings(findings, recipients=["https://hooks.slack.com/x"])
-        message = mock_send.call_args[0][0]
-        assert len(message) <= 39000 + 100
-        assert message.endswith(
-            "（メッセージが長すぎるため以降省略。詳細は API / ダッシュボードを参照）"
-        )
-        assert not message.endswith("\n")
-
-
-# ──────────────────────────────────────────────────────────────
 # app.depscan.user_scan.run_depscan_for_user / get_user_scan_status
 # ──────────────────────────────────────────────────────────────
 
 
-class TestRunDepscanForUser:
-    def test_success_path_records_done_status(self, db_session):
-        with patch(
-            "app.depscan.user_scan.collect_dependencies",
-            return_value=(
-                {("PyPI", "pkg", "1.0.0"): [("octocat/repo", "requirements.txt")]},
-                1,
-                {"octocat/repo": "public"},
-            ),
-        ), patch(
-            "app.depscan.user_scan.build_findings",
-            return_value=[{
-                "repo_full_name": "octocat/repo", "ecosystem": "PyPI", "package_name": "pkg",
-                "installed_version": "1.0.0", "osv_id": "GHSA-001", "severity": "HIGH",
-                "cvss_score": 7.5, "summary": "vuln", "fixed_versions": [],
-                "manifest_path": "requirements.txt", "detected_at": _NOW,
-            }],
-        ), patch("app.depscan.user_scan.SessionLocal", return_value=db_session):
-            run_depscan_for_user("octocat", "gho_token")
-
-        scan = db_session.query(UserScan).filter_by(username="octocat").first()
-        assert scan.status == "done"
-        assert scan.repos_scanned == 1
-        assert scan.finished_at is not None
-        findings_count = (
-            db_session.query(DependencyFinding).filter_by(repo_full_name="octocat/repo").count()
-        )
-        assert findings_count == 1
-
-    def test_does_not_resolve_other_owners_findings(self, db_session):
-        """他オーナー（baby-feelings等）の未解決findingを誤って解決済みにしないこと。"""
-        _make_finding(db_session, repo_full_name="baby-feelings/baby_grow", osv_id="GHSA-untouched")
-
-        with patch(
-            "app.depscan.user_scan.collect_dependencies", return_value=({}, 0, {}),
-        ), patch(
-            "app.depscan.user_scan.build_findings", return_value=[],
-        ), patch("app.depscan.user_scan.SessionLocal", return_value=db_session):
-            run_depscan_for_user("octocat", "gho_token")
-
-        untouched = db_session.query(DependencyFinding).filter_by(osv_id="GHSA-untouched").first()
-        assert untouched.resolved_at is None
-
-    def test_failure_records_error_status(self, db_session):
-        with patch(
-            "app.depscan.user_scan.collect_dependencies",
-            side_effect=RuntimeError("GitHub API down"),
-        ), patch("app.depscan.user_scan.SessionLocal", return_value=db_session):
-            run_depscan_for_user("octocat", "gho_token")  # 例外を送出しないことを確認
-
-        scan = db_session.query(UserScan).filter_by(username="octocat").first()
-        assert scan.status == "error"
-        assert "GitHub API down" in scan.error_message
-
-    def test_notifies_and_files_issues_when_webhook_registered(self, db_session):
-        """通知を有効にしてWebhookを登録済みのユーザーには、新規検知時にSlack通知と
-        GitHub Issue起票の両方を行う（Issue #227）。"""
-        from app.auth.account_store import set_slack_webhook, upsert_user_token
-
-        upsert_user_token(db_session, "octocat", "gho_token")
-        set_slack_webhook(db_session, "octocat", "https://hooks.slack.com/services/octocat")
-
-        with patch(
-            "app.depscan.user_scan.collect_dependencies",
-            return_value=(
-                {("PyPI", "pkg", "1.0.0"): [("octocat/repo", "requirements.txt")]},
-                1,
-                {"octocat/repo": "public"},
-            ),
-        ), patch(
-            "app.depscan.user_scan.build_findings",
-            return_value=[{
-                "repo_full_name": "octocat/repo", "ecosystem": "PyPI", "package_name": "pkg",
-                "installed_version": "1.0.0", "osv_id": "GHSA-001", "severity": "HIGH",
-                "cvss_score": 7.5, "summary": "vuln", "fixed_versions": [],
-                "manifest_path": "requirements.txt", "detected_at": _NOW,
-            }],
-        ), patch("app.depscan.user_scan.SessionLocal", return_value=db_session), \
-           patch("app.depscan.user_scan.notify_dependency_findings") as mock_notify, \
-           patch("app.depscan.user_scan.file_github_issues") as mock_file_issues:
-            run_depscan_for_user("octocat", "gho_token")
-
-        mock_notify.assert_called_once()
-        assert mock_notify.call_args.kwargs["recipients"] == [
-            "https://hooks.slack.com/services/octocat",
-        ]
-        mock_file_issues.assert_called_once()
-        assert mock_file_issues.call_args[0][1] == "gho_token"
-
-    def test_no_notification_when_webhook_not_registered(self, db_session):
-        """Webhook未登録のユーザーには従来通り一切通知しない。"""
-        with patch(
-            "app.depscan.user_scan.collect_dependencies",
-            return_value=(
-                {("PyPI", "pkg", "1.0.0"): [("octocat/repo", "requirements.txt")]},
-                1,
-                {"octocat/repo": "public"},
-            ),
-        ), patch(
-            "app.depscan.user_scan.build_findings",
-            return_value=[{
-                "repo_full_name": "octocat/repo", "ecosystem": "PyPI", "package_name": "pkg",
-                "installed_version": "1.0.0", "osv_id": "GHSA-001", "severity": "HIGH",
-                "cvss_score": 7.5, "summary": "vuln", "fixed_versions": [],
-                "manifest_path": "requirements.txt", "detected_at": _NOW,
-            }],
-        ), patch("app.depscan.user_scan.SessionLocal", return_value=db_session), \
-           patch("app.depscan.user_scan.notify_dependency_findings") as mock_notify, \
-           patch("app.depscan.user_scan.file_github_issues") as mock_file_issues:
-            run_depscan_for_user("octocat", "gho_token")
-
-        mock_notify.assert_not_called()
-        mock_file_issues.assert_not_called()
-
-    def test_second_run_updates_existing_status_row(self, db_session):
-        with patch(
-            "app.depscan.user_scan.collect_dependencies", return_value=({}, 0, {}),
-        ), patch(
-            "app.depscan.user_scan.build_findings", return_value=[],
-        ), patch("app.depscan.user_scan.SessionLocal", return_value=db_session):
-            run_depscan_for_user("octocat", "gho_token")
-            run_depscan_for_user("octocat", "gho_token")
-
-        assert db_session.query(UserScan).filter_by(username="octocat").count() == 1
 
 
-class TestGetUserScanStatus:
-    def test_returns_none_when_never_scanned(self, db_session):
-        assert get_user_scan_status(db_session, "nobody") is None
-
-    def test_returns_recorded_scan(self, db_session):
-        db_session.add(UserScan(
-            username="octocat", status="done", repos_scanned=3,
-            started_at=_NOW, finished_at=_NOW,
-        ))
-        db_session.commit()
-        scan = get_user_scan_status(db_session, "octocat")
-        assert scan is not None
-        assert scan.status == "done"
-        assert scan.repos_scanned == 3
 
 
-class TestShouldRescanForUser:
-    def test_no_scan_yet_returns_true(self, db_session):
-        assert should_rescan_for_user(db_session, "octocat") is True
-
-    def test_error_status_returns_true(self, db_session):
-        db_session.add(UserScan(
-            username="octocat", status="error", started_at=_NOW, finished_at=_NOW,
-            error_message="boom",
-        ))
-        db_session.commit()
-        assert should_rescan_for_user(db_session, "octocat") is True
-
-    def test_running_status_returns_false(self, db_session):
-        db_session.add(UserScan(username="octocat", status="running", started_at=_NOW))
-        db_session.commit()
-        assert should_rescan_for_user(db_session, "octocat") is False
-
-    def test_recent_done_scan_returns_false(self, db_session):
-        db_session.add(UserScan(
-            username="octocat", status="done", started_at=_NOW, finished_at=_NOW,
-        ))
-        db_session.commit()
-        assert should_rescan_for_user(db_session, "octocat") is False
-
-    def test_stale_done_scan_returns_true(self, db_session):
-        stale = _NOW - timedelta(hours=25)
-        db_session.add(UserScan(
-            username="octocat", status="done", started_at=stale, finished_at=stale,
-        ))
-        db_session.commit()
-        assert should_rescan_for_user(db_session, "octocat") is True
-
-    def test_stale_running_scan_returns_true(self, db_session):
-        """デプロイ等でスレッドが強制終了され running のまま取り残されたケース
-        （実際に本番で発生）。一定時間を超えたら stale とみなし再スキャンを許可する。"""
-        from app.depscan.user_scan import STALE_RUNNING_THRESHOLD_MINUTES
-
-        stale = _NOW - timedelta(minutes=STALE_RUNNING_THRESHOLD_MINUTES + 1)
-        db_session.add(UserScan(username="octocat", status="running", started_at=stale))
-        db_session.commit()
-        assert should_rescan_for_user(db_session, "octocat") is True
-
-    def test_recently_started_running_scan_returns_false(self, db_session):
-        from app.depscan.user_scan import STALE_RUNNING_THRESHOLD_MINUTES
-
-        recent = _NOW - timedelta(minutes=STALE_RUNNING_THRESHOLD_MINUTES - 1)
-        db_session.add(UserScan(username="octocat", status="running", started_at=recent))
-        db_session.commit()
-        assert should_rescan_for_user(db_session, "octocat") is False
 
 
-class TestFindingBuilder:
-    """build_findings の実体（FindingBuilder）のキャッシュ・補完・展開の単体テスト。"""
-
-    KEY = ("PyPI", "pkg", "1.0.0")
-
-    def _vuln(self, **extra):
-        return {
-            "id": "GHSA-1", "summary": " s ", "aliases": ["CVE-2026-1", "GHSA-x", "CVE-2026-0"],
-            "affected": [{"ranges": [{"events": [{"fixed": "1.0.1"}]}]}], **extra,
-        }
-
-    def test_expands_one_record_per_repo_with_shared_fields_and_cve_ids(self):
-        from app.depscan.crawler import FindingBuilder
-
-        dep_to_repos = {self.KEY: [("u/a", "requirements.txt"), ("u/b", "sub/requirements.txt")]}
-        with patch("app.depscan.crawler.query_versions_batch",
-                   return_value={self.KEY: ["GHSA-1"]}), \
-             patch("app.depscan.crawler.fetch_vuln_by_id", return_value=self._vuln()):
-            records = FindingBuilder({"u/a": "public"}).build(dep_to_repos)
-
-        assert [r["repo_full_name"] for r in records] == ["u/a", "u/b"]
-        assert records[0]["repo_visibility"] == "public"
-        assert records[1]["repo_visibility"] is None
-        assert records[0]["cve_ids"] == ["CVE-2026-0", "CVE-2026-1"]  # CVEのみ・ソート済み
-        assert records[0]["summary"] == "s"
-        assert records[0]["fixed_versions"] == ["1.0.1"]
-        assert records[0]["reachability"] == "unknown"
-        assert records[0]["detected_at"] == records[1]["detected_at"]
-
-    def test_caches_vuln_details_per_osv_id_including_failures(self):
-        import httpx
-
-        from app.depscan.crawler import FindingBuilder
-
-        k2 = ("PyPI", "other", "2.0.0")
-        dep_to_repos = {self.KEY: [("u/a", "r.txt")], k2: [("u/a", "r.txt")]}
-        with patch("app.depscan.crawler.query_versions_batch",
-                   return_value={self.KEY: ["GHSA-1"], k2: ["GHSA-1"]}), \
-             patch("app.depscan.crawler.fetch_vuln_by_id",
-                   side_effect=httpx.ConnectError("down")) as mock_fetch:
-            records = FindingBuilder().build(dep_to_repos)
-
-        assert records == []
-        mock_fetch.assert_called_once_with("GHSA-1")  # 失敗も含め同じIDは再取得しない
-
-    def test_infers_fixed_version_from_registry_only_when_osv_has_no_fixed(self):
-        from app.depscan.crawler import FindingBuilder
-
-        vuln = {
-            "id": "GHSA-1", "summary": "s",
-            "affected": [{
-                "package": {"name": "pkg", "ecosystem": "PyPI"},
-                "ranges": [{"events": [{"last_affected": "1.0.0"}]}],
-            }],
-        }
-        with patch("app.depscan.crawler.query_versions_batch",
-                   return_value={self.KEY: ["GHSA-1"]}), \
-             patch("app.depscan.crawler.fetch_vuln_by_id", return_value=vuln), \
-             patch("app.depscan.crawler.fetch_latest_version", return_value="2.0.0") as mock_latest:
-            records = FindingBuilder().build({self.KEY: [("u/a", "r.txt")]})
-
-        assert records[0]["fixed_versions"] == ["2.0.0"]
-        mock_latest.assert_called_once()

@@ -1,6 +1,6 @@
 """DEPSCAN 検知結果の GitHub Issue 管理（起票・追記・自動クローズ）。
 
-app.depscan.crawler から GitHub Issue 関連ロジックのみを切り出したモジュール。
+DEPSCAN のクローラーから GitHub Issue 関連ロジックのみを切り出したモジュール。
 新規検知の起票（`file_github_issues`）・未解決 finding が0件になった
 リポジトリの自動クローズ（`close_resolved_repo_issues`）を担当し、
 DEPSCAN 全体のオーケストレーション（crawler.py）とは責務を分離する。
