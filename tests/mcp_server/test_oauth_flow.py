@@ -17,20 +17,15 @@ os.environ.setdefault("ENVIRONMENT", "development")
 os.environ.setdefault("GITHUB_USERNAME", "test-github-user")
 os.environ.setdefault("SESSION_SECRET_KEY", "test-session-secret-key-for-pytest")
 
-import pytest  # noqa: E402
-from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.auth.mcp_token import verify_mcp_token  # noqa: E402
 from app.auth.mcp_token_expiry import find_expiring_tokens  # noqa: E402
 from app.auth.mcp_token_store import is_usable, issue_token, list_tokens  # noqa: E402
 from app.auth.models import McpToken, OAuthAuthorization  # noqa: E402
-from app.auth.router import router as auth_router  # noqa: E402
-from app.core.database import get_db  # noqa: E402
-from app.mcp_server import oauth_flow, oauth_routes  # noqa: E402
-from tests.conftest import TestSessionLocal  # noqa: E402
+from app.mcp_server import oauth_flow  # noqa: E402
+from tests.mcp_server.conftest import ISSUER  # noqa: E402
 
-ISSUER = "https://api.example.test"
 REDIRECT = "http://localhost:33418/callback"
 _GH = "app.mcp_server.oauth_consent"
 
@@ -39,31 +34,6 @@ def _pkce() -> tuple[str, str]:
     verifier = secrets.token_urlsafe(48)
     digest = hashlib.sha256(verifier.encode()).digest()
     return verifier, base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
-
-
-@pytest.fixture
-def http(db_session):
-    """OAuth を有効にし、既存の /auth ルーター（GitHub コールバック）も載せたアプリ。"""
-    app = FastAPI()
-
-    def _override_db():
-        db = TestSessionLocal()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    app.dependency_overrides[get_db] = _override_db
-    original = oauth_routes.SessionLocal
-    oauth_routes.SessionLocal = TestSessionLocal
-    try:
-        # issuer は GitHub コールバックと同じホストであることが必須（起動時に検証される）
-        with patch.object(oauth_routes.settings, "API_BASE_URL_FOR_OAUTH", ISSUER):
-            assert oauth_routes.mount_oauth_routes(app, issuer=ISSUER)
-        app.include_router(auth_router)
-        yield TestClient(app, base_url=ISSUER, follow_redirects=False)
-    finally:
-        oauth_routes.SessionLocal = original
 
 
 def _register(http, name="Claude Code", redirect=REDIRECT) -> str:
