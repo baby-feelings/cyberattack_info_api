@@ -57,7 +57,7 @@ def test_list_with_wrong_api_key_returns_403(client: TestClient):
 
 def test_list_with_valid_api_key_returns_200(client: TestClient, monkeypatch):
     """正しい API キーで 200 が返ることを確認する。"""
-    monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+    monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
     response = client.get(
         "/api/vulnerabilities",
         headers={"X-API-KEY": TEST_API_KEY},
@@ -71,7 +71,7 @@ def test_list_with_valid_api_key_returns_200(client: TestClient, monkeypatch):
 @pytest.mark.usefixtures("setup_test_db")
 def test_list_returns_pagination_fields(client: TestClient, db_session: Session, monkeypatch):
     """レスポンスに total/page/per_page/data フィールドが含まれることを確認する。"""
-    monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+    monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
     _make_vuln(db_session, cve_id="CVE-2026-10001")
 
     response = client.get(
@@ -89,7 +89,7 @@ def test_list_returns_pagination_fields(client: TestClient, db_session: Session,
 
 def test_list_search_filter(client: TestClient, db_session: Session, monkeypatch):
     """search パラメータがベンダー・製品名の部分一致フィルタとして機能することを確認する。"""
-    monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+    monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
     _make_vuln(db_session, cve_id="CVE-2026-10002", vendor="MegaCorp", product="MegaProduct")
     _make_vuln(db_session, cve_id="CVE-2026-10003", vendor="OtherVendor", product="OtherProduct")
 
@@ -104,7 +104,7 @@ def test_list_search_filter(client: TestClient, db_session: Session, monkeypatch
 
 def test_list_vendor_filter(client: TestClient, db_session: Session, monkeypatch):
     """vendor パラメータによる完全一致フィルタが機能することを確認する。"""
-    monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+    monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
     _make_vuln(db_session, cve_id="CVE-2026-10004", vendor="AlphaVendor", product="ProductA")
     _make_vuln(db_session, cve_id="CVE-2026-10005", vendor="BetaVendor", product="ProductB")
 
@@ -120,7 +120,7 @@ def test_list_vendor_filter(client: TestClient, db_session: Session, monkeypatch
 
 def test_list_min_epss_filter(client: TestClient, db_session: Session, monkeypatch):
     """min_epss パラメータで EPSS スコアの下限フィルタが機能することを確認する。"""
-    monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+    monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
     _make_vuln(db_session, cve_id="CVE-2026-10006", epss_score=0.9)
     _make_vuln(db_session, cve_id="CVE-2026-10007", epss_score=0.1)
     _make_vuln(db_session, cve_id="CVE-2026-10008", epss_score=None)
@@ -146,7 +146,7 @@ def test_list_updated_since_filter(client: TestClient, db_session: Session, monk
     """
     from datetime import datetime
 
-    monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+    monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
     cutoff = datetime(2026, 6, 15, 12, 0, 0)
     old = _make_vuln(db_session, cve_id="CVE-2026-20001")
     new = _make_vuln(db_session, cve_id="CVE-2026-20002")
@@ -172,7 +172,7 @@ def test_list_updated_since_filter(client: TestClient, db_session: Session, monk
 
 def test_list_product_filter(client: TestClient, db_session: Session, monkeypatch):
     """product パラメータによる部分一致フィルタが機能することを確認する。"""
-    monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+    monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
     _make_vuln(db_session, cve_id="CVE-2026-10006", vendor="VendorX", product="SpecialGateway")
     _make_vuln(db_session, cve_id="CVE-2026-10007", vendor="VendorY", product="CommonApp")
 
@@ -188,7 +188,7 @@ def test_list_product_filter(client: TestClient, db_session: Session, monkeypatc
 
 def test_list_pagination(client: TestClient, db_session: Session, monkeypatch):
     """ページネーションが正しく機能することを確認する。"""
-    monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+    monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
     for i in range(5):
         _make_vuln(db_session, cve_id=f"CVE-2026-5000{i}", vendor="PagingVendor")
 
@@ -208,7 +208,7 @@ def test_list_pagination(client: TestClient, db_session: Session, monkeypatch):
 
 def test_recent_returns_list(client: TestClient, db_session: Session, monkeypatch):
     """GET /api/vulnerabilities/recent がリストを返すことを確認する。"""
-    monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+    monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
     _make_vuln(db_session, cve_id="CVE-2026-20001", days_ago=3)
     _make_vuln(db_session, cve_id="CVE-2026-20002", days_ago=60)  # 範囲外
 
@@ -233,7 +233,7 @@ def test_recent_without_api_key_returns_403(client: TestClient):
 
 def test_recent_default_days(client: TestClient, db_session: Session, monkeypatch):
     """days パラメータ未指定時はデフォルト 30 日が使われることを確認する。"""
-    monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+    monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
     _make_vuln(db_session, cve_id="CVE-2026-30001", days_ago=10)
 
     response = client.get(
@@ -250,7 +250,7 @@ def test_recent_default_days(client: TestClient, db_session: Session, monkeypatc
 
 def test_get_vulnerability_by_cve_id(client: TestClient, db_session: Session, monkeypatch):
     """GET /api/vulnerabilities/{cve_id} が正しいレコードを返すことを確認する。"""
-    monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+    monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
     _make_vuln(db_session, cve_id="CVE-2026-40001", vendor="SingleVendor", product="SingleProduct")
 
     response = client.get(
@@ -265,7 +265,7 @@ def test_get_vulnerability_by_cve_id(client: TestClient, db_session: Session, mo
 
 def test_get_vulnerability_case_insensitive(client: TestClient, db_session: Session, monkeypatch):
     """CVE ID の大文字・小文字を問わず一致することを確認する。"""
-    monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+    monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
     _make_vuln(db_session, cve_id="CVE-2026-40002")
 
     response = client.get(
@@ -278,7 +278,7 @@ def test_get_vulnerability_case_insensitive(client: TestClient, db_session: Sess
 
 def test_get_vulnerability_not_found(client: TestClient, monkeypatch):
     """存在しない CVE ID に対して 404 を返すことを確認する。"""
-    monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+    monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
 
     response = client.get(
         "/api/vulnerabilities/CVE-9999-99999",
@@ -298,7 +298,7 @@ def test_get_vulnerability_requires_auth(client: TestClient):
 
 def test_get_vulnerability_stix_format(client: TestClient, db_session: Session, monkeypatch):
     """format=stix 指定時にSTIX 2.1 Vulnerability SDO形式で返すことを確認する。"""
-    monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+    monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
     _make_vuln(db_session, cve_id="CVE-2026-40003", vendor="StixVendor", product="StixProduct")
 
     response = client.get(
@@ -315,7 +315,7 @@ def test_get_vulnerability_stix_format(client: TestClient, db_session: Session, 
 
 def test_get_vulnerability_stix_format_not_found(client: TestClient, monkeypatch):
     """format=stix指定時も未存在のCVEでは404を返すことを確認する。"""
-    monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+    monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
 
     response = client.get(
         "/api/vulnerabilities/CVE-9999-99999?format=stix",
@@ -328,7 +328,7 @@ def test_get_vulnerability_defaults_to_json_format(
     client: TestClient, db_session: Session, monkeypatch,
 ):
     """format未指定時は従来通りのJSON形式を返すことを確認する（後方互換性）。"""
-    monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+    monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
     _make_vuln(db_session, cve_id="CVE-2026-40004")
 
     response = client.get(
@@ -341,7 +341,7 @@ def test_get_vulnerability_defaults_to_json_format(
 
 
 def test_get_vulnerability_rejects_unknown_format(client: TestClient, monkeypatch):
-    monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+    monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
     response = client.get(
         "/api/vulnerabilities/CVE-2026-00001?format=xml",
         headers={"X-API-KEY": TEST_API_KEY},
@@ -354,7 +354,7 @@ def test_get_vulnerability_rejects_unknown_format(client: TestClient, monkeypatc
 
 def test_stats_returns_correct_structure(client: TestClient, db_session: Session, monkeypatch):
     """GET /api/vulnerabilities/stats が正しい構造を返すことを確認する。"""
-    monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+    monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
     _make_vuln(db_session, cve_id="CVE-2026-50001", vendor="VendorA")
     _make_vuln(db_session, cve_id="CVE-2026-50002", vendor="VendorA")
     _make_vuln(db_session, cve_id="CVE-2026-50003", vendor="VendorB")
@@ -373,7 +373,7 @@ def test_stats_returns_correct_structure(client: TestClient, db_session: Session
 
 def test_stats_top_vendors_sorted(client: TestClient, db_session: Session, monkeypatch):
     """top_vendors が件数の多い順に並んでいることを確認する。"""
-    monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+    monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
     for i in range(3):
         _make_vuln(db_session, cve_id=f"CVE-2026-6000{i}", vendor="BigVendor")
     _make_vuln(db_session, cve_id="CVE-2026-60099", vendor="SmallVendor")
@@ -416,7 +416,7 @@ def test_admin_crawl_requires_auth(client: TestClient):
 
 def test_admin_crawl_success(client: TestClient, monkeypatch):
     """POST /admin/crawl が 202 を返しバックグラウンドでクローラーを起動すること。"""
-    monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+    monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
     with patch("app.kev.router.fetch_and_store_kev", return_value=(3, 1)):
         response = client.post(
             "/admin/crawl",
@@ -429,7 +429,7 @@ def test_admin_crawl_success(client: TestClient, monkeypatch):
 
 def test_admin_crawl_force_query_param_is_passed_through(client: TestClient, monkeypatch):
     """?force=true が fetch_and_store_kev(force=True) に渡ること（Issue #239）。"""
-    monkeypatch.setattr("app.core.auth.settings.API_KEY", TEST_API_KEY)
+    monkeypatch.setattr("app.auth.api_key.settings.API_KEY", TEST_API_KEY)
     with patch(
         "app.kev.router.run_in_background", side_effect=lambda name, fn: fn(),
     ), patch(

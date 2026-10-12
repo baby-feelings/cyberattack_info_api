@@ -8,9 +8,9 @@ import logging
 from fastapi import APIRouter, Security
 from pydantic import BaseModel
 
-from app.core.auth import require_api_key
+from app.auth.api_key import require_api_key
 from app.core.background import run_in_background
-from app.core.repo_cleanup import run_repo_cleanup
+from app.jobs.repo_cleanup import run_repo_cleanup
 
 logger = logging.getLogger(__name__)
 

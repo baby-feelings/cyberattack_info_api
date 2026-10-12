@@ -64,7 +64,7 @@ Windows開発環境にSemgrepバイナリが無くてもテストできるよう
 静的解析結果（ルールID・severity・CWE）だけから機械的に正確なCVSSを算出することは
 原理的に不可能。この設計上の限界を前提に、2段階で構成する:
 
-- **`app.core.cvss.calculate_base_score`**: NVD公式のCVSS 3.1計算式をそのまま
+- **`app.codescan.cvss.calculate_base_score`**: NVD公式のCVSS 3.1計算式をそのまま
   実装した、ベクター文字列→スコアの正式な変換ロジック（Impact/Exploitability
   サブスコア・Scope分岐・Roundup関数を含む）。ここ自体は近似ではなく厳密な実装。
 - **`app.codescan.cvss_mapping.estimate_cvss_vector`**: Semgrepのseverity・CWEから
@@ -114,7 +114,7 @@ DEPSCANは詳細なSlackダイジェスト（`notify_dependency_findings`）・I
 
 ## API認証: ログイン必須かつ本人所有リポジトリのみ（Issue #219でログイン必須化、#289で絞り込み追加）
 ダッシュボードのDEPSCAN/CODESCANタブ間でセッションを共有し、CODESCANも読み取りにGitHubログインを
-必須にする（Issue #219）ため、`app.core.auth.require_api_key_or_session`（`X-API-KEY`または
+必須にする（Issue #219）ため、`app.auth.api_key.require_api_key_or_session`（`X-API-KEY`または
 GitHubログインセッションJWTのいずれかを要求する共通認証。DEPSCANの`_resolve_access`と共通、DRY）で
 `GET /api/codescan`・`/stats`を保護する。
 

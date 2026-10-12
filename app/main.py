@@ -20,17 +20,16 @@ from app.codescan.router import router as codescan_router
 from app.core.config import settings
 from app.core.database import Base, engine, get_db
 from app.core.metrics import router as metrics_router
-from app.core.repo_cleanup_router import admin_router as repo_cleanup_admin_router
-from app.core.scheduler_jobs import build_scheduled_jobs, register_jobs
 from app.core.schemas import HealthResponse
 from app.core.security_headers import SecurityHeadersMiddleware
-from app.core.taxii import taxii_router
-from app.core.user_crawl_router import admin_router as user_crawl_admin_router
 from app.crawler_logs.router import router as crawler_logs_router
 from app.depscan.router import admin_router as depscan_admin_router
 from app.depscan.router import router as depscan_router
 from app.depsops.router import admin_router as depsops_admin_router
 from app.depsops.router import router as depsops_router
+from app.jobs.repo_cleanup_router import admin_router as repo_cleanup_admin_router
+from app.jobs.scheduler_jobs import build_scheduled_jobs, register_jobs
+from app.jobs.user_crawl_router import admin_router as user_crawl_admin_router
 from app.jvn.router import admin_router as jvn_admin_router
 from app.jvn.router import router as jvn_router
 from app.kev.router import admin_router as kev_admin_router
@@ -40,6 +39,7 @@ from app.mcp_server.oauth_routes import mount_oauth_routes
 from app.mcp_server.server import McpServer
 from app.osv.router import admin_router as osv_admin_router
 from app.osv.router import router as osv_router
+from app.taxii.router import taxii_router
 
 # ──────────────────────────────────────────────
 # ロギング設定（標準出力に JSON 風ログを出力）

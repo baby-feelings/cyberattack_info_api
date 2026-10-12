@@ -1,12 +1,12 @@
-"""app.core.repo_cleanup（削除済みリポジトリのデータ削除、Issue #228）のテスト。"""
+"""app.jobs.repo_cleanup（削除済みリポジトリのデータ削除、Issue #228）のテスト。"""
 from datetime import UTC, datetime
 from unittest.mock import patch
 
 from app.codescan.models import CodeFinding
-from app.core.repo_cleanup import purge_deleted_repos, run_repo_cleanup
 from app.crawler_logs.models import CrawlerLog
 from app.depscan.models import DependencyFinding
 from app.depsops.models import DependabotPrLog
+from app.jobs.repo_cleanup import purge_deleted_repos, run_repo_cleanup
 
 _NOW = datetime.now(UTC)
 
@@ -119,11 +119,11 @@ class TestPurgeDeletedRepos:
 
 class TestRunRepoCleanup:
     def test_success_path_writes_crawler_log(self, db_session, monkeypatch):
-        monkeypatch.setattr("app.core.repo_cleanup.settings.GITHUB_USERNAME", "baby-feelings")
+        monkeypatch.setattr("app.jobs.repo_cleanup.settings.GITHUB_USERNAME", "baby-feelings")
         _make_dependency_finding(db_session, repo_full_name="baby-feelings/deleted-repo")
         repos = [{"full_name": "baby-feelings/kept-repo"}]
 
-        with patch("app.core.repo_cleanup.list_target_repos", return_value=repos), \
+        with patch("app.jobs.repo_cleanup.list_target_repos", return_value=repos), \
              patch(f"{_REPO}.exists", return_value=False):
             purged = run_repo_cleanup()
 
@@ -135,7 +135,7 @@ class TestRunRepoCleanup:
 
     def test_failure_writes_error_log_and_reraises(self, db_session):
         with patch(
-            "app.core.repo_cleanup.list_target_repos", side_effect=RuntimeError("API down"),
+            "app.jobs.repo_cleanup.list_target_repos", side_effect=RuntimeError("API down"),
         ):
             try:
                 run_repo_cleanup()

@@ -124,7 +124,7 @@ class TestListCodescan:
         # ログイン必須化（Issue #219）により、読み取り専用の PUBLIC_API_KEY では
         # アクセスできない（require_api_key_or_session は X-API-KEY または
         # セッションJWTのみを受け付ける。DEPSCANと同じ方針）
-        with patch("app.core.auth.settings.PUBLIC_API_KEY", "public-key-123"):
+        with patch("app.auth.api_key.settings.PUBLIC_API_KEY", "public-key-123"):
             resp = client.get("/api/codescan", headers={"X-API-KEY": "public-key-123"})
         assert resp.status_code == 403
 

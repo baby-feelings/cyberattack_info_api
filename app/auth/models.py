@@ -19,7 +19,7 @@ class UserAccount(Base):
     だが、baby-feelings 自身の毎日クロール（`app.depscan.crawler` 等）は環境変数
     駆動のまま変更しない。このテーブルが対象にするのは、
     「GITHUB_USERNAME 以外の登録済みユーザー自身のリポジトリ」に対する定期実行
-    （`app.core.user_crawl_runner`）である。
+    （`app.jobs.user_crawl_runner`）である。
     """
 
     __tablename__ = "user_accounts"

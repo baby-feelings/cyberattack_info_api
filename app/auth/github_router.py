@@ -135,7 +135,7 @@ def github_callback(
 
     # ログインのたびにアクセストークンを暗号化して保存する（Issue #227）。
     # 登録済みユーザー自身のリポジトリに対するDEPSCAN/CODESCAN/DEPSOPSの定期実行
-    # （app.core.user_crawl_runner）が、ログイン中でなくてもこのトークンを使って
+    # （app.jobs.user_crawl_runner）が、ログイン中でなくてもこのトークンを使って
     # 実行できるようにするため（従来はオンデマンドスキャン1回にしか使わず、
     # 保存していなかった）
     upsert_user_token(db, username, access_token)

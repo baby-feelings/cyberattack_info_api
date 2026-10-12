@@ -251,7 +251,7 @@ SQLiteは`CURRENT_TIMESTAMP`が秒精度（マイクロ秒無し）のため、`
 - **`GET /api/osv/{osv_id}?format=json|stix`**: OSVは`osv_id`だけでは一意でないため、
   該当`osv_id`の全行を**リスト**（json）または**STIX Bundle**（stix）で返す（KEV/JVNの
   「単一オブジェクトを返す」設計とは意図的に異なる）
-- **`app/core/taxii.py`**: `/taxii2/`配下、`require_public_api_key`で保護。
+- **`app/taxii/router.py`**: `/taxii2/`配下、`require_public_api_key`で保護。
   コレクションレジストリパターン（コレクションID・クエリ関数・単体取得関数を紐づける
   マッピング）で複数ドメインに対応。単一API root・複数コレクション構成。manifest
   エンドポイント・フルのTAXIIページネーションは省略した簡易実装

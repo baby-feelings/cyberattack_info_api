@@ -8,7 +8,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.core.auth import require_public_api_key
+from app.auth.api_key import require_public_api_key
 from app.core.database import get_db
 from app.crawler_logs.models import CrawlerLog
 from app.crawler_logs.schemas import CrawlerLogOut

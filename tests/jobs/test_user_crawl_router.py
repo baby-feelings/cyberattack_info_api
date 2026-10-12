@@ -12,7 +12,7 @@ class TestTriggerUserCrawl:
         assert resp.status_code == 403
 
     def test_starts_background_crawl(self, client):
-        with patch("app.core.user_crawl_router.run_in_background") as mock_bg:
+        with patch("app.jobs.user_crawl_router.run_in_background") as mock_bg:
             resp = client.post("/admin/user-crawl", headers=HEADERS)
         assert resp.status_code == 202
         mock_bg.assert_called_once()

@@ -35,7 +35,7 @@ OSVは影響範囲の上限（`last_affected`）しか載せない脆弱性が�
 PYSEC-2026-3804は「〜1.14.0」）、`fixed`イベントだけを見ると`fixed_versions`が空になって
 「修正版なし」と誤表示される（実際はPyPIの1.15.0へ上げれば解消した）。`build_findings`は
 `fixed`が空のときだけ`_infer_fixed_versions`で補う: 対象パッケージ（エコシステム一致・
-PyPI流の名前正規化）の`last_affected`を集め、`app.core.registry_client.fetch_latest_version`
+PyPI流の名前正規化）の`last_affected`を集め、`app.depscan.registry_client.fetch_latest_version`
 （PyPI・npm・RubyGems・crates.io・Pub）で最新版を引き、**全ての`last_affected`より新しい
 場合のみ**それを`fixed_versions`にする。版の大小は数値のみの表記（1.2.3）に限って比較し、
 プレリリース等は補わない（誤って「修正版」と示すより安全）。最新版は「影響を受けない版の目安」で
@@ -266,7 +266,7 @@ Organization全体への一括デフォルト設定が無い）:
   セッション認証時は`owner`を強制的にログインユーザー名で上書きし、`repo`パラメータで
   他人のリポジトリを直接指定しても403。**検証ロジック自体（`hmac.compare_digest`での
   APIキー比較、`decode_session_token`でのBearerトークン検証）は
-  `app.core.auth.require_api_key_or_session`に共通化されている**（Issue #219。CODESCAN
+  `app.auth.api_key.require_api_key_or_session`に共通化されている**（Issue #219。CODESCAN
   もGitHubログインを必須にする際、DEPSCAN固有の「オーナー絞り込み」とコアの検証ロジック
   を分離する必要があったため切り出した。DRY原則）。`_resolve_access = 
   require_api_key_or_session` という単純なエイリアスで、DEPSCANの外部から見える
@@ -312,7 +312,7 @@ DEPSCANのGitHubログインを土台に、任意のユーザーが自分専用�
 - **`app.core.user_crawl_runner.run_user_crawls_for_all_accounts`**:
   `GITHUB_USERNAME`以外で、かつSlack Webhookを登録・有効化しているユーザーのみを
   対象に、本人のトークンでDEPSCAN→CODESCAN→DEPSOPSを順に実行し、削除済みリポジトリの
-  掃除（`app.core.repo_cleanup`）も行う。Webhook未登録者は対象外とする設計（通知先が
+  掃除（`app.jobs.repo_cleanup`）も行う。Webhook未登録者は対象外とする設計（通知先が
   無いままDEPSOPSの自動マージのようなリポジトリ変更操作を行うのは想定外の驚きになる
   ため、Webhook登録をopt-inのゲートとして使う）。`USER_CRAWL_CRON_HOUR_UTC`/
   `MINUTE_UTC`で毎日実行、`POST /admin/user-crawl`で手動実行も可能

@@ -16,10 +16,10 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 from app.codescan.crawler import fetch_and_scan_code
 from app.core.config import settings
-from app.core.repo_cleanup import run_repo_cleanup
-from app.core.user_crawl_runner import run_user_crawls_for_all_accounts
 from app.depscan.crawler import fetch_and_scan_dependencies
 from app.depsops.runner import run_dependabot_ops
+from app.jobs.repo_cleanup import run_repo_cleanup
+from app.jobs.user_crawl_runner import run_user_crawls_for_all_accounts
 from app.jvn.crawler import fetch_and_store_jvn
 from app.kev.crawler import fetch_and_store_kev
 from app.mcp_server.mcp_token_expiry import run_mcp_token_expiry_notices

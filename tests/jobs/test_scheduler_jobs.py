@@ -1,4 +1,4 @@
-"""app.core.scheduler_jobs（定期ジョブの定義と登録）のテスト。
+"""app.jobs.scheduler_jobs（定期ジョブの定義と登録）のテスト。
 
 `main.py` から切り出す前と同じジョブID・実行時刻・実行関数で登録されることを固定する
 （本番のスケジュールが変わらないことの回帰ガード）。
@@ -7,11 +7,11 @@ from unittest.mock import MagicMock
 
 from app.codescan.crawler import fetch_and_scan_code
 from app.core.config import settings
-from app.core.repo_cleanup import run_repo_cleanup
-from app.core.scheduler_jobs import ScheduledJob, build_scheduled_jobs, register_jobs
-from app.core.user_crawl_runner import run_user_crawls_for_all_accounts
 from app.depscan.crawler import fetch_and_scan_dependencies
 from app.depsops.runner import run_dependabot_ops
+from app.jobs.repo_cleanup import run_repo_cleanup
+from app.jobs.scheduler_jobs import ScheduledJob, build_scheduled_jobs, register_jobs
+from app.jobs.user_crawl_runner import run_user_crawls_for_all_accounts
 from app.jvn.crawler import fetch_and_store_jvn
 from app.kev.crawler import fetch_and_store_kev
 from app.mcp_server.mcp_token_expiry import run_mcp_token_expiry_notices

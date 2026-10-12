@@ -12,7 +12,7 @@ class TestTriggerRepoCleanup:
         assert resp.status_code == 403
 
     def test_starts_background_cleanup(self, client):
-        with patch("app.core.repo_cleanup_router.run_in_background") as mock_bg:
+        with patch("app.jobs.repo_cleanup_router.run_in_background") as mock_bg:
             resp = client.post("/admin/repo-cleanup", headers=HEADERS)
         assert resp.status_code == 202
         mock_bg.assert_called_once()

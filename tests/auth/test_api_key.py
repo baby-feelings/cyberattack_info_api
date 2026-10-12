@@ -1,4 +1,4 @@
-"""API キー認証（app.core.auth）のテスト。
+"""API キー認証（app.auth.api_key）のテスト。
 require_api_key（管理者用・単一キー）、require_public_api_key
 （管理者用キー or 公開ダッシュボード用キーを許可）、require_api_key_or_session
 （管理者用キー or GitHub ログインセッション JWT を許可。DEPSCAN/CODESCAN 共通）
@@ -15,12 +15,12 @@ os.environ.setdefault("SESSION_SECRET_KEY", "test-session-secret-key-for-pytest"
 import pytest  # noqa: E402
 from fastapi import HTTPException  # noqa: E402
 
-from app.auth.session import create_session_token  # noqa: E402
-from app.core.auth import (  # noqa: E402
+from app.auth.api_key import (  # noqa: E402
     require_api_key,
     require_api_key_or_session,
     require_public_api_key,
 )
+from app.auth.session import create_session_token  # noqa: E402
 from app.core.config import settings  # noqa: E402
 
 # ── require_api_key（管理者用。settings.API_KEY のみ許可） ─────────

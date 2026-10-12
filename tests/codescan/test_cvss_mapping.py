@@ -1,6 +1,6 @@
 """app.codescan.cvss_mapping（Semgrep検知結果からのCVSSベクター推定）のテスト。"""
+from app.codescan.cvss import calculate_base_score
 from app.codescan.cvss_mapping import estimate_cvss_vector
-from app.core.cvss import calculate_base_score
 
 
 class TestEstimateCvssVector:
@@ -59,7 +59,7 @@ class TestEstimateCvssVector:
         assert "UI:R" in vector  # CWE-79 (先頭一致) が優先される
 
     def test_all_fallback_and_mapped_vectors_are_valid_cvss(self):
-        """すべての推定結果が app.core.cvss.calculate_base_score で計算可能であることを確認する。"""
+        """すべての推定結果が codescan.cvss.calculate_base_score で計算可能であることを確認する。"""
         severities = ["ERROR", "WARNING", "INFO"]
         cwe_samples = [
             None, [], ["CWE-798: x"], ["CWE-89: x"], ["CWE-78: x"],

@@ -8,22 +8,23 @@ DEPSCAN / CODESCAN / DEPSOPS / MCP / ZAP / クローラーログ / 横断的共�
 ```
 cyberattack_info_api/
 ├── app/
-│   ├── main.py                 # FastAPI アプリ本体・ルーター include・lifespan のみに専念（定期ジョブ定義は core/scheduler_jobs.py）
+│   ├── main.py                 # FastAPI アプリ本体・ルーター include・lifespan のみに専念（定期ジョブ定義は jobs/scheduler_jobs.py）
 │   │                           # （/admin/* は持たない。各ドメインの router.py の admin_router に定義）
 │   ├── auth/                   # GitHub ログイン・ユーザーアカウント（models〈UserAccount〉・account_store・
-│   │                           # session・github_oauth・dependencies〈認証の依存関数〉）。router.py は
+│   │                           # session・github_oauth・dependencies〈ログイン中ユーザー〉・api_key〈X-API-KEY/公開キー/セッションの認証〉）。router.py は
 │   │                           # github_router〈ログイン・交換コード〉・account_router〈スキャン進捗・通知設定〉を束ねる。
 │   │                           # external_login は、ログインの戻りを別機能（MCP の OAuth）が引き受ける登録口
 │   │                           # （auth は mcp_server を知らない。依存は mcp_server → auth の一方向）
-│   ├── core/                   # 横断的インフラ（config・database・auth・background・crawler_runner・
+│   ├── core/                   # 横断的インフラ（個別のドメインを知らない。config・database・background・crawler_runner・
 │   │                           # crypto〈トークン暗号化〉・db_utils・notifications/〈slack・recipients・base・用途別〉・pagination・
-│   │                           # repo_cleanup〈削除済みリポジトリのデータ削除、Issue #228〉・
-│   │                           # user_crawl_runner〈登録済み他ユーザー向け定期実行、Issue #227〉・
-│   │                           # github/〈api=`GitHubApi`・repo=`GitHubRepo`〈1リポジトリへの共通操作〉・accounts=所有リポジトリ一覧〉・
-│   │                           # issue_filing〈DEPSCAN/CODESCANのIssue起票共通処理〉・
-│   │                           # list_filters〈一覧APIの絞り込み条件の基底クラス〉・
-│   │                           # scheduler_jobs〈定期ジョブの定義と登録〉・security_headers〈nosniff等を全レスポンスに付与〉・共通 schemas。
+│   │                           # osv_client・stix・github/〈api=`GitHubApi`・repo=`GitHubRepo`〈1リポジトリへの共通操作〉・
+│   │                           # accounts=所有リポジトリ一覧〉・issue_filing〈DEPSCAN/CODESCAN/ZAPのIssue起票共通処理〉・
+│   │                           # list_filters〈一覧APIの絞り込み条件の基底クラス〉・security_headers・共通 schemas。
 │   │                           # crawler_runnerは`CrawlJob`、notificationsは`Notifier`の Template Method）
+│   ├── jobs/                   # 各ドメインを束ねる定期実行・一括実行（scheduler_jobs〈定期ジョブの定義と登録〉・
+│   │                           # repo_cleanup〈削除済みリポジトリのデータ削除、Issue #228〉・
+│   │                           # user_crawl_runner〈登録済み他ユーザー向け定期実行、Issue #227〉・各管理API）
+│   ├── taxii/                  # STIX 2.1 / TAXII 2.1 配信（KEV・OSV・JVN。router.py）
 │   ├── kev/                    # CISA KEV ドメイン（models・schemas・crawler・filters〈一覧の絞り込み条件〉・router〈router + admin_router〉）
 │   ├── osv/                    # OSV ドメイン（models・schemas・crawler・filters・router〈router + admin_router〉）
 │   ├── jvn/                    # JVN ドメイン（models・schemas・crawler・filters・router〈router + admin_router〉）
