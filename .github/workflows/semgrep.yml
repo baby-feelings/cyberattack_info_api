@@ -1,0 +1,48 @@
+name: Semgrep — Static Analysis
+
+# PR と main への push で、Semgrep の静的解析（セキュリティ監査ルール）をマージ前に実行する。
+# CODESCAN（毎日）は事後検知のため、PR の時点で止める目的で追加した。
+# ルールは CODESCAN（app/codescan/crawler.py）と同じ p/security-audit と p/secrets。
+# 導入時点の検出は 0 件のため、検出があれば PR を失敗にする（誤検知は該当行に
+# `# nosemgrep: <rule-id>` を理由付きで付ける）。
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  semgrep:
+    name: Static analysis (Semgrep)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: semgrep-cli.txt
+
+      # semgrep は依存を狭くピン留めする外部 CLI のため、アプリの依存（requirements.txt）とは
+      # 別に semgrep-cli.txt からインストールする（Dockerfile の専用 venv と同じ方針）
+      - name: Install semgrep
+        run: pip install -r semgrep-cli.txt
+
+      # --error: 検出があれば終了コードを非 0 にする。--metrics=off: 利用状況を送信しない。
+      # 依存の実体・生成物・ツールの作業ディレクトリは対象外
+      - name: Run semgrep
+        run: >
+          semgrep scan
+          --config p/security-audit --config p/secrets
+          --metrics=off --error
+          --exclude node_modules --exclude htmlcov --exclude .code-review-graph
+          --exclude dashboard/node_modules
+          .

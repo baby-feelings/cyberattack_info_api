@@ -37,6 +37,8 @@ git push -u origin feature/your-feature-name
 | pytest（カバレッジ 90% 未満で失敗） | バックエンドのテスト |
 | ESLint（`--max-warnings` の上限超過で失敗）・tsc・Vitest・Playwright | ダッシュボード |
 | gitleaks（`gitleaks.yml`） | コミット範囲のシークレット検出 |
+| Semgrep（`semgrep.yml`） | 静的解析（`p/security-audit`・`p/secrets`。CODESCAN と同じルール。検出があれば失敗） |
+| Migration（`migration-check.yml`） | PostgreSQL で `upgrade head`・`alembic check`（モデルとのずれ）・`downgrade -1`・再 `upgrade`（`alembic/`・`models.py` の変更時） |
 | OSV-Scanner（`osv-scanner-pr.yml`） | 新規導入された依存の脆弱性 |
 
 定期実行: pip-audit・OSV-Scanner（毎週）、OWASP ZAP（毎週月曜 03:00 JST。`docs/zap-scan.md`）、
