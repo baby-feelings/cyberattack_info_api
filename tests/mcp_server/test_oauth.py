@@ -13,7 +13,7 @@ os.environ.setdefault("SESSION_SECRET_KEY", "test-session-secret-key-for-pytest"
 import pytest  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
-from mcp.server.auth.provider import RegistrationError, TokenError  # noqa: E402
+from mcp.server.auth.provider import RefreshToken, RegistrationError  # noqa: E402
 from mcp.shared.auth import OAuthClientInformationFull  # noqa: E402
 
 from app.auth.models import OAuthClient  # noqa: E402
@@ -118,16 +118,15 @@ class TestProvider:
 
         asyncio.run(scenario())
 
-    def test_refresh_not_supported_yet(self):
+    def test_load_returns_none_for_unknown_tokens(self):
         provider = McpOAuthProvider(TestSessionLocal, ISSUER)
         c = _client()
 
         async def scenario():
-            with pytest.raises(TokenError):
-                await provider.exchange_refresh_token(c, None, [])  # type: ignore[arg-type]
             assert await provider.load_refresh_token(c, "x") is None
             assert await provider.load_access_token("x") is None
-            assert await provider.revoke_token(None) is None  # type: ignore[arg-type]
+            # subject の無いトークンは何もしない
+            await provider.revoke_token(RefreshToken(token="x", client_id="c", scopes=[]))
 
         asyncio.run(scenario())
 

@@ -157,3 +157,32 @@ class OAuthAuthorization(Base):
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, index=True,
     )
+
+
+class OAuthRefreshToken(Base):
+    """OAuth 2.1 のリフレッシュトークン（Issue #303）。トークン本体は保存せず、SHA-256 のみ持つ。
+
+    使うたびに新しいトークンへ交換（ローテーション）し、元のトークンは `used_at` を付けて残す。
+    使用済みのトークンが再び提示されたら盗用の疑いとして、同じ `family_id`（最初の認可から
+    連なる系統）をすべて失効する。
+    """
+
+    __tablename__ = "oauth_refresh_tokens"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    # 最初の認可から連なる系統のID（ローテーションしても変わらない）
+    family_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    client_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    # 認可した本人（GitHub ユーザー名）
+    username: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    scope: Mapped[str] = mapped_column(String(255), nullable=False)
+    resource: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False,
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # 交換済み（ローテーションで使用済み）の日時
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # 失効日時（本人の接続解除・/revoke・盗用の疑いによる系統の失効）
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

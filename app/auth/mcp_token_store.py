@@ -162,3 +162,25 @@ def is_usable(db: Session, claims: McpClaims) -> bool:
         row.last_used_at = now
         db.commit()
     return True
+
+
+def revoke_oauth_tokens(db: Session, username: str, client_id: str) -> int:
+    """本人がそのクライアントに発行した OAuth のアクセストークンを、すべて失効する（件数を返す）。
+
+    接続解除（ダッシュボード）・`/revoke` で使う。手動発行のトークン
+    （oauth_client_id が null）には触れない。
+    """
+    now = _now()
+    rows = (
+        db.query(McpToken)
+        .filter(
+            McpToken.username == username,
+            McpToken.oauth_client_id == client_id,
+            McpToken.revoked_at.is_(None),
+        )
+        .all()
+    )
+    for row in rows:
+        row.revoked_at = now
+    db.commit()
+    return len(rows)
