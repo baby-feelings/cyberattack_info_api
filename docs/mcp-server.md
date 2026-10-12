@@ -87,6 +87,3 @@ claude mcp add --transport http cyberattack-info https://<API のドメイン>/m
   未使用のまま 30 日を過ぎた登録は自動削除、スコープは `mcp:read` のみ
 - PR2: 認可画面（バックエンドの HTML）→ GitHub ログイン → 認可コード → `/token`（PKCE 必須）
 - PR3: リフレッシュトークンのローテーション・失効、ダッシュボードの表示
-
-## 今後
-
