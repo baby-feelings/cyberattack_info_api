@@ -28,7 +28,7 @@ from app.mcp_server.mcp_token_store import (
     token_status,
 )
 from app.mcp_server.models import McpToken
-from app.mcp_server.oauth_connections import disconnect, list_connections
+from app.mcp_server.oauth.connections import disconnect, list_connections
 
 logger = logging.getLogger(__name__)
 

@@ -17,10 +17,10 @@ from sqlalchemy.orm import Session
 from app.auth import external_login
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.mcp_server.oauth_consent import BROWSER_COOKIE, build_consent_router, complete_github_login
-from app.mcp_server.oauth_flow import decode_state
-from app.mcp_server.oauth_provider import McpOAuthProvider
-from app.mcp_server.oauth_services import SCOPE
+from app.mcp_server.oauth.consent import BROWSER_COOKIE, build_consent_router, complete_github_login
+from app.mcp_server.oauth.flow import decode_state
+from app.mcp_server.oauth.provider import McpOAuthProvider
+from app.mcp_server.oauth.services import SCOPE
 
 logger = logging.getLogger(__name__)
 

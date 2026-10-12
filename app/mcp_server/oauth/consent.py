@@ -35,8 +35,9 @@ from app.auth.github_oauth import (
     get_authenticated_user_login,
 )
 from app.core.config import settings
-from app.mcp_server import oauth_clients, oauth_flow
-from app.mcp_server.oauth_services import CONSENT_PATH, SCOPE
+from app.mcp_server.oauth import clients as oauth_clients
+from app.mcp_server.oauth import flow as oauth_flow
+from app.mcp_server.oauth.services import CONSENT_PATH, SCOPE
 
 logger = logging.getLogger(__name__)
 

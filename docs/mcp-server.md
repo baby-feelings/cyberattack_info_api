@@ -82,21 +82,21 @@ claude mcp add --transport http cyberattack-info https://<API のドメイン>/m
 `MCP_OAUTH_ISSUER` が空（既定）の間は何も公開されず、従来のトークン方式のみ動く。
 
 - **PR1（実装済み）**: 認可サーバーのメタデータ（`/.well-known/oauth-authorization-server`、
-  `oauth-protected-resource/mcp`）と動的クライアント登録（`/register`、`oauth_clients` テーブル）
+  `oauth-protected-resource/mcp`）と動的クライアント登録（`/register`、`oauth/clients` テーブル）
 - 登録は誰でも呼べる（標準クライアントはログイン前に登録するため）が、**登録だけではデータは
   見えない**（本人の GitHub ログインと同意が必須）。悪用対策: redirect_uri は https か
   ループバックの http のみ・1 クライアント 5 件まで、1 時間 60 件・総数 1000 件の上限、
   未使用のまま 30 日を過ぎた登録は自動削除、スコープは `mcp:read` のみ
-- **構成**: `oauth_provider.McpOAuthProvider` は SDK との橋渡し（async への変換・SDK の型への詰め替え・
-  DB セッションの管理）だけを担い、判断は `oauth_services` の同期サービス（`AuthorizationService`=
+- **構成**: `oauth/provider.McpOAuthProvider` は SDK との橋渡し（async への変換・SDK の型への詰め替え・
+  DB セッションの管理）だけを担い、判断は `oauth/services` の同期サービス（`AuthorizationService`=
   `/authorize` の検証・認可コードの取得と交換、`RefreshService`=リフレッシュのローテーション・許可の
   取り消し、`AccessTokenService`=アクセストークンの取得と失効）にある。`Session` を引数に取るため、
-  async や HTTP を介さず単体でテストできる（`tests/mcp_server/test_oauth_services.py`）
+  async や HTTP を介さず単体でテストできる（`tests/mcp_server/oauth/test_oauth_services.py`）
 - **PR2（実装済み）**: 認可フロー。`/authorize`（SDK）→ 同意画面 `GET/POST /oauth/consent`
   （バックエンドの HTML）→ GitHub ログイン → 既存の `/auth/github/callback` → 認可コード → `/token`
   - GitHub のログインは**スコープなし**（本人確認だけ。リポジトリの内容は読まず、GitHub の
     トークンも保存しない）。コールバックは既存のものを再利用するため、GitHub OAuth App の
-    設定変更は不要。MCP 用かどうかは署名付き `state`（JWT、`oauth_flow`）で判別し、Cookie は使わない
+    設定変更は不要。MCP 用かどうかは署名付き `state`（JWT、`oauth/flow`）で判別し、Cookie は使わない
   - 認可リクエスト〜認可コードは `oauth_authorizations` の1行（コードはハッシュのみ保存。
     認可リクエスト 10 分・認可コード 5 分・使い捨て）。PKCE（S256）は SDK が検証する
   - アクセストークンは既存の台帳（`mcp_tokens`、`oauth_client_id` 付き）へ **1 時間**で発行し、
@@ -128,7 +128,7 @@ claude mcp add --transport http cyberattack-info https://<API のドメイン>/m
   トークンを失効したのと同じく、本人のそのクライアントへの許可をすべて取り消す）。アプリ名は React の
   テキストとして出し、HTML として解釈しない。MCPトークン欄の失効済み・期限切れは折りたたみ（標準は
   有効なものだけ表示）
-- **使われない接続・登録の自動整理（実装済み）**: 毎日 UTC 23:50 の定期ジョブ（`oauth_cleanup`）。
+- **使われない接続・登録の自動整理（実装済み）**: 毎日 UTC 23:50 の定期ジョブ（`oauth/cleanup`）。
   接続（初回の許可）から 7 日を過ぎても一度も使われていない接続は、「接続解除」と同じ処理で解除する
   （使われた接続には触れない。必要になれば認可し直す）。一度もトークン交換に使われず 30 日を過ぎた
   クライアント登録も削除する。Claude Code は `/mcp` で認証するたびにクライアントを自動登録するため、

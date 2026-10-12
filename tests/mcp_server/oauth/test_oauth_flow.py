@@ -19,15 +19,15 @@ os.environ.setdefault("SESSION_SECRET_KEY", "test-session-secret-key-for-pytest"
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app.mcp_server import oauth_flow  # noqa: E402
 from app.mcp_server.mcp_token import verify_mcp_token  # noqa: E402
 from app.mcp_server.mcp_token_expiry import find_expiring_tokens  # noqa: E402
 from app.mcp_server.mcp_token_store import is_usable, issue_token, list_tokens  # noqa: E402
 from app.mcp_server.models import McpToken, OAuthAuthorization  # noqa: E402
+from app.mcp_server.oauth import flow as oauth_flow  # noqa: E402
 from tests.mcp_server.conftest import ISSUER  # noqa: E402
 
 REDIRECT = "http://localhost:33418/callback"
-_GH = "app.mcp_server.oauth_consent"
+_GH = "app.mcp_server.oauth.consent"
 
 
 def _pkce() -> tuple[str, str]:

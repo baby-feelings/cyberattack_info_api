@@ -11,8 +11,8 @@ from fastapi.testclient import TestClient
 
 from app.auth.router import router as auth_router
 from app.core.database import get_db
-from app.mcp_server import oauth_routes
 from app.mcp_server.management_router import router as mcp_management_router
+from app.mcp_server.oauth import routes as oauth_routes
 from tests.conftest import TestSessionLocal
 
 ISSUER = "https://api.example.test"

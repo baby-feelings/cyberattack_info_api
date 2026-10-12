@@ -24,8 +24,9 @@ from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
-from app.mcp_server import oauth_clients, oauth_flow
-from app.mcp_server.oauth_services import (
+from app.mcp_server.oauth import clients as oauth_clients
+from app.mcp_server.oauth import flow as oauth_flow
+from app.mcp_server.oauth.services import (
     AccessTokenService,
     AuthorizationService,
     IssuedTokens,
