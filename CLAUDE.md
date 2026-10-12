@@ -78,18 +78,18 @@ app/
 │                 #   github_router/account_routerを束ね、認証の依存関数はdependencies.py。mcp_serverを知らない）
 ├── core/         # 横断的インフラ: config/database/auth/background/crawler_runner/crypto/
 │                 #   db_utils/notifications/osv_client/registry_client/pagination/repo_cleanup/
-│                 #   user_crawl_runner/stix/taxii/schemas/github_http（GitHub API認証・
-│                 #   `GitHubApi`）/issue_filing（Issue起票共通化）/list_filters（一覧の絞り込み
+│                 #   user_crawl_runner/stix/taxii/schemas/github/（`GitHubApi`・`GitHubRepo`
+│                 #   〈1リポジトリへの共通操作〉・`list_target_repos`）/issue_filing（Issue起票共通化）/list_filters（一覧の絞り込み
 │                 #   基底）/scheduler_jobs（定期ジョブ定義）。crawler_runner=`CrawlJob`・
 │                 #   notifications=`Notifier`（いずれもTemplate Method）
 ├── kev/          # CISA KEV（models/schemas/crawler/stix/router）
 ├── osv/          # OSV（10エコシステム対応、+packages.py）
 ├── jvn/          # JVN（MyJVN API / RDF-RSS）
 ├── depscan/      # 依存ライブラリ脆弱性スキャン（+issue_management/priority/sbom/
-│                 #   user_scan/github_client/parsers/）
-├── depsops/      # Dependabot PR 自動運用（runner/pr_judge/pr_log_repository/classify/github_client/user_scan）
+│                 #   user_scan/source_files/parsers/）
+├── depsops/      # Dependabot PR 自動運用（runner/pr_judge/pr_log_repository/classify/github_client〈PR操作〉/user_scan）
 ├── codescan/     # 自アプリのコード脆弱性診断（Semgrep静的解析+gitleaksシークレット検知。GitHubログイン
-│                 #   必須〈DEPSCANとセッション共有〉。+github_client/issue_management/cvss_mapping。
+│                 #   必須〈DEPSCANとセッション共有〉。+issue_management/cvss_mapping。
 │                 #   CVSS計算式自体はapp.core.cvss）
 ├── mcp_server/   # AIエージェント向けリモートMCPサーバー（/mcp、Streamable HTTP。ツール=server.py・
 │                 #   認証=auth.py。MCPトークンの台帳/JWT・OAuth 2.1・管理API（management_router）・

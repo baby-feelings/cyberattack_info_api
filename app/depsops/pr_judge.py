@@ -7,6 +7,7 @@ Dependabot が作成した PR を、バージョン更新の種別・CI 有無�
 import re
 from typing import Any
 
+from app.core.github.repo import GitHubRepo
 from app.depsops.classify import classify_bump
 from app.depsops.github_client import (
     get_pull_request,
@@ -73,25 +74,20 @@ def pr_summary(
 class PrJudge:
     """1リポジトリ分の Dependabot PR を判定・処理する（リポジトリ固有の文脈を保持）。
 
-    所有者・リポジトリ名・トークン・CI 有無・Dependabot alert のパッケージ名集合は、
+    対象リポジトリ（`GitHubRepo`）・CI 有無・Dependabot alert のパッケージ名集合は、
     同じリポジトリの全 PR で共通のためインスタンスに持たせ、PR ごとの `judge` は
     PR だけを受け取る（以前は 7 引数の関数だった）。
     """
 
     def __init__(
         self,
-        full_name: str,
-        owner: str,
-        repo: str,
-        token: str,
+        repo: GitHubRepo,
         *,
         has_ci: bool,
         alert_package_names: set[str] | None = None,
     ) -> None:
-        self._full_name = full_name
-        self._owner = owner
         self._repo = repo
-        self._token = token
+        self._full_name = repo.full_name
         self._has_ci = has_ci
         # 対象リポジトリの Open な Dependabot alert のパッケージ名集合
         # （`matches_security_alert` 参照）。取得できなかった場合は None。
@@ -104,17 +100,17 @@ class PrJudge:
             (action, item) のタプル。action は "merged" / "flagged" / "skipped"。
             "merged"/"flagged" の場合 item は Slack 通知用の辞書（"flagged" のみ "reason" 付き）。
         """
-        owner, repo, token = self._owner, self._repo, self._token
+        repo = self._repo
         number = pr["number"]
         bump = classify_bump(pr["title"])
         is_security_update = matches_security_alert(pr["title"], self._alert_package_names)
 
-        detail = get_pull_request(owner, repo, number, token)
+        detail = get_pull_request(repo, number)
         mergeable_state = detail.get("mergeable_state")
         compatibility_badge_url = extract_compatibility_badge_url(detail.get("body"))
 
         if mergeable_state == "dirty":
-            request_rebase(owner, repo, number, token)
+            request_rebase(repo, number)
             item = pr_summary(self._full_name, pr, is_security_update, compatibility_badge_url)
             item["reason"] = "コンフリクトのためリベースを依頼"
             return "flagged", item
@@ -134,7 +130,7 @@ class PrJudge:
             item["reason"] = reason
             return "flagged", item
 
-        merge_pull_request(owner, repo, number, token)
+        merge_pull_request(repo, number)
         return "merged", pr_summary(
             self._full_name, pr, is_security_update, compatibility_badge_url,
         )

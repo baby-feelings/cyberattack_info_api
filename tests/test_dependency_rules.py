@@ -11,6 +11,9 @@ APP = Path(__file__).resolve().parents[1] / "app"
 # (呼び出し元パッケージ, 依存してはいけないパッケージ, 理由)
 FORBIDDEN: list[tuple[str, str, str]] = [
     ("auth", "mcp_server", "auth は mcp_server を知らない（登録口 auth.external_login を使う）"),
+    # ドメイン同士は GitHub クライアントを共有する（core/github）
+    ("codescan", "depscan", "CODESCAN は DEPSCAN に依存しない（共通部分は core/github）"),
+    ("depsops", "depscan", "DEPSOPS は DEPSCAN に依存しない（共通部分は core/github）"),
 ]
 
 

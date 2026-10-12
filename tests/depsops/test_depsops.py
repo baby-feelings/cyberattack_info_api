@@ -15,6 +15,7 @@ os.environ.setdefault("ENVIRONMENT", "development")
 import httpx  # noqa: E402
 import pytest  # noqa: E402
 
+from app.core.github.repo import GitHubRepo  # noqa: E402
 from app.core.notifications import notify_dependabot_ops  # noqa: E402
 from app.crawler_logs.models import CrawlerLog  # noqa: E402
 from app.depsops.classify import classify_bump  # noqa: E402
@@ -109,8 +110,8 @@ class TestListOpenDependabotPrs:
             {"number": 2, "title": "feat: y", "user": {"login": "someone"}},
         ]
         mock_client = _mock_httpx_client(get_return=_mock_response(prs))
-        with patch("app.depsops.github_client.httpx.Client", return_value=mock_client):
-            result = list_open_dependabot_prs("owner", "repo", "token")
+        with patch("httpx.Client", return_value=mock_client):
+            result = list_open_dependabot_prs(GitHubRepo("owner", "repo", "token"))
         assert [pr["number"] for pr in result] == [1]
 
     def test_retries_on_rate_limit_403_then_succeeds(self):
@@ -125,9 +126,9 @@ class TestListOpenDependabotPrs:
         )
         mock_client = _mock_httpx_client()
         mock_client.get = MagicMock(side_effect=[rate_limited, _mock_response(prs)])
-        with patch("app.depsops.github_client.httpx.Client", return_value=mock_client), \
+        with patch("httpx.Client", return_value=mock_client), \
              patch("app.core.retry.time.sleep"):
-            result = list_open_dependabot_prs("owner", "repo", "token")
+            result = list_open_dependabot_prs(GitHubRepo("owner", "repo", "token"))
         assert [pr["number"] for pr in result] == [1]
         assert mock_client.get.call_count == 2
 
@@ -136,9 +137,9 @@ class TestListOpenDependabotPrs:
         request = httpx.Request("GET", "https://api.github.com")
         forbidden = httpx.Response(403, request=request)
         mock_client = _mock_httpx_client(get_return=forbidden)
-        with patch("app.depsops.github_client.httpx.Client", return_value=mock_client):
+        with patch("httpx.Client", return_value=mock_client):
             with pytest.raises(httpx.HTTPStatusError):
-                list_open_dependabot_prs("owner", "repo", "token")
+                list_open_dependabot_prs(GitHubRepo("owner", "repo", "token"))
         mock_client.get.assert_called_once()
 
 
@@ -147,8 +148,8 @@ class TestGetPullRequest:
         mock_client = _mock_httpx_client(
             get_return=_mock_response({"number": 1, "mergeable_state": "clean"})
         )
-        with patch("app.depsops.github_client.httpx.Client", return_value=mock_client):
-            result = get_pull_request("owner", "repo", 1, "token")
+        with patch("httpx.Client", return_value=mock_client):
+            result = get_pull_request(GitHubRepo("owner", "repo", "token"), 1)
         assert result["mergeable_state"] == "clean"
 
 
@@ -159,8 +160,8 @@ class TestMergePullRequest:
             get_return=_mock_response({"head": {"ref": "dependabot/npm/foo"}}),
             delete_return=_mock_response({}),
         )
-        with patch("app.depsops.github_client.httpx.Client", return_value=mock_client):
-            result = merge_pull_request("owner", "repo", 1, "token")
+        with patch("httpx.Client", return_value=mock_client):
+            result = merge_pull_request(GitHubRepo("owner", "repo", "token"), 1)
         assert result == {"merged": True}
         mock_client.delete.assert_called_once()
         assert "dependabot/npm/foo" in mock_client.delete.call_args[0][0]
@@ -173,16 +174,16 @@ class TestMergePullRequest:
         mock_client.delete = MagicMock(
             side_effect=httpx.HTTPStatusError("404", request=MagicMock(), response=MagicMock())
         )
-        with patch("app.depsops.github_client.httpx.Client", return_value=mock_client):
-            result = merge_pull_request("owner", "repo", 1, "token")
+        with patch("httpx.Client", return_value=mock_client):
+            result = merge_pull_request(GitHubRepo("owner", "repo", "token"), 1)
         assert result == {"merged": True}
 
 
 class TestRequestRebase:
     def test_posts_rebase_comment(self):
         mock_client = _mock_httpx_client(post_return=_mock_response({}))
-        with patch("app.depsops.github_client.httpx.Client", return_value=mock_client):
-            request_rebase("owner", "repo", 1, "token")
+        with patch("httpx.Client", return_value=mock_client):
+            request_rebase(GitHubRepo("owner", "repo", "token"), 1)
         assert mock_client.post.call_args.kwargs["json"] == {"body": "@dependabot rebase"}
 
 
@@ -191,14 +192,14 @@ class TestHasCiWorkflows:
         mock_client = _mock_httpx_client(
             get_return=_mock_response([{"name": "ci.yml"}], status_code=200)
         )
-        with patch("app.depsops.github_client.httpx.Client", return_value=mock_client):
-            assert has_ci_workflows("owner", "repo", "token") is True
+        with patch("httpx.Client", return_value=mock_client):
+            assert has_ci_workflows(GitHubRepo("owner", "repo", "token")) is True
 
     def test_returns_false_on_404(self):
         resp = _mock_response({"message": "Not Found"}, status_code=404)
         mock_client = _mock_httpx_client(get_return=resp)
-        with patch("app.depsops.github_client.httpx.Client", return_value=mock_client):
-            assert has_ci_workflows("owner", "repo", "token") is False
+        with patch("httpx.Client", return_value=mock_client):
+            assert has_ci_workflows(GitHubRepo("owner", "repo", "token")) is False
 
     def test_returns_false_on_real_404_response(self):
         """実際のhttpx.Responseで404を返した場合（raise_for_status()が実際に例外を送出する
@@ -206,8 +207,8 @@ class TestHasCiWorkflows:
         request = httpx.Request("GET", "https://api.github.com")
         resp_404 = httpx.Response(404, request=request)
         mock_client = _mock_httpx_client(get_return=resp_404)
-        with patch("app.depsops.github_client.httpx.Client", return_value=mock_client):
-            assert has_ci_workflows("owner", "repo", "token") is False
+        with patch("httpx.Client", return_value=mock_client):
+            assert has_ci_workflows(GitHubRepo("owner", "repo", "token")) is False
         mock_client.get.assert_called_once()
 
     def test_retries_on_transient_error_then_succeeds(self):
@@ -217,9 +218,9 @@ class TestHasCiWorkflows:
         success = _mock_response([{"name": "ci.yml"}], status_code=200)
         mock_client = _mock_httpx_client()
         mock_client.get = MagicMock(side_effect=[transient, success])
-        with patch("app.depsops.github_client.httpx.Client", return_value=mock_client), \
+        with patch("httpx.Client", return_value=mock_client), \
              patch("app.core.retry.time.sleep"):
-            assert has_ci_workflows("owner", "repo", "token") is True
+            assert has_ci_workflows(GitHubRepo("owner", "repo", "token")) is True
         assert mock_client.get.call_count == 2
 
 
@@ -227,8 +228,8 @@ class TestListOpenDependabotAlerts:
     def test_returns_alert_list(self):
         alerts = [{"dependency": {"package": {"name": "requests"}}}]
         mock_client = _mock_httpx_client(get_return=_mock_response(alerts))
-        with patch("app.depsops.github_client.httpx.Client", return_value=mock_client):
-            result = list_open_dependabot_alerts("owner", "repo", "token")
+        with patch("httpx.Client", return_value=mock_client):
+            result = list_open_dependabot_alerts(GitHubRepo("owner", "repo", "token"))
         assert result == alerts
         call = mock_client.get.call_args
         assert call.args[0].endswith("/dependabot/alerts")
@@ -241,9 +242,9 @@ class TestListOpenDependabotAlerts:
         )
         mock_client = _mock_httpx_client(get_return=resp)
         import pytest
-        with patch("app.depsops.github_client.httpx.Client", return_value=mock_client):
+        with patch("httpx.Client", return_value=mock_client):
             with pytest.raises(httpx.HTTPStatusError):
-                list_open_dependabot_alerts("owner", "repo", "token")
+                list_open_dependabot_alerts(GitHubRepo("owner", "repo", "token"))
 
 
 # ──────────────────────────────────────────────────────────────
@@ -319,7 +320,7 @@ class TestProcessPr:
             "app.depsops.pr_judge.get_pull_request", return_value={"mergeable_state": "dirty"},
         ), patch("app.depsops.pr_judge.request_rebase") as mock_rebase, \
            patch("app.depsops.pr_judge.merge_pull_request") as mock_merge:
-            action, item = PrJudge("u/r", "u", "r", "token", has_ci=True).judge(self._pr())
+            action, item = PrJudge(GitHubRepo("u", "r", "token"), has_ci=True).judge(self._pr())
         assert action == "flagged"
         assert "リベース" in item["reason"]
         mock_rebase.assert_called_once()
@@ -329,7 +330,7 @@ class TestProcessPr:
         with patch(
             "app.depsops.pr_judge.get_pull_request", return_value={"mergeable_state": "clean"},
         ), patch("app.depsops.pr_judge.merge_pull_request") as mock_merge:
-            action, item = PrJudge("u/r", "u", "r", "token", has_ci=False).judge(self._pr())
+            action, item = PrJudge(GitHubRepo("u", "r", "token"), has_ci=False).judge(self._pr())
         assert action == "flagged"
         assert "CI未設定" in item["reason"]
         mock_merge.assert_not_called()
@@ -339,7 +340,7 @@ class TestProcessPr:
         with patch(
             "app.depsops.pr_judge.get_pull_request", return_value={"mergeable_state": "clean"},
         ), patch("app.depsops.pr_judge.merge_pull_request") as mock_merge:
-            action, item = PrJudge("u/r", "u", "r", "token", has_ci=True).judge(pr)
+            action, item = PrJudge(GitHubRepo("u", "r", "token"), has_ci=True).judge(pr)
         assert action == "flagged"
         assert "メジャー" in item["reason"]
         mock_merge.assert_not_called()
@@ -349,7 +350,7 @@ class TestProcessPr:
         with patch(
             "app.depsops.pr_judge.get_pull_request", return_value={"mergeable_state": "clean"},
         ), patch("app.depsops.pr_judge.merge_pull_request") as mock_merge:
-            action, item = PrJudge("u/r", "u", "r", "token", has_ci=True).judge(pr)
+            action, item = PrJudge(GitHubRepo("u", "r", "token"), has_ci=True).judge(pr)
         assert action == "flagged"
         assert "判定不可" in item["reason"]
         mock_merge.assert_not_called()
@@ -358,7 +359,7 @@ class TestProcessPr:
         with patch(
             "app.depsops.pr_judge.get_pull_request", return_value={"mergeable_state": "unstable"},
         ), patch("app.depsops.pr_judge.merge_pull_request") as mock_merge:
-            action, item = PrJudge("u/r", "u", "r", "token", has_ci=True).judge(self._pr())
+            action, item = PrJudge(GitHubRepo("u", "r", "token"), has_ci=True).judge(self._pr())
         assert action == "flagged"
         mock_merge.assert_not_called()
 
@@ -366,7 +367,7 @@ class TestProcessPr:
         with patch(
             "app.depsops.pr_judge.get_pull_request", return_value={"mergeable_state": "clean"},
         ), patch("app.depsops.pr_judge.merge_pull_request") as mock_merge:
-            action, item = PrJudge("u/r", "u", "r", "token", has_ci=True).judge(self._pr())
+            action, item = PrJudge(GitHubRepo("u", "r", "token"), has_ci=True).judge(self._pr())
         assert action == "merged"
         assert item["repo_full_name"] == "u/r"
         assert item["is_security_update"] is None  # alert_package_names未指定時
@@ -378,7 +379,7 @@ class TestProcessPr:
             "app.depsops.pr_judge.get_pull_request", return_value={"mergeable_state": "clean"},
         ), patch("app.depsops.pr_judge.merge_pull_request"):
             action, item = PrJudge(
-                "u/r", "u", "r", "token", has_ci=True, alert_package_names={"requests"},
+                GitHubRepo("u", "r", "token"), has_ci=True, alert_package_names={"requests"},
             ).judge(pr)
         assert action == "merged"
         assert item["is_security_update"] is True
@@ -389,7 +390,7 @@ class TestProcessPr:
             "app.depsops.pr_judge.get_pull_request", return_value={"mergeable_state": "clean"},
         ), patch("app.depsops.pr_judge.merge_pull_request"):
             action, item = PrJudge(
-                "u/r", "u", "r", "token", has_ci=True, alert_package_names=set(),
+                GitHubRepo("u", "r", "token"), has_ci=True, alert_package_names=set(),
             ).judge(pr)
         assert action == "merged"
         assert item["is_security_update"] is False
@@ -407,7 +408,7 @@ class TestProcessPr:
         }
         with patch("app.depsops.pr_judge.get_pull_request", return_value=detail), \
              patch("app.depsops.pr_judge.merge_pull_request"):
-            action, item = PrJudge("u/r", "u", "r", "token", has_ci=True).judge(pr)
+            action, item = PrJudge(GitHubRepo("u", "r", "token"), has_ci=True).judge(pr)
         assert action == "merged"
         assert item["compatibility_badge_url"] == (
             "https://dependabot-badges.githubapp.com/badges/compatibility_score"
@@ -420,7 +421,7 @@ class TestProcessPr:
             "app.depsops.pr_judge.get_pull_request",
             return_value={"mergeable_state": "clean", "body": "no badge here"},
         ), patch("app.depsops.pr_judge.merge_pull_request"):
-            action, item = PrJudge("u/r", "u", "r", "token", has_ci=True).judge(self._pr())
+            action, item = PrJudge(GitHubRepo("u", "r", "token"), has_ci=True).judge(self._pr())
         assert action == "merged"
         assert item["compatibility_badge_url"] is None
 
@@ -556,7 +557,7 @@ class TestRunDependabotOps:
             {"number": 2, "title": "Bump y from 1.0.0 to 2.0.0"},  # major → flagged
         ]
 
-        def _get_pr(owner, repo, number, token):
+        def _get_pr(repo, number):
             return {"mergeable_state": "clean"}
 
         with patch("app.depsops.runner.list_target_repos", return_value=repos), \

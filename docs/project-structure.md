@@ -19,7 +19,7 @@ cyberattack_info_api/
 │   │                           # crypto〈トークン暗号化〉・db_utils・notifications・pagination・
 │   │                           # repo_cleanup〈削除済みリポジトリのデータ削除、Issue #228〉・
 │   │                           # user_crawl_runner〈登録済み他ユーザー向け定期実行、Issue #227〉・
-│   │                           # github_http〈GitHub API認証ヘッダー・`GitHubApi`クライアントの共通化〉・
+│   │                           # github/〈api=`GitHubApi`・repo=`GitHubRepo`〈1リポジトリへの共通操作〉・accounts=所有リポジトリ一覧〉・
 │   │                           # issue_filing〈DEPSCAN/CODESCANのIssue起票共通処理〉・
 │   │                           # list_filters〈一覧APIの絞り込み条件の基底クラス〉・
 │   │                           # scheduler_jobs〈定期ジョブの定義と登録〉・security_headers〈nosniff等を全レスポンスに付与〉・共通 schemas。
@@ -33,7 +33,7 @@ cyberattack_info_api/
 │   │                           # 〈router + admin_router〉。crawler.py 相当は runner.py〈走査の組み立て〉・pr_judge.py〈PR判定〉・pr_log_repository.py〈履歴DB操作〉。
 │   │                           # 登録済み他ユーザー向けのper-user実行はuser_scan.py）
 │   ├── codescan/                # 自アプリコード脆弱性診断（CODESCAN）ドメイン（Semgrep静的解析 + gitleaks
-│   │                           # シークレット検知。github_client・issue_management・cvss_mapping含む）
+│   │                           # シークレット検知。issue_management・cvss_mapping含む）
 │   ├── mcp_server/             # AIエージェント向けリモートMCPサーバー（/mcp、Streamable HTTP。server〈ツール〉・
 │   │                           # auth〈admin/public/userの認証。台帳で失効確認〉。詳細は docs/mcp-server.md）
 │   ├── zapscan/                # OWASP ZAPの結果→GitHub Issue起票（`python -m app.zapscan`。docs/zap-scan.md）

@@ -15,20 +15,17 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.crawler_runner import CrawlCounters, CrawlJob
+from app.core.github.accounts import list_target_repos
+from app.core.github.repo import GitHubRepo
 from app.core.notifications import notify_dependency_findings
 from app.core.osv_client import fetch_vuln_by_id, parse_severity, query_versions_batch
 from app.core.registry_client import fetch_latest_version, is_newer_version
 from app.crawler_logs.writer import now_utc
-from app.depscan.github_client import (
-    get_file_content,
-    get_repo_tree,
-    get_source_files,
-    list_target_repos,
-)
 from app.depscan.issue_management import close_resolved_repo_issues, file_github_issues
 from app.depscan.models import DependencyFinding
 from app.depscan.parsers import LOCKFILE_FILENAMES, parse_manifest
 from app.depscan.reachability import SOURCE_EXTENSIONS, check_reachability
+from app.depscan.source_files import collect_source_files
 
 logger = logging.getLogger(__name__)
 
@@ -38,12 +35,12 @@ FindingKey = tuple[str, str, str, str]
 DepKey = tuple[str, str, str]
 
 
-def _discover_manifests(owner: str, repo: str, default_branch: str, token: str) -> list[str]:
+def _discover_manifests(repo: GitHubRepo, default_branch: str) -> list[str]:
     """リポジトリ内の対応ロックファイルのパス一覧を返す（サブディレクトリ含む）。"""
     try:
-        paths = get_repo_tree(owner, repo, default_branch, token)
+        paths = repo.tree(default_branch)
     except httpx.HTTPError as exc:
-        logger.warning("Failed to get tree for %s/%s: %s", owner, repo, exc)
+        logger.warning("Failed to get tree for %s: %s", repo.full_name, exc)
         return []
     return [p for p in paths if p.rsplit("/", 1)[-1] in LOCKFILE_FILENAMES]
 
@@ -72,11 +69,11 @@ def collect_dependencies(
 
     for i, repo_info in enumerate(repos, start=1):
         full_name = repo_info["full_name"]
-        owner, repo = full_name.split("/", 1)
+        repo = GitHubRepo.from_full_name(full_name, token)
         default_branch = repo_info.get("default_branch") or "main"
         logger.info("DEPSCAN: [%d/%d] scanning %s", i, len(repos), full_name)
 
-        manifest_paths = _discover_manifests(owner, repo, default_branch, token)
+        manifest_paths = _discover_manifests(repo, default_branch)
         if manifest_paths:
             logger.info(
                 "DEPSCAN: [%d/%d] %s: %d manifest(s) found: %s",
@@ -86,7 +83,7 @@ def collect_dependencies(
         for path in manifest_paths:
             filename = path.rsplit("/", 1)[-1]
             try:
-                content = get_file_content(owner, repo, path, token)
+                content = repo.file_content(path)
             except httpx.HTTPError as exc:
                 logger.warning("Failed to fetch %s in %s: %s", path, full_name, exc)
                 continue
@@ -269,15 +266,15 @@ def _apply_reachability(
 
     source_cache: dict[tuple[str, str], dict[str, str]] = {}
     for full_name, ecosystems in by_repo.items():
-        owner, repo = full_name.split("/", 1)
+        repo = GitHubRepo.from_full_name(full_name, token)
         default_branch = branch_map.get(full_name, "main")
         for ecosystem in ecosystems:
             extensions = SOURCE_EXTENSIONS.get(ecosystem)
             if extensions is None:
                 continue
             try:
-                source_cache[(full_name, ecosystem)] = get_source_files(
-                    owner, repo, default_branch, token, extensions,
+                source_cache[(full_name, ecosystem)] = collect_source_files(
+                    repo, default_branch, extensions,
                 )
             except httpx.HTTPError as exc:
                 logger.warning(

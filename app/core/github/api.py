@@ -1,12 +1,8 @@
-"""GitHub REST API 呼び出しの共通部分（DEPSCAN/CODESCAN/DEPSOPS で共有）。
+"""GitHub REST API 呼び出しの共通部分（認証ヘッダー・接続・リトライ方針）。
 
-3つのドメイン（`app.depscan.github_client` / `app.codescan.github_client` /
-`app.depsops.github_client`）はそれぞれ異なる目的（ロックファイル収集・
-tarball取得・PR運用）で GitHub API を呼ぶため、高レベルの関数群は意図的に
-分離している（ドメインごとの責務が異なるため、まとめると低凝集になる）。
-ただし認証ヘッダーの組み立てと API ベース URL は3ドメインで完全に同一であり、
-コピペで揃え続けるのは事故の元（ヘッダー仕様変更時の修正漏れ）になるため、
-ここに一箇所だけ切り出す（DRY原則）。
+リポジトリ単位の操作は `app.core.github.repo.GitHubRepo`、ユーザー単位の操作は
+`app.core.github.accounts` が、この `GitHubApi` を使って行う。認証ヘッダーの仕様や API ベース URL を
+1か所に集約し、仕様変更時の修正漏れを防ぐ（DRY原則）。
 """
 
 import logging

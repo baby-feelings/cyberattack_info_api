@@ -1,6 +1,7 @@
 """app.depsops.user_scan.run_dependabot_ops_for_user（Issue #227）のテスト。"""
 from unittest.mock import patch
 
+from app.core.github.repo import GitHubRepo
 from app.depsops.models import DependabotPrLog
 from app.depsops.user_scan import run_dependabot_ops_for_user
 
@@ -23,7 +24,7 @@ class TestRunDependabotOpsForUser:
              patch("app.depsops.user_scan.notify_dependabot_ops") as mock_notify:
             run_dependabot_ops_for_user("octocat", "gho_token", _WEBHOOK)
 
-        mock_merge.assert_called_once_with("octocat", "repo", 1, "gho_token")
+        mock_merge.assert_called_once_with(GitHubRepo("octocat", "repo", "gho_token"), 1)
         mock_notify.assert_called_once()
         assert mock_notify.call_args.kwargs["recipients"] == [_WEBHOOK]
         merged_arg = mock_notify.call_args[0][0]

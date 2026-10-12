@@ -16,7 +16,7 @@ Contents: Read-only + **Issues: Write** 推奨）を使用する。
 `list_target_repos` は `GET /user/repos`（`affiliation=owner`）を使う（`GET /users/{username}/repos`
 は公開リポジトリのみ返す仕様のため、プライベートリポジトリを含めるにはこちらが必須。PR #72で修正）。
 
-ロックファイル検出は `app.depscan.github_client.get_repo_tree` で `git/trees/{branch}?recursive=1`
+ロックファイル検出は `GitHubRepo.tree`（`app.core.github.repo`）で `git/trees/{branch}?recursive=1`
 を使い、サブディレクトリ（monorepo）も含めて全ファイルパスを1回のAPI呼び出しで取得する。
 対応する10エコシステムのロックファイル名は `app.depscan.parsers.LOCKFILE_FILENAMES` で判定する。
 
@@ -316,14 +316,16 @@ DEPSCANのGitHubログインを土台に、任意のユーザーが自分専用�
   という別名だった（同じ「登録ユーザー自身のリポジトリに対する daily crawl のper-user版」
   という設計にファイル名が揃っていなかった）。命名一貫性のため`app.depsops.user_runner`を
   `app.depsops.user_scan`にリネームした（`run_dependabot_ops_for_user`関数自体は変更なし）
-- **GitHub API呼び出しは`app.core.github_http.GitHubApi`に集約**: 3ファイル
-  （`app.depscan.github_client`・`app.codescan.github_client`・`app.depsops.github_client`）が
-  関数ごとに「`httpx.Client`を開く→認証ヘッダー付与→`request_with_retry`」をコピペしていたため、
-  接続とリトライ方針をカプセル化するクラスにした（`with GitHubApi(token, timeout=...) as api:`で
-  `api.get/put/patch`=冪等なのでリトライ、`api.post/delete`=重複リスクがあるためリトライしない。
-  `post`は`raise_for_status`、`delete`は従来どおり例外にしない）。各`github_client`の公開関数
-  （`list_target_repos`等）のシグネチャは不変で、高レベル関数群のドメイン分離は意図的な設計のため維持。
-  テストは`httpx.Client`をpatchするため、クラス化後もそのまま動く。
+- **GitHub API呼び出しは`app/core/github/`に集約**: `api.py`の`GitHubApi`（接続・認証ヘッダー・
+  リトライ方針。`with GitHubApi(token, timeout=...) as api:`で`api.get/put/patch`=冪等なのでリトライ、
+  `api.post/delete`=重複リスクがあるためリトライしない。`post`は`raise_for_status`、`delete`は例外にしない）、
+  `repo.py`の`GitHubRepo(owner, name, token)`（1リポジトリへの共通操作: `exists`・`tree`・`file_content`・
+  `tarball`・Issue操作。`(owner, repo, token)`の3点セットを引数で受け渡していたデータの塊を値オブジェクト化。
+  tokenはreprに出さない）、`accounts.py`の`list_target_repos`。ドメイン固有の処理は各ドメインに残し
+  `GitHubRepo`の`api()`/`path()`で組み立てる（DEPSOPSのPR操作=`depsops/github_client.py`は`repo: GitHubRepo`を
+  受け取る、DEPSCANのソース収集=`depscan/source_files.py`）。CODESCAN→DEPSCANの依存は無い
+  （`tests/test_dependency_rules.py`で検査）。テストは`httpx.Client`、または`GitHubRepo`のメソッド
+  （`patch("app.core.github.repo.GitHubRepo.find_open_issue", autospec=True)`で第1引数にrepoが入る）をpatchする。
 - **ドメイン間で使う関数は公開名にする**: `user_scan`/`router`が他モジュールから呼ぶ15関数
   （`scan_repo`・`build_findings`・`scan_target_repos`・`file_github_issues`等）は`_`始まりの
   private名のままimportされていた（カプセル化の破れ）ため、`_`を外して公開名にした。

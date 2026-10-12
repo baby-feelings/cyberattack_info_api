@@ -1,10 +1,10 @@
-"""app.core.github_http（認証ヘッダー・GitHubApi クライアント）のテスト。"""
+"""app.core.github.api（認証ヘッダー・GitHubApi クライアント）のテスト。"""
 from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
 
-from app.core.github_http import GITHUB_API_BASE, GitHubApi, github_headers
+from app.core.github.api import GITHUB_API_BASE, GitHubApi, github_headers
 
 
 def _client_cm(client: MagicMock) -> MagicMock:
@@ -39,7 +39,7 @@ class TestGitHubApi:
     def test_opens_authenticated_client_with_timeout_and_closes_it(self):
         client = MagicMock()
         cm = _client_cm(client)
-        with patch("app.core.github_http.httpx.Client", return_value=cm) as mock_cls:
+        with patch("app.core.github.api.httpx.Client", return_value=cm) as mock_cls:
             with GitHubApi("tok", timeout=12.0):
                 pass
 
@@ -51,7 +51,7 @@ class TestGitHubApi:
 
     def test_follow_redirects_is_passed_only_when_requested(self):
         cm = _client_cm(MagicMock())
-        with patch("app.core.github_http.httpx.Client", return_value=cm) as mock_cls:
+        with patch("app.core.github.api.httpx.Client", return_value=cm) as mock_cls:
             with GitHubApi("tok", follow_redirects=True):
                 pass
         assert mock_cls.call_args.kwargs["follow_redirects"] is True
@@ -59,7 +59,7 @@ class TestGitHubApi:
     def test_get_prefixes_api_base_and_forwards_params(self):
         client = MagicMock()
         client.get.return_value = _ok()
-        with patch("app.core.github_http.httpx.Client", return_value=_client_cm(client)):
+        with patch("app.core.github.api.httpx.Client", return_value=_client_cm(client)):
             with GitHubApi("tok") as api:
                 api.get("/repos/o/r/pulls", params={"state": "open"})
 
@@ -73,7 +73,7 @@ class TestGitHubApi:
             client = MagicMock()
             transient = _ok(503)
             getattr(client, verb).side_effect = [transient, _ok(200)]
-            with patch("app.core.github_http.httpx.Client", return_value=_client_cm(client)), \
+            with patch("app.core.github.api.httpx.Client", return_value=_client_cm(client)), \
                  patch("app.core.retry.time.sleep"):
                 with GitHubApi("tok") as api:
                     resp = getattr(api, verb)("/x")
@@ -83,7 +83,7 @@ class TestGitHubApi:
     def test_post_does_not_retry_and_raises_on_http_error(self):
         client = MagicMock()
         client.post.return_value = _ok(503)
-        with patch("app.core.github_http.httpx.Client", return_value=_client_cm(client)):
+        with patch("app.core.github.api.httpx.Client", return_value=_client_cm(client)):
             with GitHubApi("tok") as api, pytest.raises(httpx.HTTPStatusError):
                 api.post("/repos/o/r/issues", json={"title": "t"})
 
@@ -93,7 +93,7 @@ class TestGitHubApi:
         client = MagicMock()
         not_found = _ok(404)
         client.delete.return_value = not_found
-        with patch("app.core.github_http.httpx.Client", return_value=_client_cm(client)):
+        with patch("app.core.github.api.httpx.Client", return_value=_client_cm(client)):
             with GitHubApi("tok") as api:
                 resp = api.delete("/repos/o/r/git/refs/heads/b")
 

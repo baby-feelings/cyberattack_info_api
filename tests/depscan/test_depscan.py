@@ -15,6 +15,7 @@ os.environ.setdefault("ENVIRONMENT", "development")
 import httpx  # noqa: E402
 
 from app.auth.session import create_session_token  # noqa: E402
+from app.core.github.repo import GitHubRepo  # noqa: E402
 from app.core.notifications import notify_dependency_findings  # noqa: E402
 from app.depscan.crawler import (  # noqa: E402
     _discover_manifests,
@@ -23,16 +24,6 @@ from app.depscan.crawler import (  # noqa: E402
     fetch_and_scan_dependencies,
     resolve_stale_findings,
     upsert_findings,
-)
-from app.depscan.github_client import (  # noqa: E402
-    add_issue_comment,
-    close_issue,
-    create_issue,
-    find_open_issue,
-    get_file_content,
-    get_repo_tree,
-    list_target_repos,
-    repo_exists,
 )
 from app.depscan.models import DependencyFinding, RepoAssetContext, UserScan  # noqa: E402
 from app.depscan.user_scan import (  # noqa: E402
@@ -46,6 +37,9 @@ TEST_API_KEY = "test-api-key-for-pytest"
 HEADERS = {"X-API-KEY": TEST_API_KEY}
 
 _NOW = datetime.now(UTC)
+
+
+_REPO = "app.core.github.repo.GitHubRepo"
 
 
 def _make_finding(db_session, **kwargs) -> DependencyFinding:
@@ -561,222 +555,6 @@ class TestExportDepscanSbom:
 
 
 # ──────────────────────────────────────────────────────────────
-# app.depscan.github_client
-# ──────────────────────────────────────────────────────────────
-
-
-class TestListTargetRepos:
-    def test_excludes_fork_and_archived(self):
-        repos = [
-            {"full_name": "u/a", "fork": False, "archived": False},
-            {"full_name": "u/fork", "fork": True, "archived": False},
-            {"full_name": "u/old", "fork": False, "archived": True},
-        ]
-        mock_client = _mock_httpx_client(get_return=_mock_response(repos))
-        with patch("app.depscan.github_client.httpx.Client", return_value=mock_client):
-            result = list_target_repos("u", "token")
-        assert [r["full_name"] for r in result] == ["u/a"]
-
-    def test_paginates_until_short_page(self):
-        page1 = [{"full_name": f"u/r{i}", "fork": False, "archived": False} for i in range(100)]
-        page2 = [{"full_name": "u/last", "fork": False, "archived": False}]
-        responses = [_mock_response(page1), _mock_response(page2)]
-        mock_client = _mock_httpx_client()
-        mock_client.get = MagicMock(side_effect=responses)
-        with patch("app.depscan.github_client.httpx.Client", return_value=mock_client):
-            result = list_target_repos("u", "token")
-        assert len(result) == 101
-        assert mock_client.get.call_count == 2
-
-    def test_uses_authenticated_user_repos_endpoint(self):
-        """プライベートリポジトリも取得できるよう /user/repos (affiliation=owner) を使う。"""
-        repos = [{"full_name": "u/private", "fork": False, "archived": False, "private": True}]
-        mock_client = _mock_httpx_client(get_return=_mock_response(repos))
-        with patch("app.depscan.github_client.httpx.Client", return_value=mock_client):
-            list_target_repos("u", "token")
-        call = mock_client.get.call_args
-        assert call.args[0].endswith("/user/repos")
-        assert call.kwargs["params"]["affiliation"] == "owner"
-
-
-class TestRepoExists:
-    def test_returns_true_when_repo_found(self):
-        mock_client = _mock_httpx_client(get_return=_mock_response({"full_name": "u/r"}))
-        with patch("app.depscan.github_client.httpx.Client", return_value=mock_client):
-            assert repo_exists("u", "r", "token") is True
-
-    def test_returns_false_on_404(self):
-        resp = MagicMock()
-        resp.status_code = 404
-        resp.raise_for_status = MagicMock(
-            side_effect=httpx.HTTPStatusError("404", request=MagicMock(), response=resp),
-        )
-        mock_client = _mock_httpx_client(get_return=resp)
-        with patch("app.depscan.github_client.httpx.Client", return_value=mock_client):
-            assert repo_exists("u", "deleted-repo", "token") is False
-
-    def test_returns_none_on_other_http_status_error(self):
-        resp = MagicMock()
-        resp.status_code = 401
-        resp.raise_for_status = MagicMock(
-            side_effect=httpx.HTTPStatusError("401", request=MagicMock(), response=resp),
-        )
-        mock_client = _mock_httpx_client(get_return=resp)
-        with patch("app.depscan.github_client.httpx.Client", return_value=mock_client):
-            assert repo_exists("u", "r", "token") is None
-
-    def test_returns_none_on_transport_error(self):
-        mock_client = _mock_httpx_client()
-        mock_client.get = MagicMock(side_effect=httpx.ConnectError("boom"))
-        with patch("app.depscan.github_client.httpx.Client", return_value=mock_client):
-            assert repo_exists("u", "r", "token") is None
-
-
-class TestGetRepoTree:
-    def test_returns_blob_paths_only(self):
-        tree_data = {
-            "tree": [
-                {"path": "requirements.txt", "type": "blob"},
-                {"path": "app", "type": "tree"},
-            ],
-            "truncated": False,
-        }
-        mock_client = _mock_httpx_client(get_return=_mock_response(tree_data))
-        with patch("app.depscan.github_client.httpx.Client", return_value=mock_client):
-            paths = get_repo_tree("owner", "repo", "main", "token")
-        assert paths == ["requirements.txt"]
-
-
-class TestGetFileContent:
-    def test_decodes_base64_content(self):
-        import base64
-        encoded = base64.b64encode(b"fastapi==0.115.6\n").decode()
-        mock_client = _mock_httpx_client(
-            get_return=_mock_response({"content": encoded, "encoding": "base64"})
-        )
-        with patch("app.depscan.github_client.httpx.Client", return_value=mock_client):
-            content = get_file_content("owner", "repo", "requirements.txt", "token")
-        assert content == "fastapi==0.115.6\n"
-
-    def test_unsupported_encoding_raises(self):
-        mock_client = _mock_httpx_client(
-            get_return=_mock_response({"content": "x", "encoding": "utf-8"})
-        )
-        import pytest
-        with patch("app.depscan.github_client.httpx.Client", return_value=mock_client):
-            with pytest.raises(ValueError):
-                get_file_content("owner", "repo", "path", "token")
-
-
-class TestGetSourceFiles:
-    def test_filters_by_extension_and_fetches_content(self):
-        from app.depscan.github_client import get_source_files
-
-        paths = ["app/main.py", "README.md", "app/utils.py"]
-        with patch("app.depscan.github_client.get_repo_tree", return_value=paths), \
-             patch(
-                 "app.depscan.github_client.get_file_content",
-                 side_effect=lambda owner, repo, path, token: f"# {path}",
-             ):
-            files = get_source_files("owner", "repo", "main", "token", (".py",))
-
-        assert set(files.keys()) == {"app/main.py", "app/utils.py"}
-        assert files["app/main.py"] == "# app/main.py"
-
-    def test_excludes_vendored_directories(self):
-        from app.depscan.github_client import get_source_files
-
-        paths = ["app/main.py", "node_modules/pkg/index.js"]
-        with patch("app.depscan.github_client.get_repo_tree", return_value=paths), \
-             patch("app.depscan.github_client.get_file_content", return_value="content"):
-            files = get_source_files("owner", "repo", "main", "token", (".py", ".js"))
-
-        assert list(files.keys()) == ["app/main.py"]
-
-    def test_fetch_failure_for_one_file_does_not_fail_others(self):
-        from app.depscan.github_client import get_source_files
-
-        paths = ["a.py", "b.py"]
-        with patch("app.depscan.github_client.get_repo_tree", return_value=paths), \
-             patch(
-                 "app.depscan.github_client.get_file_content",
-                 side_effect=[
-                     httpx.HTTPStatusError("404", request=MagicMock(), response=MagicMock()),
-                     "content-b",
-                 ],
-             ):
-            files = get_source_files("owner", "repo", "main", "token", (".py",))
-
-        assert files == {"b.py": "content-b"}
-
-    def test_oversized_file_is_skipped(self):
-        from app.depscan.github_client import get_source_files
-
-        with patch("app.depscan.github_client.get_repo_tree", return_value=["big.py"]), \
-             patch("app.depscan.github_client.get_file_content", return_value="x" * 400_000):
-            files = get_source_files("owner", "repo", "main", "token", (".py",))
-
-        assert files == {}
-
-
-class TestFindOpenIssue:
-    def test_returns_matching_issue_number(self):
-        issues = [
-            {"number": 5, "title": "別件のIssue"},
-            {"number": 7, "title": "🚨 依存ライブラリの脆弱性が検出されました (DEPSCAN)"},
-        ]
-        mock_client = _mock_httpx_client(get_return=_mock_response(issues))
-        with patch("app.depscan.github_client.httpx.Client", return_value=mock_client):
-            result = find_open_issue(
-                "owner", "repo", "🚨 依存ライブラリの脆弱性が検出されました (DEPSCAN)", "token",
-            )
-        assert result == 7
-
-    def test_returns_none_when_not_found(self):
-        mock_client = _mock_httpx_client(get_return=_mock_response([]))
-        with patch("app.depscan.github_client.httpx.Client", return_value=mock_client):
-            result = find_open_issue("owner", "repo", "存在しないタイトル", "token")
-        assert result is None
-
-    def test_ignores_pull_requests(self):
-        """タイトルが一致してもPull Requestは除外する（issues APIはPRも含んで返すため）。"""
-        issues = [{"number": 3, "title": "同じタイトル", "pull_request": {"url": "..."}}]
-        mock_client = _mock_httpx_client(get_return=_mock_response(issues))
-        with patch("app.depscan.github_client.httpx.Client", return_value=mock_client):
-            result = find_open_issue("owner", "repo", "同じタイトル", "token")
-        assert result is None
-
-
-class TestCreateIssueAndComment:
-    def test_create_issue_posts_title_and_body(self):
-        mock_client = _mock_httpx_client(post_return=_mock_response({"number": 42}))
-        with patch("app.depscan.github_client.httpx.Client", return_value=mock_client):
-            result = create_issue("owner", "repo", "タイトル", "本文", "token")
-        assert result == {"number": 42}
-        call = mock_client.post.call_args
-        assert call.kwargs["json"] == {"title": "タイトル", "body": "本文"}
-
-    def test_add_issue_comment_posts_body(self):
-        mock_client = _mock_httpx_client(post_return=_mock_response({"id": 1}))
-        with patch("app.depscan.github_client.httpx.Client", return_value=mock_client):
-            result = add_issue_comment("owner", "repo", 42, "追記内容", "token")
-        assert result == {"id": 1}
-        call = mock_client.post.call_args
-        assert call.args[0].endswith("/issues/42/comments")
-        assert call.kwargs["json"] == {"body": "追記内容"}
-
-    def test_close_issue_patches_state_closed(self):
-        resp = _mock_response({"number": 42, "state": "closed"})
-        mock_client = _mock_httpx_client(patch_return=resp)
-        with patch("app.depscan.github_client.httpx.Client", return_value=mock_client):
-            result = close_issue("owner", "repo", 42, "token")
-        assert result == {"number": 42, "state": "closed"}
-        call = mock_client.patch.call_args
-        assert call.args[0].endswith("/issues/42")
-        assert call.kwargs["json"] == {"state": "closed"}
-
-
-# ──────────────────────────────────────────────────────────────
 # app.depscan.crawler
 # ──────────────────────────────────────────────────────────────
 
@@ -784,18 +562,18 @@ class TestCreateIssueAndComment:
 class TestDiscoverManifests:
     def test_filters_by_known_filenames(self):
         with patch(
-            "app.depscan.crawler.get_repo_tree",
+            f"{_REPO}.tree",
             return_value=["requirements.txt", "app/main.py", "dashboard/package-lock.json"],
         ):
-            manifests = _discover_manifests("owner", "repo", "main", "token")
+            manifests = _discover_manifests(GitHubRepo("owner", "repo", "token"), "main")
         assert manifests == ["requirements.txt", "dashboard/package-lock.json"]
 
     def test_http_error_returns_empty(self):
         with patch(
-            "app.depscan.crawler.get_repo_tree",
+            f"{_REPO}.tree",
             side_effect=httpx.HTTPStatusError("500", request=MagicMock(), response=MagicMock()),
         ):
-            assert _discover_manifests("owner", "repo", "main", "token") == []
+            assert _discover_manifests(GitHubRepo("owner", "repo", "token"), "main") == []
 
 
 class TestCollectDependencies:
@@ -803,7 +581,7 @@ class TestCollectDependencies:
         repos = [{"full_name": "u/repo1", "default_branch": "main"}]
         with patch("app.depscan.crawler.list_target_repos", return_value=repos), \
              patch("app.depscan.crawler._discover_manifests", return_value=["requirements.txt"]), \
-             patch("app.depscan.crawler.get_file_content", return_value="fastapi==0.115.6\n"):
+             patch(f"{_REPO}.file_content", return_value="fastapi==0.115.6\n"):
             dep_to_repos, repos_scanned, repo_visibility = collect_dependencies("u", "token")
 
         assert repos_scanned == 1
@@ -815,7 +593,7 @@ class TestCollectDependencies:
         with patch("app.depscan.crawler.list_target_repos", return_value=repos), \
              patch("app.depscan.crawler._discover_manifests", return_value=["requirements.txt"]), \
              patch(
-                 "app.depscan.crawler.get_file_content",
+                 f"{_REPO}.file_content",
                  side_effect=httpx.HTTPStatusError(
                      "404", request=MagicMock(), response=MagicMock()
                  ),
@@ -1008,7 +786,7 @@ class TestApplyReachability:
         repos = [{"full_name": "u/r", "default_branch": "main"}]
         with patch("app.depscan.crawler.list_target_repos", return_value=repos), \
              patch(
-                 "app.depscan.crawler.get_source_files",
+                 "app.depscan.crawler.collect_source_files",
                  return_value={"app/main.py": "import requests\n"},
              ):
             from app.depscan.crawler import _apply_reachability
@@ -1024,7 +802,7 @@ class TestApplyReachability:
         repos = [{"full_name": "u/r", "default_branch": "main"}]
         with patch("app.depscan.crawler.list_target_repos", return_value=repos), \
              patch(
-                 "app.depscan.crawler.get_source_files",
+                 "app.depscan.crawler.collect_source_files",
                  return_value={"app/main.py": "import requests\n"},
              ) as mock_get_source:
             from app.depscan.crawler import _apply_reachability
@@ -1044,7 +822,7 @@ class TestApplyReachability:
         repos = [{"full_name": "u/r", "default_branch": "main"}]
         http_error = httpx.HTTPStatusError("500", request=MagicMock(), response=MagicMock())
         with patch("app.depscan.crawler.list_target_repos", return_value=repos), \
-             patch("app.depscan.crawler.get_source_files", side_effect=http_error):
+             patch("app.depscan.crawler.collect_source_files", side_effect=http_error):
             from app.depscan.crawler import _apply_reachability
             _apply_reachability(records, "user", "token")
 

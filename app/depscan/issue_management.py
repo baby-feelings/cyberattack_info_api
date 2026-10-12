@@ -13,10 +13,10 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.finding_format import format_package_lines
+from app.core.github.repo import GitHubRepo
 from app.core.issue_filing import file_or_update_repo_issues
 from app.core.notifications import DASHBOARD_URL
 from app.crawler_logs.writer import now_utc
-from app.depscan.github_client import add_issue_comment, close_issue, find_open_issue
 from app.depscan.models import DependencyFinding
 
 logger = logging.getLogger(__name__)
@@ -81,18 +81,17 @@ def close_resolved_repo_issues(db: Session, candidate_repos: set[str]) -> None:
         if remaining > 0:
             continue
 
-        owner, repo = full_name.split("/", 1)
+        repo = GitHubRepo.from_full_name(full_name, token)
         try:
-            issue_number = find_open_issue(owner, repo, _ISSUE_TITLE, token)
+            issue_number = repo.find_open_issue(_ISSUE_TITLE)
             if issue_number is None:
                 continue
-            add_issue_comment(
-                owner, repo, issue_number,
+            repo.add_issue_comment(
+                issue_number,
                 f"未解決の依存ライブラリ脆弱性が0件になったため自動的にクローズします"
                 f"（{timestamp}）。",
-                token,
             )
-            close_issue(owner, repo, issue_number, token)
+            repo.close_issue(issue_number)
             logger.info(
                 "DEPSCAN: closed issue #%d in %s (0 unresolved findings)", issue_number, full_name,
             )
