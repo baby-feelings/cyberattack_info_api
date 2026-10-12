@@ -6,7 +6,13 @@ description: CI/CD（GitHub Actions）・OCI本番デプロイ手順・環境変
 # デプロイ・CI/CD・運用監視リファレンス
 
 ## CI（ci.yml）
-PR 作成・main/develop へのプッシュで自動実行。3つのジョブが並列に動く。ほかに`gitleaks.yml`（PR/mainで
+PR 作成・main/develop へのプッシュで自動実行。先頭の`changes`ジョブが変更ファイルから対象を判定し
+（バックエンド=`app/`・`tests/`・`alembic/`・`deploy/zap/`・依存・`pyproject.toml`・`Dockerfile`等、
+ダッシュボード=`dashboard/`、`ci.yml`自体の変更は両方）、該当しない3ジョブは**ジョブ単位で省略**する
+（ドキュメントのみの変更では何も動かない。省略はジョブ単位なので将来「必須チェック」にしても成功扱い）。
+`semgrep.yml`は`paths-ignore`（`*.md`・`docs/`・`.claude/skills/`）、`gitleaks.yml`・OSVは絞らない。
+Vercelのプレビューは`dashboard/vercel.json`の`ignoreCommand`でダッシュボードに差分が無ければスキップ。
+3つのジョブが並列に動く。ほかに`gitleaks.yml`（PR/mainで
 シークレット検出）と`zap-scan.yml`（ZAP、手動+毎週月曜）が別ワークフローで動く（下記）。
 
 **`test`（バックエンド、Python 3.11 のみ。本番Dockerfile・`.python-version`と同じ。3.10は廃止）**

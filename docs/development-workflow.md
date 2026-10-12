@@ -41,5 +41,14 @@ git push -u origin feature/your-feature-name
 | Migration（`migration-check.yml`） | PostgreSQL で `upgrade head`・`alembic check`（モデルとのずれ）・`downgrade -1`・再 `upgrade`（`alembic/`・`models.py` の変更時） |
 | OSV-Scanner（`osv-scanner-pr.yml`） | 新規導入された依存の脆弱性 |
 
+**実行条件（ソースの更新があるときだけ）**: `ci.yml` は先頭の `changes` ジョブで変更ファイルを判定し、
+バックエンド（`app/`・`tests/`・`alembic/`・`deploy/zap/`・依存・`pyproject.toml`・`Dockerfile` 等）の変更が
+なければ `test` を、`dashboard/` の変更がなければ `dashboard-test`・`dashboard-e2e` を省略する
+（`ci.yml` 自体の変更時は両方実行）。Semgrep はドキュメント（`*.md`・`docs/`・`.claude/skills/`）のみの
+変更で実行しない。**gitleaks・OSV-Scanner は絞らない**（ドキュメントや設定にもシークレット・依存が入りうる）。
+省略はワークフロー単位でなくジョブ単位（将来「必須チェック」を設定しても、省略されたジョブは成功扱い）。
+ダッシュボードの Vercel デプロイ（`deploy.yml`）は従来から `dashboard/**` の変更時のみ、Vercel のプレビュー
+ビルドは `dashboard/vercel.json` の `ignoreCommand` で、ダッシュボードに差分がなければスキップする。
+
 定期実行: pip-audit・OSV-Scanner（毎週）、OWASP ZAP（毎週月曜 03:00 JST。`docs/zap-scan.md`）、
 DEPSCAN/CODESCAN（毎日）。

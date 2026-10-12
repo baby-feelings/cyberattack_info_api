@@ -7,9 +7,64 @@ on:
     branches: [main]
 
 jobs:
+  # 変更されたファイルから、バックエンド・ダッシュボードのテストが必要かを判定する。
+  # ドキュメント（*.md・docs/・.claude/）だけの変更では、どちらも動かさない。
+  # ワークフロー単位の paths 絞り込みにしない理由: 将来ブランチ保護で「必須チェック」を設定した
+  # とき、チェックが報告されずマージが止まる。ジョブ単位で省略すれば成功扱いになる。
+  changes:
+    name: Detect changed areas
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.detect.outputs.backend }}
+      dashboard: ${{ steps.detect.outputs.dashboard }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # 比較元（PR の base・push の直前のコミット）を取得するため全履歴を使う
+          fetch-depth: 0
+
+      - name: Detect changed areas
+        id: detect
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          # 比較元: PR は base、push は直前のコミット。判定できない場合は安全側（全部実行）
+          base="$BEFORE_SHA"
+          if [ "$EVENT" = "pull_request" ]; then base="$BASE_SHA"; fi
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            echo "比較元を特定できないため、すべて実行します"
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+            echo "dashboard=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          files=$(git diff --name-only "$base" HEAD)
+          echo "変更されたファイル:"; echo "$files"
+
+          # バックエンド: アプリ・テスト・マイグレーション・依存・設定・Docker・ZAP 用ファイル
+          backend_re='^(app|tests|alembic|deploy/zap)/|^(requirements[^/]*\.txt|pyproject\.toml|alembic\.ini|Dockerfile|semgrep-cli\.txt|\.python-version)$'
+          # ダッシュボード: dashboard/ 配下
+          dashboard_re='^dashboard/'
+          # このワークフロー自体を変えたときは、確認のためどちらも実行する
+          self_re='^\.github/workflows/ci\.yml$'
+
+          backend=false; dashboard=false
+          if echo "$files" | grep -Eq "$backend_re|$self_re"; then backend=true; fi
+          if echo "$files" | grep -Eq "$dashboard_re|$self_re"; then dashboard=true; fi
+          echo "backend=$backend" >> "$GITHUB_OUTPUT"
+          echo "dashboard=$dashboard" >> "$GITHUB_OUTPUT"
+          echo "→ backend=$backend dashboard=$dashboard"
+
   test:
     # 本番（Dockerfile）・.python-version と同じ 3.11 のみ（3.10 はサポート対象外）
     name: Test & Lint (Python 3.11)
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -58,6 +113,8 @@ jobs:
 
   dashboard-test:
     name: Dashboard Test & Build
+    needs: changes
+    if: needs.changes.outputs.dashboard == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -99,6 +156,8 @@ jobs:
 
   dashboard-e2e:
     name: Dashboard E2E (Playwright)
+    needs: changes
+    if: needs.changes.outputs.dashboard == 'true'
     runs-on: ubuntu-latest
 
     steps:
