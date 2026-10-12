@@ -19,7 +19,8 @@ from app.core.config import settings
 from app.core.database import SessionLocal
 from app.mcp_server.oauth_consent import BROWSER_COOKIE, build_consent_router, complete_github_login
 from app.mcp_server.oauth_flow import decode_state
-from app.mcp_server.oauth_provider import SCOPE, McpOAuthProvider
+from app.mcp_server.oauth_provider import McpOAuthProvider
+from app.mcp_server.oauth_services import SCOPE
 
 logger = logging.getLogger(__name__)
 
