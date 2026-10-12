@@ -73,6 +73,20 @@ async def authenticate(headers: Headers, session_factory: SessionFactory) -> Pri
     return None
 
 
+def www_authenticate_challenge() -> bytes:
+    """401 の `WWW-Authenticate` ヘッダーの値。
+
+    OAuth 2.1 が有効（`MCP_OAUTH_ISSUER` 設定済み）なら、保護リソースのメタデータの URL
+    （`resource_metadata`、RFC 9728）を添える。MCP クライアントは、これを手がかりに認可サーバー
+    （`/authorize`・`/token` 等）を見つけ、貼り付け不要で接続できる。
+    無効なら従来どおり `Bearer` のみ。
+    """
+    issuer = settings.MCP_OAUTH_ISSUER.rstrip("/")
+    if not issuer:
+        return b"Bearer"
+    return f'Bearer resource_metadata="{issuer}/.well-known/oauth-protected-resource/mcp"'.encode()
+
+
 class McpAuthMiddleware:
     """/mcp への HTTP リクエストを認証し、主体を request.state に載せる ASGI ミドルウェア。"""
 
@@ -95,7 +109,7 @@ class McpAuthMiddleware:
                 "headers": [
                     (b"content-type", b"application/json"),
                     (b"content-length", str(len(body)).encode()),
-                    (b"www-authenticate", b"Bearer"),
+                    (b"www-authenticate", www_authenticate_challenge()),
                 ],
             })
             await send({"type": "http.response.body", "body": body})

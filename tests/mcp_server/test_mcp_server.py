@@ -117,7 +117,17 @@ class TestAuthentication:
     def test_rejects_missing_credentials(self, mcp_client):
         resp = _rpc(mcp_client, "tools/list")
         assert resp.status_code == 401
-        assert resp.headers["www-authenticate"] == "Bearer"
+        assert resp.headers["www-authenticate"] == "Bearer"  # OAuth 無効（既定）なら従来どおり
+
+    def test_challenge_points_to_resource_metadata_when_oauth_is_enabled(self, mcp_client):
+        # OAuth 2.1 が有効なら、認可サーバーを見つける手がかり（RFC 9728）を 401 に添える
+        with patch("app.mcp_server.auth.settings.MCP_OAUTH_ISSUER", "https://api.example.test/"):
+            resp = _rpc(mcp_client, "tools/list")
+        assert resp.status_code == 401
+        assert resp.headers["www-authenticate"] == (
+            'Bearer resource_metadata="https://api.example.test'
+            '/.well-known/oauth-protected-resource/mcp"'
+        )
 
     def test_rejects_wrong_api_key(self, mcp_client):
         assert _rpc(mcp_client, "tools/list", headers={"X-API-KEY": "wrong"}).status_code == 401
