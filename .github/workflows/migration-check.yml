@@ -1,0 +1,80 @@
+name: Alembic — Migration Check
+
+# DB スキーマのマイグレーションを、本番と同じ PostgreSQL で実際に流して検証する。
+# テーブル・列を足す PR のマイグレーション不備（本番デプロイ時の起動失敗）を、マージ前に止める。
+#   1. upgrade head          : 空の DB から最新まで適用できる
+#   2. alembic check         : モデル（ORM）とマイグレーションにずれが無い（足し忘れ・書き間違い）
+#   3. downgrade -1 → upgrade: 最新のマイグレーションが戻せて、再適用もできる
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "alembic/**"
+      - "alembic.ini"
+      - "app/**/models.py"
+      - "requirements.txt"
+      - ".github/workflows/migration-check.yml"
+  push:
+    branches: [main]
+    paths:
+      - "alembic/**"
+      - "app/**/models.py"
+
+permissions:
+  contents: read
+
+jobs:
+  migration-check:
+    name: Migration (upgrade / downgrade)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # 使い捨ての DB（このジョブの間だけ存在する）。パスワードは CI 内だけの値
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: migration_check
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      # アプリの設定（app.core.config）が必須とする値。マイグレーションでは使わないダミー
+      DATABASE_URL: postgresql://postgres:ci-only-password@localhost:5432/migration_check
+      API_KEY: ci-dummy-api-key
+      GITHUB_USERNAME: ci-dummy-user
+      ENVIRONMENT: development
+      # alembic コマンドが、リポジトリ直下の app パッケージ（alembic/env.py が import する）を見つけるため
+      PYTHONPATH: .
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Upgrade to head
+        run: alembic upgrade head
+
+      # モデルとマイグレーションにずれがあると失敗する（autogenerate の差分が空であること）
+      - name: Check models match migrations
+        run: alembic check
+
+      - name: Downgrade one revision
+        run: alembic downgrade -1
+
+      - name: Upgrade to head again
+        run: alembic upgrade head

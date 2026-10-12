@@ -28,6 +28,14 @@ PR 作成・main/develop へのプッシュで自動実行。3つのジョブが
 **`gitleaks.yml`**: PR（base..head）とmainのpushで、チェックサム検証済みの公式バイナリ（Dockerfileと同じ
 バージョン）を使い`gitleaks git --redact`を実行。除外は`.gitleaks.toml`（書式は`codescan`スキル参照）。
 
+**`semgrep.yml`**: PR/mainのpushでSemgrep（`p/security-audit`・`p/secrets`＝CODESCANと同じルール、
+`semgrep-cli.txt`からインストール）を`--error`で実行。導入時の検出は0件で、検出があればPRを失敗にする
+（誤検知は理由付きの`# nosemgrep`）。
+
+**`migration-check.yml`**: `alembic/`・`models.py`等の変更時、使い捨てのPostgreSQL 16で`upgrade head`→
+`alembic check`（モデルとのずれ）→`downgrade -1`→再`upgrade head`を実行。テーブル・列を足すPRの不備を
+本番デプロイ前に止める（ローカルでalembicを流せない場合の確認手段にもなる）。
+
 **`zap-scan.yml`**: OWASP ZAP API Scanを`workflow_dispatch`と毎週月曜03:00 JSTで実行。使い捨てのAPI
 コンテナ（SQLite・ダミー鍵・外部通信なし、`deploy/zap/`）だけを対象にし、本番には向けない。レポートを
 artifactに保存し、Medium以上を`python -m app.zapscan`でIssue起票（詳細は`docs/zap-scan.md`）。
