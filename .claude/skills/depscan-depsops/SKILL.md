@@ -1,6 +1,6 @@
 ---
 name: depscan-depsops
-description: DEPSCAN（GitHub全リポジトリの依存ライブラリ脆弱性スキャン）とDEPSOPS（Dependabot PR自動運用）の内部設計。到達可能性判定・資産コンテキスト・優先度推薦・SBOMエクスポート・GitHub Issue自動起票/クローズ・DEPSOPSの自動マージ判定ロジック・GitHub OAuthログイン・ユーザー別Slack通知登録（UserAccount、Issue #227）と登録済みユーザー向け定期実行を扱う。app/depscan/・app/depsops/・app/auth/・app/core/user_crawl_runner.py配下の変更時に読む。
+description: DEPSCAN（GitHub全リポジトリの依存ライブラリ脆弱性スキャン）とDEPSOPS（Dependabot PR自動運用）の内部設計。到達可能性判定・資産コンテキスト・優先度推薦・SBOMエクスポート・GitHub Issue自動起票/クローズ・DEPSOPSの自動マージ判定ロジック・GitHub OAuthログイン・ユーザー別Slack通知登録（UserAccount、Issue #227）と登録済みユーザー向け定期実行を扱う。app/depscan/・app/depsops/・app/auth/・app/jobs/user_crawl_runner.py配下の変更時に読む。
 ---
 
 # DEPSCAN / DEPSOPS 内部実装リファレンス
@@ -286,7 +286,7 @@ Organization全体への一括デフォルト設定が無い）:
   ログアウトさせず、セッションが実際に無効（401）な場合のみログアウト扱いにする
   （`UnauthorizedError`で区別）
 
-## ユーザー別Slack通知登録とDEPSCAN/CODESCAN/DEPSOPSの定期実行（Issue #227、app/auth/、app/core/user_crawl_runner.py）
+## ユーザー別Slack通知登録とDEPSCAN/CODESCAN/DEPSOPSの定期実行（Issue #227、app/auth/、app/jobs/user_crawl_runner.py）
 DEPSCANのGitHubログインを土台に、任意のユーザーが自分専用のSlack Webhookを登録し、
 自分自身のリポジトリに対するDEPSCAN/CODESCAN/DEPSOPSの検知結果を受け取れる機能。
 
