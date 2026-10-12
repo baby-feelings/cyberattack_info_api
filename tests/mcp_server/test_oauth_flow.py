@@ -84,8 +84,16 @@ def _request_id(location: str) -> str:
     return parse_qs(urlsplit(location).query)["request_id"][0]
 
 
+def _open_consent(http, request_id: str):
+    """同意画面を開く（このブラウザに認可リクエストが紐づき、Cookie が渡される）。"""
+    page = http.get("/oauth/consent", params={"request_id": request_id})
+    assert page.status_code == 200, page.text
+    return page
+
+
 def _github_state(http, request_id: str) -> str:
-    """同意画面で「許可」を押し、GitHub へ渡される state を取り出す。"""
+    """同意画面を開いて「許可」を押し、GitHub へ渡される state を取り出す。"""
+    _open_consent(http, request_id)
     with patch(f"{_GH}.settings.GITHUB_OAUTH_CLIENT_ID", "gh-client"):
         res = http.post("/oauth/consent", content=f"request_id={request_id}&action=approve",
                         headers={"content-type": "application/x-www-form-urlencoded"})
@@ -168,6 +176,7 @@ class TestConsentPage:
         _, challenge = _pkce()
         loc = _authorize(http, _register(http), challenge).headers["location"]
         rid = _request_id(loc)
+        _open_consent(http, rid)
         res = http.post("/oauth/consent", content=f"request_id={rid}&action=deny",
                         headers={"content-type": "application/x-www-form-urlencoded"})
         query = parse_qs(urlsplit(res.headers["location"]).query)
@@ -179,6 +188,7 @@ class TestConsentPage:
         _, challenge = _pkce()
         loc = _authorize(http, _register(http), challenge).headers["location"]
         rid = _request_id(loc)
+        _open_consent(http, rid)
         bad = http.post("/oauth/consent", content=f"request_id={rid}&action=hack",
                         headers={"content-type": "application/x-www-form-urlencoded"})
         assert bad.status_code == 400
@@ -189,6 +199,7 @@ class TestConsentPage:
     def test_github_login_requests_no_scope(self, http):
         _, challenge = _pkce()
         loc = _authorize(http, _register(http), challenge).headers["location"]
+        _open_consent(http, _request_id(loc))
         with patch(f"{_GH}.settings.GITHUB_OAUTH_CLIENT_ID", "gh-client"):
             res = http.post("/oauth/consent",
                             content=f"request_id={_request_id(loc)}&action=approve",
@@ -199,11 +210,60 @@ class TestConsentPage:
     def test_approve_without_github_config_is_503(self, http):
         _, challenge = _pkce()
         loc = _authorize(http, _register(http), challenge).headers["location"]
+        _open_consent(http, _request_id(loc))
         with patch(f"{_GH}.settings.GITHUB_OAUTH_CLIENT_ID", ""):
             res = http.post("/oauth/consent",
                             content=f"request_id={_request_id(loc)}&action=approve",
                             headers={"content-type": "application/x-www-form-urlencoded"})
         assert res.status_code == 503
+
+
+class TestBrowserBinding:
+    """許可・拒否は、同意画面を最初に開いたブラウザだけが送れる（CSRF・URL の横取り対策）。"""
+
+    def _pending(self, http) -> str:
+        _, challenge = _pkce()
+        return _request_id(_authorize(http, _register(http), challenge).headers["location"])
+
+    def test_cookie_is_httponly_secure_lax_and_scoped(self, http):
+        page = _open_consent(http, self._pending(http))
+        cookie = page.headers["set-cookie"].lower()
+        assert "mcp_oauth_consent=" in cookie
+        assert "httponly" in cookie and "secure" in cookie
+        assert "samesite=lax" in cookie and "path=/oauth/consent" in cookie
+
+    def test_post_without_opening_the_page_is_rejected(self, http, db_session):
+        rid = self._pending(http)
+        # 画面を開かず（Cookie なし）に直接 POST: CSRF の想定。承認されない
+        res = http.post("/oauth/consent", content=f"request_id={rid}&action=approve",
+                        headers={"content-type": "application/x-www-form-urlencoded"})
+        assert res.status_code == 403
+        assert db_session.get(OAuthAuthorization, rid) is not None  # 破棄もされない
+
+    def test_other_browser_cannot_view_or_approve(self, http, db_session):
+        rid = self._pending(http)
+        _open_consent(http, rid)  # 正規のブラウザ（http）が先に開く
+        attacker = TestClient(http.app, base_url=ISSUER, follow_redirects=False)  # Cookie なし
+        assert attacker.get("/oauth/consent", params={"request_id": rid}).status_code == 403
+        res = attacker.post("/oauth/consent", content=f"request_id={rid}&action=approve",
+                            headers={"content-type": "application/x-www-form-urlencoded"})
+        assert res.status_code == 403
+        # 別のブラウザの Cookie を偽造しても通らない
+        attacker.cookies.set("mcp_oauth_consent", "forged", domain="api.example.test", path="/")
+        res = attacker.post("/oauth/consent", content=f"request_id={rid}&action=deny",
+                            headers={"content-type": "application/x-www-form-urlencoded"})
+        assert res.status_code == 403
+        assert db_session.get(OAuthAuthorization, rid) is not None
+
+    def test_same_browser_can_reopen_the_page(self, http):
+        rid = self._pending(http)
+        _open_consent(http, rid)
+        assert _open_consent(http, rid).status_code == 200  # 再読み込みしても見られる
+
+    def test_binding_helpers(self):
+        row = OAuthAuthorization(browser_hash=None)
+        assert not oauth_flow.is_bound_to(row, "x")
+        assert not oauth_flow.is_bound_to(row, None)
 
 
 class TestAuthorizeValidation:

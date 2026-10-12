@@ -95,4 +95,8 @@ claude mcp add --transport http cyberattack-info https://<API のドメイン>/m
     `/mcp` の認証・個別失効は手動発行のトークンと同じ仕組み。手動発行の一覧・上限・
     期限前の Slack 通知の対象外。リフレッシュトークンは未対応（切れたら再認可）
   - 同意画面は、クライアント名（自己申告・未確認）と戻り先ホストを表示し、文字列はエスケープ
+  - 許可・拒否は、**同意画面を最初に開いたブラウザ**だけが送れる（HttpOnly・Secure・SameSite=Lax の
+    Cookie の乱数のハッシュを `oauth_authorizations.browser_hash` と照合）。URL を横取りされても、
+    画面を開かない CSRF でも承認されない。GitHub から戻るコールバックの紐づけは、コールバックが
+    別ドメイン（nip.io）で Cookie が届かないため未実施（署名付き state で保護。ドメインを揃えたら追加）
 - PR3: リフレッシュトークンのローテーション・失効、ダッシュボードの表示

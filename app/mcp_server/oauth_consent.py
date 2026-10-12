@@ -47,6 +47,9 @@ _MAX_NAME_CHARS = 80
 
 _NO_STORE = {"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"}
 
+# 同意画面を開いたブラウザを識別する Cookie（許可・拒否の送信元の確認用。10 分で失効）
+_BROWSER_COOKIE = "mcp_oauth_consent"
+
 
 def _page(title: str, body: str, status_code: int = 200) -> HTMLResponse:
     """最小限のスタイルだけを持つ HTML ページ（外部リソースは読み込まない）。"""
@@ -109,21 +112,34 @@ def build_consent_router(session_factory: SessionFactory) -> APIRouter:
     """同意画面のルーター（`GET`=表示、`POST`=許可/拒否）を作る。"""
     router = APIRouter(include_in_schema=False)
 
-    def _show(request_id: str) -> HTMLResponse:
+    def _show(request_id: str, browser_nonce: str | None) -> Response:
         with session_factory() as db:
             row = oauth_flow.load_pending(db, request_id)
             if row is None:
                 return _error_page("認可リクエストが無効か、期限切れです。")
+            # 最初に開いたブラウザに紐づける。紐づけ済みなら、同じブラウザ（Cookie 一致）だけ表示する
+            new_nonce = oauth_flow.bind_browser(db, row)
+            if new_nonce is None and not oauth_flow.is_bound_to(row, browser_nonce):
+                return _error_page("この認可リクエストは、別のブラウザで開かれています。", 403)
             client = oauth_clients.load_client(db, row.client_id)
             name = (client.client_name if client else None) or ""
-            host = urlsplit(row.redirect_uri).netloc
-            return _consent_page(request_id, name, host)
+            page = _consent_page(request_id, name, urlsplit(row.redirect_uri).netloc)
+            if new_nonce is not None:
+                max_age = int(oauth_flow.REQUEST_TTL.total_seconds())
+                page.set_cookie(
+                    _BROWSER_COOKIE, new_nonce, max_age=max_age,
+                    path=CONSENT_PATH, httponly=True, secure=True, samesite="lax",
+                )
+            return page
 
-    def _decide(request_id: str, action: str) -> Response:
+    def _decide(request_id: str, action: str, browser_nonce: str | None) -> Response:
         with session_factory() as db:
             row = oauth_flow.load_pending(db, request_id)
             if row is None:
                 return _error_page("認可リクエストが無効か、期限切れです。")
+            # 同意画面を開いたブラウザ以外からの許可・拒否は受け付けない（CSRF・URL の横取り対策）
+            if not oauth_flow.is_bound_to(row, browser_nonce):
+                return _error_page("同意画面を開いたブラウザから操作してください。", 403)
             if action == "deny":
                 redirect_uri, state = row.redirect_uri, row.state
                 oauth_flow.discard_request(db, request_id)
@@ -142,8 +158,8 @@ def build_consent_router(session_factory: SessionFactory) -> APIRouter:
             return RedirectResponse(github_url, status_code=303, headers=_NO_STORE)
 
     @router.get(CONSENT_PATH)
-    def consent_page(request_id: str = "") -> Response:
-        return _show(request_id)
+    def consent_page(request: Request, request_id: str = "") -> Response:
+        return _show(request_id, request.cookies.get(_BROWSER_COOKIE))
 
     @router.post(CONSENT_PATH)
     async def consent_submit(request: Request) -> Response:
@@ -153,7 +169,9 @@ def build_consent_router(session_factory: SessionFactory) -> APIRouter:
         form = parse_qs(body.decode("utf-8", errors="replace"))
         request_id = (form.get("request_id") or [""])[0]
         action = (form.get("action") or [""])[0]
-        return await run_in_threadpool(_decide, request_id, action)
+        return await run_in_threadpool(
+            _decide, request_id, action, request.cookies.get(_BROWSER_COOKIE),
+        )
 
     return router
 

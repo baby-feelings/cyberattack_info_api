@@ -96,6 +96,27 @@ def discard_request(db: Session, request_id: str) -> None:
         db.commit()
 
 
+def bind_browser(db: Session, row: OAuthAuthorization) -> str | None:
+    """同意画面を最初に開いたブラウザに、この認可リクエストを紐づける。
+
+    未紐づけなら乱数（Cookie に載せる値）を返し、そのハッシュを保存する。すでに紐づいていれば
+    None（2つ目のブラウザには Cookie を渡さない）。
+    """
+    if row.browser_hash is not None:
+        return None
+    nonce = secrets.token_urlsafe(32)
+    row.browser_hash = hash_code(nonce)
+    db.commit()
+    return nonce
+
+
+def is_bound_to(row: OAuthAuthorization, nonce: str | None) -> bool:
+    """Cookie の乱数が、この認可リクエストを紐づけたブラウザのものか（定数時間で比較）。"""
+    if not nonce or row.browser_hash is None:
+        return False
+    return secrets.compare_digest(row.browser_hash, hash_code(nonce))
+
+
 def complete_request(
     db: Session, row: OAuthAuthorization, username: str, now: datetime | None = None,
 ) -> str:

@@ -32,6 +32,7 @@ def upgrade() -> None:
         sa.Column('resource', sa.Text(), nullable=True),
         sa.Column('username', sa.String(length=255), nullable=True),
         sa.Column('code_hash', sa.String(length=64), nullable=True),
+        sa.Column('browser_hash', sa.String(length=64), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column('expires_at', sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint('id'),

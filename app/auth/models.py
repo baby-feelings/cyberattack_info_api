@@ -147,6 +147,10 @@ class OAuthAuthorization(Base):
     username: Mapped[str | None] = mapped_column(String(255), nullable=True)
     code_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)
 
+    # 同意画面を最初に開いたブラウザの識別（Cookie の乱数のハッシュ）。許可・拒否の送信は
+    # このブラウザだけが行える（別の人が認可リクエストの URL を入手しても承認できない）
+    browser_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False,
     )
