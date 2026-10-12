@@ -63,3 +63,8 @@ cyberattack-info-api.json
 
 # Claude Code のローカル個人設定（APIキー等を含む許可リストが混入し得るため）
 .claude/settings.local.json
+
+# gitleaks 等のスキャン結果（ファイルパスなどの手がかりを含むためコミットしない）
+gl*.json
+*.gitleaks.json
+gitleaks-report*.json
