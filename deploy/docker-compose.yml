@@ -111,6 +111,8 @@ services:
       # nip.io: IP アドレスをそのままドメインとして解決してくれる無料 DNS
       # （Let's Encrypt の証明書取得にドメイン名が必要なため）
       - "BACKEND_DOMAIN=${BACKEND_DOMAIN:?BACKEND_DOMAIN を deploy/.env に設定してください（例 インスタンスIP.nip.io）}"
+      # 任意: ドメイン移行中に、別名のドメインでも同じAPIを提供する（未設定なら空）
+      - "BACKEND_DOMAIN_ALIAS=${BACKEND_DOMAIN_ALIAS:-}"
       - "GRAFANA_DOMAIN=${GRAFANA_DOMAIN:?GRAFANA_DOMAIN を deploy/.env に設定してください（例 grafana.インスタンスIP.nip.io）}"
     ports:
       - "80:80"

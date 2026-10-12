@@ -1,4 +1,6 @@
-{$BACKEND_DOMAIN} {
+# BACKEND_DOMAIN_ALIAS（任意）: ドメイン移行中に、別のドメインでも同じAPIを提供する。
+# 未設定（空）なら BACKEND_DOMAIN のみ
+{$BACKEND_DOMAIN} {$BACKEND_DOMAIN_ALIAS:} {
 	reverse_proxy api-prod:8000
 }
 
