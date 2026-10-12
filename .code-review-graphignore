@@ -1,0 +1,7 @@
+# code-review-graph の索引から除外する生成物（調査・レビューのノイズになるため）
+# dashboard のビルド成果物（圧縮された JS が「ハブノード」の上位を占めてしまう）
+dashboard/dist/**
+# Playwright のレポート・カバレッジの HTML/JS
+dashboard/playwright-report/**
+dashboard/coverage/**
+htmlcov/**
