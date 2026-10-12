@@ -17,19 +17,22 @@ _TIMEOUT = 15.0
 # fine-grained PAT と異なり読み取り専用の粒度指定ができない）
 _SCOPE = "repo"
 
+# GitHub OAuth App に登録するコールバックのパス（ダッシュボードのログインと MCP の OAuth で共用）
+CALLBACK_PATH = "/auth/github/callback"
 
-def build_authorize_url(client_id: str, redirect_uri: str, state: str) -> str:
-    """GitHub の認可画面へのリダイレクト先 URL を組み立てる。"""
+
+def build_authorize_url(
+    client_id: str, redirect_uri: str, state: str, scope: str | None = _SCOPE,
+) -> str:
+    """GitHub の認可画面へのリダイレクト先 URL を組み立てる。
+
+    `scope=None` なら scope を付けない（公開情報＝本人確認のみ。MCP の OAuth ログイン用）。
+    """
+    params = {"client_id": client_id, "redirect_uri": redirect_uri, "state": state}
+    if scope is not None:
+        params["scope"] = scope
     with httpx.Client() as client:
-        req = client.build_request(
-            "GET", _GITHUB_AUTHORIZE_URL,
-            params={
-                "client_id": client_id,
-                "redirect_uri": redirect_uri,
-                "scope": _SCOPE,
-                "state": state,
-            },
-        )
+        req = client.build_request("GET", _GITHUB_AUTHORIZE_URL, params=params)
     return str(req.url)
 
 

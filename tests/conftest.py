@@ -62,6 +62,8 @@ def clean_db():
         conn.execute(text("DELETE FROM code_findings"))
         conn.execute(text("DELETE FROM user_accounts"))
         conn.execute(text("DELETE FROM mcp_tokens"))
+        conn.execute(text("DELETE FROM oauth_authorizations"))
+        conn.execute(text("DELETE FROM oauth_clients"))
         conn.commit()
 
 

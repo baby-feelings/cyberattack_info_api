@@ -2,6 +2,7 @@
 import asyncio
 import os
 from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
 os.environ.setdefault("API_KEY", "test-api-key-for-pytest")
@@ -12,11 +13,11 @@ os.environ.setdefault("SESSION_SECRET_KEY", "test-session-secret-key-for-pytest"
 import pytest  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
-from mcp.server.auth.provider import AuthorizeError, RegistrationError, TokenError  # noqa: E402
+from mcp.server.auth.provider import RegistrationError, TokenError  # noqa: E402
 from mcp.shared.auth import OAuthClientInformationFull  # noqa: E402
 
 from app.auth.models import OAuthClient  # noqa: E402
-from app.mcp_server import oauth_clients  # noqa: E402
+from app.mcp_server import oauth_clients, oauth_routes  # noqa: E402
 from app.mcp_server.oauth_provider import McpOAuthProvider  # noqa: E402
 from app.mcp_server.oauth_routes import mount_oauth_routes  # noqa: E402
 from tests.conftest import TestSessionLocal  # noqa: E402
@@ -41,12 +42,12 @@ def _clean(db_session):
 def http() -> TestClient:
     """OAuth を有効にした最小の FastAPI アプリ（DB はテスト用）。"""
     app = FastAPI()
-    from app.mcp_server import oauth_routes
-
     original = oauth_routes.SessionLocal
     oauth_routes.SessionLocal = TestSessionLocal
     try:
-        assert mount_oauth_routes(app, issuer=ISSUER)
+        # issuer は GitHub コールバックと同じホストであることが必須（起動時に検証される）
+        with patch.object(oauth_routes.settings, "API_BASE_URL_FOR_OAUTH", ISSUER):
+            assert mount_oauth_routes(app, issuer=ISSUER)
         yield TestClient(app, base_url=ISSUER)
     finally:
         oauth_routes.SessionLocal = original
@@ -108,7 +109,7 @@ class TestClientStore:
 
 class TestProvider:
     def test_register_and_get(self):
-        provider = McpOAuthProvider(TestSessionLocal)
+        provider = McpOAuthProvider(TestSessionLocal, ISSUER)
 
         async def scenario():
             await provider.register_client(_client("p1"))
@@ -117,18 +118,13 @@ class TestProvider:
 
         asyncio.run(scenario())
 
-    def test_authorization_and_tokens_not_available_yet(self):
-        provider = McpOAuthProvider(TestSessionLocal)
+    def test_refresh_not_supported_yet(self):
+        provider = McpOAuthProvider(TestSessionLocal, ISSUER)
         c = _client()
 
         async def scenario():
-            with pytest.raises(AuthorizeError):
-                await provider.authorize(c, None)  # type: ignore[arg-type]
-            with pytest.raises(TokenError):
-                await provider.exchange_authorization_code(c, None)  # type: ignore[arg-type]
             with pytest.raises(TokenError):
                 await provider.exchange_refresh_token(c, None, [])  # type: ignore[arg-type]
-            assert await provider.load_authorization_code(c, "x") is None
             assert await provider.load_refresh_token(c, "x") is None
             assert await provider.load_access_token("x") is None
             assert await provider.revoke_token(None) is None  # type: ignore[arg-type]
@@ -142,6 +138,14 @@ class TestRoutes:
         before = len(app.router.routes)  # FastAPI 既定のルート（/docs 等）
         assert mount_oauth_routes(app, issuer="") is False
         assert len(app.router.routes) == before
+
+    def test_issuer_host_must_match_github_callback_host(self):
+        # Cookie はホスト単位。ホストが違うと、コールバックで同意画面のブラウザを確認できない
+        app = FastAPI()
+        other = "https://other.example.test"
+        with patch.object(oauth_routes.settings, "API_BASE_URL_FOR_OAUTH", other):
+            with pytest.raises(ValueError, match="same host"):
+                mount_oauth_routes(app, issuer=ISSUER)
 
     def test_metadata(self, http):
         body = http.get("/.well-known/oauth-authorization-server").json()
@@ -173,12 +177,3 @@ class TestRoutes:
             "redirect_uris": ["https://app.example.test/cb"], "scope": "admin",
         })
         assert res.status_code == 400
-
-    def test_authorize_unavailable_yet(self, http, db_session):
-        oauth_clients.save_client(db_session, _client("c1", uris=("https://app.example.test/cb",)))
-        res = http.get("/authorize", params={
-            "client_id": "c1", "response_type": "code", "redirect_uri": "https://app.example.test/cb",
-            "code_challenge": "x" * 43, "code_challenge_method": "S256", "state": "s",
-        }, follow_redirects=False)
-        # 認可は未実装のため、コードは発行されない（エラーとしてクライアントへ返す）
-        assert "code=" not in res.headers.get("location", "")

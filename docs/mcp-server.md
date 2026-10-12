@@ -79,11 +79,27 @@ claude mcp add --transport http cyberattack-info https://<API のドメイン>/m
 `MCP_OAUTH_ISSUER` が空（既定）の間は何も公開されず、従来のトークン方式のみ動く。
 
 - **PR1（実装済み）**: 認可サーバーのメタデータ（`/.well-known/oauth-authorization-server`、
-  `oauth-protected-resource/mcp`）と動的クライアント登録（`/register`、`oauth_clients` テーブル）。
-  `/authorize`・`/token` は未実装で、呼ぶとエラーを返す（認可が通ることはない）
+  `oauth-protected-resource/mcp`）と動的クライアント登録（`/register`、`oauth_clients` テーブル）
 - 登録は誰でも呼べる（標準クライアントはログイン前に登録するため）が、**登録だけではデータは
-  見えない**（PR2 以降で本人の GitHub ログインと同意が必須）。悪用対策: redirect_uri は https か
+  見えない**（本人の GitHub ログインと同意が必須）。悪用対策: redirect_uri は https か
   ループバックの http のみ・1 クライアント 5 件まで、1 時間 60 件・総数 1000 件の上限、
   未使用のまま 30 日を過ぎた登録は自動削除、スコープは `mcp:read` のみ
-- PR2: 認可画面（バックエンドの HTML）→ GitHub ログイン → 認可コード → `/token`（PKCE 必須）
+- **PR2（実装済み）**: 認可フロー。`/authorize`（SDK）→ 同意画面 `GET/POST /oauth/consent`
+  （バックエンドの HTML）→ GitHub ログイン → 既存の `/auth/github/callback` → 認可コード → `/token`
+  - GitHub のログインは**スコープなし**（本人確認だけ。リポジトリの内容は読まず、GitHub の
+    トークンも保存しない）。コールバックは既存のものを再利用するため、GitHub OAuth App の
+    設定変更は不要。MCP 用かどうかは署名付き `state`（JWT、`oauth_flow`）で判別し、Cookie は使わない
+  - 認可リクエスト〜認可コードは `oauth_authorizations` の1行（コードはハッシュのみ保存。
+    認可リクエスト 10 分・認可コード 5 分・使い捨て）。PKCE（S256）は SDK が検証する
+  - アクセストークンは既存の台帳（`mcp_tokens`、`oauth_client_id` 付き）へ **1 時間**で発行し、
+    `/mcp` の認証・個別失効は手動発行のトークンと同じ仕組み。手動発行の一覧・上限・
+    期限前の Slack 通知の対象外。リフレッシュトークンは未対応（切れたら再認可）
+  - 同意画面は、クライアント名（自己申告・未確認）と戻り先ホストを表示し、文字列はエスケープ
+  - 許可・拒否と、GitHub から戻るコールバックは、**同意画面を最初に開いたブラウザ**だけが行える
+    （HttpOnly・Secure・SameSite=Lax の Cookie の乱数のハッシュを `oauth_authorizations.browser_hash`
+    と照合）。URL の横取りや画面を開かない CSRF、さらに「攻撃者の認可リクエストの state を被害者に
+    GitHub 認可 URL として踏ませ、被害者の本人確認を攻撃者の認可リクエストに紐づける」攻撃を防ぐ
+  - **`MCP_OAUTH_ISSUER` は `API_BASE_URL_FOR_OAUTH`（GitHub コールバック）と同じホスト**にする。
+    Cookie がホスト単位のため、違うと起動時にエラーにする（Fail Fast）。ドメインを切り替えるときは
+    GitHub OAuth App の callback URL・`API_BASE_URL_FOR_OAUTH`・ダッシュボードの API URL と揃える
 - PR3: リフレッシュトークンのローテーション・失効、ダッシュボードの表示
