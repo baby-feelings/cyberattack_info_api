@@ -10,4 +10,4 @@
 # なおファイル名を requirements*.txt にしないのは、pip-audit/OSV-Scannerの走査対象を
 # アプリ本体の依存（requirements.txt）に限定するため。semgrep側の既知の脆弱依存は
 # Dockerfileで個別に上書きしている（PyJWT）。
-semgrep>=1.100.0
+semgrep>=1.180.0
