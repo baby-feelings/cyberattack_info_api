@@ -1,6 +1,6 @@
 # ── 本番依存パッケージ ──────────────────────────────────────────
 fastapi>=0.141.1
-uvicorn[standard]>=0.52.4
+uvicorn[standard]>=0.54.0
 # SQLAlchemy 2.1.0でmypyプラグイン（sqlalchemy.ext.mypy.plugin、pyproject.tomlで
 # 使用中）が削除され、mypyが起動時エラーになる（CI: Python 3.11ジョブのみ2.1.0を
 # 解決し失敗、3.10ジョブはキャッシュ済み2.0.54のままで気付かれなかった）。
@@ -10,7 +10,7 @@ psycopg2-binary>=2.9.13
 alembic>=1.20.0
 pydantic>=2.13.5
 pydantic-settings>=2.15.0
-python-dotenv>=1.2.3
+python-dotenv>=1.2.4
 httpx>=0.28.1
 apscheduler>=3.11.3
 defusedxml>=0.7.1
