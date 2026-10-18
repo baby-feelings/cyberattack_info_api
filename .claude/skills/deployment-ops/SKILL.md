@@ -130,6 +130,10 @@ DBマイグレーションは`Dockerfile`の`CMD`（`python -m app.core.migrate 
 各コマンドの終了コードを`Invoke-Checked`で判定し、最後に`/health`を待って確認する（いずれも失敗で
 停止）。「デプロイ完了」が出たら実際に反映されている。`deploy/.env`にキーを足すときは**既存の行を
 消さない**こと（`BACKEND_DOMAIN`を落とすとcaddyが再作成されず、旧設定のまま動き続ける）。
+**`deploy/Caddyfile`を変更したときは、デプロイ後にCaddyの再読み込みが必要**（`docker compose up`は
+bindマウントしたファイルの変更ではcaddyを再作成しないため、旧設定のまま動き続ける。HSTS追加時に踏んだ）。
+`ssh ... "cd /home/ubuntu/cyberattack_info_api/deploy && docker compose exec -T caddy caddy reload
+--config /etc/caddy/Caddyfile"`で反映し、`curl -sI https://<BACKEND_DOMAIN>/health`で確認する。
 
 ## デプロイ構成
 

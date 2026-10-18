@@ -47,6 +47,9 @@ cd deploy
 
 SCPでコード一式を転送し、OCI上で `docker compose up -d --build` を実行する
 （`api-prod`・`caddy`・`prometheus`・`grafana`・`node-exporter`）。
+`deploy/Caddyfile` を変えたときは、デプロイ後に Caddy の再読み込みが別途必要
+（`docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile`。
+bind マウントの変更では caddy が再作成されない）。
 
 スクリプトは Fail Fast で動く: ①転送の前に `deploy/.env` の必須キー（`BACKEND_DOMAIN`・
 `GRAFANA_DOMAIN`・`GRAFANA_ADMIN_PASSWORD`）と `../.env.production` を確認し、欠けていれば止まる
