@@ -267,6 +267,29 @@ scenario('DEP-12', 'セッション失効（401）で自動的にログアウト
   expect(await page.evaluate(() => localStorage.getItem('depscan_session_token'))).toBeNull()
 })
 
+scenario('DEP-16', '表示時にセッションが延長され、新しいトークンが保存される（Issue #337）', async ({ page, api }) => {
+  api.override('POST', '/auth/refresh', () => ({
+    body: { token: 'refreshed-token', username: 'octocat' },
+  }))
+  await seedSession(page)
+  await page.goto('/')
+  await openTab(page, 'DEPSCAN')
+
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('depscan_session_token')))
+    .toBe('refreshed-token')
+  expect(api.requestsTo('/auth/refresh', 'POST')).toHaveLength(1)
+})
+
+scenario('DEP-17', '延長できない（ログインから上限日数を超えた等）セッションはログアウトされる', async ({ page, api }) => {
+  api.override('POST', '/auth/refresh', () => ({ status: 401, body: { detail: 'expired' } }))
+  await seedSession(page)
+  await page.goto('/')
+  await openTab(page, 'DEPSCAN')
+
+  await expect(page.getByText('GitHubアカウントでログインしてください')).toBeVisible()
+  expect(await page.evaluate(() => localStorage.getItem('depscan_session_token'))).toBeNull()
+})
+
 scenario('DEP-13', '新しいクロールを検知すると更新バナーが表示され更新できる', async ({ page, api }) => {
   // 2分間隔の確認ポーリングを待たずに進められるよう、ブラウザの時計を制御する
   await page.clock.install()

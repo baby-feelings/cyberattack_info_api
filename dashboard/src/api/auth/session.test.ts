@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { githubLoginUrl, fetchScanStatus, exchangeAuthCode } from './session'
+import { githubLoginUrl, fetchScanStatus, exchangeAuthCode, refreshSession } from './session'
 import { BASE_URL, jsonResponse } from '../../test/http'
 import { UnauthorizedError } from '../shared'
 
@@ -61,4 +61,20 @@ describe('api/auth/session', () => {
     })
   })
 
+  describe('refreshSession', () => {
+    it('POSTs with the Bearer token and returns the new token/username', async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ token: 'new-tok', username: 'octocat' }))
+      const result = await refreshSession('old-tok')
+      expect(result).toEqual({ token: 'new-tok', username: 'octocat' })
+      const [url, opts] = fetchMock.mock.calls[0]
+      expect(url).toBe(`${BASE_URL}/auth/refresh`)
+      expect(opts.method).toBe('POST')
+      expect(opts.headers.Authorization).toBe('Bearer old-tok')
+    })
+
+    it('throws UnauthorizedError when the session can no longer be extended', async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({}, { ok: false, status: 401 }))
+      await expect(refreshSession('old-tok')).rejects.toBeInstanceOf(UnauthorizedError)
+    })
+  })
 })

@@ -65,7 +65,7 @@ claude mcp add --transport http cyberattack-info https://<API のドメイン>/m
   プロセス内（ASGI）で呼ぶ。検索・検証・所有者による絞り込みのロジックを複製しない。ツールを足すときは
   該当グループの `tools/*.py` に追加する
 - **ステートレス**: セッションをサーバーに持たない（再起動や複数台構成で壊れない）
-- **トークン**: `app/mcp_server/mcp_token.py`（JWT: sub・jti・aud・exp）。ダッシュボードのセッション（24 時間）とは
+- **トークン**: `app/mcp_server/mcp_token.py`（JWT: sub・jti・aud・exp）。ダッシュボードのセッション（7 日・利用で延長）とは
   `aud` で区別し、相互に流用できない
 - **台帳**: `app/mcp_server/mcp_token_store.py`・テーブル `mcp_tokens`（トークンID=jti・ユーザー・期限・失効日時・
   最終使用日時。トークン本体は保存しない）。接続のたびに、署名・期限に加えて「台帳にあり、発行者本人の

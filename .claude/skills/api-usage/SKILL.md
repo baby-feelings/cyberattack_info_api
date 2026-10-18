@@ -106,6 +106,7 @@ React ダッシュボードの DEPSCAN タブ向けの GitHub OAuth ログイン
 |---------------|------|
 | `GET /auth/github/login` | GitHub 認可画面へリダイレクト |
 | `POST /auth/exchange` | 交換コードをセッションJWTに交換する（使い捨て） |
+| `POST /auth/refresh` | セッションJWTを、有効期間を延長した新しいJWTに交換する（Bearer。ログインから30日超は401） |
 | `GET /auth/scan-status` | オンデマンドスキャン進捗（`Authorization: Bearer` 必須） |
 
 ログインすると、その GitHub アカウント自身が所有するリポジトリを対象にオンデマンドで

@@ -206,6 +206,15 @@ function defaultResponse(req: RecordedRequest, state: MockState): MockResponse {
     }
     case 'POST /auth/exchange':
       return { body: { token: 'exchanged-token', username: state.username } }
+    case 'POST /auth/refresh':
+      // 実サーバーは新しいJWTを返すが、他のシナリオが Bearer の値を検証しているため、
+      // 受け取ったトークンをそのまま返す（延長されたことの検証は専用シナリオで上書きする）
+      return {
+        body: {
+          token: (req.headers['authorization'] ?? '').replace(/^Bearer /i, ''),
+          username: state.username,
+        },
+      }
     case 'GET /auth/notification-settings':
       return { body: state.notification }
     case 'PUT /auth/notification-settings': {
