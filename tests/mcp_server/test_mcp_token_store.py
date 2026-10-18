@@ -1,6 +1,7 @@
 """app.mcp_server.mcp_token_store（台帳）と /auth/mcp-token(s) エンドポイントのテスト。"""
 import os
 from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
 os.environ.setdefault("API_KEY", "test-api-key-for-pytest")
@@ -129,6 +130,31 @@ class TestEndpoints:
         token, _ = issue_token(db_session, "alice", 30)
         resp = client.post("/auth/mcp-token", headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 401
+
+    def test_issue_notifies_the_user_when_a_webhook_is_registered(self, client, db_session):
+        from app.auth.account_store import set_slack_webhook, upsert_user_token
+        from app.auth.models import UserAccount
+
+        hook = "https://hooks.slack.com/services/T000/B000/XXXX"
+        upsert_user_token(db_session, "alice", "gho_dummy")
+        set_slack_webhook(db_session, "alice", hook)
+        try:
+            with patch("app.mcp_server.management_router.notify_mcp_token_issued") as notify:
+                resp = client.post("/auth/mcp-token", headers=_session("alice"))
+        finally:
+            db_session.query(UserAccount).delete()
+            db_session.commit()
+
+        assert resp.status_code == 200
+        notify.assert_called_once_with(hook, resp.json()["expires_at"][:10])
+        assert "token" in resp.json()  # 通知にはトークン本体を渡さない（日付だけ）
+
+    def test_issue_does_not_notify_without_a_registered_webhook(self, client):
+        with patch("app.mcp_server.management_router.notify_mcp_token_issued") as notify:
+            resp = client.post("/auth/mcp-token", headers=_session("alice"))
+
+        assert resp.status_code == 200
+        notify.assert_not_called()
 
     def test_issue_defaults_to_30_days_and_returns_token_once(self, client):
         resp = client.post("/auth/mcp-token", headers=_session("alice"))

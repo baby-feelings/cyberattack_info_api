@@ -1,6 +1,9 @@
 # BACKEND_DOMAIN_ALIAS（任意）: ドメイン移行中に、別のドメインでも同じAPIを提供する。
 # 未設定（空）なら BACKEND_DOMAIN のみ
 {$BACKEND_DOMAIN} {$BACKEND_DOMAIN_ALIAS:} {
+	# HSTS: 一度HTTPSで接続したブラウザは、以後HTTPでの接続を拒否する（通信の盗聴・改ざん対策）。
+	# サブドメイン・preload は付けない（nip.io 等の共有ドメインを巻き込まないため）
+	header Strict-Transport-Security "max-age=31536000"
 	reverse_proxy api-prod:8000
 }
 
@@ -8,5 +11,6 @@
 # （80/443番はBACKEND_DOMAINと共用のため追加のポート開放は不要。
 # CaddyがSNI/Hostヘッダーでドメインごとに振り分ける）。
 {$GRAFANA_DOMAIN} {
+	header Strict-Transport-Security "max-age=31536000"
 	reverse_proxy grafana:3000
 }

@@ -26,8 +26,10 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from mcp.server.auth.provider import construct_redirect_uri
 from sqlalchemy.orm import Session
+from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 
+from app.auth.account_store import get_webhook_for_user
 from app.auth.github_oauth import (
     CALLBACK_PATH,
     build_authorize_url,
@@ -35,6 +37,7 @@ from app.auth.github_oauth import (
     get_authenticated_user_login,
 )
 from app.core.config import settings
+from app.core.notifications.mcp_token import notify_oauth_connection_granted
 from app.mcp_server.oauth import clients as oauth_clients
 from app.mcp_server.oauth import flow as oauth_flow
 from app.mcp_server.oauth.services import CONSENT_PATH, SCOPE
@@ -224,8 +227,17 @@ def complete_github_login(
         oauth_flow.discard_request(db, request_id)
         return _redirect_with(redirect_uri, state, error="access_denied")
 
+    client = oauth_clients.load_client(db, row.client_id)
+    client_name = (client.client_name if client else None) or ""
     code = oauth_flow.complete_request(db, row, username)
     logger.info("MCP OAuth: authorization code issued for %s", username)
     response = _redirect_with(redirect_uri, state, code=code)
     response.delete_cookie(BROWSER_COOKIE, path="/")  # 使い終わった識別 Cookie は消す
+    # 本人の Slack（登録済みの場合のみ）へ事後通知する。送信は応答の後に行い、
+    # 失敗しても許可は成功のまま
+    webhook = get_webhook_for_user(db, username)
+    if webhook is not None:
+        response.background = BackgroundTask(
+            notify_oauth_connection_granted, webhook, client_name,
+        )
     return response

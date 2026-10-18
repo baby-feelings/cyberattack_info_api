@@ -76,4 +76,18 @@ describe('OsvRow', () => {
     fireEvent.click(cveLink)
     expect(screen.queryByText(item.details!)).not.toBeInTheDocument()
   })
+
+  // 外部データの URL は http(s) のものだけリンクにする（XSS 対策。javascript: 等は文字列のまま表示）
+  it('renders only http(s) references as links, and others as plain text', () => {
+    const item = makeItem({
+      aliases: ['OSV-INTERNAL-001'],
+      references: ['https://example.com/advisory', 'javascript:alert(1)'],
+    })
+    renderRow(item)
+    fireEvent.click(screen.getByText(item.package_name))
+
+    expect(screen.getByText('https://example.com/advisory').closest('a'))
+      .toHaveAttribute('href', 'https://example.com/advisory')
+    expect(screen.getByText('javascript:alert(1)').closest('a')).toBeNull()
+  })
 })

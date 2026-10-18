@@ -12,12 +12,14 @@ DELETE /auth/oauth-connections/{client_id} – OAuth 接続の解除
 import logging
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Body, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.auth.account_store import get_webhook_for_user
 from app.auth.dependencies import get_current_username
 from app.core.database import get_db
+from app.core.notifications.mcp_token import notify_mcp_token_issued
 from app.mcp_server.mcp_token_store import (
     DEFAULT_DAYS,
     MAX_ACTIVE_TOKENS,
@@ -60,6 +62,7 @@ def _mcp_token_out(row: McpToken) -> dict:
 def issue_mcp_token(
     db: Annotated[Session, Depends(get_db)],
     username: Annotated[str, Depends(get_current_username)],
+    background_tasks: BackgroundTasks,
     body: Annotated[IssueMcpTokenRequest | None, Body()] = None,
 ) -> dict:
     """ログイン中ユーザー専用の MCP トークンを発行する（有効期限は 7/30/90 日、既定 30 日）。
@@ -81,6 +84,13 @@ def issue_mcp_token(
             "使っていないトークンを失効してから発行してください。",
         ) from None
     logger.info("MCP token issued for %s (id=%s, days=%d)", username, row.id, days)
+    # 本人の Slack（登録済みの場合のみ）へ事後通知する。送信は応答の後に行い、
+    # 失敗しても発行は成功のまま
+    webhook = get_webhook_for_user(db, username)
+    if webhook is not None:
+        background_tasks.add_task(
+            notify_mcp_token_issued, webhook, row.expires_at.date().isoformat(),
+        )
     return {"token": token, "username": username, **_mcp_token_out(row)}
 
 
