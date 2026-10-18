@@ -79,4 +79,15 @@ describe('JvnRow', () => {
     fireEvent.click(cveLink)
     expect(screen.queryByText(item.overview)).not.toBeInTheDocument()
   })
+
+  // 外部データの URL は http(s) のものだけリンクにする（XSS 対策）
+  it('links the JVNDB ID only when jvn_url is http(s)', () => {
+    const safe = renderRow(makeItem())
+    expect(screen.getByText('JVNDB-2026-000001').closest('a'))
+      .toHaveAttribute('href', 'https://jvndb.jvn.jp/ja/contents/2026/JVNDB-2026-000001.html')
+    safe.unmount()
+
+    renderRow(makeItem({ jvn_url: 'javascript:alert(1)' }))
+    expect(screen.getByText('JVNDB-2026-000001').closest('a')).not.toHaveAttribute('href')
+  })
 })

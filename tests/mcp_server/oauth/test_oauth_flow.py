@@ -415,3 +415,31 @@ class TestLedgerIntegration:
         assert not is_usable(db_session, claims)
         # 他人は失効できない
         assert not revoke_token(db_session, "mallory", claims.token_id)
+
+
+class TestGrantNotice:
+    """接続を許可したら、本人の Slack に事後通知する（登録済みの場合のみ。IPA 6-(ii)）。"""
+
+    _HOOK = "https://hooks.slack.com/services/T000/B000/XXXX"
+
+    def test_notifies_the_user_who_approved(self, http, db_session):
+        from app.auth.account_store import set_slack_webhook, upsert_user_token
+        from app.auth.models import UserAccount
+
+        upsert_user_token(db_session, "alice", "gho_dummy")
+        set_slack_webhook(db_session, "alice", self._HOOK)
+        try:
+            with patch(f"{_GH}.notify_oauth_connection_granted") as notify:
+                _full_flow(http, login="alice", name="Claude Code")
+        finally:
+            db_session.query(UserAccount).delete()
+            db_session.commit()
+
+        notify.assert_called_once_with(self._HOOK, "Claude Code")
+
+    def test_does_not_notify_without_a_registered_webhook(self, http):
+        with patch(f"{_GH}.notify_oauth_connection_granted") as notify:
+            _full_flow(http, login="alice")
+
+        notify.assert_not_called()
+

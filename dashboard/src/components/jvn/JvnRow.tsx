@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
 import { type JvnVulnerabilityOut } from '../../api/client'
 import { SeverityBadge } from '../shared/VulnPanelParts'
+import { safeHttpUrl } from '../shared/safeUrl'
 
 export function JvnRow({
   item, severityClassMap,
@@ -33,7 +34,7 @@ export function JvnRow({
         {/* JVNDB ID */}
         <td className="py-2.5 pr-3 w-48">
           <a
-            href={item.jvn_url}
+            href={safeHttpUrl(item.jvn_url)}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 font-mono text-amber-400 hover:text-amber-300 text-xs transition-colors"
@@ -148,7 +149,7 @@ export function JvnRow({
 
             {/* JVNDB リンク */}
             <a
-              href={item.jvn_url}
+              href={safeHttpUrl(item.jvn_url)}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-amber-400 hover:text-amber-300 underline underline-offset-2 text-[10px]"

@@ -42,6 +42,25 @@ class TestExtractTarball:
         assert repo_root == str(dest)
 
 
+    def test_rejects_a_member_that_escapes_the_destination_directory(self, tmp_path):
+        # 悪意あるリポジトリの tarball に含まれうる「../」で展開先の外へ書き出すメンバー
+        # （パス名パラメータの未チェック／ディレクトリ・トラバーサル）。展開せずに拒否する
+        buf = io.BytesIO()
+        with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+            data = b"pwned"
+            info = tarfile.TarInfo(name="owner-repo-abc/../../escaped.txt")
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+        dest = tmp_path / "extract" / "inner"
+        dest.mkdir(parents=True)
+
+        with pytest.raises(tarfile.FilterError):
+            extract_tarball(buf.getvalue(), str(dest))
+
+        assert not (tmp_path / "escaped.txt").exists()
+        assert not (tmp_path / "extract" / "escaped.txt").exists()
+
+
 class TestRepoArchive:
     def test_yields_the_repo_root_with_extracted_files(self):
         tarball = make_tarball({"app/main.py": "print('hi')"}, top_dir="owner-repo-abc")

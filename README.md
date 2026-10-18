@@ -78,7 +78,7 @@ cd dashboard && npm run lint          # ESLint（警告数の上限あり）
 deploy/zap/run_zap_scan.ps1           # OWASP ZAP の動的診断（Docker Desktop。docs/zap-scan.md）
 ```
 
-**テスト結果（最新）:** バックエンド 1168 テスト / カバレッジ 98%、ダッシュボード 328 テスト
+**テスト結果（最新）:** バックエンド 1179 テスト / カバレッジ 99%、ダッシュボード 340 テスト
 （Vitest）/ カバレッジ 98%、E2E 89 シナリオ
 
 ダッシュボードのE2Eテスト（Playwright、API全モック）は `dashboard/` で `npm run e2e`。
@@ -105,6 +105,7 @@ Compose により稼働し、`deploy/deploy_to_oci.ps1` を都度手動実行し
 - 環境変数の全一覧: [docs/environment-variables.md](docs/environment-variables.md)
 - Slack通知の登録方法・通知先ルール: [docs/slack-notifications.md](docs/slack-notifications.md)
 - OWASP ZAP による API の動的診断: [docs/zap-scan.md](docs/zap-scan.md)
+- IPA「安全なウェブサイトの作り方」11項目の対応表: [docs/security-checklist.md](docs/security-checklist.md)
 - AIエージェント向けリモートMCPサーバー（接続方法・見える範囲）: [docs/mcp-server.md](docs/mcp-server.md)
 - 開発の進め方・CI の品質チェック一覧: [docs/development-workflow.md](docs/development-workflow.md)
 - Claude Code / AIエージェントからの活用例: [.claude/skills/api-usage/SKILL.md](.claude/skills/api-usage/SKILL.md)

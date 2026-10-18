@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
 import { type OsvVulnerabilityOut } from '../../api/client'
 import { SeverityBadge } from '../shared/VulnPanelParts'
+import { safeHttpUrl } from '../shared/safeUrl'
 
 // エコシステムバッジの色
 const ECO_COLOR: Record<string, string> = {
@@ -132,15 +133,20 @@ export function OsvRow({
             {item.references.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {item.references.map(url => (
-                  <a
-                    key={url}
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-violet-400 hover:text-violet-300 underline underline-offset-2 text-[10px] break-all"
-                  >
-                    {url}
-                  </a>
+                  safeHttpUrl(url) ? (
+                    <a
+                      key={url}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-violet-400 hover:text-violet-300 underline underline-offset-2 text-[10px] break-all"
+                    >
+                      {url}
+                    </a>
+                  ) : (
+                    // http(s) 以外（javascript: 等）はリンクにしない（XSS 対策）
+                    <span key={url} className="text-slate-500 text-[10px] break-all">{url}</span>
+                  )
                 ))}
               </div>
             )}
