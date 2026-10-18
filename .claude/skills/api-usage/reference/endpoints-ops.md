@@ -142,6 +142,7 @@ React ダッシュボードの DEPSCAN タブ向けの GitHub OAuth ログイン
 | `GET /auth/github/login` | GitHub 認可画面へリダイレクト（`<a href>` で開く） |
 | `GET /auth/github/callback` | OAuth コールバック（内部利用のみ）。数十秒で失効する使い捨ての交換コードを発行し、URLクエリにはそれのみ載せる（セッションJWT自体は載せない。RFC 9700対応） |
 | `POST /auth/exchange` | 交換コードをセッションJWTに交換する（使い捨て） |
+| `POST /auth/refresh` | セッションJWTを、有効期間を延長した新しいJWTに交換する（Bearer。ログインから30日超は401） |
 | `GET /auth/scan-status` | ログイン中ユーザーのオンデマンドスキャン進捗を取得（`Authorization: Bearer <セッショントークン>` 必須） |
 
 ログインすると、その GitHub アカウント自身が所有するリポジトリを対象にオンデマンドで

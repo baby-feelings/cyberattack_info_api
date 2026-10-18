@@ -30,13 +30,14 @@ from sqlalchemy.orm import Session
 
 from app.auth import external_login
 from app.auth.account_store import upsert_user_token
+from app.auth.dependencies import get_session_token
 from app.auth.github_oauth import (
     CALLBACK_PATH,
     build_authorize_url,
     exchange_code_for_token,
     get_authenticated_user_login,
 )
-from app.auth.session import create_session_token, decode_session_token
+from app.auth.session import create_session_token, decode_session_token, refresh_session_token
 from app.core.config import settings
 from app.core.database import get_db
 from app.depscan.user_scan import run_depscan_for_user, should_rescan_for_user
@@ -181,3 +182,21 @@ def exchange(body: ExchangeRequest) -> dict:
             detail="Invalid session token.",
         )
     return {"token": session_token, "username": username}
+
+
+@router.post("/refresh", summary="セッションJWTの有効期間を延長する（スライディング更新）")
+def refresh(token: str = Depends(get_session_token)) -> dict:
+    """有効なセッションJWTを、有効期間を延長した新しいJWTに交換する。
+
+    ダッシュボードを開いたときに呼ぶ。数時間・数日開かなかっただけでログインが切れないようにする
+    （Issue #337）。ログインから上限日数を超えた場合・期限切れ・無効なトークンは 401
+    （GitHub で再ログインさせる）。
+    """
+    new_token = refresh_session_token(token)
+    username = decode_session_token(new_token) if new_token else None
+    if new_token is None or username is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired session token.",
+        )
+    return {"token": new_token, "username": username}

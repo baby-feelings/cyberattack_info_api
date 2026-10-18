@@ -1,4 +1,5 @@
-// GitHub ログイン（Issue #107）とセッション: ログイン URL・交換コードの交換・オンデマンドスキャンの進捗。
+// GitHub ログイン（Issue #107）とセッション: ログイン URL・交換コードの交換・セッションの延長・
+// オンデマンドスキャンの進捗。
 
 import { BASE_URL } from '../shared'
 import { authorizedFetch } from './request'
@@ -38,5 +39,14 @@ export async function exchangeAuthCode(code: string): Promise<ExchangeResponse> 
     body: JSON.stringify({ code }),
   })
   if (!res.ok) throw new Error(`Exchange error ${res.status}`)
+  return res.json()
+}
+
+// セッションJWTの有効期間を延長した新しいJWTに交換する（スライディング更新、Issue #337）。
+// 期限切れ・無効・ログインから上限日数を超えた場合は 401（UnauthorizedError）になる
+export async function refreshSession(authToken: string): Promise<ExchangeResponse> {
+  const res = await authorizedFetch('/auth/refresh', authToken, 'Session refresh error', {
+    method: 'POST',
+  })
   return res.json()
 }

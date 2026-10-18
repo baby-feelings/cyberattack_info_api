@@ -254,7 +254,11 @@ Organization全体への一括デフォルト設定が無い）:
 
 - **OAuthフロー**: `/auth/github/login` → GitHub認可（scope `repo`）→
   `/auth/github/callback` で `code` を `access_token` に交換しログインユーザー名取得 →
-  セッションJWT（PyJWT、`SESSION_SECRET_KEY`でHS256署名、24時間有効）発行
+  セッションJWT（PyJWT、`SESSION_SECRET_KEY`でHS256署名、7日有効）発行。
+  **スライディング更新**（Issue #337）: `POST /auth/refresh`で有効期間を7日延長した新JWTに交換する
+  （`session.refresh_session_token`）。ログイン時刻`login_at`は引き継ぎ、ログインから30日を超えると
+  401（GitHubで再認証）。ダッシュボードは`useGithubSession`が表示前（起動時）とタブ復帰時（1時間に1回）に呼ぶ
+  （同時に開いた複数画面の延長は1リクエストに共有。起動時の延長は描画前に済ませ、パネルの再取得を防ぐ）
 - **セッションJWTの受け渡しは使い捨て交換コード方式**: JWT本体をURLクエリに載せるのは
   RFC 9700違反、Cookie方式はSafari ITPがクロスサイトCookieをブロックしiOS PWAでログイン
   できない不具合が実際に発生した（過去2回の設計変更を経て現方式に到達）。現在は

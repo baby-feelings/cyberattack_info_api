@@ -180,3 +180,28 @@ class TestExchange:
 
         assert res.status_code == 400
 
+
+class TestRefresh:
+    """POST /auth/refresh: セッションJWTの有効期間を延長する（Issue #337）。"""
+
+    def test_returns_new_token_for_valid_session(self, client):
+        with (
+            patch("app.auth.github_router.settings.SESSION_SECRET_KEY", "test-secret"),
+            patch("app.auth.session.settings.SESSION_SECRET_KEY", "test-secret"),
+        ):
+            token = create_session_token("octocat")
+            headers = {"Authorization": f"Bearer {token}"}
+            res = client.post("/auth/refresh", headers=headers)
+
+        assert res.status_code == 200
+        body = res.json()
+        assert body["username"] == "octocat"
+        assert body["token"]
+
+    def test_rejects_missing_authorization(self, client):
+        assert client.post("/auth/refresh").status_code == 401
+
+    def test_rejects_invalid_token(self, client):
+        with patch("app.auth.session.settings.SESSION_SECRET_KEY", "test-secret"):
+            res = client.post("/auth/refresh", headers={"Authorization": "Bearer nope"})
+        assert res.status_code == 401
