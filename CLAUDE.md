@@ -128,6 +128,8 @@ deploy/       # OCIデプロイ関連（deploy_to_oci.ps1・docker-compose.yml�
 - `Settings()` の呼び出しには `# type: ignore[call-arg]`
 - ヘルスチェック等で `db_gen` を使う場合は try の前で `None` 初期化（`UnboundLocalError` 対策）
 - `GITHUB_USERNAME` は必須環境変数（デフォルト値なし、未設定だとアプリ全体が起動しない）
+- スキャンしないリポジトリは`SCAN_EXCLUDE_REPOS`（`owner/name`のカンマ区切り。全スキャン共通。起動時に形式検証）。
+  データと起票済みIssueは`jobs/repo_cleanup`が片付ける。`.env.production`に足してデプロイが必要
 - semgrepは`requirements.txt`に入れない（`semgrep-cli.txt`・Dockerfileの専用venv）。依存を狭く
   固定する外部CLIとアプリの依存解決を分けるため。`Dockerfile`に`COPY`を足したら
   `deploy/deploy_to_oci.ps1`の転送対象も更新する（`deployment-ops`スキル参照）
