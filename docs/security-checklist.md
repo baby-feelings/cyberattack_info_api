@@ -23,6 +23,9 @@ IPA のチェックリスト（11 の脆弱性）を、本アプリの実装と�
 - **ダッシュボードの CSP（`dashboard/vercel.json`）の `connect-src` に、API のオリジン**
   （`https://<BACKEND_DOMAIN>`）を書いている。**API のドメイン・IP を変えたら、`vercel.json` も更新する**
   （忘れると、本番のダッシュボードが API に接続できず、何も表示されない）。
+- 画面が外部のオリジンから画像などを読み込む場合も、CSP に足す必要がある（現在は DEPSOPS の互換性スコアの
+  バッジ `https://dependabot-badges.githubapp.com` を `img-src` に許可）。**E2E は同一オリジンのモックで動くため、
+  足し忘れには気づけない**。`dashboard/src/csp.test.ts` が、許可すべきオリジンの抜けを検査する。
 - CSP の確認は、ビルド済みの画面を `vercel.json` のヘッダー付きで配信して E2E を流す
   （違反は `report-uri` で記録して 0 件を確認する）。ZAP の対象は API のコンテナのみで、
   ダッシュボード（Vercel）は対象外。
