@@ -1,6 +1,7 @@
 """アプリケーション設定モジュール。
 .env ファイルから環境変数を読み込み、型安全な設定オブジェクトを提供する。
 """
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -51,6 +52,10 @@ class Settings(BaseSettings):
     GITHUB_TOKEN: str = ""
     # スキャン対象リポジトリのオーナー（GitHub ユーザー名）
     GITHUB_USERNAME: str
+    # スキャン対象外のリポジトリ（カンマ区切りの `owner/name`。大文字小文字は区別しない）。
+    # DEPSCAN・CODESCAN・DEPSOPS のすべてで対象外にする。すでにあるデータと起票済みの
+    # Issue は、毎日のクリーンアップで片付ける（Issue #342。学習用の脆弱なアプリ等を想定）
+    SCAN_EXCLUDE_REPOS: str = ""
     # DEPSCAN: JST 7:00 = UTC 22:00（KEV→OSV→JVN の後段）
     DEPSCAN_CRON_HOUR_UTC: int = 22
     # DEPSCAN データの保持期間（日数）: 解決済み（resolved_at 設定済み）のまま
@@ -115,6 +120,19 @@ class Settings(BaseSettings):
     # 使われない OAuth 接続・登録の自動整理: 毎日 UTC 23:50（JST 翌日 8:50）
     OAUTH_CLEANUP_CRON_HOUR_UTC: int = 23
     OAUTH_CLEANUP_CRON_MINUTE_UTC: int = 50
+
+    @field_validator("SCAN_EXCLUDE_REPOS")
+    @classmethod
+    def _validate_scan_exclude_repos(cls, value: str) -> str:
+        """`owner/name` 形式でない指定は、起動時に弾く（書き間違いに気づかない事故を防ぐ）。"""
+        for entry in (e.strip() for e in value.split(",") if e.strip()):
+            owner, _, name = entry.partition("/")
+            if not owner or not name or "/" in name:
+                raise ValueError(
+                    "SCAN_EXCLUDE_REPOS は 'owner/name' をカンマ区切りで指定してください: "
+                    f"{entry!r}",
+                )
+        return value
 
     model_config = SettingsConfigDict(
         # 環境に応じて .env.development または .env.production を使用

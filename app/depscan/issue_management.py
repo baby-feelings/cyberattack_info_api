@@ -22,7 +22,7 @@ from app.depscan.models import DependencyFinding
 logger = logging.getLogger(__name__)
 
 # GitHub Issue自動起票時のタイトル（Open Issue検索の一致キーも兼ねる）
-_ISSUE_TITLE = "🚨 依存ライブラリの脆弱性が検出されました (DEPSCAN)"
+ISSUE_TITLE = "🚨 依存ライブラリの脆弱性が検出されました (DEPSCAN)"
 
 
 def file_github_issues(new_snapshots: list[dict[str, Any]], token: str | None = None) -> None:
@@ -50,7 +50,7 @@ def file_github_issues(new_snapshots: list[dict[str, Any]], token: str | None = 
             + f"\n\n---\n詳細: {DASHBOARD_URL}"
         )
 
-    file_or_update_repo_issues(new_snapshots, _ISSUE_TITLE, format_body, token, "DEPSCAN")
+    file_or_update_repo_issues(new_snapshots, ISSUE_TITLE, format_body, token, "DEPSCAN")
 
 
 def close_resolved_repo_issues(db: Session, candidate_repos: set[str]) -> None:
@@ -83,7 +83,7 @@ def close_resolved_repo_issues(db: Session, candidate_repos: set[str]) -> None:
 
         repo = GitHubRepo.from_full_name(full_name, token)
         try:
-            issue_number = repo.find_open_issue(_ISSUE_TITLE)
+            issue_number = repo.find_open_issue(ISSUE_TITLE)
             if issue_number is None:
                 continue
             repo.add_issue_comment(

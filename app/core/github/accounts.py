@@ -5,6 +5,7 @@
 import logging
 from typing import Any
 
+from app.core.config import settings
 from app.core.github.api import GitHubApi
 
 logger = logging.getLogger(__name__)
@@ -13,8 +14,18 @@ _TIMEOUT = 30.0
 _PER_PAGE = 100
 
 
+def excluded_repo_names() -> set[str]:
+    """`SCAN_EXCLUDE_REPOS`（カンマ区切りの `owner/name`）を、小文字の集合にして返す。"""
+    return {e.strip().lower() for e in settings.SCAN_EXCLUDE_REPOS.split(",") if e.strip()}
+
+
+def is_excluded_repo(full_name: str) -> bool:
+    """スキャン対象外に指定されたリポジトリか（大文字小文字は区別しない）。"""
+    return full_name.lower() in excluded_repo_names()
+
+
 def list_target_repos(username: str, token: str) -> list[dict[str, Any]]:
-    """トークンの持ち主が所有する全リポジトリを取得する（fork・archived は除外）。
+    """トークンの持ち主が所有する全リポジトリを取得する（fork・archived・対象外指定は除外）。
 
     `GET /users/{username}/repos` は公開リポジトリしか返さないため、プライベートリポジトリも
     対象に含めるには、認証ユーザー自身の視点で全リポジトリを返す `GET /user/repos`
@@ -44,4 +55,9 @@ def list_target_repos(username: str, token: str) -> list[dict[str, Any]]:
                 break
             page += 1
 
-    return [repo for repo in repos if not repo.get("fork") and not repo.get("archived")]
+    excluded = excluded_repo_names()
+    return [
+        repo for repo in repos
+        if not repo.get("fork") and not repo.get("archived")
+        and str(repo.get("full_name", "")).lower() not in excluded
+    ]

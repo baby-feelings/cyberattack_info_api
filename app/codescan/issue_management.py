@@ -18,7 +18,7 @@ from app.crawler_logs.writer import now_utc
 # GitHub Issue自動起票時のタイトル（Open Issue検索の一致キーも兼ねる）。
 # DEPSCANのIssueタイトル（"依存ライブラリの脆弱性が検出されました (DEPSCAN)"）と
 # 混同しないよう、CODESCAN専用の固定文字列にする
-_ISSUE_TITLE = "🔎 自アプリのコード脆弱性が検出されました (CODESCAN)"
+ISSUE_TITLE = "🔎 自アプリのコード脆弱性が検出されました (CODESCAN)"
 
 # 重大度の表示順（数値が小さいほど深刻）
 _SEVERITY_ORDER: dict[str, int] = {"ERROR": 0, "WARNING": 1, "INFO": 2}
@@ -75,4 +75,4 @@ def file_github_issues(new_snapshots: list[dict[str, Any]], token: str | None = 
             + f"\n\n---\n詳細: {DASHBOARD_URL}"
         )
 
-    file_or_update_repo_issues(new_snapshots, _ISSUE_TITLE, format_body, token, "CODESCAN")
+    file_or_update_repo_issues(new_snapshots, ISSUE_TITLE, format_body, token, "CODESCAN")
