@@ -22,7 +22,7 @@ Claude Code や CI/CD ツールから「今まさに悪用されているサイ�
 | **DEPSCAN/CODESCAN ダッシュボードの GitHub ログイン** | 任意の GitHub アカウントでログインし、本人が所有するリポジトリの検知結果のみ閲覧可能（DEPSCAN・CODESCAN とも。他の人には見えない） |
 | **AIエージェント向けリモートMCPサーバー** | `/mcp`（Streamable HTTP）で、KEV/OSV/JVN の検索と、本人所有リポジトリの DEPSCAN/CODESCAN をツールとして提供。MCPトークンはダッシュボードの設定画面から発行（期限 7/30/90 日の選択、個別失効に対応。詳細: [docs/mcp-server.md](docs/mcp-server.md)） |
 | **ユーザー別 Slack 通知登録** | ダッシュボードから任意の GitHub アカウントで自分専用の Slack Webhook を登録可能（詳細: [docs/slack-notifications.md](docs/slack-notifications.md)） |
-| **削除済みリポジトリ・古いデータの自動削除** | GitHub上で削除確認できたリポジトリのデータ、保持期間超過レコードを自動削除 |
+| **削除済みリポジトリ・古いデータの自動削除** | GitHub上で削除確認できたリポジトリのデータ、保持期間超過レコードを自動削除。`SCAN_EXCLUDE_REPOS` で指定したリポジトリはスキャン対象外（データと起票済みIssueも片付ける） |
 | **品質・セキュリティ検査** | ruff（bandit 相当含む）・mypy・ESLint・pytest/Vitest/Playwright、gitleaks・OSV-Scanner・pip-audit、OWASP ZAP による動的診断を CI で実行 |
 | **運用監視** | Prometheus + Grafana によるクローラー実行結果・ホストリソースの可視化（OCI上、任意） |
 | **一覧・統計・実行ログ API** | ページネーション・検索・フィルタリング対応（詳細: [docs/api-reference.md](docs/api-reference.md)） |

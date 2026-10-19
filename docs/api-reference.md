@@ -46,7 +46,7 @@
 | PUT | `/admin/depscan/assets/{owner}/{repo}` | リポジトリ資産コンテキスト設定（Upsert、Issue #131） |
 | POST | `/admin/codescan-crawl` | CODESCAN手動実行（GitHub全リポジトリをSemgrep + gitleaksで再スキャン。`?force=true`対応） |
 | POST | `/admin/dependabot-ops` | DEPSOPS手動実行（安全なPRのみ自動マージ。`?force=true`対応） |
-| POST | `/admin/repo-cleanup` | 削除済みリポジトリのDEPSCAN/CODESCAN/DEPSOPSデータ削除を手動実行（Issue #228） |
+| POST | `/admin/repo-cleanup` | 削除済み・スキャン対象外（`SCAN_EXCLUDE_REPOS`）のリポジトリのDEPSCAN/CODESCAN/DEPSOPSデータ削除（対象外は起票済みIssueも閉じる）を手動実行（Issue #228・#342） |
 | POST | `/admin/user-crawl` | 登録済み他ユーザー（`GITHUB_USERNAME`以外、Webhook登録済み）向けDEPSCAN/CODESCAN/DEPSOPSを手動実行（Issue #227） |
 | GET | `/taxii2/*` | TAXII 2.1配信（KEV/OSV/JVN 3コレクション購読用、最小実装。Issue #134） |
 | GET | `/metrics` | Prometheus用メトリクス（`Authorization: Bearer <METRICS_API_KEY>`。未設定時は503） |
