@@ -17,14 +17,17 @@ DEPSCAN/CODESCAN/DEPSOPSはいずれも「今回のスキャンで取得でき�
 """
 import logging
 
+import httpx
 from sqlalchemy.orm import Session
 
+from app.codescan.issue_management import ISSUE_TITLE as CODESCAN_ISSUE_TITLE
 from app.codescan.models import CodeFinding
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.core.github.accounts import list_target_repos
+from app.core.github.accounts import is_excluded_repo, list_target_repos
 from app.core.github.repo import GitHubRepo
 from app.crawler_logs.writer import now_utc, write_crawler_log
+from app.depscan.issue_management import ISSUE_TITLE as DEPSCAN_ISSUE_TITLE
 from app.depscan.models import DependencyFinding
 from app.depsops.models import DependabotPrLog
 
@@ -71,10 +74,36 @@ def _purge_repo_data(db: Session, repo_full_name: str) -> dict[str, int]:
     return counts
 
 
+# 対象外にしたリポジトリの Issue を閉じるときに添えるコメント
+_EXCLUDED_CLOSE_COMMENT = "スキャン対象外に設定されたため、自動でクローズします。"
+
+
+def _close_issues_for_excluded_repo(repo: GitHubRepo) -> bool:
+    """対象外にしたリポジトリの、このアプリが起票した Open の Issue（CODESCAN・DEPSCAN）を閉じる。
+
+    閉じられなかったら False（呼び出し元はデータを残し、翌日やり直す。先に DB から消すと、
+    以後このリポジトリは「データが残っているリポジトリ」として見つけられず、Issue が取り残される）。
+    """
+    try:
+        for title in (CODESCAN_ISSUE_TITLE, DEPSCAN_ISSUE_TITLE):
+            number = repo.find_open_issue(title)
+            if number is not None:
+                repo.add_issue_comment(number, _EXCLUDED_CLOSE_COMMENT)
+                repo.close_issue(number)
+                logger.info(
+                    "repo_cleanup: closed issue #%d in excluded repo %s", number, repo.full_name,
+                )
+    except httpx.HTTPError as exc:
+        logger.warning("repo_cleanup: failed to close issues in %s: %s", repo.full_name, exc)
+        return False
+    return True
+
+
 def purge_deleted_repos(username: str, token: str, current_repo_full_names: set[str]) -> int:
     """`username`配下でDBに記録が残っているが、今回のスキャン対象一覧
     （`current_repo_full_names`）に含まれないリポジトリについて、GitHub上で
-    実際に削除されたことを確認できたものだけデータを削除する。
+    実際に削除されたことを確認できたものだけデータを削除する。スキャン対象外に指定された
+    リポジトリ（`SCAN_EXCLUDE_REPOS`）は、実在していても、起票済みのIssueを閉じてから削除する。
 
     Args:
         username: 対象GitHubアカウント（DEPSCAN/CODESCAN/DEPSOPSのスキャン対象と同じ）
@@ -94,7 +123,19 @@ def purge_deleted_repos(username: str, token: str, current_repo_full_names: set[
 
         purged = 0
         for full_name in candidates:
-            exists = GitHubRepo.from_full_name(full_name, token).exists()
+            repo = GitHubRepo.from_full_name(full_name, token)
+            if is_excluded_repo(full_name):
+                # スキャン対象外に指定されたリポジトリ（Issue #342）: 実在していても、
+                # 起票済みの Issue を閉じたうえで、記録を削除する
+                if _close_issues_for_excluded_repo(repo):
+                    counts = _purge_repo_data(db, full_name)
+                    logger.info(
+                        "Purged excluded repo %s: %s (total %d rows)",
+                        full_name, counts, sum(counts.values()),
+                    )
+                    purged += 1
+                continue
+            exists = repo.exists()
             if exists is False:
                 counts = _purge_repo_data(db, full_name)
                 total = sum(counts.values())

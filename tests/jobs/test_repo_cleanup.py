@@ -2,6 +2,8 @@
 from datetime import UTC, datetime
 from unittest.mock import patch
 
+import httpx
+
 from app.codescan.models import CodeFinding
 from app.crawler_logs.models import CrawlerLog
 from app.depscan.models import DependencyFinding
@@ -115,6 +117,79 @@ class TestPurgeDeletedRepos:
     def test_returns_zero_when_nothing_to_check(self, db_session):
         purged = purge_deleted_repos("baby-feelings", "token", current_repo_full_names=set())
         assert purged == 0
+
+
+class TestPurgeExcludedRepos:
+    """対象外（SCAN_EXCLUDE_REPOS）のリポジトリは、実在していても、Issue を閉じてから削除する。"""
+
+    _EXCLUDED = "baby-feelings/AppGoat_web_v305"
+    _CFG = "app.core.github.accounts.settings.SCAN_EXCLUDE_REPOS"
+
+    def _seed(self, db_session):
+        _make_code_finding(db_session, repo_full_name=self._EXCLUDED)
+        _make_code_finding(db_session, repo_full_name=self._EXCLUDED, line_start=2)
+        _make_dependency_finding(db_session, repo_full_name=self._EXCLUDED)
+        _make_code_finding(db_session, repo_full_name="baby-feelings/other")
+
+    def test_closes_open_issues_then_purges_only_the_excluded_repo(self, db_session):
+        self._seed(db_session)
+
+        with patch(self._CFG, self._EXCLUDED), \
+             patch(f"{_REPO}.exists") as exists, \
+             patch(f"{_REPO}.find_open_issue", side_effect=[2, 7]) as find, \
+             patch(f"{_REPO}.add_issue_comment") as comment, \
+             patch(f"{_REPO}.close_issue") as close:
+            purged = purge_deleted_repos(
+                "baby-feelings", "token", current_repo_full_names={"baby-feelings/other"},
+            )
+
+        assert purged == 1
+        exists.assert_not_called()  # 実在確認は不要（対象外なので、実在していても削除する）
+        assert find.call_count == 2  # CODESCAN と DEPSCAN の Issue を探す
+        assert [c.args[0] for c in comment.call_args_list] == [2, 7]
+        assert [c.args[0] for c in close.call_args_list] == [2, 7]
+        assert db_session.query(CodeFinding).filter_by(repo_full_name=self._EXCLUDED).count() == 0
+        assert db_session.query(DependencyFinding).count() == 0
+        assert db_session.query(CodeFinding).filter_by(
+            repo_full_name="baby-feelings/other").count() == 1  # 他のリポジトリは残る
+
+    def test_purges_when_there_is_no_open_issue(self, db_session):
+        self._seed(db_session)
+
+        with patch(self._CFG, self._EXCLUDED), \
+             patch(f"{_REPO}.find_open_issue", return_value=None), \
+             patch(f"{_REPO}.close_issue") as close:
+            purged = purge_deleted_repos("baby-feelings", "token", current_repo_full_names=set())
+
+        assert purged >= 1
+        close.assert_not_called()
+        assert db_session.query(CodeFinding).filter_by(repo_full_name=self._EXCLUDED).count() == 0
+
+    def test_keeps_data_when_closing_the_issue_fails_so_it_retries_next_day(self, db_session):
+        self._seed(db_session)
+
+        with patch(self._CFG, self._EXCLUDED), \
+             patch(f"{_REPO}.find_open_issue", side_effect=httpx.ConnectError("down")):
+            purged = purge_deleted_repos(
+                "baby-feelings", "token", current_repo_full_names={"baby-feelings/other"},
+            )
+
+        assert purged == 0
+        # 先に消すと、このリポジトリを「データが残っているリポジトリ」として見つけられなくなる
+        assert db_session.query(CodeFinding).filter_by(repo_full_name=self._EXCLUDED).count() == 2
+
+    def test_does_nothing_when_no_repo_is_excluded(self, db_session):
+        self._seed(db_session)
+
+        with patch(self._CFG, ""), patch(f"{_REPO}.exists", return_value=True), \
+             patch(f"{_REPO}.find_open_issue") as find:
+            purged = purge_deleted_repos(
+                "baby-feelings", "token", current_repo_full_names={"baby-feelings/other"},
+            )
+
+        assert purged == 0
+        find.assert_not_called()
+        assert db_session.query(CodeFinding).filter_by(repo_full_name=self._EXCLUDED).count() == 2
 
 
 class TestRunRepoCleanup:

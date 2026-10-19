@@ -20,7 +20,7 @@ description: DEPSCAN（GitHub全リポジトリの依存ライブラリ脆弱性
 収録していないため、GitHub 上の自作アプリが依存する任意のパッケージを検知するには不十分。
 そのため DEPSCAN は `app.core.osv_client.query_versions_batch` で **バージョン指定の OSV API を
 その場でクエリ**し、既存 DB とは独立して脆弱性を判定する。GitHub リポジトリの列挙は
-`GITHUB_USERNAME`（fork・archived は自動除外）、認証は `GITHUB_TOKEN`（fine-grained PAT,
+`GITHUB_USERNAME`（fork・archived は自動除外。`SCAN_EXCLUDE_REPOS`で指定したリポジトリも対象外にし、DB のデータと起票済み Issue は`jobs/repo_cleanup`が片付ける〈Issue #342〉）、認証は `GITHUB_TOKEN`（fine-grained PAT,
 Contents: Read-only + **Issues: Write** 推奨）を使用する。
 
 `list_target_repos` は `GET /user/repos`（`affiliation=owner`）を使う（`GET /users/{username}/repos`
