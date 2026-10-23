@@ -11,14 +11,21 @@ async function openJvn(page: Page) {
   return page.getByRole('table', { name: 'JVN 脆弱性一覧' })
 }
 
-scenario('JVN-01', '一覧・HIGH/MED件数・グラフが表示される', async ({ page }) => {
+scenario('JVN-01', '一覧・件数の帯・グラフが表示される', async ({ page }) => {
   const table = await openJvn(page)
 
   await expect(table.getByRole('row')).toHaveCount(PER_PAGE + 1)
   await expect(table.getByRole('link', { name: 'JVNDB-2026-000001' })).toBeVisible()
-  await expect(page.getByText(`HIGH ${count('High')}`, { exact: true })).toBeVisible()
-  await expect(page.getByText(`MED ${count('Medium')}`, { exact: true })).toBeVisible()
-  await expect(page.getByText(`/ ${JVN_TOTAL} 件`)).toBeVisible()
+  // 件数の帯: 期間内の件数 / そのうち High
+  const band = page.getByRole('group', { name: '件数の集計' })
+  await expect(band.getByText(String(JVN_TOTAL), { exact: true })).toBeVisible()
+  await expect(band.getByText('件が直近30日に更新')).toBeVisible()
+  await expect(band.getByText(String(count('High')), { exact: true })).toBeVisible()
+  await expect(band.getByText('件は High')).toBeVisible()
+
+  // グラフは初期は畳まれていて、開くと表示される
+  await expect(page.getByText('月別 JVN 更新トレンド')).toHaveCount(0)
+  await page.getByText('グラフ（重要度別・月別）を開く').click()
   await expect(page.getByText('月別 JVN 更新トレンド')).toBeVisible()
   await expect(page.getByText('データなし')).toHaveCount(0)
 
@@ -174,4 +181,34 @@ scenario('JVN-09', 'ページ送りの最初/最後ボタンとページ番号�
   await jump.fill('0')
   await move.click()
   await expect(bottom).toContainText('1 / 2')
+})
+
+scenario('JVN-10', '期間を切り替えると、一覧と統計が、その日数で再取得される', async ({ page, api }) => {
+  await openJvn(page)
+  const period = page.getByRole('group', { name: '期間フィルター' })
+  await expect(period.getByRole('button', { name: '30日' })).toHaveAttribute('aria-pressed', 'true')
+  expect(api.lastQuery('/api/jvn')?.get('days')).toBe('30')
+  expect(api.lastQuery('/api/jvn/stats')?.get('days')).toBe('30')
+
+  await period.getByRole('button', { name: '90日' }).click()
+  await expect(page.getByText('JVN 脆弱性（直近 90 日）')).toBeVisible()
+  await expect.poll(() => api.lastQuery('/api/jvn')?.get('days')).toBe('90')
+  expect(api.lastQuery('/api/jvn/stats')?.get('days')).toBe('90')
+})
+
+scenario('JVN-11', '登録したキーワードごとの該当件数が出て、押すと絞り込まれる', async ({ page, api }) => {
+  const table = await openJvn(page)
+  const group = page.getByRole('group', { name: '自分のスタックのキーワード' })
+
+  await page.getByRole('textbox', { name: 'キーワードを追加' }).fill('JVNタイトル 1')
+  await page.getByRole('textbox', { name: 'キーワードを追加' }).press('Enter')
+  await expect.poll(() => api.requestsTo('/api/jvn').some(
+    (r) => r.query.get('search') === 'JVNタイトル 1' && r.query.get('per_page') === '1' && r.query.get('days') === '30',
+  )).toBe(true)
+  await expect(group.getByRole('button', { name: /^JVNタイトル 1\s*\d+$/ })).toBeVisible()
+
+  await group.getByRole('button', { name: /^JVNタイトル 1\s*\d+$/ }).click()
+  await expect(page.getByRole('textbox', { name: 'JVNDB ID・タイトル・概要' })).toHaveValue('JVNタイトル 1')
+  expect(api.lastQuery('/api/jvn')?.get('search')).toBe('JVNタイトル 1')
+  await expect(table).toBeVisible()
 })

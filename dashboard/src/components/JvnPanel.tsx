@@ -1,15 +1,15 @@
-import { useCallback, useEffect, useState } from 'react'
 import { FileWarning, RefreshCw, Search, X } from 'lucide-react'
-import {
-  fetchJvnList, fetchJvnStats,
-  type JvnListResponse, type JvnStatsResponse,
-} from '../api/client'
 import {
   SeverityPieChart, MonthlyBarChart,
   TableLoadingSkeleton, EmptyState, Pagination,
   SeverityFilterButtons, SearchBox, SortSelector,
 } from './shared/VulnPanelParts'
 import { JvnRow } from './jvn/JvnRow'
+import { useJvnData, JVN_PERIODS } from './jvn/useJvnData'
+import { PeriodFilter } from './shared/PeriodFilter'
+import { StatBand } from './shared/StatBand'
+import { WatchKeywords } from './shared/WatchKeywords'
+import { CollapsibleSection } from './shared/CollapsibleSection'
 
 // JVN の重要度は High / Medium / Low（OSV とは異なる）
 const SEVERITY_CLS: Record<string, string> = {
@@ -26,133 +26,60 @@ const SEVERITY_COLORS: Record<string, string> = {
 }
 
 const SEVERITIES = ['ALL', 'High', 'Medium', 'Low']
-const PER_PAGE = 30
-
 export function JvnPanel() {
-  const [severity, setSeverity] = useState<string | null>(null)
-  const [search, setSearch] = useState('')
-  const [sortBy, setSortBy] = useState<'modified' | 'cvss'>('modified')
-  const [page, setPage] = useState(1)
-  const [result, setResult] = useState<JvnListResponse | null>(null)
-  const [stats, setStats] = useState<JvnStatsResponse | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [statsLoading, setStatsLoading] = useState(true)
-
-  // 一覧（フィルタ・ページ）とグラフ用の統計は独立して取得する。統計はページ送り
-  // では変化しないため、ページ送りのたびにグラフが読み込み中表示に戻るのを防ぐ
-  const loadList = useCallback(async (
-    sev: string | null, q: string,
-    p: number, sort: 'modified' | 'cvss',
-  ) => {
-    setLoading(true)
-    try {
-      const list = await fetchJvnList({ severity: sev, search: q, page: p, perPage: PER_PAGE, sortBy: sort })
-      setResult(list)
-    } catch {
-      // エラーは握りつぶし（データなし状態として扱う）
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  const loadStats = useCallback(async () => {
-    setStatsLoading(true)
-    try {
-      const st = await fetchJvnStats(180)
-      setStats(st)
-    } catch {
-      // エラーは握りつぶし（データなし状態として扱う）
-    } finally {
-      setStatsLoading(false)
-    }
-  }, [])
-
-  const load = useCallback((
-    sev: string | null, q: string, p: number, sort: 'modified' | 'cvss',
-  ) => {
-    loadList(sev, q, p, sort)
-    loadStats()
-  }, [loadList, loadStats])
-
-  useEffect(() => {
-    loadList(severity, search, page, sortBy)
-  }, [loadList, severity, search, page, sortBy])
-
-  useEffect(() => {
-    loadStats()
-  }, [loadStats])
-
-  function handleSev(sev: string) {
-    setSeverity(sev === 'ALL' ? null : sev)
-    setPage(1)
-  }
-
-  function clearSearch() {
-    setSearch('')
-    setPage(1)
-  }
-
-  const totalPages = result ? Math.ceil(result.total / PER_PAGE) : 0
-
-  // 重要度別カウントをヘッダーに表示
-  const highCount = stats?.severities.find(s => s.severity === 'High')?.count ?? 0
-  const medCount  = stats?.severities.find(s => s.severity === 'Medium')?.count ?? 0
+  const {
+    severity, search, sortBy, period, page, setPage,
+    result, stats, loading, statsLoading,
+    load, handleSev, handleSearch, handleSortBy, handlePeriod,
+    totalPages, highCount,
+    keywords, keywordCounts, addKeyword, removeKeyword,
+  } = useJvnData()
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg flex flex-col gap-5">
 
       {/* ヘッダー */}
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <FileWarning size={16} className="text-slate-400" />
-            <span className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
-              JVN 脆弱性（過去 6 ヶ月）
-            </span>
-          </div>
-          <button
-            onClick={() => load(severity, search, page, sortBy)}
-            disabled={loading || statsLoading}
-            className="text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40 p-1 rounded"
-            title="再読み込み"
-          >
-            <RefreshCw size={13} className={loading || statsLoading ? 'animate-spin' : ''} />
-          </button>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <FileWarning size={16} className="text-slate-400" />
+          <span className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
+            JVN 脆弱性（直近 {period} 日）
+          </span>
         </div>
-        {!statsLoading && stats && stats.total > 0 && (
-          <div className="flex items-center gap-2 text-xs tabular-nums">
-            {highCount > 0 && (
-              <span className="px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-400 font-semibold">
-                HIGH {highCount}
-              </span>
-            )}
-            {medCount > 0 && (
-              <span className="px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 font-semibold">
-                MED {medCount}
-              </span>
-            )}
-            <span className="text-slate-500">/ {stats.total} 件</span>
-          </div>
-        )}
+        <button
+          onClick={() => load(severity, search, page, sortBy, period)}
+          disabled={loading || statsLoading}
+          className="text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40 p-1 rounded"
+          title="再読み込み"
+        >
+          <RefreshCw size={13} className={loading || statsLoading ? 'animate-spin' : ''} />
+        </button>
       </div>
 
-      {/* ビジュアライゼーション: 重要度別グラフ・月別トレンド */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <SeverityPieChart
-          icon={<FileWarning size={13} className="text-slate-400" />}
-          data={stats?.severities ?? []}
-          colorMap={SEVERITY_COLORS}
-          loading={statsLoading}
-        />
-        <MonthlyBarChart
-          icon={<FileWarning size={13} className="text-slate-400" />}
-          title="月別 JVN 更新トレンド"
-          data={stats?.monthly_trend ?? []}
-          barColor="#f59e0b"
-          height={210}
-          loading={statsLoading}
-        />
+      {/* 期間の切り替え */}
+      <div className="flex flex-wrap items-center gap-3">
+        <PeriodFilter value={period} options={JVN_PERIODS} onChange={v => handlePeriod(v ?? 30)} />
       </div>
+
+      {/* 期間内の件数と、そのうち対応が必要な（High）件数 */}
+      <StatBand
+        loading={statsLoading && !stats}
+        items={[
+          { value: stats?.total ?? null, label: `件が直近${period}日に更新`, tone: 'sky' },
+          { value: stats ? highCount : null, label: '件は High', tone: 'red' },
+        ]}
+      />
+
+      {/* 自分が使っている製品名ごとの該当件数。押すと、その語で絞り込む */}
+      <WatchKeywords
+        keywords={keywords}
+        counts={keywordCounts}
+        active={search}
+        total={stats?.total ?? null}
+        onSelect={kw => handleSearch(kw ?? '')}
+        onAdd={addKeyword}
+        onRemove={removeKeyword}
+      />
 
       {/* 重要度フィルター + 検索 + ソート */}
       <div className="flex flex-wrap items-center gap-3">
@@ -165,8 +92,8 @@ export function JvnPanel() {
 
         <SearchBox
           value={search}
-          onChange={v => { setSearch(v); setPage(1) }}
-          onClear={clearSearch}
+          onChange={handleSearch}
+          onClear={() => handleSearch('')}
           placeholder="JVNDB ID・タイトル・概要"
           searchIcon={<Search size={11} className="text-slate-500 shrink-0" />}
           clearIcon={<X size={10} />}
@@ -174,7 +101,7 @@ export function JvnPanel() {
 
         <SortSelector
           sortBy={sortBy}
-          onChange={sort => { setSortBy(sort); setPage(1) }}
+          onChange={handleSortBy}
           activeClass="bg-amber-500 text-white"
         />
       </div>
@@ -219,6 +146,26 @@ export function JvnPanel() {
           <Pagination page={page} totalPages={totalPages} total={result.total} onPageChange={setPage} />
         </>
       )}
+
+      {/* グラフ（重要度別・月別トレンド）。一覧より優先度が低いため、初期は畳んでおく */}
+      <CollapsibleSection summary="グラフ（重要度別・月別）を開く">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <SeverityPieChart
+            icon={<FileWarning size={13} className="text-slate-400" />}
+            data={stats?.severities ?? []}
+            colorMap={SEVERITY_COLORS}
+            loading={statsLoading}
+          />
+          <MonthlyBarChart
+            icon={<FileWarning size={13} className="text-slate-400" />}
+            title="月別 JVN 更新トレンド"
+            data={stats?.monthly_trend ?? []}
+            barColor="#f59e0b"
+            height={210}
+            loading={statsLoading}
+          />
+        </div>
+      </CollapsibleSection>
     </div>
   )
 }

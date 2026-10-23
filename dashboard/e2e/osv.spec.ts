@@ -17,15 +17,18 @@ scenario('OSV-01', '一覧・CRIT/HIGH件数・グラフが表示される', asy
   await expect(table.getByRole('row')).toHaveCount(PER_PAGE + 1)
   await expect(table.getByRole('link', { name: 'GHSA-e2e0001' })).toBeVisible()
 
-  // ヘッダーの件数バッジ（統計APIの深刻度別件数）
+  // 件数の帯: 期間内の件数 / そのうち CRITICAL・HIGH（統計APIの深刻度別件数）
   const crit = count((v) => v.severity === 'CRITICAL')
   const high = count((v) => v.severity === 'HIGH')
-  await expect(page.getByText(`CRIT ${crit}`, { exact: true })).toBeVisible()
-  // 円グラフの凡例にも同じ「HIGH n」があるため、ヘッダーのバッジ（DOM上で先）を対象にする
-  await expect(page.getByText(`HIGH ${high}`, { exact: true }).first()).toBeVisible()
-  await expect(page.getByText(`/ ${OSV_TOTAL} 件`)).toBeVisible()
+  const band = page.getByRole('group', { name: '件数の集計' })
+  await expect(band.getByText(String(OSV_TOTAL), { exact: true })).toBeVisible()
+  await expect(band.getByText('件が直近30日に更新')).toBeVisible()
+  await expect(band.getByText(String(crit + high), { exact: true })).toBeVisible()
+  await expect(band.getByText('件は CRITICAL・HIGH')).toBeVisible()
 
-  // 深刻度別・エコシステム別・月別トレンドの3グラフ
+  // 深刻度別・エコシステム別・月別トレンドの3グラフは、初期は畳まれていて、開くと表示される
+  await expect(page.getByText('月別 OSV 更新トレンド')).toHaveCount(0)
+  await page.getByText('グラフ（重要度別・エコシステム別・月別）を開く').click()
   await expect(page.getByText('月別 OSV 更新トレンド')).toBeVisible()
   await expect(page.locator('.recharts-wrapper').first()).toBeVisible()
   await expect(page.getByText('データなし')).toHaveCount(0)
@@ -211,4 +214,37 @@ scenario('OSV-10', 'ページ送りの最初/最後ボタンとページ番号�
   await jump.fill('0')
   await move.click()
   await expect(bottom).toContainText('1 / 3')
+})
+
+scenario('OSV-11', '期間を切り替えると、一覧と統計が、その日数で再取得される', async ({ page, api }) => {
+  await openOsv(page)
+  const period = page.getByRole('group', { name: '期間フィルター' })
+  await expect(period.getByRole('button', { name: '30日' })).toHaveAttribute('aria-pressed', 'true')
+  expect(api.lastQuery('/api/osv')?.get('days')).toBe('30')
+  expect(api.lastQuery('/api/osv/stats')?.get('days')).toBe('30')
+
+  await period.getByRole('button', { name: '180日' }).click()
+  await expect(page.getByText('OSV 脆弱性（直近 180 日）')).toBeVisible()
+  await expect(page.getByText('件が直近180日に更新')).toBeVisible()
+  await expect.poll(() => api.lastQuery('/api/osv')?.get('days')).toBe('180')
+  expect(api.lastQuery('/api/osv/stats')?.get('days')).toBe('180')
+  expect(api.lastQuery('/api/osv')?.get('page')).toBe('1')
+})
+
+scenario('OSV-12', '登録したキーワードごとの該当件数が出て、押すと絞り込まれる', async ({ page, api }) => {
+  const table = await openOsv(page)
+  const group = page.getByRole('group', { name: '自分のスタックのキーワード' })
+
+  await page.getByRole('textbox', { name: 'キーワードを追加' }).fill('pkg-pypi')
+  await page.getByRole('textbox', { name: 'キーワードを追加' }).press('Enter')
+  // PyPI は 65 件中 17 件（添字を4で割った余りが0）。期間内の件数を、キーワードで検索して数える
+  await expect(group.getByRole('button', { name: /^pkg-pypi\s*\d+$/ })).toContainText('17')
+  await expect.poll(() => api.requestsTo('/api/osv').some(
+    (r) => r.query.get('search') === 'pkg-pypi' && r.query.get('per_page') === '1' && r.query.get('days') === '30',
+  )).toBe(true)
+
+  await group.getByRole('button', { name: /^pkg-pypi\s*\d+$/ }).click()
+  await expect(page.getByRole('textbox', { name: 'OSV ID・パッケージ名・概要' })).toHaveValue('pkg-pypi')
+  await expect(table.getByRole('row')).toHaveCount(17 + 1)
+  expect(api.lastQuery('/api/osv')?.get('search')).toBe('pkg-pypi')
 })
