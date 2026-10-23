@@ -45,6 +45,8 @@ export interface MockState {
     connected_at: string | null; last_refreshed_at: string | null
     last_used_at: string | null; expires_at: string | null
   }>
+  // 運用停止中のリポジトリ（バックエンドの INACTIVE_REPOS 相当）。既定は空＝すべて運用中
+  inactiveRepos: string[]
   username: string
 }
 
@@ -68,6 +70,13 @@ function paginate<T>(items: T[], query: URLSearchParams, defaultPerPage: number)
     per_page: perPage,
     data: items.slice((page - 1) * perPage, page * perPage),
   }
+}
+
+// `operating=active|inactive|all`（未指定は all）に合わせて、リポジトリを残すかを返す。実APIと同じ振る舞い
+function operatingKeep(query: URLSearchParams, state: MockState): (repo: string) => boolean {
+  const operating = query.get('operating') ?? 'all'
+  const inactive = new Set(state.inactiveRepos.map((r) => r.toLowerCase()))
+  return (repo) => operating === 'all' || (inactive.has(repo.toLowerCase()) === (operating === 'inactive'))
 }
 
 const includesCI = (haystack: string, needle: string) =>
@@ -149,13 +158,15 @@ function defaultResponse(req: RecordedRequest, state: MockState): MockResponse {
 
     // ── DEPSCAN ──
     case 'GET /api/depscan/stats':
-      return { body: depscanStats() }
+      return { body: depscanStats(operatingKeep(query, state)) }
     case 'GET /api/depscan': {
       const owner = query.get('owner')
       const sev = query.get('severity')
       const resolved = query.get('resolved')
+      const keep = operatingKeep(query, state)
       const items = depscanFindings.filter((f) =>
-        (!owner || f.repo_full_name.startsWith(`${owner}/`))
+        keep(f.repo_full_name)
+        && (!owner || f.repo_full_name.startsWith(`${owner}/`))
         && (!sev || f.severity === sev)
         && (resolved === null || (resolved === 'true') === !!f.resolved_at))
       return { body: paginate(items, query, 50) }
@@ -164,14 +175,16 @@ function defaultResponse(req: RecordedRequest, state: MockState): MockResponse {
     // ── DEPSOPS ──
     case 'GET /api/depsops/stats': {
       const repos = new Map<string, number>()
-      for (const i of depsopsItems.filter((d) => d.action === 'flagged')) {
+      const keep = operatingKeep(query, state)
+      for (const i of depsopsItems.filter((d) => d.action === 'flagged' && keep(d.repo_full_name))) {
         repos.set(i.repo_full_name, (repos.get(i.repo_full_name) ?? 0) + 1)
       }
       return { body: { repos: [...repos].map(([repo_full_name, count]) => ({ repo_full_name, count })) } }
     }
     case 'GET /api/depsops': {
       const action = query.get('action')
-      const items = depsopsItems.filter((d) => !action || d.action === action)
+      const keep = operatingKeep(query, state)
+      const items = depsopsItems.filter((d) => keep(d.repo_full_name) && (!action || d.action === action))
       return { body: paginate(items, query, 50) }
     }
 
@@ -187,12 +200,14 @@ function defaultResponse(req: RecordedRequest, state: MockState): MockResponse {
 
     // ── CODESCAN ──
     case 'GET /api/codescan/stats':
-      return { body: codescanStats() }
+      return { body: codescanStats(operatingKeep(query, state)) }
     case 'GET /api/codescan': {
       const sev = query.get('severity')
       const resolved = query.get('resolved')
+      const keep = operatingKeep(query, state)
       const items = codescanItems.filter((f) =>
-        (!sev || f.severity === sev)
+        keep(f.repo_full_name)
+        && (!sev || f.severity === sev)
         && (resolved === null || (resolved === 'true') === !!f.resolved_at))
       return { body: paginate(items, query, 30) }
     }
@@ -255,6 +270,7 @@ export async function installMockApi(page: Page): Promise<MockApi> {
     notification: { slack_webhook_url: null, notifications_enabled: false },
     mcpTokens: [],
     oauthConnections: [],
+    inactiveRepos: [],
     username: 'octocat',
   }
   const requests: RecordedRequest[] = []

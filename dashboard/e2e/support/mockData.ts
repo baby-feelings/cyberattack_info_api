@@ -171,8 +171,8 @@ export const depscanFindings = FINDING_SEEDS.map((s) => ({
   resolved_at: s.resolved ? '2026-09-18T00:00:00Z' : null,
 }))
 
-export function depscanStats() {
-  const open = depscanFindings.filter((f) => !f.resolved_at)
+export function depscanStats(keep: (repo: string) => boolean = () => true) {
+  const open = depscanFindings.filter((f) => !f.resolved_at && keep(f.repo_full_name))
   const repos = new Map<string, number>()
   const sev = new Map<string, number>()
   for (const f of open) {
@@ -235,8 +235,8 @@ export const codescanItems = Array.from({ length: CODESCAN_TOTAL }, (_, i) => {
   }
 })
 
-export function codescanStats() {
-  const open = codescanItems.filter((f) => !f.resolved_at)
+export function codescanStats(keep: (repo: string) => boolean = () => true) {
+  const open = codescanItems.filter((f) => !f.resolved_at && keep(f.repo_full_name))
   const repos = new Map<string, number>()
   const sev = new Map<string, number>()
   for (const f of open) {

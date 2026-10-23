@@ -110,7 +110,9 @@ CODESCAN追加後もキー名はあえて変更せず両ドメインで共有す
 表示する（トークン本体はサーバーに保存されない）。下段に発行済みトークンの一覧（状態・期限・最終使用日）と
 有効なものへの「失効」ボタン（`window.confirm`で確認。表示中のコマンドのトークンを失効したらコマンドも消す）を出す。
 上限（有効10個）超過の409だけはサーバーの説明文をそのまま表示し、他のエラーは固定文言（詳細を漏らさない）。
-コピーは`navigator.clipboard`。本番の`vercel.json`のCSPは外部のオリジン（API・DEPSOPSのバッジ画像）を許可する必要があり、`src/csp.test.ts`が
+コピーは`navigator.clipboard`。DEPSCAN・DEPSOPS（モーダル）・CODESCANは、`shared/OperatingFilter`で運用中／運用停止中／すべてを切り替える（初期表示は運用中。
+APIの`operating`パラメータで絞る。`all`は付けない＝従来どおり。E2Eのモックは`state.inactiveRepos`で再現。表示名はポートフォリオと同じ）。
+本番の`vercel.json`のCSPは外部のオリジン（API・DEPSOPSのバッジ画像）を許可する必要があり、`src/csp.test.ts`が
 抜けを検査する（E2Eは同一オリジンのモックで動くため気づけない）。外部データ（JVN・OSVの参照URL）は`safeHttpUrl`（`shared/safeUrl.ts`）で
 http(s)のみリンクにする（`javascript:`等を弾くXSS対策）。
 セッション（7日・利用で延長。ログインから30日で再認証）が切れていると401→「再ログインしてください」を表示する
