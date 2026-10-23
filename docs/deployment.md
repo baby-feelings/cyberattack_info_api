@@ -92,4 +92,6 @@ bind マウントの変更では caddy が再作成されない）。
 ### CODESCAN などを単独で再スキャンする
 `gh workflow run daily-crawl.yml -f target=codescan`（`target` は kev / osv / jvn / depscan / codescan /
 dependabot-ops / all）。同じUTC日に成功済みの種別は、既定では2回目がスキップされる。確実に再実行するには
-管理API `POST /admin/codescan-crawl?force=true`（`X-API-KEY` 必須）を使う。
+管理API `POST /admin/codescan-crawl?force=true`（`X-API-KEY` 必須）を使う。DEPSCAN・DEPSOPSも同様
+（`/admin/depscan-crawl?force=true`・`/admin/dependabot-ops?force=true`。202で開始し、完了は
+`/api/crawler-logs`で確認する。全リポジトリの走査にDEPSCANは約3分、CODESCANは約4分かかる）。
