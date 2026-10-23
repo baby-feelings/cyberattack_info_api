@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { DepscanPanel } from './DepscanPanel'
 import {
@@ -126,10 +126,12 @@ describe('DepscanPanel', () => {
     render(<DepscanPanel />)
     await waitFor(() => expect(screen.getByText('cryptography')).toBeInTheDocument())
     expect(screen.getByText('requests')).toBeInTheDocument()
-    expect(screen.getByText(/3 件（2 パッケージ）/)).toBeInTheDocument()
+    // 帯: 対応が必要な件数（CRITICAL・HIGH の合計）と、未解決の総件数
+    expect(screen.getByText('件が対応必要（CRITICAL・HIGH）')).toBeInTheDocument()
+    expect(screen.getByText('未解決 3 件のうち')).toBeInTheDocument()
   })
 
-  it('shows the CRIT count badge when there are critical findings', async () => {
+  it('shows how many findings need action in the summary band', async () => {
     mockedFindings.mockResolvedValue([finding({ severity: 'CRITICAL' })])
     mockedStats.mockResolvedValue({
       total: 1,
@@ -138,7 +140,68 @@ describe('DepscanPanel', () => {
     })
 
     render(<DepscanPanel />)
-    await waitFor(() => expect(screen.getByText(/CRIT 1/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('件が対応必要（CRITICAL・HIGH）')).toBeInTheDocument())
+  })
+
+  it('shows a calm message when nothing needs action', async () => {
+    mockedFindings.mockResolvedValue([finding({ severity: 'LOW' })])
+    mockedStats.mockResolvedValue({
+      total: 1,
+      repos: [{ repo_full_name: 'baby-feelings/baby_grow', count: 1 }],
+      severities: [{ severity: 'LOW', count: 1 }],
+    })
+
+    render(<DepscanPanel />)
+    await waitFor(() => expect(screen.getByText('対応が必要な脆弱性はありません')).toBeInTheDocument())
+  })
+
+  it('lists apps in the left rail, urgent ones first, and filters the table when one is selected', async () => {
+    mockedFindings.mockResolvedValue([
+      finding({ repo_full_name: 'baby-feelings/quiet', package_name: 'lodash', severity: 'LOW', osv_id: 'A' }),
+      finding({ repo_full_name: 'baby-feelings/urgent', package_name: 'vite', severity: 'CRITICAL', osv_id: 'B' }),
+    ])
+    mockedStats.mockResolvedValue({
+      total: 2,
+      repos: [
+        { repo_full_name: 'baby-feelings/quiet', count: 1 },
+        { repo_full_name: 'baby-feelings/urgent', count: 1 },
+      ],
+      severities: [{ severity: 'CRITICAL', count: 1 }, { severity: 'LOW', count: 1 }],
+    })
+
+    render(<DepscanPanel />)
+    const rail = await screen.findByRole('navigation', { name: 'アプリ一覧' })
+    const names = within(rail).getAllByRole('button').map(b => b.textContent)
+    // 先頭は「すべてのアプリ」、その次が要対応のあるアプリ
+    expect(names[0]).toContain('すべてのアプリ')
+    expect(names[1]).toContain('urgent')
+    expect(names[2]).toContain('quiet')
+    expect(screen.getByText('lodash')).toBeInTheDocument()
+
+    await userEvent.click(within(rail).getByRole('button', { name: /urgent/ }))
+    expect(screen.getByText('vite')).toBeInTheDocument()
+    expect(screen.queryByText('lodash')).not.toBeInTheDocument()
+    // アプリを選ぶと、リポジトリ列は不要になる
+    expect(screen.queryByRole('columnheader', { name: 'リポジトリ' })).not.toBeInTheDocument()
+
+    await userEvent.click(within(rail).getByRole('button', { name: /すべてのアプリ/ }))
+    expect(screen.getByText('lodash')).toBeInTheDocument()
+  })
+
+  it('keeps the charts folded until they are opened', async () => {
+    mockedFindings.mockResolvedValue([finding()])
+    mockedStats.mockResolvedValue({
+      total: 1,
+      repos: [{ repo_full_name: 'baby-feelings/baby_grow', count: 1 }],
+      severities: [{ severity: 'HIGH', count: 1 }],
+    })
+
+    render(<DepscanPanel />)
+    await screen.findByText('cryptography')
+    expect(screen.queryByText('リポジトリ別件数（未解決）')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByText('グラフ（重要度別・リポジトリ別）を開く'))
+    expect(await screen.findByText('リポジトリ別件数（未解決）')).toBeInTheDocument()
   })
 
   it('only shows the owner filter when findings span more than one owner', async () => {

@@ -57,7 +57,8 @@ function CvssBadge({ score }: { score: number | null }) {
   )
 }
 
-export function CodescanRow({ item }: { item: CodeFindingOut }) {
+// showRepo=false のときはリポジトリ列を隠す（左の一覧でアプリを選んでいて、リポジトリが自明なため）
+export function CodescanRow({ item, showRepo = true }: { item: CodeFindingOut; showRepo?: boolean }) {
   const [open, setOpen] = useState(false)
   const detectedDate = new Date(item.detected_at).toLocaleDateString('ja-JP', {
     year: 'numeric', month: 'short', day: 'numeric',
@@ -76,9 +77,11 @@ export function CodescanRow({ item }: { item: CodeFindingOut }) {
         <td className="py-2.5 pr-3">
           <CvssBadge score={item.cvss_score} />
         </td>
-        <td className="py-2.5 pr-3">
-          <p className="text-slate-300 font-mono text-xs">{item.repo_full_name}</p>
-        </td>
+        {showRepo && (
+          <td className="py-2.5 pr-3">
+            <p className="text-slate-300 font-mono text-xs">{item.repo_full_name}</p>
+          </td>
+        )}
         <td className="py-2.5 pr-3">
           <p className="text-slate-300 font-mono text-xs truncate max-w-[220px]">
             {item.file_path}:{item.line_start}
@@ -104,7 +107,7 @@ export function CodescanRow({ item }: { item: CodeFindingOut }) {
 
       {open && (
         <tr className="bg-slate-800/30">
-          <td colSpan={7} className="px-4 py-3 text-xs text-slate-400 space-y-2">
+          <td colSpan={showRepo ? 7 : 6} className="px-4 py-3 text-xs text-slate-400 space-y-2">
             <p className="leading-relaxed whitespace-pre-wrap">{item.message}</p>
             {item.code_snippet && (
               <pre className="bg-slate-950 rounded p-2 overflow-x-auto text-[11px] text-slate-300">

@@ -112,6 +112,13 @@ CODESCAN追加後もキー名はあえて変更せず両ドメインで共有す
 上限（有効10個）超過の409だけはサーバーの説明文をそのまま表示し、他のエラーは固定文言（詳細を漏らさない）。
 コピーは`navigator.clipboard`。DEPSCAN・DEPSOPS（モーダル）・CODESCANは、`shared/OperatingFilter`で運用中／運用停止中／すべてを切り替える（初期表示は運用中。
 APIの`operating`パラメータで絞る。`all`は付けない＝従来どおり。E2Eのモックは`state.inactiveRepos`で再現。表示名はポートフォリオと同じ）。
+DEPSCAN・CODESCANは「いま対応が必要な運用中の脆弱性は何件で、どのアプリか」を最初に答える構成:
+上に`shared/ActionSummary`（対応が必要＝未解決のCRITICAL・HIGH〈CODESCANは重大〉の件数を大きく。0件は緑の完了表示）、
+その下を左右に分け、左に`shared/RepoRail`（アプリ一覧。要対応の多い順。狭い画面は横並びのチップ）、右に選んだアプリの表。
+DEPSCANは取得済みの検知を`depscan/repoSummary`でアプリ別に集計し、選択は画面側で絞る（重要度フィルターはサーバー側のまま
+＝一覧は現在の絞り込み結果を反映）。CODESCANはサーバー側ページ分割のため、一覧は統計の`repos`、選択は一覧APIの`repo`で絞る。
+アプリを選ぶと表のリポジトリ列を隠す（`showRepo`）。グラフ（重要度別・リポジトリ別）は`shared/CollapsibleSection`で畳む
+（閉じている間は描画しない＝大きさ0でグラフが崩れるのを避ける。統計は運用状態で絞られる）。
 本番の`vercel.json`のCSPは外部のオリジン（API・DEPSOPSのバッジ画像）を許可する必要があり、`src/csp.test.ts`が
 抜けを検査する（E2Eは同一オリジンのモックで動くため気づけない）。外部データ（JVN・OSVの参照URL）は`safeHttpUrl`（`shared/safeUrl.ts`）で
 http(s)のみリンクにする（`javascript:`等を弾くXSS対策）。

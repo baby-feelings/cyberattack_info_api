@@ -32,10 +32,15 @@ scenario('COD-02', 'ログイン済みで一覧・統計・注記が表示され
 
   await expect(page.getByText('ログイン中:')).toBeVisible()
   await expect(table.getByRole('row')).toHaveCount(PER_PAGE + 1)
-  await expect(page.getByText(`未解決 ${open.length} 件`)).toBeVisible()
-  await expect(page.getByText(`重大 ${bySeverity('ERROR')}`, { exact: true })).toBeVisible()
+  // 帯: 対応が必要な件数（重大）と、未解決の総件数
+  await expect(page.getByText(String(bySeverity('ERROR')), { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('件が対応必要（重大）')).toBeVisible()
+  await expect(page.getByText(`未解決 ${open.length} 件のうち`)).toBeVisible()
   // CVSSがベストエフォート推定であることの注記
   await expect(page.getByText(/ベストエフォート推定値/)).toBeVisible()
+  // グラフは初期は畳まれていて、開くと表示される
+  await expect(page.getByText('リポジトリ別件数（未解決）')).toHaveCount(0)
+  await page.getByText('グラフ（リポジトリ別）を開く').click()
   await expect(page.getByText('リポジトリ別件数（未解決）')).toBeVisible()
   await expect(page.locator('.recharts-wrapper').first()).toBeVisible()
 
@@ -266,3 +271,19 @@ scenario('COD-12', '運用中／運用停止中を切り替えると、リクエ
   await expect(page.getByRole('navigation', { name: 'ページ送り（下部）' })).toContainText('（32 件）')
 })
 
+
+scenario('COD-13', '左のアプリ一覧でアプリを選ぶと、そのリポジトリで絞り込んで取得する', async ({ page, api }) => {
+  const table = await openCodescan(page)
+  const rail = page.getByRole('navigation', { name: 'アプリ一覧' })
+
+  await expect(rail.getByRole('button').first()).toContainText('すべてのアプリ')
+  await rail.getByRole('button', { name: /app-one/ }).click()
+
+  await expect.poll(() => api.lastQuery('/api/codescan')?.get('repo')).toBe('baby-feelings/app-one')
+  // アプリを選ぶと、リポジトリ列は不要になる
+  await expect(table.getByRole('columnheader', { name: 'リポジトリ' })).toHaveCount(0)
+
+  await rail.getByRole('button', { name: 'すべてのアプリ' }).click()
+  await expect.poll(() => api.lastQuery('/api/codescan')?.get('repo')).toBeNull()
+  await expect(table.getByRole('columnheader', { name: 'リポジトリ' })).toBeVisible()
+})

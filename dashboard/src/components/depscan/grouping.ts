@@ -93,14 +93,3 @@ export function groupReachability(g: FindingGroup): string | null {
   }
   return best
 }
-
-export function groupSeverityCounts(g: FindingGroup): [string, number][] {
-  const counts = new Map<string, number>()
-  for (const f of g.findings) {
-    const sev = f.severity ?? 'N/A'
-    counts.set(sev, (counts.get(sev) ?? 0) + 1)
-  }
-  return Array.from(counts.entries()).sort(
-    (a, b) => severityRank(a[0] === 'N/A' ? null : a[0]) - severityRank(b[0] === 'N/A' ? null : b[0]),
-  )
-}

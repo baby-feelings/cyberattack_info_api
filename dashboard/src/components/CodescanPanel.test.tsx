@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { CodescanPanel } from './CodescanPanel'
 import {
@@ -195,5 +195,73 @@ describe('CodescanPanel', () => {
       expect(mockedList).toHaveBeenLastCalledWith(expect.objectContaining({ operating: 'all' })),
     )
     expect(mockedStats).toHaveBeenLastCalledWith(undefined, 'all')
+  })
+
+  it('shows how many critical findings need action in the summary band', async () => {
+    mockedList.mockResolvedValue({ total: 1, page: 1, per_page: 30, data: [item()] })
+    mockedStats.mockResolvedValue({
+      total: 3,
+      repos: [{ repo_full_name: 'baby-feelings/baby_grow', count: 3 }],
+      severities: [{ severity: 'ERROR', count: 2 }, { severity: 'INFO', count: 1 }],
+    })
+
+    render(<CodescanPanel />)
+    await waitFor(() => expect(screen.getByText('件が対応必要（重大）')).toBeInTheDocument())
+    expect(screen.getByText('未解決 3 件のうち')).toBeInTheDocument()
+  })
+
+  it('narrows the list to one app through the left rail, and back to all apps', async () => {
+    mockedList.mockResolvedValue({ total: 1, page: 1, per_page: 30, data: [item()] })
+    mockedStats.mockResolvedValue({
+      total: 3,
+      repos: [
+        { repo_full_name: 'baby-feelings/baby_grow', count: 2 },
+        { repo_full_name: 'baby-feelings/todo-app', count: 1 },
+      ],
+      severities: [{ severity: 'ERROR', count: 3 }],
+    })
+
+    render(<CodescanPanel />)
+    const rail = await screen.findByRole('navigation', { name: 'アプリ一覧' })
+    await waitFor(() =>
+      expect(mockedList).toHaveBeenCalledWith(expect.objectContaining({ repo: null })),
+    )
+
+    await userEvent.click(within(rail).getByRole('button', { name: /todo-app/ }))
+    await waitFor(() =>
+      expect(mockedList).toHaveBeenLastCalledWith(
+        expect.objectContaining({ repo: 'baby-feelings/todo-app', page: 1 }),
+      ),
+    )
+    // アプリを選ぶと、リポジトリ列は不要になる
+    expect(screen.queryByRole('columnheader', { name: 'リポジトリ' })).not.toBeInTheDocument()
+
+    await userEvent.click(within(rail).getByRole('button', { name: /すべてのアプリ/ }))
+    await waitFor(() =>
+      expect(mockedList).toHaveBeenLastCalledWith(expect.objectContaining({ repo: null })),
+    )
+  })
+
+  it('clears the selected app when the operating filter changes', async () => {
+    mockedList.mockResolvedValue({ total: 1, page: 1, per_page: 30, data: [item()] })
+    mockedStats.mockResolvedValue({
+      total: 1,
+      repos: [{ repo_full_name: 'baby-feelings/baby_grow', count: 1 }],
+      severities: [{ severity: 'ERROR', count: 1 }],
+    })
+
+    render(<CodescanPanel />)
+    const rail = await screen.findByRole('navigation', { name: 'アプリ一覧' })
+    await userEvent.click(within(rail).getByRole('button', { name: /baby_grow/ }))
+    await waitFor(() =>
+      expect(mockedList).toHaveBeenLastCalledWith(expect.objectContaining({ repo: 'baby-feelings/baby_grow' })),
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: '運用停止中' }))
+    await waitFor(() =>
+      expect(mockedList).toHaveBeenLastCalledWith(
+        expect.objectContaining({ operating: 'inactive', repo: null }),
+      ),
+    )
   })
 })

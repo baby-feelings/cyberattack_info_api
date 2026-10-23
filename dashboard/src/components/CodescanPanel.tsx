@@ -6,6 +6,10 @@ import { CodescanRow } from './codescan/CodescanRow'
 import { RepoBarChart } from './codescan/RepoBarChart'
 import { useCodescanData } from './codescan/useCodescanData'
 import { OperatingFilter } from './shared/OperatingFilter'
+import { ActionSummary } from './shared/ActionSummary'
+import { CollapsibleSection } from './shared/CollapsibleSection'
+import { RepoRail } from './shared/RepoRail'
+import { repoShortName } from './shared/repoName'
 
 const SEVERITY_CLS: Record<string, string> = {
   ERROR: 'bg-red-500/15 text-red-400 border-red-500/30',
@@ -29,7 +33,7 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
     severity, resolved, operating, page, setPage,
     result, stats, loading, statsLoading,
     load, handleSev, handleOperating, handleResolvedToggle,
-    totalPages, errorCount,
+    selectedRepo, handleRepo, totalPages, errorCount,
   } = useCodescanData(authToken)
 
   return (
@@ -45,7 +49,7 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
             </span>
           </div>
           <button
-            onClick={() => load(severity, resolved, page, operating)}
+            onClick={() => load(severity, resolved, page, operating, selectedRepo)}
             disabled={loading || statsLoading}
             className="text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40 p-1 rounded"
             title="再読み込み"
@@ -53,16 +57,6 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
             <RefreshCw size={13} className={loading || statsLoading ? 'animate-spin' : ''} />
           </button>
         </div>
-        {!statsLoading && stats && stats.total > 0 && (
-          <div className="flex items-center gap-2 text-xs tabular-nums">
-            {errorCount > 0 && (
-              <span className="px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 font-semibold">
-                重大 {errorCount}
-              </span>
-            )}
-            <span className="text-slate-500">未解決 {stats.total} 件</span>
-          </div>
-        )}
       </div>
 
       {/* 注記: CVSSはベストエフォート推定であることを明記（Issue #203の要件） */}
@@ -72,9 +66,6 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
         ベストエフォート推定値であり、正式なCVSS評価に代わるものではありません。
         7.0以上は赤バッジで強調表示します。
       </p>
-
-      {/* リポジトリ別統計（棒グラフ、DEPSCANと同じ構成） */}
-      <RepoBarChart stats={stats} loading={statsLoading} />
 
       {/* 運用状態フィルター + 重要度フィルター + 解決状態フィルター */}
       <div className="flex flex-wrap items-center gap-3">
@@ -109,46 +100,78 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
         </div>
       </div>
 
-      {/* ローディング */}
-      {loading ? (
-        <TableLoadingSkeleton columnWidths={['w-16', 'w-12', 'w-32', 'w-40', 'flex-1']} />
+      {/* いま対応が必要な件数（未解決の重大＝ERROR） */}
+      <ActionSummary
+        count={errorCount}
+        criteria="重大"
+        total={stats?.total ?? null}
+        loading={statsLoading && !stats}
+      />
 
-      /* データなし */
-      ) : result && result.total === 0 ? (
-        <EmptyState icon={<ScanSearch size={28} />} message="該当するコード脆弱性はありません" />
+      {/* 左: アプリ一覧／右: 選んだアプリの脆弱性 */}
+      <div className="flex flex-col md:flex-row gap-4">
+        <RepoRail
+          selected={selectedRepo}
+          onSelect={handleRepo}
+          allBadge={<span className="text-slate-500 tabular-nums">{stats?.total ?? 0}</span>}
+          items={(stats?.repos ?? []).map(r => ({
+            key: r.repo_full_name,
+            label: repoShortName(r.repo_full_name),
+            badge: <span className="text-slate-300 tabular-nums">{r.count}</span>,
+          }))}
+        />
 
-      /* テーブル */
-      ) : result && (
-        <>
-          <Pagination page={page} totalPages={totalPages} total={result.total} onPageChange={setPage} position="top" />
+        <div className="flex-1 min-w-0 flex flex-col gap-3">
+          {/* ローディング */}
+          {loading ? (
+            <TableLoadingSkeleton columnWidths={['w-16', 'w-12', 'w-32', 'w-40', 'flex-1']} />
 
-          <div className="overflow-x-auto -mx-1 px-1">
-            <table aria-label="コード脆弱性一覧" className="w-full text-sm min-w-[700px]">
-              <thead>
-                <tr className="border-b border-slate-800">
-                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-20">重要度</th>
-                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-16">CVSS</th>
-                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-40">リポジトリ</th>
-                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3">ファイル:行</th>
-                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3">ルール</th>
-                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-24">検知日</th>
-                  <th className="w-5" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {result.data.map((item, i) => (
-                  <CodescanRow
-                    key={`${item.repo_full_name}-${item.file_path}-${item.rule_id}-${item.line_start}-${i}`}
-                    item={item}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
+          /* データなし */
+          ) : result && result.total === 0 ? (
+            <EmptyState icon={<ScanSearch size={28} />} message="該当するコード脆弱性はありません" />
 
-          <Pagination page={page} totalPages={totalPages} total={result.total} onPageChange={setPage} />
-        </>
-      )}
+          /* テーブル */
+          ) : result && (
+            <>
+              <Pagination page={page} totalPages={totalPages} total={result.total} onPageChange={setPage} position="top" />
+
+              <div className="overflow-x-auto -mx-1 px-1">
+                <table aria-label="コード脆弱性一覧" className="w-full text-sm min-w-[560px]">
+                  <thead>
+                    <tr className="border-b border-slate-800">
+                      <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-20">重要度</th>
+                      <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-16">CVSS</th>
+                      {!selectedRepo && (
+                        <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-40">リポジトリ</th>
+                      )}
+                      <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3">ファイル:行</th>
+                      <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3">ルール</th>
+                      <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-24">検知日</th>
+                      <th className="w-5" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60">
+                    {result.data.map((item, i) => (
+                      <CodescanRow
+                        key={`${item.repo_full_name}-${item.file_path}-${item.rule_id}-${item.line_start}-${i}`}
+                        item={item}
+                        showRepo={!selectedRepo}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <Pagination page={page} totalPages={totalPages} total={result.total} onPageChange={setPage} />
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* リポジトリ別統計（棒グラフ）。一覧より優先度が低いため、初期は畳んでおく */}
+      <CollapsibleSection summary="グラフ（リポジトリ別）を開く">
+        <RepoBarChart stats={stats} loading={statsLoading} />
+      </CollapsibleSection>
     </div>
   )
 }
