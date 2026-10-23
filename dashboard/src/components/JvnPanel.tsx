@@ -29,7 +29,7 @@ const SEVERITIES = ['ALL', 'High', 'Medium', 'Low']
 export function JvnPanel() {
   const {
     severity, search, sortBy, period, page, setPage,
-    result, stats, loading, statsLoading,
+    result, stats, trend, loading, statsLoading,
     load, handleSev, handleSearch, handleSortBy, handlePeriod,
     totalPages, highCount,
     keywords, keywordCounts, addKeyword, removeKeyword,
@@ -67,11 +67,11 @@ export function JvnPanel() {
           />
           <MonthlyBarChart
             icon={<FileWarning size={13} className="text-slate-400" />}
-            title="月別 JVN 更新トレンド"
-            data={stats?.monthly_trend ?? []}
+            title="月別 JVN 更新トレンド（6ヶ月）"
+            data={trend?.monthly_trend ?? []}
             barColor="#f59e0b"
             height={210}
-            loading={statsLoading}
+            loading={trend === null && statsLoading}
           />
         </div>
       </CollapsibleSection>

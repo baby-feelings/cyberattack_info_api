@@ -35,7 +35,7 @@ const SEVERITIES = ['ALL', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
 export function OsvPanel() {
   const {
     ecosystem, severity, search, sortBy, period, page, setPage,
-    result, stats, loading, statsLoading,
+    result, stats, trend, loading, statsLoading,
     load, handleEco, handleSev, handleSearch, clearSearch, handleSortBy, handlePeriod,
     totalPages, critCount, highCount,
     keywords, keywordCounts, addKeyword, removeKeyword,
@@ -74,11 +74,11 @@ export function OsvPanel() {
           <EcosystemBarChart stats={stats} loading={statsLoading} />
           <MonthlyBarChart
             icon={<BarChart2 size={13} className="text-slate-400" />}
-            title="月別 OSV 更新トレンド"
-            data={stats?.monthly_trend ?? []}
+            title="月別 OSV 更新トレンド（6ヶ月）"
+            data={trend?.monthly_trend ?? []}
             barColor="#7c3aed"
             height={160}
-            loading={statsLoading}
+            loading={trend === null && statsLoading}
           />
         </div>
       </CollapsibleSection>

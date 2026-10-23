@@ -133,7 +133,8 @@ scenario('JVN-08', '再読み込みボタンで再取得される', async ({ pag
   await page.getByRole('button', { name: '再読み込み' }).click()
 
   await expect.poll(() => api.requestsTo('/api/jvn').length).toBe(before.list + 1)
-  await expect.poll(() => api.requestsTo('/api/jvn/stats').length).toBe(before.stats + 1)
+  // 統計は、選んだ期間の分と、月別トレンド用の6ヶ月分の2回取り直す
+  await expect.poll(() => api.requestsTo('/api/jvn/stats').length).toBe(before.stats + 2)
 })
 
 scenario('JVN-09', 'ページ送りの最初/最後ボタンとページ番号の直接入力', async ({ page, api }) => {
@@ -186,12 +187,16 @@ scenario('JVN-10', '期間を切り替えると、一覧と統計が、その日
   const period = page.getByRole('group', { name: '期間フィルター' })
   await expect(period.getByRole('button', { name: '30日' })).toHaveAttribute('aria-pressed', 'true')
   expect(api.lastQuery('/api/jvn')?.get('days')).toBe('30')
-  expect(api.lastQuery('/api/jvn/stats')?.get('days')).toBe('30')
+  // 統計は、選んだ期間（件数の帯）と、月別トレンド用の180日分（常に6ヶ月）の2回取得する
+  const statsDays = () => api.requestsTo('/api/jvn/stats').map((r) => r.query.get('days'))
+  await expect.poll(statsDays).toEqual(expect.arrayContaining(['30', '180']))
 
   await period.getByRole('button', { name: '90日' }).click()
   await expect(page.getByText('JVN 脆弱性（直近 90 日）')).toBeVisible()
   await expect.poll(() => api.lastQuery('/api/jvn')?.get('days')).toBe('90')
-  expect(api.lastQuery('/api/jvn/stats')?.get('days')).toBe('90')
+  await expect.poll(statsDays).toContain('90')
+  // 6ヶ月分は期間を切り替えても取り直さない
+  expect(statsDays().filter((d) => d === '180')).toHaveLength(1)
 })
 
 scenario('JVN-11', '登録したキーワードごとの該当件数が出て、押すと絞り込まれる', async ({ page, api }) => {

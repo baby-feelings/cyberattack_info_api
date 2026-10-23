@@ -125,7 +125,9 @@ OSV・JVNは一覧・統計APIの`days`、KEVは新着API`/recent`で期間内�
 「すべて」だけサーバー側のページ分割〉）、`shared/StatBand`（期間内の件数と、注目すべき件数＝KEVはEPSS10%以上〈`min_epss`〉・OSVはCRITICAL・HIGH・JVNはHigh）、
 `shared/WatchKeywords`（自分のスタックのキーワードごとの該当件数のチップ。0件は緑。押すと検索語に入れて絞る。キーワードは
 `hooks/useWatchKeywords`でlocalStorageに保存〈最大10個・端末ごと〉、件数は`shared/useKeywordCounts`で取得し、条件が変わったら古い件数を捨てる）。
-KEVの表は追加日ごとに区切り、EPSSに小さな棒を添える。グラフは5画面とも上部に最初から表示し、`CollapsibleSection`で閉じられる。KEVのデータ取得は`kev/useKevData`、JVNは`jvn/useJvnData`。
+KEVの表は追加日ごとに区切り、EPSSに小さな棒を添える。グラフは5画面とも上部に最初から表示し、`CollapsibleSection`で閉じられる。月別トレンドは3画面とも直近6ヶ月で統一
+（OSV・JVNは、選んだ期間に関わらず180日分の統計を別に取得して使う〈期間を絞ると月が2つしか出ないため。期間を切り替えても取り直さず、
+再読み込みでは取り直す〉。KEVは全期間の月別から`kev/trend`の`recentMonths`で直近6ヶ月を切り出す）。KEVのデータ取得は`kev/useKevData`、JVNは`jvn/useJvnData`。
 本番の`vercel.json`のCSPは外部のオリジン（API・DEPSOPSのバッジ画像）を許可する必要があり、`src/csp.test.ts`が
 抜けを検査する（E2Eは同一オリジンのモックで動くため気づけない）。外部データ（JVN・OSVの参照URL）は`safeHttpUrl`（`shared/safeUrl.ts`）で
 http(s)のみリンクにする（`javascript:`等を弾くXSS対策）。
