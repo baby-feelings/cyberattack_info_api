@@ -189,10 +189,10 @@ describe('JvnPanel', () => {
 
     render(<JvnPanel />)
     await screen.findByRole('group', { name: '件数の集計' })
-    expect(await screen.findByText('月別 JVN 更新トレンド')).toBeInTheDocument()
+    expect(await screen.findByText('月別 JVN 更新トレンド（6ヶ月）')).toBeInTheDocument()
 
     await user.click(screen.getByText('グラフ（重要度別・月別）'))
-    expect(screen.queryByText('月別 JVN 更新トレンド')).not.toBeInTheDocument()
+    expect(screen.queryByText('月別 JVN 更新トレンド（6ヶ月）')).not.toBeInTheDocument()
   })
 
   it('counts hits per watched keyword within the period', async () => {
@@ -209,5 +209,27 @@ describe('JvnPanel', () => {
     expect(await within(group).findByText('6')).toBeInTheDocument()
     expect(mockedList).toHaveBeenCalledWith(expect.objectContaining({ search: 'Cisco', days: 30, perPage: 1 }))
     localStorage.clear()
+  })
+
+  it('always loads a 6-month stats for the monthly trend, whatever period is selected', async () => {
+    mockedList.mockResolvedValue(EMPTY_LIST)
+    mockedStats.mockResolvedValue(EMPTY_STATS)
+    const user = userEvent.setup()
+
+    render(<JvnPanel />)
+    // 件数の帯は選んだ期間（30日）、月別トレンドは 180日分（月が2つしか出なくならないように）
+    await waitFor(() => expect(mockedStats).toHaveBeenCalledWith(30))
+    await waitFor(() => expect(mockedStats).toHaveBeenCalledWith(180))
+    const trendCalls = () => mockedStats.mock.calls.filter(c => c[0] === 180).length
+    expect(trendCalls()).toBe(1)
+
+    // 期間を切り替えても、6ヶ月分は取り直さない
+    await user.click(screen.getByRole('button', { name: '90日' }))
+    await waitFor(() => expect(mockedStats).toHaveBeenCalledWith(90))
+    expect(trendCalls()).toBe(1)
+
+    // 手動の再読み込みでは、6ヶ月分も取り直す
+    await user.click(screen.getByTitle('再読み込み'))
+    await waitFor(() => expect(trendCalls()).toBe(2))
   })
 })

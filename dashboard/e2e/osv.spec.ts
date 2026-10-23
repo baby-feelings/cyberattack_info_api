@@ -219,13 +219,17 @@ scenario('OSV-11', '期間を切り替えると、一覧と統計が、その日
   const period = page.getByRole('group', { name: '期間フィルター' })
   await expect(period.getByRole('button', { name: '30日' })).toHaveAttribute('aria-pressed', 'true')
   expect(api.lastQuery('/api/osv')?.get('days')).toBe('30')
-  expect(api.lastQuery('/api/osv/stats')?.get('days')).toBe('30')
+  // 統計は、選んだ期間（件数の帯）と、月別トレンド用の180日分（常に6ヶ月）の2回取得する
+  const statsDays = () => api.requestsTo('/api/osv/stats').map((r) => r.query.get('days'))
+  await expect.poll(statsDays).toEqual(expect.arrayContaining(['30', '180']))
 
   await period.getByRole('button', { name: '180日' }).click()
   await expect(page.getByText('OSV 脆弱性（直近 180 日）')).toBeVisible()
   await expect(page.getByText('件が直近180日に更新')).toBeVisible()
   await expect.poll(() => api.lastQuery('/api/osv')?.get('days')).toBe('180')
-  expect(api.lastQuery('/api/osv/stats')?.get('days')).toBe('180')
+  await expect.poll(statsDays).toContain('180')
+  // 期間（180日）の統計と、月別トレンド用の6ヶ月分は、同じ180日（期間を30→180にしても6ヶ月分は取り直さない）
+  expect(statsDays().filter((d) => d === '180').length).toBeGreaterThanOrEqual(1)
   expect(api.lastQuery('/api/osv')?.get('page')).toBe('1')
 })
 

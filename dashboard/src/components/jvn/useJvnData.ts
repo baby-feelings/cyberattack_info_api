@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   fetchJvnList, fetchJvnStats,
   type JvnListResponse, type JvnStatsResponse,
@@ -7,6 +7,8 @@ import { useWatchKeywords } from '../../hooks/useWatchKeywords'
 import { useKeywordCounts } from '../shared/useKeywordCounts'
 
 const PER_PAGE = 30
+// 月別トレンドは、選んだ期間に関わらず、常にこの日数（6ヶ月）で集計する（期間を絞ると月が2つしか出ないため）
+const TREND_DAYS = 180
 
 // 期間の選択肢（直近 N 日）。初期は直近30日
 export const JVN_PERIODS = [
@@ -26,6 +28,9 @@ export function useJvnData() {
   const [page, setPage] = useState(1)
   const [result, setResult] = useState<JvnListResponse | null>(null)
   const [stats, setStats] = useState<JvnStatsResponse | null>(null)
+  // 月別トレンド用の統計（期間に左右されない）。取得済みなら、期間を切り替えても取り直さない
+  const [trend, setTrend] = useState<JvnStatsResponse | null>(null)
+  const trendLoaded = useRef(false)
   const [loading, setLoading] = useState(true)
   const [statsLoading, setStatsLoading] = useState(true)
   const { keywords, add, remove } = useWatchKeywords()
@@ -44,10 +49,22 @@ export function useJvnData() {
     }
   }, [])
 
-  const loadStats = useCallback(async (days: number) => {
+  const loadStats = useCallback(async (days: number, force = false) => {
     setStatsLoading(true)
     try {
-      setStats(await fetchJvnStats(days))
+      const st = await fetchJvnStats(days)
+      setStats(st)
+      if (days === TREND_DAYS) {
+        setTrend(st)
+        trendLoaded.current = true
+      } else if (force || !trendLoaded.current) {
+        trendLoaded.current = true
+        try {
+          setTrend(await fetchJvnStats(TREND_DAYS))
+        } catch {
+          trendLoaded.current = false
+        }
+      }
     } catch {
       // エラーは握りつぶし（データなし状態として扱う）
     } finally {
@@ -59,7 +76,7 @@ export function useJvnData() {
     sev: string | null, q: string, p: number, sort: 'modified' | 'cvss', days: number,
   ) => {
     loadList(sev, q, p, sort, days)
-    loadStats(days)
+    loadStats(days, true)
   }, [loadList, loadStats])
 
   useEffect(() => {
@@ -104,7 +121,7 @@ export function useJvnData() {
 
   return {
     severity, search, sortBy, period, page, setPage,
-    result, stats, loading, statsLoading,
+    result, stats, trend, loading, statsLoading,
     load, handleSev, handleSearch, handleSortBy, handlePeriod,
     totalPages, highCount,
     keywords, keywordCounts, addKeyword: add, removeKeyword: remove,

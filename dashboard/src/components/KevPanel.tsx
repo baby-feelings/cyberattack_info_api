@@ -7,6 +7,7 @@ import {
 import { KevRow } from './kev/KevRow'
 import { VendorBarChart } from './kev/VendorBarChart'
 import { useKevData, KEV_PERIODS } from './kev/useKevData'
+import { recentMonths } from './kev/trend'
 import { PeriodFilter } from './shared/PeriodFilter'
 import { StatBand } from './shared/StatBand'
 import { WatchKeywords } from './shared/WatchKeywords'
@@ -55,8 +56,8 @@ export function KevPanel() {
           <VendorBarChart stats={stats} loading={statsLoading} />
           <MonthlyBarChart
             icon={<BarChart2 size={13} className="text-slate-400" />}
-            title="月別 CVE 追加数トレンド"
-            data={stats?.monthly_trend ?? []}
+            title="月別 CVE 追加数トレンド（6ヶ月）"
+            data={recentMonths(stats?.monthly_trend ?? [])}
             barColor="#7c3aed"
             height={160}
             loading={statsLoading}
