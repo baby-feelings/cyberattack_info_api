@@ -122,6 +122,8 @@ DBマイグレーションは`Dockerfile`の`CMD`（`python -m app.core.migrate 
 コンテナ起動時に自動適用される。ファイルが削除されたPRをデプロイする際は、SCPが削除を
 反映しないため、リモート側の不要ファイルを`ssh`で手動削除すること。
 
+**デプロイスクリプトは PowerShell 7（`pwsh`）で、`deploy/`から実行する**（BOMなしUTF-8のため、Windows PowerShell 5は
+日本語を誤読して構文エラーになる。相対パスで`../.env.production`を読む）。
 **デプロイスクリプト実行の注意**: `deploy_to_oci.ps1`の出力を`| Select-Object -First N`等で打ち切ると、
 パイプライン停止でスクリプトごと中断され、本番が古いまま残る（実際に発生）。`| Out-String`で全体を受けて
 から`Select-String`で絞る。デプロイ後は`/health`・`/mcp`（401が返れば到達）で反映を確認する。

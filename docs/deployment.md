@@ -45,6 +45,10 @@ cd deploy
 .\deploy_to_oci.ps1
 ```
 
+**PowerShell 7（`pwsh`）で実行する。** スクリプトは BOM なしの UTF-8 のため、Windows PowerShell 5
+（`powershell.exe`）は日本語を誤読して構文エラーで止まる。`deploy/` ディレクトリから実行する
+（相対パスで `../.env.production` を読む）。
+
 SCPでコード一式を転送し、OCI上で `docker compose up -d --build` を実行する
 （`api-prod`・`caddy`・`prometheus`・`grafana`・`node-exporter`）。
 `deploy/Caddyfile` を変えたときは、デプロイ後に Caddy の再読み込みが別途必要
