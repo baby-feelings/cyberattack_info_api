@@ -16,6 +16,8 @@ export function useCodescanData(authToken?: string) {
   const [resolved, setResolved] = useState<boolean | null>(false)
   // 初期表示は運用中のみ（運用停止中のアプリの脆弱性に埋もれず、運用中のものを見やすくするため）
   const [operating, setOperating] = useState<OperatingStatus>('active')
+  // 左のアプリ一覧で選んでいるリポジトリ（null = すべてのアプリ）。一覧APIの repo で絞り込む
+  const [selectedRepo, setSelectedRepo] = useState<string | null>(null)
   const [page, setPage] = useState(1)
   const [result, setResult] = useState<CodescanListResponse | null>(null)
   const [stats, setStats] = useState<CodescanStatsResponse | null>(null)
@@ -25,12 +27,12 @@ export function useCodescanData(authToken?: string) {
   // 一覧（フィルタ・ページ）とグラフ用の統計は独立して取得する。統計はページ送り
   // では変化しないため、ページ送りのたびにグラフが読み込み中表示に戻るのを防ぐ
   const loadList = useCallback(async (
-    sev: string | null, res: boolean | null, p: number, op: OperatingStatus,
+    sev: string | null, res: boolean | null, p: number, op: OperatingStatus, repo: string | null,
   ) => {
     setLoading(true)
     try {
       const list = await fetchCodescanList({
-        severity: sev, resolved: res, page: p, perPage: PER_PAGE, operating: op, authToken,
+        severity: sev, resolved: res, page: p, perPage: PER_PAGE, operating: op, repo, authToken,
       })
       setResult(list)
     } catch {
@@ -53,15 +55,15 @@ export function useCodescanData(authToken?: string) {
   }, [authToken])
 
   const load = useCallback((
-    sev: string | null, res: boolean | null, p: number, op: OperatingStatus,
+    sev: string | null, res: boolean | null, p: number, op: OperatingStatus, repo: string | null,
   ) => {
-    loadList(sev, res, p, op)
+    loadList(sev, res, p, op, repo)
     loadStats(op)
   }, [loadList, loadStats])
 
   useEffect(() => {
-    loadList(severity, resolved, page, operating)
-  }, [loadList, severity, resolved, page, operating])
+    loadList(severity, resolved, page, operating, selectedRepo)
+  }, [loadList, severity, resolved, page, operating, selectedRepo])
 
   useEffect(() => {
     loadStats(operating)
@@ -74,6 +76,13 @@ export function useCodescanData(authToken?: string) {
 
   function handleOperating(op: OperatingStatus) {
     setOperating(op)
+    // 運用状態を切り替えると、選んでいたアプリが一覧に無いことがあるため、選択を戻す
+    setSelectedRepo(null)
+    setPage(1)
+  }
+
+  function handleRepo(repo: string | null) {
+    setSelectedRepo(repo)
     setPage(1)
   }
 
@@ -89,6 +98,6 @@ export function useCodescanData(authToken?: string) {
     severity, resolved, page, setPage,
     result, stats, loading, statsLoading,
     operating, load, handleSev, handleOperating, handleResolvedToggle,
-    totalPages, errorCount,
+    selectedRepo, handleRepo, totalPages, errorCount,
   }
 }

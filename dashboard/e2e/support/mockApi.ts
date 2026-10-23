@@ -203,10 +203,12 @@ function defaultResponse(req: RecordedRequest, state: MockState): MockResponse {
       return { body: codescanStats(operatingKeep(query, state)) }
     case 'GET /api/codescan': {
       const sev = query.get('severity')
+      const repo = query.get('repo')
       const resolved = query.get('resolved')
       const keep = operatingKeep(query, state)
       const items = codescanItems.filter((f) =>
         keep(f.repo_full_name)
+        && (!repo || f.repo_full_name === repo)
         && (!sev || f.severity === sev)
         && (resolved === null || (resolved === 'true') === !!f.resolved_at))
       return { body: paginate(items, query, 30) }

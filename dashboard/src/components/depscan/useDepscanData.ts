@@ -6,6 +6,7 @@ import {
 import {
   ownerOf, groupFindings, groupBestSeverityRank, groupLatestDetectedAt,
 } from './grouping'
+import { summarizeRepos } from './repoSummary'
 
 const PER_PAGE = 30
 // 新しいDEPSCANクロールが完了していないかを確認する間隔（ミリ秒）
@@ -23,6 +24,8 @@ export function useDepscanData(authToken?: string) {
   const [showResolved, setShowResolved] = useState(false)
   // 初期表示は運用中のみ（運用停止中のアプリの脆弱性に埋もれず、運用中のものを見やすくするため）
   const [operating, setOperating] = useState<OperatingStatus>('active')
+  // 左のアプリ一覧で選んでいるリポジトリ（null = すべてのアプリ）。絞り込みは取得済みの結果に対して行う
+  const [selectedRepo, setSelectedRepo] = useState<string | null>(null)
   const [page, setPage] = useState(1)
   const [findings, setFindings] = useState<DependencyFindingOut[]>([])
   const [stats, setStats] = useState<DepscanStatsResponse | null>(null)
@@ -95,16 +98,27 @@ export function useDepscanData(authToken?: string) {
     return Array.from(set).sort()
   }, [stats])
 
+  // 左のアプリ一覧（対応が必要なアプリが上）。絞り込み条件の変更で選択中のアプリが一覧から
+  // 消えた場合は、選択を「すべてのアプリ」に戻す
+  const repos = useMemo(() => summarizeRepos(findings), [findings])
+  const activeRepo = repos.some(r => r.repo === selectedRepo) ? selectedRepo : null
+
   // パッケージ×バージョン単位に集約し、重大度が高い順・検知が新しい順に並べる
   const groups = useMemo(() => {
-    const g = groupFindings(findings)
+    const target = activeRepo ? findings.filter(f => f.repo_full_name === activeRepo) : findings
+    const g = groupFindings(target)
     g.sort((a, b) => {
       const r = groupBestSeverityRank(a) - groupBestSeverityRank(b)
       if (r !== 0) return r
       return groupLatestDetectedAt(b).localeCompare(groupLatestDetectedAt(a))
     })
     return g
-  }, [findings])
+  }, [findings, activeRepo])
+
+  function handleRepo(repo: string | null) {
+    setSelectedRepo(repo)
+    setPage(1)
+  }
 
   function handleOwner(o: string) {
     setOwner(o === 'ALL' ? null : o)
@@ -137,5 +151,6 @@ export function useDepscanData(authToken?: string) {
     findings, stats, loading, newDataAvailable,
     load, handleOwner, handleSev, handleOperating, toggleShowResolved,
     owners, groups, totalPages, pageGroups, critCount, highCount,
+    repos, activeRepo, handleRepo,
   }
 }

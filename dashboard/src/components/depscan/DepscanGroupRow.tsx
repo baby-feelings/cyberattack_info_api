@@ -3,7 +3,7 @@ import { ExternalLink, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react
 import { SeverityBadge } from '../shared/VulnPanelParts'
 import {
   SEVERITY_CLS, severityRank,
-  groupFixedVersions, groupSeverityCounts, groupIsResolved, groupLatestDetectedAt,
+  groupFixedVersions, groupIsResolved, groupLatestDetectedAt,
   groupReachability,
   type FindingGroup,
 } from './grouping'
@@ -77,14 +77,14 @@ function PriorityReasonBadges({ reasons }: { reasons: string[] }) {
   )
 }
 
-export function DepscanGroupRow({ group }: { group: FindingGroup }) {
+// showRepo=false のときはリポジトリ列を隠す（左の一覧でアプリを選んでいて、リポジトリが自明なため）
+export function DepscanGroupRow({ group, showRepo = true }: { group: FindingGroup; showRepo?: boolean }) {
   const [open, setOpen] = useState(false)
   const bestSeverity = group.findings
     .slice()
     .sort((a, b) => severityRank(a.severity) - severityRank(b.severity))[0].severity
   const fixedVersions = groupFixedVersions(group)
   const reachability = groupReachability(group)
-  const severityCounts = groupSeverityCounts(group)
   const hasKevListed = group.findings.some(f => f.priority_reasons.includes('kev_listed'))
   const latestDate = new Date(groupLatestDetectedAt(group)).toLocaleDateString('ja-JP', {
     year: 'numeric', month: 'short', day: 'numeric',
@@ -108,7 +108,7 @@ export function DepscanGroupRow({ group }: { group: FindingGroup }) {
         </td>
 
         {/* リポジトリ */}
-        <td className="py-2.5 pr-3 w-52">
+        {showRepo && <td className="py-2.5 pr-3 w-52">
           <div className="flex items-center gap-1.5">
             <a
               href={`https://github.com/${group.repo_full_name}`}
@@ -127,7 +127,7 @@ export function DepscanGroupRow({ group }: { group: FindingGroup }) {
               <CheckCircle2 size={9} /> 解決済み
             </span>
           )}
-        </td>
+        </td>}
 
         {/* パッケージ */}
         <td className="py-2.5 pr-3 w-40">
@@ -152,22 +152,6 @@ export function DepscanGroupRow({ group }: { group: FindingGroup }) {
           <ReachabilityBadge reachability={reachability} />
         </td>
 
-        {/* 重大度内訳 */}
-        <td className="py-2.5 pr-3">
-          <div className="flex flex-wrap gap-1">
-            {severityCounts.map(([sev, count]) => (
-              <span
-                key={sev}
-                className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${
-                  SEVERITY_CLS[sev] ?? 'bg-slate-800 text-slate-500 border-slate-700'
-                }`}
-              >
-                {sev}×{count}
-              </span>
-            ))}
-          </div>
-        </td>
-
         <td className="py-2.5 text-xs text-slate-600 tabular-nums whitespace-nowrap w-24">
           {latestDate}
         </td>
@@ -182,7 +166,7 @@ export function DepscanGroupRow({ group }: { group: FindingGroup }) {
       {/* 展開: 個々のCVE一覧 */}
       {open && (
         <tr className="bg-slate-800/30">
-          <td colSpan={8} className="px-4 py-3 text-xs text-slate-400">
+          <td colSpan={showRepo ? 7 : 6} className="px-4 py-3 text-xs text-slate-400">
             <p className="text-slate-500 mb-2">
               ロックファイル: <span className="font-mono text-slate-400">{group.findings[0].manifest_path}</span>
             </p>

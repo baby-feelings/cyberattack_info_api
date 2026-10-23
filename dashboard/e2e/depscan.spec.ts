@@ -51,9 +51,9 @@ scenario('DEP-03', 'パッケージ単位に集約した一覧と件数サマリ
 
   // 未解決4件 → 3パッケージ（lodash は同一パッケージ・同一バージョンで2件を集約）
   await expect(table.getByRole('row')).toHaveCount(4)
-  await expect(page.getByText('/ 4 件（3 パッケージ）')).toBeVisible()
-  await expect(page.getByText('CRIT 1', { exact: true })).toBeVisible()
-  await expect(page.getByText('HIGH 1', { exact: true }).first()).toBeVisible()
+  // 帯: 対応が必要な件数（CRITICAL 1 + HIGH 1）と、未解決の総件数
+  await expect(page.getByText('件が対応必要（CRITICAL・HIGH）')).toBeVisible()
+  await expect(page.getByText('未解決 4 件のうち')).toBeVisible()
 
   // 重大度が高いグループが先頭
   const lodash = table.getByRole('row').nth(1)
@@ -65,8 +65,6 @@ scenario('DEP-03', 'パッケージ単位に集約した一覧と件数サマリ
   await expect(lodash).toContainText('Public')
   await expect(lodash).toContainText('到達可能')
   await expect(lodash).toContainText('4.17.19 +1')
-  await expect(lodash).toContainText('CRITICAL×1')
-  await expect(lodash).toContainText('HIGH×1')
 
   // 修正版なし・Private・未使用の可能性
   const requests = page.getByRole('row', { name: /requests/ })
@@ -79,6 +77,9 @@ scenario('DEP-03', 'パッケージ単位に集約した一覧と件数サマリ
   await expect(express).not.toContainText('Public')
   await expect(express).not.toContainText('Private')
 
+  // グラフは初期は畳まれていて、開くと表示される
+  await expect(page.getByText('リポジトリ別件数（未解決）')).toHaveCount(0)
+  await page.getByText('グラフ（重要度別・リポジトリ別）を開く').click()
   await expect(page.getByText('リポジトリ別件数（未解決）')).toBeVisible()
   await expect(page.locator('.recharts-wrapper').first()).toBeVisible()
 })
@@ -460,4 +461,26 @@ scenario('DEP-21', 'Dependabot運用状況モーダルも運用中／運用停�
   await group.getByRole('button', { name: 'すべて' }).click()
   await expect(bottom).toContainText('（45 件）')
   expect(api.lastQuery('/api/depsops')?.has('operating')).toBe(false)
+})
+
+scenario('DEP-22', '左のアプリ一覧で、対応が必要なアプリが上に並び、選ぶと一覧がそのアプリに絞られる', async ({ page }) => {
+  const table = await openDepscan(page)
+  const rail = page.getByRole('navigation', { name: 'アプリ一覧' })
+
+  // 先頭は「すべてのアプリ」、次に対応が必要（CRITICAL・HIGH）を持つ app-one
+  const buttons = rail.getByRole('button')
+  await expect(buttons.first()).toContainText('すべてのアプリ')
+  await expect(buttons.nth(1)).toContainText('app-one')
+  await expect(table.getByRole('row')).toHaveCount(4)
+
+  // app-one を選ぶと lodash だけになり、リポジトリ列は消える
+  await buttons.nth(1).click()
+  await expect(table.getByRole('row')).toHaveCount(2)
+  await expect(table.getByRole('row').nth(1)).toContainText('lodash')
+  await expect(table.getByRole('columnheader', { name: 'リポジトリ' })).toHaveCount(0)
+
+  // 「すべてのアプリ」で元に戻る
+  await buttons.first().click()
+  await expect(table.getByRole('row')).toHaveCount(4)
+  await expect(table.getByRole('columnheader', { name: 'リポジトリ' })).toBeVisible()
 })

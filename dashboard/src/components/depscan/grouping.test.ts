@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import type { DependencyFindingOut } from '../../api/client'
 import {
   severityRank, ownerOf, groupFindings, groupBestSeverityRank,
-  groupLatestDetectedAt, groupIsResolved, groupFixedVersions, groupSeverityCounts,
+  groupLatestDetectedAt, groupIsResolved, groupFixedVersions,
   groupReachability,
   SEVERITY_CLS, SEVERITY_COLORS,
 } from './grouping'
@@ -116,25 +116,6 @@ describe('groupFixedVersions', () => {
   it('returns an empty array when no fixed versions are provided', () => {
     const group = groupFindings([makeFinding({ fixed_versions: [] })])[0]
     expect(groupFixedVersions(group)).toEqual([])
-  })
-})
-
-describe('groupSeverityCounts', () => {
-  it('counts findings per severity, sorted by severity rank', () => {
-    const group = groupFindings([
-      makeFinding({ osv_id: 'GHSA-1', severity: 'LOW' }),
-      makeFinding({ osv_id: 'GHSA-2', severity: 'CRITICAL' }),
-      makeFinding({ osv_id: 'GHSA-3', severity: 'CRITICAL' }),
-    ])[0]
-    expect(groupSeverityCounts(group)).toEqual([
-      ['CRITICAL', 2],
-      ['LOW', 1],
-    ])
-  })
-
-  it('treats a null severity as the "N/A" bucket', () => {
-    const group = groupFindings([makeFinding({ severity: null })])[0]
-    expect(groupSeverityCounts(group)).toEqual([['N/A', 1]])
   })
 })
 
