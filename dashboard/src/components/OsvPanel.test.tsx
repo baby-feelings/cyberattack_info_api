@@ -72,6 +72,26 @@ describe('OsvPanel', () => {
     expect(screen.getAllByText('CVE-2026-12345').length).toBeGreaterThanOrEqual(1)
   })
 
+  it('shows the details as formatted markdown, not as raw "###" / "**" / "|" text (Issue #365)', async () => {
+    const details = '### Summary\n\nEvery wheel bundles **OpenJPEG**.\n\n| Pillow | status |\n|---|---|\n| 11.1.0 | affected |'
+    mockedList.mockResolvedValue({ total: 1, page: 1, per_page: 30, data: [item({ details })] })
+    mockedStats.mockResolvedValue({
+      total: 1, ecosystems: [{ ecosystem: 'PyPI', count: 1 }],
+      severities: [{ severity: 'HIGH', count: 1 }], monthly_trend: [],
+    })
+    const user = userEvent.setup()
+
+    render(<OsvPanel />)
+    await user.click(await screen.findByText('cryptography'))
+
+    expect(screen.getByRole('heading', { name: 'Summary' })).toBeInTheDocument()
+    expect(screen.getByText('OpenJPEG').tagName).toBe('STRONG')
+    // 一覧の表とは別に、詳細の中に表（Pillow / status の列）が出る
+    expect(screen.getByRole('columnheader', { name: 'Pillow' })).toBeInTheDocument()
+    expect(screen.getByRole('cell', { name: 'affected' })).toBeInTheDocument()
+    expect(screen.queryByText(/###/)).not.toBeInTheDocument()
+  })
+
   it('requests the selected ecosystem when a filter button is clicked', async () => {
     mockedList.mockResolvedValue(EMPTY_LIST)
     mockedStats.mockResolvedValue(EMPTY_STATS)

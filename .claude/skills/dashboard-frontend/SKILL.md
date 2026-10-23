@@ -128,6 +128,10 @@ OSV・JVNは一覧・統計APIの`days`、KEVは新着API`/recent`で期間内�
 KEVの表は追加日ごとに区切り、EPSSに小さな棒を添える。グラフは5画面とも上部に最初から表示し、`CollapsibleSection`で閉じられる。月別トレンドは3画面とも直近6ヶ月で統一
 （OSV・JVNは、選んだ期間に関わらず180日分の統計を別に取得して使う〈期間を絞ると月が2つしか出ないため。期間を切り替えても取り直さず、
 再読み込みでは取り直す〉。KEVは全期間の月別から`kev/trend`の`recentMonths`で直近6ヶ月を切り出す）。KEVのデータ取得は`kev/useKevData`、JVNは`jvn/useJvnData`。
+OSVの「詳細」はGitHub Advisory由来のマークダウンのため、`shared/Markdown`（解析は`shared/parseMarkdown.ts`）で整えて表示する
+（見出し・段落・箇条書き・表・コード・強調・リンク・引用・区切り線。外部ライブラリは足さず、React要素へ直接変換＝HTMLを埋め込まないのでXSSが起きない。
+リンクはhttp(s)のみ、画像は読み込まない）。**ファイル名は大文字小文字だけが違う組（`Markdown.tsx`と`markdown.ts`）にしない**（Windowsで同じ名前になり、
+自分自身をimportしてしまう）。展開行が表の最小幅（700px）で横に長くなり、スマホで右が切れて見えるのは、横スクロールで見る設計。
 本番の`vercel.json`のCSPは外部のオリジン（API・DEPSOPSのバッジ画像）を許可する必要があり、`src/csp.test.ts`が
 抜けを検査する（E2Eは同一オリジンのモックで動くため気づけない）。外部データ（JVN・OSVの参照URL）は`safeHttpUrl`（`shared/safeUrl.ts`）で
 http(s)のみリンクにする（`javascript:`等を弾くXSS対策）。

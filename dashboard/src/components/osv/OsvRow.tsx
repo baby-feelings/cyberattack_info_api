@@ -3,6 +3,7 @@ import { ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
 import { type OsvVulnerabilityOut } from '../../api/client'
 import { SeverityBadge } from '../shared/VulnPanelParts'
 import { safeHttpUrl } from '../shared/safeUrl'
+import { Markdown } from '../shared/Markdown'
 
 // エコシステムバッジの色
 const ECO_COLOR: Record<string, string> = {
@@ -109,9 +110,8 @@ export function OsvRow({
       {open && (
         <tr className="bg-slate-800/30">
           <td colSpan={7} className="px-4 py-3 text-xs text-slate-400 space-y-2">
-            {item.details && (
-              <p className="leading-relaxed whitespace-pre-wrap">{item.details}</p>
-            )}
+            {/* 詳細は GitHub Advisory 由来のマークダウン。見出し・表・コードなどを整えて表示する */}
+            {item.details && <Markdown source={item.details} />}
             {item.fixed_versions.length > 0 && (
               <p className="flex flex-wrap items-center gap-1.5">
                 <span className="text-slate-500">修正済みバージョン:</span>
