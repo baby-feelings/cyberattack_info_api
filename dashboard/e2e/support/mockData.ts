@@ -55,7 +55,19 @@ export const osvItems = Array.from({ length: OSV_TOTAL }, (_, i) => ({
   package_name: `pkg-${OSV_ECOSYSTEMS[i % 4].toLowerCase()}-${i + 1}`,
   aliases: [`CVE-2026-9${pad(i + 1)}`, `GHSA-alias-${i + 1}`],
   summary: `OSV概要 ${i + 1}: ${OSV_ECOSYSTEMS[i % 4]} パッケージの脆弱性`,
-  details: `OSV詳細 ${i + 1}: 入力検証の不備により任意コード実行が可能。`,
+  // GitHub Advisory 由来のマークダウン（見出し・強調・コード・表を含む。Issue #365）
+  details: [
+    `### 概要 ${i + 1}`,
+    '',
+    `OSV詳細 ${i + 1}: 入力検証の不備により任意コード実行が可能。`,
+    '',
+    '- 影響: **高**',
+    '- 対処: `pkg` を更新する',
+    '',
+    '| 版 | 状態 |',
+    '|---|---|',
+    '| 1.0.0 | 影響あり |',
+  ].join('\n'),
   // 5件に1件は深刻度・CVSSが未設定（N/A表示の分岐）
   severity: i % 5 === 4 ? null : OSV_SEVERITIES[i % 4],
   cvss_score: i % 5 === 4 ? null : 9.8 - (i % 4) * 2,

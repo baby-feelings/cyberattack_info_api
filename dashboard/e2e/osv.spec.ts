@@ -116,6 +116,13 @@ scenario('OSV-06', '行クリックで詳細（修正版・エイリアス・参
   await expect(row).toHaveAttribute('aria-expanded', 'true')
 
   await expect(page.getByText('OSV詳細 2: 入力検証の不備により任意コード実行が可能。')).toBeVisible()
+  // 詳細はマークダウンとして整えて表示される（見出し・強調・コード・表。「###」や「**」の記号は残らない）
+  await expect(page.getByRole('heading', { name: '概要 2' })).toBeVisible()
+  await expect(page.locator('strong', { hasText: '高' })).toBeVisible()
+  await expect(page.locator('code', { hasText: 'pkg' })).toBeVisible()
+  await expect(page.getByRole('table').getByRole('cell', { name: '影響あり', exact: true })).toBeVisible()
+  await expect(page.getByText('###')).toHaveCount(0)
+  await expect(page.getByText('**')).toHaveCount(0)
   await expect(page.getByText('修正済みバージョン:')).toBeVisible()
   await expect(page.getByText('2.0.1', { exact: true })).toBeVisible()
   await expect(page.getByText('エイリアス:')).toBeVisible()
