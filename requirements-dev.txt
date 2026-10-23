@@ -6,7 +6,7 @@ pytest-asyncio>=1.4.0
 httpx>=0.28.1
 ruff>=0.16.9
 mypy>=2.4.0
-types-psycopg2>=2.9.21.20260911
+types-psycopg2>=2.9.21.20261008
 pip-audit>=2.10.1
 
 # ── セキュリティピン留め（間接依存の脆弱性対策） ──────────────────
@@ -15,4 +15,4 @@ Pygments>=2.21.0
 # OSV-Scanner が脆弱な古いバージョンとして解決してしまうため明示的に固定する
 # （PYSEC-2020-173 等、pip<26.2 の複数CVE。Issue #63対応時に発覚）
 pip>=26.2.1
-filelock>=4.1.1
+filelock>=4.2.2
