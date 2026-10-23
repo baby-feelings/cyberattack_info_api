@@ -56,6 +56,26 @@ export function JvnPanel() {
         </button>
       </div>
 
+      {/* グラフ。最初は表示し、見出しを押すと閉じられる */}
+      <CollapsibleSection summary="グラフ（重要度別・月別）">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <SeverityPieChart
+            icon={<FileWarning size={13} className="text-slate-400" />}
+            data={stats?.severities ?? []}
+            colorMap={SEVERITY_COLORS}
+            loading={statsLoading}
+          />
+          <MonthlyBarChart
+            icon={<FileWarning size={13} className="text-slate-400" />}
+            title="月別 JVN 更新トレンド"
+            data={stats?.monthly_trend ?? []}
+            barColor="#f59e0b"
+            height={210}
+            loading={statsLoading}
+          />
+        </div>
+      </CollapsibleSection>
+
       {/* 期間の切り替え */}
       <div className="flex flex-wrap items-center gap-3">
         <PeriodFilter value={period} options={JVN_PERIODS} onChange={v => handlePeriod(v ?? 30)} />
@@ -147,25 +167,6 @@ export function JvnPanel() {
         </>
       )}
 
-      {/* グラフ（重要度別・月別トレンド）。一覧より優先度が低いため、初期は畳んでおく */}
-      <CollapsibleSection summary="グラフ（重要度別・月別）を開く">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <SeverityPieChart
-            icon={<FileWarning size={13} className="text-slate-400" />}
-            data={stats?.severities ?? []}
-            colorMap={SEVERITY_COLORS}
-            loading={statsLoading}
-          />
-          <MonthlyBarChart
-            icon={<FileWarning size={13} className="text-slate-400" />}
-            title="月別 JVN 更新トレンド"
-            data={stats?.monthly_trend ?? []}
-            barColor="#f59e0b"
-            height={210}
-            loading={statsLoading}
-          />
-        </div>
-      </CollapsibleSection>
     </div>
   )
 }
