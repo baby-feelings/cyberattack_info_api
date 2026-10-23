@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseInline, parseMarkdown } from './parseMarkdown'
+import { parseInline, parseMarkdown, MAX_SOURCE_LENGTH } from './parseMarkdown'
 
 describe('parseInline', () => {
   it('keeps plain text as it is', () => {
@@ -142,5 +142,76 @@ describe('parseMarkdown', () => {
   it('returns nothing for empty text, and always terminates on odd input', () => {
     expect(parseMarkdown('')).toEqual([])
     expect(parseMarkdown('|\n|\n---|\n> \n- \n```').length).toBeGreaterThan(0)
+  })
+
+  it('keeps a "#" in the middle of a heading (C#), and strips only the closing hashes', () => {
+    expect(parseMarkdown('## C# notes ##')[0]).toEqual({
+      type: 'heading', level: 2, children: [{ type: 'text', text: 'C# notes' }],
+    })
+    expect(parseMarkdown('# C#')[0]).toMatchObject({ children: [{ type: 'text', text: 'C#' }] })
+    expect(parseMarkdown('###')[0]).toEqual({ type: 'heading', level: 3, children: [] })
+    // 「#」の直後に空白が無ければ見出しではない（ハッシュタグ）
+    expect(parseMarkdown('#hashtag')[0]).toMatchObject({ type: 'paragraph' })
+  })
+
+  it('accepts alignment colons in a table separator', () => {
+    expect(parseMarkdown('| a | b |\n|:---|---:|\n| 1 | 2 |')[0]).toMatchObject({ type: 'table' })
+  })
+})
+
+// 外部データのため、悪意ある入力でもブラウザが固まらないこと（ReDoS・入れ子・巨大入力の対策）
+describe('hostile input', () => {
+  // 時間の上限は、遅い実行環境でも誤検知しないよう余裕を持たせている（通常は数十ミリ秒以下）
+  const LIMIT_MS = 1500
+  const timed = (fn: () => unknown) => {
+    const start = performance.now()
+    fn()
+    return performance.now() - start
+  }
+
+  const CASES: Record<string, string> = {
+    'heading with a huge run of spaces': '#' + ' '.repeat(MAX_SOURCE_LENGTH),
+    'heading with many hashes and spaces': '# ' + '# '.repeat(MAX_SOURCE_LENGTH / 2),
+    'many unclosed link openers': '['.repeat(MAX_SOURCE_LENGTH),
+    'many unclosed link texts': '[a'.repeat(MAX_SOURCE_LENGTH / 2),
+    'link with a very long URL': '[a](' + 'x'.repeat(MAX_SOURCE_LENGTH),
+    'many unclosed images': '!['.repeat(MAX_SOURCE_LENGTH / 2),
+    'many backticks without a closer': '`a '.repeat(MAX_SOURCE_LENGTH / 3),
+    'backtick runs of growing length': Array.from({ length: 150 }, (_, i) => '`'.repeat(i + 1) + 'x').join(' '),
+    'many unclosed bold markers': '**a '.repeat(MAX_SOURCE_LENGTH / 4),
+    'many unclosed italics': '*a '.repeat(MAX_SOURCE_LENGTH / 3),
+    'many underscores': '_a'.repeat(MAX_SOURCE_LENGTH / 2),
+    'deeply nested quotes': '> '.repeat(5000) + 'x',
+    'deeply nested emphasis': '*_'.repeat(2000) + 'x' + '_*'.repeat(2000),
+    'table separator lookalike': '|' + '---|'.repeat(MAX_SOURCE_LENGTH / 4),
+    'horizontal rule lookalike': '- '.repeat(MAX_SOURCE_LENGTH / 2) + 'x',
+    'a huge number of list items': '- a\n'.repeat(MAX_SOURCE_LENGTH / 4),
+    'a huge number of lines': 'a\n'.repeat(MAX_SOURCE_LENGTH / 2),
+    'a huge number of pipes': '|'.repeat(MAX_SOURCE_LENGTH),
+  }
+
+  for (const [name, input] of Object.entries(CASES)) {
+    it(`parses quickly: ${name}`, () => {
+      expect(timed(() => parseMarkdown(input))).toBeLessThan(LIMIT_MS)
+    })
+  }
+
+  it('does not overflow the stack on deeply nested quotes or emphasis', () => {
+    expect(() => parseMarkdown(CASES['deeply nested quotes'])).not.toThrow()
+    expect(() => parseMarkdown(CASES['deeply nested emphasis'])).not.toThrow()
+  })
+
+  it('cuts text longer than the limit, and says that the rest was omitted', () => {
+    const long = 'word '.repeat(MAX_SOURCE_LENGTH) // 上限の5倍
+    const blocks = parseMarkdown(long)
+    const last = blocks[blocks.length - 1]
+    expect(JSON.stringify(last)).toContain('以降は省略しました')
+    // 解析された文字数が、上限を大きく超えていない
+    const parsed = JSON.stringify(blocks[0]).length
+    expect(parsed).toBeLessThan(MAX_SOURCE_LENGTH * 2)
+  })
+
+  it('does not add the omission notice to text within the limit', () => {
+    expect(JSON.stringify(parseMarkdown('a'.repeat(MAX_SOURCE_LENGTH)))).not.toContain('省略')
   })
 })
