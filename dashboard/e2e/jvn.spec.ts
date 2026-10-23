@@ -23,9 +23,7 @@ scenario('JVN-01', '一覧・件数の帯・グラフが表示される', async 
   await expect(band.getByText(String(count('High')), { exact: true })).toBeVisible()
   await expect(band.getByText('件は High')).toBeVisible()
 
-  // グラフは初期は畳まれていて、開くと表示される
-  await expect(page.getByText('月別 JVN 更新トレンド')).toHaveCount(0)
-  await page.getByText('グラフ（重要度別・月別）を開く').click()
+  // グラフは最初から表示されている
   await expect(page.getByText('月別 JVN 更新トレンド')).toBeVisible()
   await expect(page.getByText('データなし')).toHaveCount(0)
 

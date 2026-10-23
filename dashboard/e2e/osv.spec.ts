@@ -26,9 +26,7 @@ scenario('OSV-01', '一覧・CRIT/HIGH件数・グラフが表示される', asy
   await expect(band.getByText(String(crit + high), { exact: true })).toBeVisible()
   await expect(band.getByText('件は CRITICAL・HIGH')).toBeVisible()
 
-  // 深刻度別・エコシステム別・月別トレンドの3グラフは、初期は畳まれていて、開くと表示される
-  await expect(page.getByText('月別 OSV 更新トレンド')).toHaveCount(0)
-  await page.getByText('グラフ（重要度別・エコシステム別・月別）を開く').click()
+  // 深刻度別・エコシステム別・月別トレンドの3グラフは、最初から表示されている
   await expect(page.getByText('月別 OSV 更新トレンド')).toBeVisible()
   await expect(page.locator('.recharts-wrapper').first()).toBeVisible()
   await expect(page.getByText('データなし')).toHaveCount(0)

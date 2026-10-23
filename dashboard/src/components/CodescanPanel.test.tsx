@@ -264,4 +264,19 @@ describe('CodescanPanel', () => {
       ),
     )
   })
+
+  it('shows the repo chart at first and closes it when the heading is clicked', async () => {
+    mockedList.mockResolvedValue({ total: 1, page: 1, per_page: 30, data: [item()] })
+    mockedStats.mockResolvedValue({
+      total: 1,
+      repos: [{ repo_full_name: 'baby-feelings/baby_grow', count: 1 }],
+      severities: [{ severity: 'ERROR', count: 1 }],
+    })
+
+    render(<CodescanPanel />)
+    expect(await screen.findByText('リポジトリ別件数（未解決）')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByText('グラフ（リポジトリ別）'))
+    expect(screen.queryByText('リポジトリ別件数（未解決）')).not.toBeInTheDocument()
+  })
 })

@@ -244,7 +244,7 @@ describe('KevPanel', () => {
     expect(screen.getAllByRole('row', { name: /に追加$/ }).length).toBe(2)
   })
 
-  it('keeps the charts folded until opened', async () => {
+  it('shows the charts at first and closes them when the heading is clicked', async () => {
     mockedStats.mockResolvedValue({
       total_vulnerabilities: 1619,
       top_vendors: [{ vendor_project: 'Microsoft', count: 312 }],
@@ -255,10 +255,10 @@ describe('KevPanel', () => {
 
     render(<KevPanel />)
     await waitFor(() => expect(screen.getByText('Apache')).toBeInTheDocument())
-    expect(screen.queryByText('ベンダー別件数 TOP8')).not.toBeInTheDocument()
-
-    await user.click(screen.getByText('グラフ（ベンダー別・月別トレンド）を開く'))
     expect(await screen.findByText('ベンダー別件数 TOP8')).toBeInTheDocument()
+
+    await user.click(screen.getByText('グラフ（ベンダー別・月別トレンド）'))
+    expect(screen.queryByText('ベンダー別件数 TOP8')).not.toBeInTheDocument()
   })
 
   describe('watch keywords', () => {

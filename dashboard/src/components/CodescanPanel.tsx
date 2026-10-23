@@ -67,6 +67,11 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
         7.0以上は赤バッジで強調表示します。
       </p>
 
+      {/* グラフ。最初は表示し、見出しを押すと閉じられる */}
+      <CollapsibleSection summary="グラフ（リポジトリ別）">
+        <RepoBarChart stats={stats} loading={statsLoading} />
+      </CollapsibleSection>
+
       {/* 運用状態フィルター + 重要度フィルター + 解決状態フィルター */}
       <div className="flex flex-wrap items-center gap-3">
         <OperatingFilter value={operating} onChange={handleOperating} />
@@ -168,10 +173,6 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
         </div>
       </div>
 
-      {/* リポジトリ別統計（棒グラフ）。一覧より優先度が低いため、初期は畳んでおく */}
-      <CollapsibleSection summary="グラフ（リポジトリ別）を開く">
-        <RepoBarChart stats={stats} loading={statsLoading} />
-      </CollapsibleSection>
     </div>
   )
 }

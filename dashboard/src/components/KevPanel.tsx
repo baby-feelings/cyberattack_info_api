@@ -49,6 +49,21 @@ export function KevPanel() {
         </button>
       </div>
 
+      {/* グラフ。最初は表示し、見出しを押すと閉じられる */}
+      <CollapsibleSection summary="グラフ（ベンダー別・月別トレンド）">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <VendorBarChart stats={stats} loading={statsLoading} />
+          <MonthlyBarChart
+            icon={<BarChart2 size={13} className="text-slate-400" />}
+            title="月別 CVE 追加数トレンド"
+            data={stats?.monthly_trend ?? []}
+            barColor="#7c3aed"
+            height={160}
+            loading={statsLoading}
+          />
+        </div>
+      </CollapsibleSection>
+
       {/* 期間の切り替え + 検索 */}
       <div className="flex flex-wrap items-center gap-3">
         <PeriodFilter value={period} options={KEV_PERIODS} onChange={handlePeriod} />
@@ -129,20 +144,6 @@ export function KevPanel() {
         </>
       )}
 
-      {/* グラフ（ベンダー別・月別トレンド）。一覧より優先度が低いため、初期は畳んでおく */}
-      <CollapsibleSection summary="グラフ（ベンダー別・月別トレンド）を開く">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <VendorBarChart stats={stats} loading={statsLoading} />
-          <MonthlyBarChart
-            icon={<BarChart2 size={13} className="text-slate-400" />}
-            title="月別 CVE 追加数トレンド"
-            data={stats?.monthly_trend ?? []}
-            barColor="#7c3aed"
-            height={160}
-            loading={statsLoading}
-          />
-        </div>
-      </CollapsibleSection>
     </div>
   )
 }

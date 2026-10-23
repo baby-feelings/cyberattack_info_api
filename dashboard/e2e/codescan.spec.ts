@@ -38,9 +38,7 @@ scenario('COD-02', 'ログイン済みで一覧・統計・注記が表示され
   await expect(page.getByText(`未解決 ${open.length} 件のうち`)).toBeVisible()
   // CVSSがベストエフォート推定であることの注記
   await expect(page.getByText(/ベストエフォート推定値/)).toBeVisible()
-  // グラフは初期は畳まれていて、開くと表示される
-  await expect(page.getByText('リポジトリ別件数（未解決）')).toHaveCount(0)
-  await page.getByText('グラフ（リポジトリ別）を開く').click()
+  // グラフは最初から表示されている
   await expect(page.getByText('リポジトリ別件数（未解決）')).toBeVisible()
   await expect(page.locator('.recharts-wrapper').first()).toBeVisible()
 

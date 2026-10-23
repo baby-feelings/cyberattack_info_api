@@ -32,13 +32,14 @@ scenario('KEV-01', '一覧・件数サマリー・グラフが表示される', 
   await expect(band.getByText('1', { exact: true })).toBeVisible()
   await expect(band.getByText('件は悪用されやすい（EPSS 10%以上）')).toBeVisible()
 
-  // グラフ（ベンダー別・月別トレンド）は初期は畳まれていて、開くと表示される
-  await expect(page.getByText('ベンダー別件数 TOP8')).toHaveCount(0)
-  await page.getByText('グラフ（ベンダー別・月別トレンド）を開く').click()
+  // グラフ（ベンダー別・月別トレンド）は最初から表示され、見出しを押すと閉じられる
   await expect(page.getByText('ベンダー別件数 TOP8')).toBeVisible()
   await expect(page.getByText('月別 CVE 追加数トレンド')).toBeVisible()
   await expect(page.locator('.recharts-wrapper')).toHaveCount(2)
   await expect(page.getByText('データなし')).toHaveCount(0)
+  await page.getByText('グラフ（ベンダー別・月別トレンド）').click()
+  await expect(page.getByText('ベンダー別件数 TOP8')).toHaveCount(0)
+  await expect(page.locator('.recharts-wrapper')).toHaveCount(0)
 })
 
 scenario('KEV-02', '行クリックで詳細（説明・推奨対処・EPSS）が展開/折りたたみされる', async ({ page }) => {
@@ -161,7 +162,6 @@ scenario('KEV-08', 'APIエラー時もクラッシュせずデータなし状態
   await expect(page.getByRole('textbox', { name: 'ベンダー名・製品名' })).toBeVisible()
   await expect(page.getByRole('button', { name: '再読み込み' })).toBeEnabled()
   // グラフは「データなし」
-  await page.getByText('グラフ（ベンダー別・月別トレンド）を開く').click()
   await expect(page.getByText('データなし')).toHaveCount(2)
 })
 

@@ -191,7 +191,7 @@ describe('OsvPanel', () => {
     expect(screen.getByText(/OSV 脆弱性（直近 180 日）/)).toBeInTheDocument()
   })
 
-  it('keeps the charts folded until opened', async () => {
+  it('shows the charts at first and closes them when the heading is clicked', async () => {
     mockedList.mockResolvedValue({ total: 1, page: 1, per_page: 30, data: [item()] })
     mockedStats.mockResolvedValue({
       total: 2,
@@ -203,10 +203,10 @@ describe('OsvPanel', () => {
 
     render(<OsvPanel />)
     await screen.findByRole('group', { name: '件数の集計' })
-    expect(screen.queryByText('エコシステム別件数')).not.toBeInTheDocument()
-
-    await user.click(screen.getByText('グラフ（重要度別・エコシステム別・月別）を開く'))
     expect(await screen.findByText('エコシステム別件数')).toBeInTheDocument()
+
+    await user.click(screen.getByText('グラフ（重要度別・エコシステム別・月別）'))
+    expect(screen.queryByText('エコシステム別件数')).not.toBeInTheDocument()
   })
 
   it('counts hits per watched keyword within the period, and filters by it when clicked', async () => {

@@ -77,9 +77,7 @@ scenario('DEP-03', 'パッケージ単位に集約した一覧と件数サマリ
   await expect(express).not.toContainText('Public')
   await expect(express).not.toContainText('Private')
 
-  // グラフは初期は畳まれていて、開くと表示される
-  await expect(page.getByText('リポジトリ別件数（未解決）')).toHaveCount(0)
-  await page.getByText('グラフ（重要度別・リポジトリ別）を開く').click()
+  // グラフは最初から表示されている
   await expect(page.getByText('リポジトリ別件数（未解決）')).toBeVisible()
   await expect(page.locator('.recharts-wrapper').first()).toBeVisible()
 })

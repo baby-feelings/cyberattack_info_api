@@ -178,7 +178,7 @@ describe('JvnPanel', () => {
     expect(screen.getByText(/JVN 脆弱性（直近 90 日）/)).toBeInTheDocument()
   })
 
-  it('keeps the charts folded until opened', async () => {
+  it('shows the charts at first and closes them when the heading is clicked', async () => {
     mockedList.mockResolvedValue({ total: 1, page: 1, per_page: 30, data: [item()] })
     mockedStats.mockResolvedValue({
       total: 2,
@@ -189,10 +189,10 @@ describe('JvnPanel', () => {
 
     render(<JvnPanel />)
     await screen.findByRole('group', { name: '件数の集計' })
-    expect(screen.queryByText('月別 JVN 更新トレンド')).not.toBeInTheDocument()
-
-    await user.click(screen.getByText('グラフ（重要度別・月別）を開く'))
     expect(await screen.findByText('月別 JVN 更新トレンド')).toBeInTheDocument()
+
+    await user.click(screen.getByText('グラフ（重要度別・月別）'))
+    expect(screen.queryByText('月別 JVN 更新トレンド')).not.toBeInTheDocument()
   })
 
   it('counts hits per watched keyword within the period', async () => {

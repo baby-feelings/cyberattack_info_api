@@ -99,6 +99,19 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
         </div>
       </div>
 
+      {/* グラフ。最初は表示し、見出しを押すと閉じられる */}
+      <CollapsibleSection summary="グラフ（重要度別・リポジトリ別）">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <SeverityPieChart
+            icon={<Bug size={13} className="text-slate-400" />}
+            data={stats?.severities ?? []}
+            colorMap={SEVERITY_COLORS}
+            loading={loading}
+          />
+          <RepoBarChart stats={stats} loading={loading} />
+        </div>
+      </CollapsibleSection>
+
       {/* 運用状態フィルター + オーナーフィルター + 重要度フィルター + 解決済み表示切替 */}
       <div className="flex flex-wrap items-center gap-3">
         <OperatingFilter value={operating} onChange={handleOperating} />
@@ -210,18 +223,6 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
         </div>
       </div>
 
-      {/* グラフ（重要度別・リポジトリ別件数）。一覧より優先度が低いため、初期は畳んでおく */}
-      <CollapsibleSection summary="グラフ（重要度別・リポジトリ別）を開く">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <SeverityPieChart
-            icon={<Bug size={13} className="text-slate-400" />}
-            data={stats?.severities ?? []}
-            colorMap={SEVERITY_COLORS}
-            loading={loading}
-          />
-          <RepoBarChart stats={stats} loading={loading} />
-        </div>
-      </CollapsibleSection>
 
       {/* Dependabot PR 自動運用（DEPSOPS）の判定履歴。専用タブは作らず全画面モーダルで表示する */}
       <DependabotOpsModal open={depsOpsOpen} onClose={() => setDepsOpsOpen(false)} />

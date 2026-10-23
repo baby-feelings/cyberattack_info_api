@@ -188,7 +188,7 @@ describe('DepscanPanel', () => {
     expect(screen.getByText('lodash')).toBeInTheDocument()
   })
 
-  it('keeps the charts folded until they are opened', async () => {
+  it('shows the charts at first and closes them when the heading is clicked', async () => {
     mockedFindings.mockResolvedValue([finding()])
     mockedStats.mockResolvedValue({
       total: 1,
@@ -198,10 +198,10 @@ describe('DepscanPanel', () => {
 
     render(<DepscanPanel />)
     await screen.findByText('cryptography')
-    expect(screen.queryByText('リポジトリ別件数（未解決）')).not.toBeInTheDocument()
-
-    await userEvent.click(screen.getByText('グラフ（重要度別・リポジトリ別）を開く'))
     expect(await screen.findByText('リポジトリ別件数（未解決）')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByText('グラフ（重要度別・リポジトリ別）'))
+    expect(screen.queryByText('リポジトリ別件数（未解決）')).not.toBeInTheDocument()
   })
 
   it('only shows the owner filter when findings span more than one owner', async () => {
