@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   fetchAllDepscanFindings, fetchDepscanStats, fetchCrawlerLogs,
-  type DependencyFindingOut, type DepscanStatsResponse,
+  type DependencyFindingOut, type DepscanStatsResponse, type OperatingStatus,
 } from '../../api/client'
 import {
   ownerOf, groupFindings, groupBestSeverityRank, groupLatestDetectedAt,
@@ -21,6 +21,8 @@ export function useDepscanData(authToken?: string) {
   const [owner, setOwner] = useState<string | null>(null)
   const [severity, setSeverity] = useState<string | null>(null)
   const [showResolved, setShowResolved] = useState(false)
+  // 初期表示は運用中のみ（運用停止中のアプリの脆弱性に埋もれず、運用中のものを見やすくするため）
+  const [operating, setOperating] = useState<OperatingStatus>('active')
   const [page, setPage] = useState(1)
   const [findings, setFindings] = useState<DependencyFindingOut[]>([])
   const [stats, setStats] = useState<DepscanStatsResponse | null>(null)
@@ -41,15 +43,15 @@ export function useDepscanData(authToken?: string) {
   }, [])
 
   const load = useCallback(async (
-    own: string | null, sev: string | null, resolved: boolean,
+    own: string | null, sev: string | null, resolved: boolean, op: OperatingStatus,
   ) => {
     setLoading(true)
     try {
       const [all, st] = await Promise.all([
         fetchAllDepscanFindings({
-          owner: own, severity: sev, resolved: resolved ? null : false, authToken,
+          owner: own, severity: sev, resolved: resolved ? null : false, operating: op, authToken,
         }),
-        fetchDepscanStats(authToken),
+        fetchDepscanStats(authToken, op),
       ])
       setFindings(all)
       setStats(st)
@@ -64,8 +66,8 @@ export function useDepscanData(authToken?: string) {
   }, [authToken, fetchLatestLogId])
 
   useEffect(() => {
-    load(owner, severity, showResolved)
-  }, [load, owner, severity, showResolved])
+    load(owner, severity, showResolved, operating)
+  }, [load, owner, severity, showResolved, operating])
 
   // 定期的に新しい DEPSCAN クロールが完了していないか確認し、あればバナーで通知する
   // （バックグラウンドで自動更新はせず、ユーザーが更新ボタンを押すまで表示は変えない）
@@ -114,6 +116,11 @@ export function useDepscanData(authToken?: string) {
     setPage(1)
   }
 
+  function handleOperating(op: OperatingStatus) {
+    setOperating(op)
+    setPage(1)
+  }
+
   function toggleShowResolved() {
     setShowResolved(v => !v)
     setPage(1)
@@ -126,9 +133,9 @@ export function useDepscanData(authToken?: string) {
   const highCount = stats?.severities.find(s => s.severity === 'HIGH')?.count ?? 0
 
   return {
-    owner, severity, showResolved, page, setPage,
+    owner, severity, showResolved, operating, page, setPage,
     findings, stats, loading, newDataAvailable,
-    load, handleOwner, handleSev, toggleShowResolved,
+    load, handleOwner, handleSev, handleOperating, toggleShowResolved,
     owners, groups, totalPages, pageGroups, critCount, highCount,
   }
 }

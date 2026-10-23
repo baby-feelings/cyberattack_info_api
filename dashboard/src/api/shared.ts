@@ -21,6 +21,16 @@ export class UnauthorizedError extends Error {}
 // SafariのITP（Intelligent Tracking Prevention）により既定でブロックされ、iOSのPWAを
 // 含むSafari系ブラウザでログインできない不具合が実際に発生したため、Bearerトークンを
 // クライアント側（localStorage）で保持する方式にしている。
+// 運用状態（Issue: 運用中と運用停止中を分けて見る）。バックエンドの `operating` パラメータと同じ値。
+// active=運用中 / inactive=運用停止中 / all=すべて。DEPSCAN・DEPSOPS・CODESCAN の一覧・統計で共通
+export type OperatingStatus = 'active' | 'inactive' | 'all'
+
+// `operating` を付けた URL のクエリ文字列を返す（all は付けない＝従来どおり全件）
+export function withOperating(path: string, operating?: OperatingStatus): string {
+  if (!operating || operating === 'all') return path
+  return `${path}${path.includes('?') ? '&' : '?'}operating=${operating}`
+}
+
 export async function apiFetch<T>(path: string, authToken?: string): Promise<T> {
   const headers: Record<string, string> = authToken
     ? { Authorization: `Bearer ${authToken}` }

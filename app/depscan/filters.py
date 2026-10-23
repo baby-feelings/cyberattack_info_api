@@ -5,6 +5,7 @@ from fastapi import Query
 from sqlalchemy.orm import Query as SaQuery
 
 from app.core.list_filters import RepoFindingFilter
+from app.core.operating_status import OperatingQuery
 from app.depscan.models import DependencyFinding
 
 
@@ -24,8 +25,9 @@ class DepscanListFilter(RepoFindingFilter):
             None, description="重要度絞り込み（CRITICAL / HIGH / MEDIUM / LOW）"
         ),
         resolved: bool | None = Query(None, description="解決状態で絞り込み（未指定なら全件）"),
+        operating: OperatingQuery = "all",
     ) -> None:
-        super().__init__(repo, owner, severity, resolved)
+        super().__init__(repo, owner, severity, resolved, operating)
         self.ecosystem = ecosystem
 
     def apply(self, query: SaQuery[Any]) -> SaQuery[Any]:

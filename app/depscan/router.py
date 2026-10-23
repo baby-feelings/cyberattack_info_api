@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.auth.api_key import require_api_key, require_api_key_or_session, require_public_api_key
 from app.core.background import run_in_background
 from app.core.database import get_db
+from app.core.operating_status import OperatingQuery, apply_operating_status
 from app.core.pagination import paginate
 from app.core.schemas import SeverityStat
 from app.depscan.crawler import fetch_and_scan_dependencies
@@ -126,6 +127,7 @@ def list_depscan(
 def get_depscan_stats(
     db: Annotated[Session, Depends(get_db)],
     forced_owner: Annotated[str | None, Depends(_resolve_access)],
+    operating: OperatingQuery = "all",
 ) -> DependencyFindingStatsResponse:
     """未解決の依存ライブラリ脆弱性を集計して返す。
 
@@ -135,6 +137,7 @@ def get_depscan_stats(
     base = db.query(DependencyFinding).filter(DependencyFinding.resolved_at.is_(None))
     if forced_owner is not None:
         base = base.filter(DependencyFinding.repo_full_name.like(f"{forced_owner}/%"))
+    base = apply_operating_status(base, DependencyFinding.repo_full_name, operating)
 
     total = base.count()
 

@@ -2,8 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { X, GitPullRequest, ExternalLink } from 'lucide-react'
 import {
   fetchDepsOpsList, fetchDepsOpsStats, type DependabotPrLogOut, type DepsOpsRepoStat,
+  type OperatingStatus,
 } from '../../api/client'
 import { TableLoadingSkeleton, EmptyState, Pagination } from '../shared/VulnPanelParts'
+import { OperatingFilter } from '../shared/OperatingFilter'
 import { DepsOpsRepoBarChart } from './DepsOpsRepoBarChart'
 
 const PER_PAGE = 20
@@ -66,6 +68,8 @@ function CompatibilityScoreBadge({ badgeUrl }: { badgeUrl: string | null }) {
 // DEPSCAN タブ内のボタンから開く（5つ目の固定タブにはしない設計判断。詳細はCLAUDE.md参照）。
 export function DependabotOpsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [action, setAction] = useState<'ALL' | 'merged' | 'flagged'>('ALL')
+  // 初期表示は運用中のみ（運用停止中のアプリのPRに埋もれず、運用中のものを見やすくするため）
+  const [operating, setOperating] = useState<OperatingStatus>('active')
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [items, setItems] = useState<DependabotPrLogOut[]>([])
@@ -73,11 +77,11 @@ export function DependabotOpsModal({ open, onClose }: { open: boolean; onClose: 
   const [repoStats, setRepoStats] = useState<DepsOpsRepoStat[]>([])
   const [statsLoading, setStatsLoading] = useState(false)
 
-  const loadTable = useCallback(async (act: typeof action, p: number) => {
+  const loadTable = useCallback(async (act: typeof action, p: number, op: OperatingStatus) => {
     setLoading(true)
     try {
       const res = await fetchDepsOpsList({
-        page: p, perPage: PER_PAGE, action: act === 'ALL' ? null : act,
+        page: p, perPage: PER_PAGE, action: act === 'ALL' ? null : act, operating: op,
       })
       setItems(res.data)
       setTotal(res.total)
@@ -88,10 +92,10 @@ export function DependabotOpsModal({ open, onClose }: { open: boolean; onClose: 
     }
   }, [])
 
-  const loadStats = useCallback(async () => {
+  const loadStats = useCallback(async (op: OperatingStatus) => {
     setStatsLoading(true)
     try {
-      const res = await fetchDepsOpsStats()
+      const res = await fetchDepsOpsStats(op)
       setRepoStats(res.repos)
     } catch {
       // エラーは握りつぶし（データなし状態として扱う）
@@ -103,15 +107,15 @@ export function DependabotOpsModal({ open, onClose }: { open: boolean; onClose: 
   // 開いたときのみ取得する（閉じている間は取得しない）
   useEffect(() => {
     if (open) {
-      loadTable(action, page)
+      loadTable(action, page, operating)
     }
-  }, [open, loadTable, action, page])
+  }, [open, loadTable, action, page, operating])
 
   useEffect(() => {
     if (open) {
-      loadStats()
+      loadStats(operating)
     }
-  }, [open, loadStats])
+  }, [open, loadStats, operating])
 
   useEffect(() => {
     if (!open) return
@@ -121,6 +125,11 @@ export function DependabotOpsModal({ open, onClose }: { open: boolean; onClose: 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [open, onClose])
+
+  function handleOperating(op: OperatingStatus) {
+    setOperating(op)
+    setPage(1)
+  }
 
   function handleAction(act: typeof action) {
     setAction(act)
@@ -155,6 +164,10 @@ export function DependabotOpsModal({ open, onClose }: { open: boolean; onClose: 
       <div className="flex-1 overflow-y-auto px-6 py-5">
         <div className="max-w-5xl mx-auto flex flex-col gap-5">
           <DepsOpsRepoBarChart stats={repoStats} loading={statsLoading} />
+
+          <div className="flex flex-wrap items-center gap-3">
+            <OperatingFilter value={operating} onChange={handleOperating} />
+          </div>
 
           <div role="group" aria-label="判定フィルター" className="flex flex-wrap gap-1.5">
             {ACTIONS.map(a => (

@@ -1,6 +1,6 @@
 // CODESCAN（自アプリのコード脆弱性診断）関連の API クライアント。
 
-import { apiFetch } from './shared'
+import { apiFetch, withOperating, type OperatingStatus } from './shared'
 
 export interface CodeFindingOut {
   repo_full_name: string
@@ -51,6 +51,7 @@ export async function fetchCodescanList(params: {
   severity?: string | null
   resolved?: boolean | null
   minCvss?: number | null
+  operating?: OperatingStatus
   authToken?: string
 }): Promise<CodescanListResponse> {
   const p = new URLSearchParams()
@@ -58,6 +59,7 @@ export async function fetchCodescanList(params: {
   p.set('per_page', String(params.perPage ?? 30))
   if (params.repo) p.set('repo', params.repo)
   if (params.owner) p.set('owner', params.owner)
+  if (params.operating && params.operating !== 'all') p.set('operating', params.operating)
   if (params.severity) p.set('severity', params.severity)
   if (params.resolved !== null && params.resolved !== undefined) {
     p.set('resolved', String(params.resolved))
@@ -68,6 +70,8 @@ export async function fetchCodescanList(params: {
   return apiFetch<CodescanListResponse>(`/api/codescan?${p}`, params.authToken)
 }
 
-export async function fetchCodescanStats(authToken?: string): Promise<CodescanStatsResponse> {
-  return apiFetch<CodescanStatsResponse>('/api/codescan/stats', authToken)
+export async function fetchCodescanStats(
+  authToken?: string, operating?: OperatingStatus,
+): Promise<CodescanStatsResponse> {
+  return apiFetch<CodescanStatsResponse>(withOperating('/api/codescan/stats', operating), authToken)
 }

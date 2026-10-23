@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.auth.api_key import require_api_key, require_public_api_key
 from app.core.background import run_in_background
 from app.core.database import get_db
+from app.core.operating_status import OperatingQuery, apply_operating_status
 from app.core.pagination import paginate
 from app.depsops.models import DependabotPrLog
 from app.depsops.runner import run_dependabot_ops
@@ -70,6 +71,7 @@ def list_depsops(
     per_page: int = Query(50, ge=1, le=200, description="1ページあたりの件数"),
     repo: str | None = Query(None, description="リポジトリ名絞り込み（例: owner/repo）"),
     action: str | None = Query(None, description="判定結果で絞り込み（merged / flagged）"),
+    operating: OperatingQuery = "all",
 ) -> DependabotPrLogListResponse:
     """DEPSOPS の判定履歴（自動マージ・要確認）を取得する。直近の処理日時順。"""
     query = db.query(DependabotPrLog)
@@ -78,6 +80,7 @@ def list_depsops(
         query = query.filter(DependabotPrLog.repo_full_name == repo)
     if action:
         query = query.filter(DependabotPrLog.action == action)
+    query = apply_operating_status(query, DependabotPrLog.repo_full_name, operating)
 
     total, items = paginate(query, page, per_page, DependabotPrLog.processed_at.desc())
 
@@ -100,7 +103,10 @@ def list_depsops(
     description="最新の判定が action=flagged（要確認）のまま残っているPRを"
     "リポジトリ別に件数集計して返す（ダッシュボードの棒グラフ表示用）。",
 )
-def get_depsops_stats(db: Annotated[Session, Depends(get_db)]) -> DepsOpsStatsResponse:
+def get_depsops_stats(
+    db: Annotated[Session, Depends(get_db)],
+    operating: OperatingQuery = "all",
+) -> DepsOpsStatsResponse:
     """リポジトリ別の未解決（最新状態がflagged）PR件数を集計する。
 
     DEPSOPS は同じPRについて実行のたびに1行追加する append-only ログのため、
@@ -125,12 +131,12 @@ def get_depsops_stats(db: Annotated[Session, Depends(get_db)]) -> DepsOpsStatsRe
         latest_rank,
     ).subquery()
 
+    unresolved = db.query(subq.c.repo_full_name, func.count().label("cnt")).filter(
+        subq.c.latest_rank == 1, subq.c.action == "flagged",
+    )
+    unresolved = apply_operating_status(unresolved, subq.c.repo_full_name, operating)
     rows = (
-        db.query(subq.c.repo_full_name, func.count().label("cnt"))
-        .filter(subq.c.latest_rank == 1, subq.c.action == "flagged")
-        .group_by(subq.c.repo_full_name)
-        .order_by(func.count().desc())
-        .all()
+        unresolved.group_by(subq.c.repo_full_name).order_by(func.count().desc()).all()
     )
     repos = [RepoStat(repo_full_name=r[0], count=r[1]) for r in rows]
 

@@ -5,6 +5,7 @@ import {
 import { CodescanRow } from './codescan/CodescanRow'
 import { RepoBarChart } from './codescan/RepoBarChart'
 import { useCodescanData } from './codescan/useCodescanData'
+import { OperatingFilter } from './shared/OperatingFilter'
 
 const SEVERITY_CLS: Record<string, string> = {
   ERROR: 'bg-red-500/15 text-red-400 border-red-500/30',
@@ -25,9 +26,9 @@ const SEVERITY_LABELS: Record<string, string> = {
 // によりログイン必須になる（Issue #219）。DepscanPanel と同じ props パターン。
 export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
   const {
-    severity, resolved, page, setPage,
+    severity, resolved, operating, page, setPage,
     result, stats, loading, statsLoading,
-    load, handleSev, handleResolvedToggle,
+    load, handleSev, handleOperating, handleResolvedToggle,
     totalPages, errorCount,
   } = useCodescanData(authToken)
 
@@ -44,7 +45,7 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
             </span>
           </div>
           <button
-            onClick={() => load(severity, resolved, page)}
+            onClick={() => load(severity, resolved, page, operating)}
             disabled={loading || statsLoading}
             className="text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40 p-1 rounded"
             title="再読み込み"
@@ -75,8 +76,9 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
       {/* リポジトリ別統計（棒グラフ、DEPSCANと同じ構成） */}
       <RepoBarChart stats={stats} loading={statsLoading} />
 
-      {/* 重要度フィルター + 解決状態フィルター */}
+      {/* 運用状態フィルター + 重要度フィルター + 解決状態フィルター */}
       <div className="flex flex-wrap items-center gap-3">
+        <OperatingFilter value={operating} onChange={handleOperating} />
         <SeverityFilterButtons
           severities={SEVERITIES}
           active={severity}

@@ -31,6 +31,7 @@ from app.codescan.schemas import (
 )
 from app.core.background import run_in_background
 from app.core.database import get_db
+from app.core.operating_status import OperatingQuery, apply_operating_status
 from app.core.pagination import paginate
 from app.core.schemas import SeverityStat
 
@@ -106,6 +107,7 @@ def list_codescan(
 def get_codescan_stats(
     db: Annotated[Session, Depends(get_db)],
     forced_owner: Annotated[str | None, Depends(require_api_key_or_session)],
+    operating: OperatingQuery = "all",
 ) -> CodeFindingStatsResponse:
     """未解決の自アプリコード脆弱性を集計して返す。
 
@@ -115,6 +117,7 @@ def get_codescan_stats(
     base = db.query(CodeFinding).filter(CodeFinding.resolved_at.is_(None))
     if forced_owner is not None:
         base = base.filter(CodeFinding.repo_full_name.like(f"{forced_owner}/%"))
+    base = apply_operating_status(base, CodeFinding.repo_full_name, operating)
     total = base.count()
 
     repo_rows = (

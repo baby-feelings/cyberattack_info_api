@@ -1,6 +1,6 @@
 // DEPSCAN（自作アプリの依存ライブラリ脆弱性）関連の API クライアント。
 
-import { apiFetch } from './shared'
+import { apiFetch, withOperating, type OperatingStatus } from './shared'
 
 export interface DependencyFindingOut {
   repo_full_name: string
@@ -52,12 +52,14 @@ export async function fetchDepscanList(params: {
   owner?: string | null
   severity?: string | null
   resolved?: boolean | null
+  operating?: OperatingStatus
   authToken?: string
 }): Promise<DepscanListResponse> {
   const p = new URLSearchParams()
   p.set('page', String(params.page ?? 1))
   p.set('per_page', String(params.perPage ?? 50))
   if (params.owner) p.set('owner', params.owner)
+  if (params.operating && params.operating !== 'all') p.set('operating', params.operating)
   if (params.severity) p.set('severity', params.severity)
   if (params.resolved !== null && params.resolved !== undefined) {
     p.set('resolved', String(params.resolved))
@@ -65,8 +67,10 @@ export async function fetchDepscanList(params: {
   return apiFetch<DepscanListResponse>(`/api/depscan?${p}`, params.authToken)
 }
 
-export async function fetchDepscanStats(authToken?: string): Promise<DepscanStatsResponse> {
-  return apiFetch<DepscanStatsResponse>('/api/depscan/stats', authToken)
+export async function fetchDepscanStats(
+  authToken?: string, operating?: OperatingStatus,
+): Promise<DepscanStatsResponse> {
+  return apiFetch<DepscanStatsResponse>(withOperating('/api/depscan/stats', operating), authToken)
 }
 
 // サーバー側は「パッケージ×CVE」単位で1件として返すため、パッケージ単位に
@@ -78,6 +82,7 @@ export async function fetchAllDepscanFindings(params: {
   owner?: string | null
   severity?: string | null
   resolved?: boolean | null
+  operating?: OperatingStatus
   authToken?: string
 }): Promise<DependencyFindingOut[]> {
   const first = await fetchDepscanList({ ...params, page: 1, perPage: MAX_PER_PAGE })

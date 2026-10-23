@@ -6,6 +6,7 @@ from sqlalchemy.orm import Query as SaQuery
 
 from app.codescan.models import CodeFinding
 from app.core.list_filters import RepoFindingFilter
+from app.core.operating_status import OperatingQuery
 
 
 class CodescanListFilter(RepoFindingFilter):
@@ -24,8 +25,9 @@ class CodescanListFilter(RepoFindingFilter):
         min_cvss: float | None = Query(
             None, ge=0, le=10, description="CVSS基本値の下限値で絞り込み"
         ),
+        operating: OperatingQuery = "all",
     ) -> None:
-        super().__init__(repo, owner, severity, resolved)
+        super().__init__(repo, owner, severity, resolved, operating)
         self.min_cvss = min_cvss
 
     def apply(self, query: SaQuery[Any]) -> SaQuery[Any]:

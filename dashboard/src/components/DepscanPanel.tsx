@@ -12,6 +12,7 @@ import { RepoBarChart } from './depscan/RepoBarChart'
 import { DependabotOpsModal } from './depscan/DependabotOpsModal'
 import { SEVERITY_CLS, SEVERITY_COLORS } from './depscan/grouping'
 import { useDepscanData } from './depscan/useDepscanData'
+import { OperatingFilter } from './shared/OperatingFilter'
 
 const SEVERITIES = ['ALL', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
 
@@ -21,9 +22,9 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
   const [depsOpsOpen, setDepsOpsOpen] = useState(false)
 
   const {
-    owner, severity, showResolved, page, setPage,
+    owner, severity, showResolved, operating, page, setPage,
     stats, loading, newDataAvailable,
-    load, handleOwner, handleSev, toggleShowResolved,
+    load, handleOwner, handleSev, handleOperating, toggleShowResolved,
     owners, groups, totalPages, pageGroups, critCount, highCount,
   } = useDepscanData(authToken)
 
@@ -38,7 +39,7 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
             新しいデータがあります
           </span>
           <button
-            onClick={() => load(owner, severity, showResolved)}
+            onClick={() => load(owner, severity, showResolved, operating)}
             className="px-2.5 py-1 rounded-md bg-violet-600 hover:bg-violet-500 text-white font-medium transition-colors"
           >
             更新
@@ -64,7 +65,7 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
               Dependabot運用状況
             </button>
             <button
-              onClick={() => load(owner, severity, showResolved)}
+              onClick={() => load(owner, severity, showResolved, operating)}
               disabled={loading}
               className="text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40 p-1 rounded"
               title="再読み込み"
@@ -124,8 +125,9 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
         </div>
       )}
 
-      {/* 重要度フィルター + 解決済み表示切替 */}
+      {/* 運用状態フィルター + 重要度フィルター + 解決済み表示切替 */}
       <div className="flex flex-wrap items-center gap-3">
+        <OperatingFilter value={operating} onChange={handleOperating} />
         <SeverityFilterButtons
           severities={SEVERITIES}
           active={severity}
