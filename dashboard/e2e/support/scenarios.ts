@@ -76,6 +76,10 @@ export const SCENARIOS = [
   { id: 'DEP-15', area: 'DEPSCAN', title: 'リクエストにBearerトークンが付与される（X-API-KEYではない）' },
   { id: 'DEP-16', area: 'DEPSCAN', title: 'モーダルのページ送りと該当なし状態' },
   { id: 'DEP-17', area: 'DEPSCAN', title: 'モーダルのページ送りの最初/最後ボタンとページ番号の直接入力' },
+  { id: 'DEP-18', area: 'DEPSCAN', title: '表示時にセッションが延長され、新しいトークンが保存される（Issue #337）' },
+  { id: 'DEP-19', area: 'DEPSCAN', title: '延長できない（ログインから上限日数を超えた等）セッションはログアウトされる' },
+  { id: 'DEP-20', area: 'DEPSCAN', title: '運用中／運用停止中を切り替えると、リクエストと一覧が分かれる' },
+  { id: 'DEP-21', area: 'DEPSCAN', title: 'Dependabot運用状況モーダルも運用中／運用停止中で分かれる' },
 
   // ── CODESCAN ──────────────────────────────────────────────────────
   { id: 'COD-01', area: 'CODESCAN', title: '未ログイン時はGitHubログイン案内が表示される' },
@@ -89,6 +93,7 @@ export const SCENARIOS = [
   { id: 'COD-09', area: 'CODESCAN', title: 'ページ送り' },
   { id: 'COD-10', area: 'CODESCAN', title: 'CVSS 7.0以上のバッジ強調・未算出表示・ツールバッジ' },
   { id: 'COD-11', area: 'CODESCAN', title: 'ページ送りの最初/最後ボタンとページ番号の直接入力' },
+  { id: 'COD-12', area: 'CODESCAN', title: '運用中／運用停止中を切り替えると、リクエストと一覧が分かれる' },
 
   // ── 設定（Slack通知登録） ─────────────────────────────────────────
   { id: 'SET-01', area: '設定', title: 'メニュー→設定で開き、未ログイン時はログイン案内が表示される' },

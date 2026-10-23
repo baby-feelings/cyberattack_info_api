@@ -168,6 +168,32 @@ describe('CodescanPanel', () => {
     await waitFor(() =>
       expect(mockedList).toHaveBeenCalledWith(expect.objectContaining({ authToken: 'tok-abc' })),
     )
-    expect(mockedStats).toHaveBeenCalledWith('tok-abc')
+    expect(mockedStats).toHaveBeenCalledWith('tok-abc', 'active')
+  })
+
+  it('shows only running apps by default, and switches to stopped / all', async () => {
+    mockedList.mockResolvedValue(EMPTY_LIST)
+    mockedStats.mockResolvedValue(EMPTY_STATS)
+
+    render(<CodescanPanel />)
+    await waitFor(() =>
+      expect(mockedList).toHaveBeenCalledWith(expect.objectContaining({ operating: 'active' })),
+    )
+    expect(mockedStats).toHaveBeenCalledWith(undefined, 'active')
+    expect(screen.getByRole('button', { name: '運用中' })).toHaveAttribute('aria-pressed', 'true')
+
+    await userEvent.click(screen.getByRole('button', { name: '運用停止中' }))
+    await waitFor(() =>
+      expect(mockedList).toHaveBeenLastCalledWith(
+        expect.objectContaining({ operating: 'inactive', page: 1 }),
+      ),
+    )
+    expect(mockedStats).toHaveBeenLastCalledWith(undefined, 'inactive')
+
+    await userEvent.click(screen.getByRole('button', { name: 'すべて' }))
+    await waitFor(() =>
+      expect(mockedList).toHaveBeenLastCalledWith(expect.objectContaining({ operating: 'all' })),
+    )
+    expect(mockedStats).toHaveBeenLastCalledWith(undefined, 'all')
   })
 })

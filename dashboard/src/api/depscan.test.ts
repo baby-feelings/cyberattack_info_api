@@ -94,4 +94,24 @@ describe('api/depscan', () => {
       expect(fetchMock).toHaveBeenCalledTimes(2)
     })
   })
+
+  describe('operating status filter', () => {
+    it('sends operating on the list request only for active / inactive', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ total: 0, page: 1, per_page: 30, data: [] }))
+      await fetchDepscanList({ operating: 'active' })
+      expect(fetchMock.mock.calls[0][0]).toContain('operating=active')
+      await fetchDepscanList({ operating: 'inactive' })
+      expect(fetchMock.mock.calls[1][0]).toContain('operating=inactive')
+      await fetchDepscanList({ operating: 'all' })
+      expect(fetchMock.mock.calls[2][0]).not.toContain('operating=')
+      await fetchDepscanList({})
+      expect(fetchMock.mock.calls[3][0]).not.toContain('operating=')
+    })
+
+    it('sends operating on the stats request', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ total: 0, repos: [], severities: [] }))
+      await fetchDepscanStats(undefined, 'inactive')
+      expect(fetchMock.mock.calls[0][0]).toContain('/api/depscan/stats?operating=inactive')
+    })
+  })
 })

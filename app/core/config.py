@@ -56,6 +56,11 @@ class Settings(BaseSettings):
     # DEPSCAN・CODESCAN・DEPSOPS のすべてで対象外にする。すでにあるデータと起票済みの
     # Issue は、毎日のクリーンアップで片付ける（Issue #342。学習用の脆弱なアプリ等を想定）
     SCAN_EXCLUDE_REPOS: str = ""
+    # 運用を停止したアプリのリポジトリ（カンマ区切りの `owner/name`。大文字小文字は区別しない）。
+    # ダッシュボードの DEPSCAN・DEPSOPS・CODESCAN で「運用中」「運用停止中」に分けて見られる
+    # ようにする。
+    # スキャンは止めない（止めるのは SCAN_EXCLUDE_REPOS）。載っていないリポジトリは運用中として扱う
+    INACTIVE_REPOS: str = ""
     # DEPSCAN: JST 7:00 = UTC 22:00（KEV→OSV→JVN の後段）
     DEPSCAN_CRON_HOUR_UTC: int = 22
     # DEPSCAN データの保持期間（日数）: 解決済み（resolved_at 設定済み）のまま
@@ -121,15 +126,16 @@ class Settings(BaseSettings):
     OAUTH_CLEANUP_CRON_HOUR_UTC: int = 23
     OAUTH_CLEANUP_CRON_MINUTE_UTC: int = 50
 
-    @field_validator("SCAN_EXCLUDE_REPOS")
+    @field_validator("SCAN_EXCLUDE_REPOS", "INACTIVE_REPOS")
     @classmethod
-    def _validate_scan_exclude_repos(cls, value: str) -> str:
+    def _validate_repo_list(cls, value: str) -> str:
         """`owner/name` 形式でない指定は、起動時に弾く（書き間違いに気づかない事故を防ぐ）。"""
         for entry in (e.strip() for e in value.split(",") if e.strip()):
             owner, _, name = entry.partition("/")
             if not owner or not name or "/" in name:
                 raise ValueError(
-                    "SCAN_EXCLUDE_REPOS は 'owner/name' をカンマ区切りで指定してください: "
+                    "SCAN_EXCLUDE_REPOS・INACTIVE_REPOS は 'owner/name' を"
+                    "カンマ区切りで指定してください: "
                     f"{entry!r}",
                 )
         return value

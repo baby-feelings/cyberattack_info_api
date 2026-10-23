@@ -9,7 +9,7 @@ FastAPI は `Depends()` に渡したクラスの `__init__` 引数をクエリ�
 （サブクラスは自身の `__init__` で `Query(...)` を宣言する）。
 
 - `FeedListFilter`: OSV / JVN 共通（直近 N 日・重要度・キーワード・ソート・差分取得）
-- `RepoFindingFilter`: DEPSCAN / CODESCAN 共通（リポジトリ・オーナー・重要度・解決状態）
+- `RepoFindingFilter`: DEPSCAN / CODESCAN 共通（リポジトリ・オーナー・重要度・解決状態・運用状態）
 """
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -18,6 +18,8 @@ from typing import Any, ClassVar, Literal
 from fastapi import HTTPException, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Query as SaQuery
+
+from app.core.operating_status import OperatingStatus, apply_operating_status
 
 
 class FeedListFilter:
@@ -85,11 +87,13 @@ class RepoFindingFilter:
         owner: str | None,
         severity: str | None,
         resolved: bool | None,
+        operating: OperatingStatus = "all",
     ) -> None:
         self.repo = repo
         self.owner = owner
         self.severity = severity
         self.resolved = resolved
+        self.operating = operating
 
     def restrict_to_owner(self, forced_owner: str | None) -> None:
         """セッション認証時、ログイン中ユーザー本人が所有するリポジトリのみに強制的に絞り込む。
@@ -115,6 +119,7 @@ class RepoFindingFilter:
             query = query.filter(model.repo_full_name.like(f"{self.owner}/%"))
         if self.severity:
             query = query.filter(model.severity == self.severity.upper())
+        query = apply_operating_status(query, model.repo_full_name, self.operating)
         if self.resolved is not None:
             if self.resolved:
                 query = query.filter(model.resolved_at.is_not(None))

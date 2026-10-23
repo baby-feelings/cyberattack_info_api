@@ -230,7 +230,7 @@ describe('DepscanPanel', () => {
     render(<DepscanPanel authToken="session-tok" />)
     await waitFor(() => expect(mockedFindings).toHaveBeenCalledTimes(1))
     expect(mockedFindings).toHaveBeenCalledWith(expect.objectContaining({ authToken: 'session-tok' }))
-    expect(mockedStats).toHaveBeenCalledWith('session-tok')
+    expect(mockedStats).toHaveBeenCalledWith('session-tok', 'active')
   })
 
   it('shows a "new data available" banner once the crawl log id changes, and clears it on refresh', async () => {
@@ -254,5 +254,31 @@ describe('DepscanPanel', () => {
     const user = userEvent.setup()
     await user.click(screen.getByText('更新'))
     await waitFor(() => expect(screen.queryByText('新しいデータがあります')).not.toBeInTheDocument())
+  })
+
+  it('shows only running apps by default, and switches to stopped / all', async () => {
+    mockedFindings.mockResolvedValue([])
+    mockedStats.mockResolvedValue(EMPTY_STATS)
+
+    render(<DepscanPanel />)
+    await waitFor(() =>
+      expect(mockedFindings).toHaveBeenCalledWith(expect.objectContaining({ operating: 'active' })),
+    )
+    expect(mockedStats).toHaveBeenCalledWith(undefined, 'active')
+    expect(screen.getByRole('button', { name: '運用中' })).toHaveAttribute('aria-pressed', 'true')
+
+    await userEvent.click(screen.getByRole('button', { name: '運用停止中' }))
+    await waitFor(() =>
+      expect(mockedFindings).toHaveBeenLastCalledWith(
+        expect.objectContaining({ operating: 'inactive' }),
+      ),
+    )
+    expect(mockedStats).toHaveBeenLastCalledWith(undefined, 'inactive')
+
+    await userEvent.click(screen.getByRole('button', { name: 'すべて' }))
+    await waitFor(() =>
+      expect(mockedFindings).toHaveBeenLastCalledWith(expect.objectContaining({ operating: 'all' })),
+    )
+    expect(mockedStats).toHaveBeenLastCalledWith(undefined, 'all')
   })
 })

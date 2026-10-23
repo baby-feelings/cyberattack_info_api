@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { DependabotOpsModal } from './DependabotOpsModal'
 import {
@@ -166,5 +166,32 @@ describe('DependabotOpsModal', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: '要確認' })).toBeInTheDocument())
     expect(screen.getByRole('button', { name: '自動マージ' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '解消済み' })).not.toBeInTheDocument()
+  })
+
+  it('shows only running apps by default, and switches to stopped / all (page reset)', async () => {
+    mockedList.mockResolvedValue(listResponse([item()]))
+    mockedStats.mockResolvedValue({ repos: [] })
+    render(<DependabotOpsModal open onClose={vi.fn()} />)
+
+    await waitFor(() =>
+      expect(mockedList).toHaveBeenCalledWith(expect.objectContaining({ operating: 'active' })),
+    )
+    expect(mockedStats).toHaveBeenCalledWith('active')
+
+    await userEvent.click(screen.getByRole('button', { name: '運用停止中' }))
+    await waitFor(() =>
+      expect(mockedList).toHaveBeenLastCalledWith(
+        expect.objectContaining({ operating: 'inactive', page: 1 }),
+      ),
+    )
+    expect(mockedStats).toHaveBeenLastCalledWith('inactive')
+
+    // 「すべて」は判定フィルターにもあるため、運用状態のグループの中から選ぶ
+    const operatingGroup = screen.getByRole('group', { name: '運用状態フィルター' })
+    await userEvent.click(within(operatingGroup).getByRole('button', { name: 'すべて' }))
+    await waitFor(() =>
+      expect(mockedList).toHaveBeenLastCalledWith(expect.objectContaining({ operating: 'all' })),
+    )
+    expect(mockedStats).toHaveBeenLastCalledWith('all')
   })
 })

@@ -147,6 +147,11 @@ bindマウントしたファイルの変更ではcaddyを再作成しないた�
 **稼働先**: `cyberattack-info-api`インスタンス（Ampere A1、1 OCPU/6GB、Ubuntu 24.04 aarch64、
 IP `168.138.213.240`）。
 
+### アプリの運用状態を変える（運用停止↔再開）
+`.env.production`の`INACTIVE_REPOS`（運用停止中のリポジトリ。`owner/name`のカンマ区切り）を編集してデプロイする。
+ポートフォリオ（`babysmile_portfolio`の`src/data/apps.ts`の`status: 'stopped'`）と同じ内容にそろえる。取得のたびに照合するため、
+再起動だけで過去の検知も入れ替わる。スキャン自体を止めるときは`SCAN_EXCLUDE_REPOS`（データも片付く）。
+
 ### 環境変数（`.env.production`、OCIへ転送）
 `DATABASE_URL`・`API_KEY`・`ENVIRONMENT=production`・`GITHUB_USERNAME`
 （**未設定だとアプリが起動しない**）・`GITHUB_TOKEN`

@@ -267,7 +267,7 @@ scenario('DEP-12', 'セッション失効（401）で自動的にログアウト
   expect(await page.evaluate(() => localStorage.getItem('depscan_session_token'))).toBeNull()
 })
 
-scenario('DEP-16', '表示時にセッションが延長され、新しいトークンが保存される（Issue #337）', async ({ page, api }) => {
+scenario('DEP-18', '表示時にセッションが延長され、新しいトークンが保存される（Issue #337）', async ({ page, api }) => {
   api.override('POST', '/auth/refresh', () => ({
     body: { token: 'refreshed-token', username: 'octocat' },
   }))
@@ -280,7 +280,7 @@ scenario('DEP-16', '表示時にセッションが延長され、新しいトー
   expect(api.requestsTo('/auth/refresh', 'POST')).toHaveLength(1)
 })
 
-scenario('DEP-17', '延長できない（ログインから上限日数を超えた等）セッションはログアウトされる', async ({ page, api }) => {
+scenario('DEP-19', '延長できない（ログインから上限日数を超えた等）セッションはログアウトされる', async ({ page, api }) => {
   api.override('POST', '/auth/refresh', () => ({ status: 401, body: { detail: 'expired' } }))
   await seedSession(page)
   await page.goto('/')
@@ -410,4 +410,54 @@ scenario('DEP-17', 'モーダルのページ送りの最初/最後ボタンと�
   await jump.fill('0')
   await move.click()
   await expect(bottom).toContainText('1 / 3')
+})
+
+scenario('DEP-20', '運用中／運用停止中を切り替えると、リクエストと一覧が分かれる', async ({ page, api }) => {
+  api.state.inactiveRepos = ['baby-feelings/app-two']
+  const table = await openDepscan(page)
+  const group = page.getByRole('group', { name: '運用状態フィルター' })
+
+  // 初期表示は運用中のみ（lodash と express。停止中の app-two の requests は出ない）
+  await expect(group.getByRole('button', { name: '運用中' })).toHaveAttribute('aria-pressed', 'true')
+  expect(api.lastQuery('/api/depscan')?.get('operating')).toBe('active')
+  expect(api.lastQuery('/api/depscan/stats')?.get('operating')).toBe('active')
+  await expect(table.getByRole('row')).toHaveCount(3)
+  await expect(table).not.toContainText('requests')
+
+  await group.getByRole('button', { name: '運用停止中' }).click()
+  await expect(group.getByRole('button', { name: '運用停止中' })).toHaveAttribute('aria-pressed', 'true')
+  expect(api.lastQuery('/api/depscan')?.get('operating')).toBe('inactive')
+  await expect(table.getByRole('row')).toHaveCount(2)
+  await expect(table).toContainText('requests')
+
+  // すべては、従来どおり operating を付けない
+  await group.getByRole('button', { name: 'すべて' }).click()
+  expect(api.lastQuery('/api/depscan')?.has('operating')).toBe(false)
+  await expect(table.getByRole('row')).toHaveCount(4)
+})
+
+scenario('DEP-21', 'Dependabot運用状況モーダルも運用中／運用停止中で分かれる', async ({ page, api }) => {
+  api.state.inactiveRepos = ['baby-feelings/app-two']
+  await openDepscan(page)
+  await page.getByRole('button', { name: 'Dependabot運用状況' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Dependabot 運用状況' })
+  const bottom = dialog.getByRole('navigation', { name: 'ページ送り（下部）' })
+  const group = dialog.getByRole('group', { name: '運用状態フィルター' })
+
+  // 45件のうち、app-one（運用中）は23件
+  await expect(bottom).toContainText('（23 件）')
+  expect(api.lastQuery('/api/depsops')?.get('operating')).toBe('active')
+  expect(api.lastQuery('/api/depsops/stats')?.get('operating')).toBe('active')
+  await expect(dialog).not.toContainText('baby-feelings/app-two')
+
+  // 運用停止中の app-two は22件。切り替えるとページは1に戻る
+  await group.getByRole('button', { name: '運用停止中' }).click()
+  await expect(bottom).toContainText('（22 件）')
+  expect(api.lastQuery('/api/depsops')?.get('operating')).toBe('inactive')
+  expect(api.lastQuery('/api/depsops')?.get('page')).toBe('1')
+  await expect(dialog).not.toContainText('baby-feelings/app-one')
+
+  await group.getByRole('button', { name: 'すべて' }).click()
+  await expect(bottom).toContainText('（45 件）')
+  expect(api.lastQuery('/api/depsops')?.has('operating')).toBe(false)
 })

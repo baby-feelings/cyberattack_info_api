@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   fetchCodescanList, fetchCodescanStats,
-  type CodescanListResponse, type CodescanStatsResponse,
+  type CodescanListResponse, type CodescanStatsResponse, type OperatingStatus,
 } from '../../api/client'
 
 const PER_PAGE = 30
@@ -14,6 +14,8 @@ const PER_PAGE = 30
 export function useCodescanData(authToken?: string) {
   const [severity, setSeverity] = useState<string | null>(null)
   const [resolved, setResolved] = useState<boolean | null>(false)
+  // 初期表示は運用中のみ（運用停止中のアプリの脆弱性に埋もれず、運用中のものを見やすくするため）
+  const [operating, setOperating] = useState<OperatingStatus>('active')
   const [page, setPage] = useState(1)
   const [result, setResult] = useState<CodescanListResponse | null>(null)
   const [stats, setStats] = useState<CodescanStatsResponse | null>(null)
@@ -23,11 +25,13 @@ export function useCodescanData(authToken?: string) {
   // 一覧（フィルタ・ページ）とグラフ用の統計は独立して取得する。統計はページ送り
   // では変化しないため、ページ送りのたびにグラフが読み込み中表示に戻るのを防ぐ
   const loadList = useCallback(async (
-    sev: string | null, res: boolean | null, p: number,
+    sev: string | null, res: boolean | null, p: number, op: OperatingStatus,
   ) => {
     setLoading(true)
     try {
-      const list = await fetchCodescanList({ severity: sev, resolved: res, page: p, perPage: PER_PAGE, authToken })
+      const list = await fetchCodescanList({
+        severity: sev, resolved: res, page: p, perPage: PER_PAGE, operating: op, authToken,
+      })
       setResult(list)
     } catch {
       // エラーは握りつぶし（データなし状態として扱う。他パネルと同じ方針）
@@ -36,10 +40,10 @@ export function useCodescanData(authToken?: string) {
     }
   }, [authToken])
 
-  const loadStats = useCallback(async () => {
+  const loadStats = useCallback(async (op: OperatingStatus) => {
     setStatsLoading(true)
     try {
-      const st = await fetchCodescanStats(authToken)
+      const st = await fetchCodescanStats(authToken, op)
       setStats(st)
     } catch {
       // エラーは握りつぶし（データなし状態として扱う。他パネルと同じ方針）
@@ -49,22 +53,27 @@ export function useCodescanData(authToken?: string) {
   }, [authToken])
 
   const load = useCallback((
-    sev: string | null, res: boolean | null, p: number,
+    sev: string | null, res: boolean | null, p: number, op: OperatingStatus,
   ) => {
-    loadList(sev, res, p)
-    loadStats()
+    loadList(sev, res, p, op)
+    loadStats(op)
   }, [loadList, loadStats])
 
   useEffect(() => {
-    loadList(severity, resolved, page)
-  }, [loadList, severity, resolved, page])
+    loadList(severity, resolved, page, operating)
+  }, [loadList, severity, resolved, page, operating])
 
   useEffect(() => {
-    loadStats()
-  }, [loadStats])
+    loadStats(operating)
+  }, [loadStats, operating])
 
   function handleSev(sev: string) {
     setSeverity(sev === 'ALL' ? null : sev)
+    setPage(1)
+  }
+
+  function handleOperating(op: OperatingStatus) {
+    setOperating(op)
     setPage(1)
   }
 
@@ -79,7 +88,7 @@ export function useCodescanData(authToken?: string) {
   return {
     severity, resolved, page, setPage,
     result, stats, loading, statsLoading,
-    load, handleSev, handleResolvedToggle,
+    operating, load, handleSev, handleOperating, handleResolvedToggle,
     totalPages, errorCount,
   }
 }

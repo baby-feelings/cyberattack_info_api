@@ -22,6 +22,7 @@ Claude Code や CI/CD ツールから「今まさに悪用されているサイ�
 | **DEPSCAN/CODESCAN ダッシュボードの GitHub ログイン** | 任意の GitHub アカウントでログインし、本人が所有するリポジトリの検知結果のみ閲覧可能（DEPSCAN・CODESCAN とも。他の人には見えない） |
 | **AIエージェント向けリモートMCPサーバー** | `/mcp`（Streamable HTTP）で、KEV/OSV/JVN の検索と、本人所有リポジトリの DEPSCAN/CODESCAN をツールとして提供。MCPトークンはダッシュボードの設定画面から発行（期限 7/30/90 日の選択、個別失効に対応。詳細: [docs/mcp-server.md](docs/mcp-server.md)） |
 | **ユーザー別 Slack 通知登録** | ダッシュボードから任意の GitHub アカウントで自分専用の Slack Webhook を登録可能（詳細: [docs/slack-notifications.md](docs/slack-notifications.md)） |
+| **運用中／運用停止中の切り替え** | DEPSCAN・DEPSOPS・CODESCAN を、運用中のアプリと運用を止めたアプリ（`INACTIVE_REPOS`）に分けて表示（初期表示は運用中） |
 | **削除済みリポジトリ・古いデータの自動削除** | GitHub上で削除確認できたリポジトリのデータ、保持期間超過レコードを自動削除。`SCAN_EXCLUDE_REPOS` で指定したリポジトリはスキャン対象外（データと起票済みIssueも片付ける） |
 | **品質・セキュリティ検査** | ruff（bandit 相当含む）・mypy・ESLint・pytest/Vitest/Playwright、gitleaks・OSV-Scanner・pip-audit、OWASP ZAP による動的診断を CI で実行 |
 | **運用監視** | Prometheus + Grafana によるクローラー実行結果・ホストリソースの可視化（OCI上、任意） |
@@ -78,8 +79,8 @@ cd dashboard && npm run lint          # ESLint（警告数の上限あり）
 deploy/zap/run_zap_scan.ps1           # OWASP ZAP の動的診断（Docker Desktop。docs/zap-scan.md）
 ```
 
-**テスト結果（最新）:** バックエンド 1195 テスト / カバレッジ 99%、ダッシュボード 343 テスト
-（Vitest）/ カバレッジ 98%、E2E 89 シナリオ
+**テスト結果（最新）:** バックエンド 1230 テスト / カバレッジ 99%、ダッシュボード 356 テスト
+（Vitest）/ カバレッジ 98%、E2E 92 シナリオ
 
 ダッシュボードのE2Eテスト（Playwright、API全モック）は `dashboard/` で `npm run e2e`。
 HTMLレポートは `npm run e2e:report`、画面・機能のシナリオ網羅率（90%未満で失敗）は

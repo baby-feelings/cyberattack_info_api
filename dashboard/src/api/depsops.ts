@@ -1,6 +1,6 @@
 // DEPSOPS（Dependabot PR 自動運用の判定履歴）関連の API クライアント。
 
-import { apiFetch } from './shared'
+import { apiFetch, withOperating, type OperatingStatus } from './shared'
 
 export interface DependabotPrLogOut {
   repo_full_name: string
@@ -25,12 +25,14 @@ export async function fetchDepsOpsList(params: {
   perPage?: number
   repo?: string | null
   action?: 'merged' | 'flagged' | null
+  operating?: OperatingStatus
 }): Promise<DepsOpsListResponse> {
   const p = new URLSearchParams()
   p.set('page', String(params.page ?? 1))
   p.set('per_page', String(params.perPage ?? 50))
   if (params.repo) p.set('repo', params.repo)
   if (params.action) p.set('action', params.action)
+  if (params.operating && params.operating !== 'all') p.set('operating', params.operating)
   return apiFetch<DepsOpsListResponse>(`/api/depsops?${p}`)
 }
 
@@ -48,6 +50,6 @@ export interface DepsOpsStatsResponse {
 // 往復回数が増えて表示が遅くなっていた（10秒近くかかっていた）ため、
 // 「(repo, pr_number) ごとの最新状態のみ数える」集計自体をサーバー側（SQL の
 // ROW_NUMBER()）に移し、1回のリクエストで済むようにした
-export async function fetchDepsOpsStats(): Promise<DepsOpsStatsResponse> {
-  return apiFetch<DepsOpsStatsResponse>('/api/depsops/stats')
+export async function fetchDepsOpsStats(operating?: OperatingStatus): Promise<DepsOpsStatsResponse> {
+  return apiFetch<DepsOpsStatsResponse>(withOperating('/api/depsops/stats', operating))
 }

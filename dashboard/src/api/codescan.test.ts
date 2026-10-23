@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { fetchCodescanList, fetchCodescanStats } from './codescan'
 
+// 成功レスポンス（`json()` だけを使う最小のモック）
+function jsonResponse(body: unknown) {
+  return { ok: true, status: 200, json: () => Promise.resolve(body) } as Response
+}
+
 describe('api/codescan', () => {
   let fetchMock: ReturnType<typeof vi.fn>
 
@@ -79,6 +84,26 @@ describe('api/codescan', () => {
       await fetchCodescanStats('session-token-abc')
       const [, opts] = fetchMock.mock.calls[0]
       expect(opts.headers).toEqual({ Authorization: 'Bearer session-token-abc' })
+    })
+  })
+
+  describe('operating status filter', () => {
+    it('sends operating on the list request only for active / inactive', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ total: 0, page: 1, per_page: 30, data: [] }))
+      await fetchCodescanList({ operating: 'active' })
+      expect(fetchMock.mock.calls[0][0]).toContain('operating=active')
+      await fetchCodescanList({ operating: 'inactive' })
+      expect(fetchMock.mock.calls[1][0]).toContain('operating=inactive')
+      await fetchCodescanList({ operating: 'all' })
+      expect(fetchMock.mock.calls[2][0]).not.toContain('operating=')
+      await fetchCodescanList({})
+      expect(fetchMock.mock.calls[3][0]).not.toContain('operating=')
+    })
+
+    it('sends operating on the stats request', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ total: 0, repos: [], severities: [] }))
+      await fetchCodescanStats(undefined, 'inactive')
+      expect(fetchMock.mock.calls[0][0]).toContain('/api/codescan/stats?operating=inactive')
     })
   })
 })

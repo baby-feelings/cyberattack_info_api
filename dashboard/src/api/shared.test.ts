@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { apiFetch, UnauthorizedError } from './shared'
+import { apiFetch, withOperating, UnauthorizedError } from './shared'
 import { fetchDepscanStats } from './depscan'
 
 function jsonResponse(body: unknown, init: { ok?: boolean; status?: number } = {}) {
@@ -54,6 +54,22 @@ describe('api/shared', () => {
       await fetchDepscanStats('session-token-xyz')
       const [, opts] = fetchMock.mock.calls[0]
       expect(opts.headers).toEqual({ Authorization: 'Bearer session-token-xyz' })
+    })
+  })
+
+  describe('withOperating', () => {
+    it('adds the operating query for active / inactive', () => {
+      expect(withOperating('/api/depscan/stats', 'active')).toBe('/api/depscan/stats?operating=active')
+      expect(withOperating('/api/depscan/stats', 'inactive')).toBe('/api/depscan/stats?operating=inactive')
+    })
+
+    it('leaves the path unchanged for all or when not given (existing behavior)', () => {
+      expect(withOperating('/api/depscan/stats', 'all')).toBe('/api/depscan/stats')
+      expect(withOperating('/api/depscan/stats')).toBe('/api/depscan/stats')
+    })
+
+    it('uses & when the path already has a query string', () => {
+      expect(withOperating('/api/x?a=1', 'active')).toBe('/api/x?a=1&operating=active')
     })
   })
 })

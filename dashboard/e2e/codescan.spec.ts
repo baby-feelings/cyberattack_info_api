@@ -238,3 +238,31 @@ scenario('COD-11', 'ページ送りの最初/最後ボタンとページ番号�
   await move.click()
   await expect(bottom).toContainText('1 / 2')
 })
+
+scenario('COD-12', '運用中／運用停止中を切り替えると、リクエストと一覧が分かれる', async ({ page, api }) => {
+  api.state.inactiveRepos = ['baby-feelings/app-two']
+  const table = await openCodescan(page)
+  const group = page.getByRole('group', { name: '運用状態フィルター' })
+
+  // 初期表示は運用中のみ（app-one）。未解決のうち運用中は16件
+  await expect(group.getByRole('button', { name: '運用中' })).toHaveAttribute('aria-pressed', 'true')
+  expect(api.lastQuery('/api/codescan')?.get('operating')).toBe('active')
+  expect(api.lastQuery('/api/codescan/stats')?.get('operating')).toBe('active')
+  // 16件は1ページに収まるため、ページ送りは出ない（見出し行 + 16行）
+  await expect(table.getByRole('row')).toHaveCount(17)
+  await expect(table).toContainText('baby-feelings/app-one')
+  await expect(table).not.toContainText('baby-feelings/app-two')
+
+  await group.getByRole('button', { name: '運用停止中' }).click()
+  expect(api.lastQuery('/api/codescan')?.get('operating')).toBe('inactive')
+  expect(api.lastQuery('/api/codescan')?.get('page')).toBe('1')
+  await expect(table.getByRole('row')).toHaveCount(17)
+  await expect(table).toContainText('baby-feelings/app-two')
+  await expect(table).not.toContainText('baby-feelings/app-one')
+
+  // すべては、従来どおり operating を付けない（未解決は32件）
+  await group.getByRole('button', { name: 'すべて' }).click()
+  expect(api.lastQuery('/api/codescan')?.has('operating')).toBe(false)
+  await expect(page.getByRole('navigation', { name: 'ページ送り（下部）' })).toContainText('（32 件）')
+})
+
