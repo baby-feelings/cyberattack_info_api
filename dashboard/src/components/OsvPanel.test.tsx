@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { OsvPanel } from './OsvPanel'
 import {
@@ -156,18 +156,78 @@ describe('OsvPanel', () => {
     await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2))
   })
 
-  it('shows CRIT/HIGH counts and the ecosystem chart once stats load', async () => {
+  it('shows the period count and how many are CRITICAL or HIGH in the summary band', async () => {
     mockedList.mockResolvedValue({ total: 2, page: 1, per_page: 30, data: [item()] })
     mockedStats.mockResolvedValue({
-      total: 2,
-      ecosystems: [{ ecosystem: 'PyPI', count: 2 }],
-      severities: [{ severity: 'CRITICAL', count: 1 }, { severity: 'HIGH', count: 1 }],
-      monthly_trend: [{ year_month: '2026-06', count: 2 }],
+      total: 7,
+      ecosystems: [{ ecosystem: 'PyPI', count: 7 }],
+      severities: [{ severity: 'CRITICAL', count: 1 }, { severity: 'HIGH', count: 2 }, { severity: 'LOW', count: 4 }],
+      monthly_trend: [{ year_month: '2026-06', count: 7 }],
     })
 
     render(<OsvPanel />)
-    await waitFor(() => expect(screen.getByText(/CRIT 1/)).toBeInTheDocument())
-    expect(screen.getByText(/HIGH 1/)).toBeInTheDocument()
-    expect(screen.getByText('エコシステム別件数')).toBeInTheDocument()
+    const band = await screen.findByRole('group', { name: '件数の集計' })
+    expect(within(band).getByText('7')).toBeInTheDocument()
+    expect(within(band).getByText('件が直近30日に更新')).toBeInTheDocument()
+    // CRITICAL 1 + HIGH 2
+    expect(within(band).getByText('3')).toBeInTheDocument()
+    expect(within(band).getByText('件は CRITICAL・HIGH')).toBeInTheDocument()
+  })
+
+  it('defaults to the last 30 days and passes the selected period to the list and stats', async () => {
+    mockedList.mockResolvedValue(EMPTY_LIST)
+    mockedStats.mockResolvedValue(EMPTY_STATS)
+    const user = userEvent.setup()
+
+    render(<OsvPanel />)
+    await waitFor(() => expect(mockedList).toHaveBeenCalledWith(expect.objectContaining({ days: 30 })))
+    expect(mockedStats).toHaveBeenCalledWith(30)
+
+    await user.click(screen.getByRole('button', { name: '180日' }))
+    await waitFor(() => expect(mockedList).toHaveBeenLastCalledWith(
+      expect.objectContaining({ days: 180, page: 1 }),
+    ))
+    expect(mockedStats).toHaveBeenLastCalledWith(180)
+    expect(screen.getByText(/OSV 脆弱性（直近 180 日）/)).toBeInTheDocument()
+  })
+
+  it('keeps the charts folded until opened', async () => {
+    mockedList.mockResolvedValue({ total: 1, page: 1, per_page: 30, data: [item()] })
+    mockedStats.mockResolvedValue({
+      total: 2,
+      ecosystems: [{ ecosystem: 'PyPI', count: 2 }],
+      severities: [{ severity: 'HIGH', count: 2 }],
+      monthly_trend: [{ year_month: '2026-06', count: 2 }],
+    })
+    const user = userEvent.setup()
+
+    render(<OsvPanel />)
+    await screen.findByRole('group', { name: '件数の集計' })
+    expect(screen.queryByText('エコシステム別件数')).not.toBeInTheDocument()
+
+    await user.click(screen.getByText('グラフ（重要度別・エコシステム別・月別）を開く'))
+    expect(await screen.findByText('エコシステム別件数')).toBeInTheDocument()
+  })
+
+  it('counts hits per watched keyword within the period, and filters by it when clicked', async () => {
+    localStorage.setItem('watch_keywords', JSON.stringify(['requests']))
+    mockedList.mockImplementation(async params => (
+      params.perPage === 1
+        ? { total: 4, page: 1, per_page: 1, data: [] }
+        : { total: 1, page: 1, per_page: 30, data: [item()] }
+    ))
+    mockedStats.mockResolvedValue(EMPTY_STATS)
+    const user = userEvent.setup()
+
+    render(<OsvPanel />)
+    const group = await screen.findByRole('group', { name: '自分のスタックのキーワード' })
+    expect(await within(group).findByText('4')).toBeInTheDocument()
+    expect(mockedList).toHaveBeenCalledWith(expect.objectContaining({ search: 'requests', days: 30, perPage: 1 }))
+
+    await user.click(within(group).getByRole('button', { name: /^requests\d+$/ }))
+    await waitFor(() => expect(mockedList).toHaveBeenLastCalledWith(
+      expect.objectContaining({ search: 'requests', perPage: 30 }),
+    ))
+    localStorage.clear()
   })
 })

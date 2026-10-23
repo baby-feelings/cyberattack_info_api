@@ -37,8 +37,15 @@ export function KevRow({ item }: { item: VulnerabilityOut }) {
         </td>
         <td className="py-2.5 pr-3 text-xs tabular-nums whitespace-nowrap">
           {item.epss_score !== null ? (
-            <span className={epssColorClass(item.epss_score)}>
-              {(item.epss_score * 100).toFixed(1)}%
+            // 数字に小さな棒を添え、悪用されやすさ（0〜100%）をひと目で比べられるようにする
+            <span className={`flex items-center gap-1.5 ${epssColorClass(item.epss_score)}`}>
+              <span className="w-11">{(item.epss_score * 100).toFixed(1)}%</span>
+              <span aria-hidden className="block h-1 w-10 rounded-full bg-slate-800 overflow-hidden">
+                <span
+                  className="block h-full rounded-full bg-current"
+                  style={{ width: `${Math.max(3, Math.min(100, item.epss_score * 100))}%` }}
+                />
+              </span>
             </span>
           ) : (
             <span className="text-slate-700">—</span>

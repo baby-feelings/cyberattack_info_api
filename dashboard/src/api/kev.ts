@@ -63,10 +63,13 @@ export async function fetchVulnerabilities(params: {
   page?: number
   perPage?: number
   search?: string
+  // EPSS の下限（0.0〜1.0）。指定値以上のものだけ返す
+  minEpss?: number
 }): Promise<VulnerabilityListResponse> {
   const p = new URLSearchParams()
   p.set('page', String(params.page ?? 1))
   p.set('per_page', String(params.perPage ?? 50))
   if (params.search) p.set('search', params.search)
+  if (params.minEpss !== undefined) p.set('min_epss', String(params.minEpss))
   return apiFetch<VulnerabilityListResponse>(`/api/vulnerabilities?${p}`)
 }

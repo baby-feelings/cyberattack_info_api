@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { JvnPanel } from './JvnPanel'
 import {
@@ -145,16 +145,69 @@ describe('JvnPanel', () => {
     await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2))
   })
 
-  it('shows HIGH/MED counts once stats load', async () => {
+  it('shows the period count and how many are High in the summary band', async () => {
     mockedList.mockResolvedValue({ total: 2, page: 1, per_page: 30, data: [item()] })
     mockedStats.mockResolvedValue({
-      total: 2,
-      severities: [{ severity: 'High', count: 1 }, { severity: 'Medium', count: 1 }],
-      monthly_trend: [{ year_month: '2026-06', count: 2 }],
+      total: 5,
+      severities: [{ severity: 'High', count: 2 }, { severity: 'Medium', count: 3 }],
+      monthly_trend: [{ year_month: '2026-06', count: 5 }],
     })
 
     render(<JvnPanel />)
-    await waitFor(() => expect(screen.getByText(/HIGH 1/)).toBeInTheDocument())
-    expect(screen.getByText(/MED 1/)).toBeInTheDocument()
+    const band = await screen.findByRole('group', { name: '件数の集計' })
+    expect(within(band).getByText('5')).toBeInTheDocument()
+    expect(within(band).getByText('件が直近30日に更新')).toBeInTheDocument()
+    expect(within(band).getByText('2')).toBeInTheDocument()
+    expect(within(band).getByText('件は High')).toBeInTheDocument()
+  })
+
+  it('defaults to the last 30 days and passes the selected period to the list and stats', async () => {
+    mockedList.mockResolvedValue(EMPTY_LIST)
+    mockedStats.mockResolvedValue(EMPTY_STATS)
+    const user = userEvent.setup()
+
+    render(<JvnPanel />)
+    await waitFor(() => expect(mockedList).toHaveBeenCalledWith(expect.objectContaining({ days: 30 })))
+    expect(mockedStats).toHaveBeenCalledWith(30)
+
+    await user.click(screen.getByRole('button', { name: '90日' }))
+    await waitFor(() => expect(mockedList).toHaveBeenLastCalledWith(
+      expect.objectContaining({ days: 90, page: 1 }),
+    ))
+    expect(mockedStats).toHaveBeenLastCalledWith(90)
+    expect(screen.getByText(/JVN 脆弱性（直近 90 日）/)).toBeInTheDocument()
+  })
+
+  it('keeps the charts folded until opened', async () => {
+    mockedList.mockResolvedValue({ total: 1, page: 1, per_page: 30, data: [item()] })
+    mockedStats.mockResolvedValue({
+      total: 2,
+      severities: [{ severity: 'High', count: 2 }],
+      monthly_trend: [{ year_month: '2026-06', count: 2 }],
+    })
+    const user = userEvent.setup()
+
+    render(<JvnPanel />)
+    await screen.findByRole('group', { name: '件数の集計' })
+    expect(screen.queryByText('月別 JVN 更新トレンド')).not.toBeInTheDocument()
+
+    await user.click(screen.getByText('グラフ（重要度別・月別）を開く'))
+    expect(await screen.findByText('月別 JVN 更新トレンド')).toBeInTheDocument()
+  })
+
+  it('counts hits per watched keyword within the period', async () => {
+    localStorage.setItem('watch_keywords', JSON.stringify(['Cisco']))
+    mockedList.mockImplementation(async params => (
+      params.perPage === 1
+        ? { total: 6, page: 1, per_page: 1, data: [] }
+        : { total: 1, page: 1, per_page: 30, data: [item()] }
+    ))
+    mockedStats.mockResolvedValue(EMPTY_STATS)
+
+    render(<JvnPanel />)
+    const group = await screen.findByRole('group', { name: '自分のスタックのキーワード' })
+    expect(await within(group).findByText('6')).toBeInTheDocument()
+    expect(mockedList).toHaveBeenCalledWith(expect.objectContaining({ search: 'Cisco', days: 30, perPage: 1 }))
+    localStorage.clear()
   })
 })

@@ -108,17 +108,20 @@ function defaultResponse(req: RecordedRequest, state: MockState): MockResponse {
       return { body: state.health }
 
     // ── KEV ──
-    case 'GET /api/vulnerabilities/recent':
-      return { body: kevItems.slice(0, 3) }
+    case 'GET /api/vulnerabilities/recent': {
+      // 実APIと同じく、過去 days 日以内に追加されたもの（モックは1日1件ずつ追加されている）
+      const days = Number(query.get('days') ?? 30)
+      return { body: kevItems.filter((_, i) => i <= days) }
+    }
     case 'GET /api/vulnerabilities/stats':
       return { body: kevStats() }
     case 'GET /api/vulnerabilities': {
       const search = query.get('search')
-      const items = search
-        ? kevItems.filter((v) =>
-          includesCI(v.vendor_project, search) || includesCI(v.product, search)
+      const minEpss = query.get('min_epss')
+      const items = kevItems.filter((v) =>
+        (!search || includesCI(v.vendor_project, search) || includesCI(v.product, search)
           || includesCI(v.cve_id, search))
-        : kevItems
+        && (minEpss === null || (v.epss_score ?? -1) >= Number(minEpss)))
       return { body: paginate(items, query, 50) }
     }
 

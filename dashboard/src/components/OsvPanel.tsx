@@ -6,7 +6,11 @@ import {
 } from './shared/VulnPanelParts'
 import { OsvRow } from './osv/OsvRow'
 import { EcosystemBarChart } from './osv/EcosystemBarChart'
-import { useOsvData } from './osv/useOsvData'
+import { useOsvData, OSV_PERIODS } from './osv/useOsvData'
+import { PeriodFilter } from './shared/PeriodFilter'
+import { StatBand } from './shared/StatBand'
+import { WatchKeywords } from './shared/WatchKeywords'
+import { CollapsibleSection } from './shared/CollapsibleSection'
 
 // 深刻度バッジのスタイル
 const SEVERITY_CLS: Record<string, string> = {
@@ -30,69 +34,58 @@ const SEVERITIES = ['ALL', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
 
 export function OsvPanel() {
   const {
-    ecosystem, severity, search, sortBy, page, setPage,
+    ecosystem, severity, search, sortBy, period, page, setPage,
     result, stats, loading, statsLoading,
-    load, handleEco, handleSev, handleSearch, clearSearch, handleSortBy,
+    load, handleEco, handleSev, handleSearch, clearSearch, handleSortBy, handlePeriod,
     totalPages, critCount, highCount,
+    keywords, keywordCounts, addKeyword, removeKeyword,
   } = useOsvData()
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg flex flex-col gap-5">
 
       {/* ヘッダー */}
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Shield size={16} className="text-slate-400" />
-            <span className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
-              OSV 脆弱性（過去 6 ヶ月）
-            </span>
-          </div>
-          <button
-            onClick={() => load(ecosystem, severity, search, page, sortBy)}
-            disabled={loading || statsLoading}
-            className="text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40 p-1 rounded"
-            title="再読み込み"
-          >
-            <RefreshCw size={13} className={loading || statsLoading ? 'animate-spin' : ''} />
-          </button>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Shield size={16} className="text-slate-400" />
+          <span className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
+            OSV 脆弱性（直近 {period} 日）
+          </span>
         </div>
-        {/* CRITICAL / HIGH カウント */}
-        {!statsLoading && stats && stats.total > 0 && (
-          <div className="flex items-center gap-2 text-xs tabular-nums">
-            {critCount > 0 && (
-              <span className="px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 font-semibold">
-                CRIT {critCount}
-              </span>
-            )}
-            {highCount > 0 && (
-              <span className="px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-400 font-semibold">
-                HIGH {highCount}
-              </span>
-            )}
-            <span className="text-slate-500">/ {stats.total} 件</span>
-          </div>
-        )}
+        <button
+          onClick={() => load(ecosystem, severity, search, page, sortBy, period)}
+          disabled={loading || statsLoading}
+          className="text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40 p-1 rounded"
+          title="再読み込み"
+        >
+          <RefreshCw size={13} className={loading || statsLoading ? 'animate-spin' : ''} />
+        </button>
       </div>
 
-      {/* ビジュアライゼーション: 重要度別グラフ・エコシステム別・月別トレンド */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <SeverityPieChart
-          icon={<Shield size={13} className="text-slate-400" />}
-          data={stats?.severities ?? []}
-          colorMap={SEVERITY_COLORS}
-          loading={statsLoading}
-        />
-        <EcosystemBarChart stats={stats} loading={statsLoading} />
-        <MonthlyBarChart
-          icon={<BarChart2 size={13} className="text-slate-400" />}
-          title="月別 OSV 更新トレンド"
-          data={stats?.monthly_trend ?? []}
-          barColor="#7c3aed"
-          height={160}
-          loading={statsLoading}
-        />
+      {/* 期間の切り替え */}
+      <div className="flex flex-wrap items-center gap-3">
+        <PeriodFilter value={period} options={OSV_PERIODS} onChange={v => handlePeriod(v ?? 30)} />
       </div>
+
+      {/* 期間内の件数と、そのうち対応が必要な（CRITICAL・HIGH）件数 */}
+      <StatBand
+        loading={statsLoading && !stats}
+        items={[
+          { value: stats?.total ?? null, label: `件が直近${period}日に更新`, tone: 'sky' },
+          { value: stats ? critCount + highCount : null, label: '件は CRITICAL・HIGH', tone: 'red' },
+        ]}
+      />
+
+      {/* 自分が使っている製品名ごとの該当件数。押すと、その語で絞り込む */}
+      <WatchKeywords
+        keywords={keywords}
+        counts={keywordCounts}
+        active={search}
+        total={stats?.total ?? null}
+        onSelect={kw => handleSearch(kw ?? '')}
+        onAdd={addKeyword}
+        onRemove={removeKeyword}
+      />
 
       {/* エコシステムフィルター */}
       <div role="group" aria-label="エコシステムフィルター" className="flex flex-wrap gap-1.5">
@@ -187,6 +180,27 @@ export function OsvPanel() {
           <Pagination page={page} totalPages={totalPages} total={result.total} onPageChange={setPage} />
         </>
       )}
+
+      {/* グラフ（重要度別・エコシステム別・月別トレンド）。一覧より優先度が低いため、初期は畳んでおく */}
+      <CollapsibleSection summary="グラフ（重要度別・エコシステム別・月別）を開く">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <SeverityPieChart
+            icon={<Shield size={13} className="text-slate-400" />}
+            data={stats?.severities ?? []}
+            colorMap={SEVERITY_COLORS}
+            loading={statsLoading}
+          />
+          <EcosystemBarChart stats={stats} loading={statsLoading} />
+          <MonthlyBarChart
+            icon={<BarChart2 size={13} className="text-slate-400" />}
+            title="月別 OSV 更新トレンド"
+            data={stats?.monthly_trend ?? []}
+            barColor="#7c3aed"
+            height={160}
+            loading={statsLoading}
+          />
+        </div>
+      </CollapsibleSection>
     </div>
   )
 }

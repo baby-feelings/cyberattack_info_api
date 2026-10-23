@@ -34,6 +34,9 @@ export const SCENARIOS = [
   { id: 'KEV-09', area: 'KEV', title: 'リクエストに公開用 X-API-KEY ヘッダーが付与される' },
   { id: 'KEV-10', area: 'KEV', title: 'ページ送りの最初/最後ボタンとページ番号の直接入力' },
   { id: 'KEV-11', area: 'KEV', title: 'スマホ幅でもページ送りが画面内に収まり横スクロールしない' },
+  { id: 'KEV-12', area: 'KEV', title: '期間（7日/30日/90日/すべて）を切り替えると、件数の帯と一覧が変わる' },
+  { id: 'KEV-13', area: 'KEV', title: '一覧は追加日ごとに区切られる' },
+  { id: 'KEV-14', area: 'KEV', title: '自分のスタックのキーワードを登録すると、該当件数が出て、押すと絞り込まれる' },
 
   // ── OSV ───────────────────────────────────────────────────────────
   { id: 'OSV-01', area: 'OSV', title: '一覧・CRIT/HIGH件数・グラフが表示される' },
@@ -46,9 +49,11 @@ export const SCENARIOS = [
   { id: 'OSV-08', area: 'OSV', title: '該当なしのとき空状態メッセージが表示される' },
   { id: 'OSV-09', area: 'OSV', title: 'フィルター変更時にページが1に戻る' },
   { id: 'OSV-10', area: 'OSV', title: 'ページ送りの最初/最後ボタンとページ番号の直接入力' },
+  { id: 'OSV-11', area: 'OSV', title: '期間を切り替えると、一覧と統計が、その日数で再取得される' },
+  { id: 'OSV-12', area: 'OSV', title: '登録したキーワードごとの該当件数が出て、押すと絞り込まれる' },
 
   // ── JVN ───────────────────────────────────────────────────────────
-  { id: 'JVN-01', area: 'JVN', title: '一覧・HIGH/MED件数・グラフが表示される' },
+  { id: 'JVN-01', area: 'JVN', title: '一覧・件数の帯・グラフが表示される' },
   { id: 'JVN-02', area: 'JVN', title: '深刻度フィルターで絞り込まれる' },
   { id: 'JVN-03', area: 'JVN', title: 'キーワード検索とクリア' },
   { id: 'JVN-04', area: 'JVN', title: 'ソートを更新日/CVSSで切り替えられる' },
@@ -57,6 +62,8 @@ export const SCENARIOS = [
   { id: 'JVN-07', area: 'JVN', title: '該当なしのとき空状態メッセージが表示される' },
   { id: 'JVN-08', area: 'JVN', title: '再読み込みボタンで再取得される' },
   { id: 'JVN-09', area: 'JVN', title: 'ページ送りの最初/最後ボタンとページ番号の直接入力' },
+  { id: 'JVN-10', area: 'JVN', title: '期間を切り替えると、一覧と統計が、その日数で再取得される' },
+  { id: 'JVN-11', area: 'JVN', title: '登録したキーワードごとの該当件数が出て、押すと絞り込まれる' },
 
   // ── DEPSCAN ───────────────────────────────────────────────────────
   { id: 'DEP-01', area: 'DEPSCAN', title: '未ログイン時はGitHubログイン案内とログインリンクが表示される' },

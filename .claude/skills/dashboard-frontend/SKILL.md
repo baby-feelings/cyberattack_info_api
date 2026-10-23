@@ -119,6 +119,12 @@ DEPSCANは取得済みの検知を`depscan/repoSummary`でアプリ別に集計�
 ＝一覧は現在の絞り込み結果を反映）。CODESCANはサーバー側ページ分割のため、一覧は統計の`repos`、選択は一覧APIの`repo`で絞る。
 アプリを選ぶと表のリポジトリ列を隠す（`showRepo`）。グラフ（重要度別・リポジトリ別）は`shared/CollapsibleSection`で畳む
 （閉じている間は描画しない＝大きさ0でグラフが崩れるのを避ける。統計は運用状態で絞られる）。
+KEV・OSV・JVNは「新しく出たものを先に」の構成: `shared/PeriodFilter`（期間。初期は直近30日。KEVは7/30/90日＋すべて、OSV・JVNは7/30/90/180日。
+OSV・JVNは一覧・統計APIの`days`、KEVは新着API`/recent`で期間内の全件を取得し、検索・ページ分割は画面側〈同じ期間なら取り直さない。
+「すべて」だけサーバー側のページ分割〉）、`shared/StatBand`（期間内の件数と、注目すべき件数＝KEVはEPSS10%以上〈`min_epss`〉・OSVはCRITICAL・HIGH・JVNはHigh）、
+`shared/WatchKeywords`（自分のスタックのキーワードごとの該当件数のチップ。0件は緑。押すと検索語に入れて絞る。キーワードは
+`hooks/useWatchKeywords`でlocalStorageに保存〈最大10個・端末ごと〉、件数は`shared/useKeywordCounts`で取得し、条件が変わったら古い件数を捨てる）。
+KEVの表は追加日ごとに区切り、EPSSに小さな棒を添える。グラフは`CollapsibleSection`で畳む。KEVのデータ取得は`kev/useKevData`、JVNは`jvn/useJvnData`。
 本番の`vercel.json`のCSPは外部のオリジン（API・DEPSOPSのバッジ画像）を許可する必要があり、`src/csp.test.ts`が
 抜けを検査する（E2Eは同一オリジンのモックで動くため気づけない）。外部データ（JVN・OSVの参照URL）は`safeHttpUrl`（`shared/safeUrl.ts`）で
 http(s)のみリンクにする（`javascript:`等を弾くXSS対策）。
