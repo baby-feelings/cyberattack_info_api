@@ -71,7 +71,7 @@ cyberattack_info_api/
 │   └── zap/                 # OWASP ZAP（docker-compose.yml・Dockerfile.api・run_zap_scan.ps1・reports/）
 ├── Dockerfile               # バックエンドのコンテナイメージ定義（OCI上でdocker composeがビルド）
 ├── .env.example         # 環境変数テンプレート
-├── .python-version      # Python バージョン固定 (3.11)
+├── .python-version      # Python バージョン固定 (3.13)
 ├── requirements.txt     # 本番依存パッケージ
 ├── requirements-dev.txt # 開発・テスト依存パッケージ
 ├── semgrep-cli.txt      # semgrep（CODESCAN用の外部CLI）。Dockerfileの専用venvへ導入しアプリの依存と隔離

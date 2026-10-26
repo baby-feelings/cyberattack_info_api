@@ -12,7 +12,7 @@ def extract_tarball(tarball_bytes: bytes, dest_dir: str) -> str:
     GitHub の tarball エンドポイントは常に単一のトップレベルディレクトリ
     （例: `owner-repo-<sha>/`）を含むため、それを見つけてルートとして返す。
     パストラバーサル対策として `filter="data"`（PEP 706）で安全に展開する。本プロジェクトは
-    Python 3.11 のみ（`filter` 引数が使える版）のため、フィルターなしで展開するフォールバックは
+    Python 3.13 のみ（`filter` 引数が使える版）のため、フィルターなしで展開するフォールバックは
     持たない（古い版で動いてしまうより、動かずに気づける方が安全。Fail Fast）。
     """
     with tarfile.open(fileobj=io.BytesIO(tarball_bytes), mode="r:gz") as tar:

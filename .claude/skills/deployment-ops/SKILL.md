@@ -15,7 +15,7 @@ Vercelのプレビューは`dashboard/vercel.json`の`ignoreCommand`でダッシ
 3つのジョブが並列に動く。ほかに`gitleaks.yml`（PR/mainで
 シークレット検出）と`zap-scan.yml`（ZAP、手動+毎週月曜）が別ワークフローで動く（下記）。
 
-**`test`（バックエンド、Python 3.11 のみ。本番Dockerfile・`.python-version`と同じ。3.10は廃止）**
+**`test`（バックエンド、Python 3.13 のみ。本番Dockerfile・`.python-version`と同じ。3.10・3.11は廃止）**
 1. `ruff check app/ tests/` — Linting（`S`=flake8-bandit相当を含む。testsは`S`除外）
 2. `mypy app/ --ignore-missing-imports` — 型チェック
 3. `pytest --cov=app --cov-fail-under=90` — テスト（カバレッジ 90% 未満で失敗）

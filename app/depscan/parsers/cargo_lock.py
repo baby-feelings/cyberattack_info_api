@@ -1,11 +1,8 @@
 """Cargo.lock（Rust / crates.io）パーサー。
 
-TOML 形式。Python 3.11+ は標準ライブラリ tomllib、3.10 は tomli（依存追加）を使用する。
+TOML 形式。標準ライブラリ tomllib（Python 3.11+）で読む。
 """
-try:
-    import tomllib
-except ModuleNotFoundError:  # Python 3.10
-    import tomli as tomllib  # type: ignore[no-redef]
+import tomllib
 
 from app.depscan.parsers.base import DependencyRef
 
