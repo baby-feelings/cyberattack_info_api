@@ -9,6 +9,8 @@ os.environ.setdefault("GITHUB_USERNAME", "test-github-user")
 import subprocess
 from unittest.mock import patch
 
+import pytest
+
 from app.codescan.scanners import (  # noqa: E402
     GitleaksScanner,
     Scanner,
@@ -206,6 +208,9 @@ class TestParseGitleaksResults:
         )
         assert records[0]["message"] == "Secret detected"
 
+    # 本番・CI は Linux。Windows では "/tmp/..." がドライブ文字なしで絶対パスとみなされず、
+    # 検証できないためスキップする
+    @pytest.mark.skipif(os.name == "nt", reason="POSIX の絶対パス（/tmp/...）を前提にしたテスト")
     def test_normalizes_absolute_file_path_to_repo_relative(self):
         """gitleaksが--sourceディレクトリ基準の絶対パスを返す実運用のケースを再現する。
 

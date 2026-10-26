@@ -37,7 +37,7 @@ Claude Code や CI/CD ツールから「今まさに悪用されているサイ�
 # 1. クローン・仮想環境
 git clone https://github.com/baby-feelings/cyberattack_info_api.git
 cd cyberattack_info_api
-python -m venv .venv
+python3.13 -m venv .venv   # Windows: py -3.13 -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements-dev.txt
 
@@ -79,7 +79,7 @@ cd dashboard && npm run lint          # ESLint（警告数の上限あり）
 deploy/zap/run_zap_scan.ps1           # OWASP ZAP の動的診断（Docker Desktop。docs/zap-scan.md）
 ```
 
-**テスト結果（最新）:** バックエンド 1230 テスト / カバレッジ 99%、ダッシュボード 477 テスト
+**テスト結果（最新）:** バックエンド 1230 テスト / カバレッジ 99%（Windows は、POSIXパス前提の1件をスキップ）、ダッシュボード 477 テスト
 （Vitest）/ カバレッジ 98%、E2E 101 シナリオ
 
 ダッシュボードのE2Eテスト（Playwright、API全モック）は `dashboard/` で `npm run e2e`。

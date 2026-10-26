@@ -15,6 +15,9 @@ Vercelのプレビューは`dashboard/vercel.json`の`ignoreCommand`でダッシ
 3つのジョブが並列に動く。ほかに`gitleaks.yml`（PR/mainで
 シークレット検出）と`zap-scan.yml`（ZAP、手動+毎週月曜）が別ワークフローで動く（下記）。
 
+**デプロイ前後の備え**: 挙動が変わるデプロイ（Pythonのバージョン更新など）の前に、稼働中のイメージへロールバック用のタグを付け、
+デプロイ後はPython・semgrep・gitleaksのバージョンとDEPSCAN・CODESCANの手動実行で確認する（手順は`docs/deployment.md`）。
+
 **`test`（バックエンド、Python 3.13 のみ。本番Dockerfile・`.python-version`と同じ。3.10・3.11は廃止）**
 1. `ruff check app/ tests/` — Linting（`S`=flake8-bandit相当を含む。testsは`S`除外）
 2. `mypy app/ --ignore-missing-imports` — 型チェック

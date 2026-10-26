@@ -150,6 +150,7 @@ deploy/       # OCIデプロイ関連（deploy_to_oci.ps1・docker-compose.yml�
 - OSV-Scannerの再利用ワークフローは呼び出し側に`security-events: write`が必須（無いと`startup_failure`で
   検査が動かないのに気づけない）。OSVは`requirements.txt`の下限（`>=`）の版を検知する（pip-auditは実インストール版）
 - Pythonは3.13のみ（ruff `py313`・mypy 3.13・CIも3.13。`timezone.utc`ではなく`datetime.UTC`を使う）。
+  ローカルは`py -3.13 -m venv .venv`で仮想環境を作る（グローバルのPythonにはpytest等が入っていない）。
   Windows: `python3`は無効なストアスタブのため`python`を使う。日本語絡みのcp932エラー（`pip install -r`
   含む）は`PYTHONUTF8=1`で解消。テストDB削除は`test_engine.dispose()`してから`os.remove`する
 
