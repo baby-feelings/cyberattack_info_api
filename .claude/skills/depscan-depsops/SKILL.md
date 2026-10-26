@@ -363,6 +363,6 @@ Vite の `VITE_` 接頭辞の環境変数はビルド時にJSバンドルへ平�
   実行して反映する（実行完了後に解決済みになり、Issueは再スキャンで自動クローズされる）。
 - **推移的依存のnpmロック更新**（`proxy-addr`等）: `npm update <pkg>`が"up to date"で変更しない
   ことがある。依存関係が同一なら`package-lock.json`の該当エントリの`version`/`resolved`/`integrity`の
-  3行を直接書き換え、LinuxのDocker（`node:22`）で`npm ci --dry-run`して整合を確認する。Windowsで
+  3行を直接書き換え、LinuxのDocker（`node:24`）で`npm ci --dry-run`して整合を確認する。Windowsで
   `npm install`するとwasm系optional依存がロックから消える。
 - 他リポジトリの修正は、作業中のローカルを避けて`gh repo clone --depth 1`の新規クローンで行う。
