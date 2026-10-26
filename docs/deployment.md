@@ -61,6 +61,20 @@ bind マウントの変更では caddy が再作成されない）。
 `https://<BACKEND_DOMAIN>/health` を最大約1分待って確認し、応答しなければ失敗で終了する
 （以前は docker compose が失敗しても「デプロイ完了」と表示していた）。
 
+### 挙動が変わるデプロイの前に: ロールバック用のタグ
+
+スクリプトは最後に `docker image prune -f` で古いイメージを消すため、Python のバージョン更新など、
+挙動が変わる変更をデプロイする前に、稼働中のイメージへタグを付けて残しておく（2026-10-26、Python 3.13 化で実施）:
+
+```bash
+ssh -i <鍵> ubuntu@<OCIのIP> "docker tag $(docker inspect cyberattack-api-prod --format '{{.Image}}') cyberattack-api-prod:rollback-<メモ>"
+```
+
+戻すときは、`deploy/docker-compose.yml` の `api-prod` の `build:` を `image: cyberattack-api-prod:rollback-<メモ>` に置き換えて
+`docker compose up -d api-prod`。安定稼働を確認できたら `docker rmi cyberattack-api-prod:rollback-<メモ>` で消す。
+デプロイ後は、Python のバージョン（`docker exec cyberattack-api-prod python --version`）、`semgrep --version`・`gitleaks version`、
+DEPSCAN・CODESCAN の手動実行（`?force=true`）で、起動とクローラーの動作を確認する。
+
 ## GitHub Secrets の設定
 
 | Secret 名 | 説明 |
