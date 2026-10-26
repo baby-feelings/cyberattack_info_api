@@ -61,8 +61,8 @@ jobs:
           echo "→ backend=$backend dashboard=$dashboard"
 
   test:
-    # 本番（Dockerfile）・.python-version と同じ 3.11 のみ（3.10 はサポート対象外）
-    name: Test & Lint (Python 3.11)
+    # 本番（Dockerfile）・.python-version と同じ 3.13 のみ（3.10・3.11 はサポート対象外）
+    name: Test & Lint (Python 3.13)
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
@@ -71,10 +71,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.13"
           cache: "pip"
 
       - name: Install dependencies

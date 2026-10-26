@@ -2,7 +2,7 @@
 fastapi>=0.141.1
 uvicorn[standard]>=0.54.0
 # SQLAlchemy 2.1.0でmypyプラグイン（sqlalchemy.ext.mypy.plugin、pyproject.tomlで
-# 使用中）が削除され、mypyが起動時エラーになる（CI: Python 3.11ジョブのみ2.1.0を
+# 使用中）が削除され、mypyが起動時エラーになる（CI: Python 3.13ジョブのみ2.1.0を
 # 解決し失敗、3.10ジョブはキャッシュ済み2.0.54のままで気付かれなかった）。
 # 2.0系を明示的に上限指定して回避する
 sqlalchemy>=2.0.54,<2.1
@@ -25,7 +25,6 @@ certifi>=2026.10.19
 # これによりアプリ側のPyJWTを自由に上げられる
 PyJWT>=2.15.1
 PyYAML>=6.0.3
-tomli>=2.0.1; python_version < "3.11"
 prometheus-client>=0.26.0
 # 注: CODESCAN用の静的解析エンジンsemgrepはここに含めない（semgrep-cli.txt参照）。
 # semgrepが依存するpyjwt・mcp・click等のピン留めがアプリの依存解決を縛るため

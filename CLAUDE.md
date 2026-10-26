@@ -20,7 +20,7 @@ code-review-graph watch
 
 | 項目 | 内容 |
 |------|------|
-| **言語** | Python 3.11 |
+| **言語** | Python 3.13 |
 | **フレームワーク** | FastAPI 0.141.x |
 | **ORM** | SQLAlchemy 2.x（`Mapped` / `mapped_column` スタイル） |
 | **スケジューラ** | APScheduler 3.x + GitHub Actions cron（補完） |
@@ -149,7 +149,7 @@ deploy/       # OCIデプロイ関連（deploy_to_oci.ps1・docker-compose.yml�
   デプロイ時、起動時のマイグレーションでDBが自動更新される（新テーブルは追加のみ）
 - OSV-Scannerの再利用ワークフローは呼び出し側に`security-events: write`が必須（無いと`startup_failure`で
   検査が動かないのに気づけない）。OSVは`requirements.txt`の下限（`>=`）の版を検知する（pip-auditは実インストール版）
-- Pythonは3.11のみ（ruff `py311`・mypy 3.11・CIも3.11。`timezone.utc`ではなく`datetime.UTC`を使う）。
+- Pythonは3.13のみ（ruff `py313`・mypy 3.13・CIも3.13。`timezone.utc`ではなく`datetime.UTC`を使う）。
   Windows: `python3`は無効なストアスタブのため`python`を使う。日本語絡みのcp932エラー（`pip install -r`
   含む）は`PYTHONUTF8=1`で解消。テストDB削除は`test_engine.dispose()`してから`os.remove`する
 

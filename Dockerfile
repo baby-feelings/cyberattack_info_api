@@ -1,6 +1,6 @@
 # OCI Ampere A1（aarch64）を含む多アーキテクチャに対応する軽量イメージ
 # （crypto_forecast/backend/Dockerfile と同じベースイメージパターン）
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 WORKDIR /app
 
