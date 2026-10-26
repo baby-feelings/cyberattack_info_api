@@ -220,6 +220,11 @@ Semgrepは`--source`配下の`.semgrepignore`（`.gitignore`と同じgitignore�
 APIキー〈`.gitleaks.toml`〉・Jekyllテンプレート変数〈`.semgrepignore`〉・自リポジトリの
 defusedxml誤検知〈`# nosemgrep`〉の3パターンで実際に運用している）。
 
+**`# nosemgrep`は、指摘される行の「すぐ上の行」に置く**（間に別のコメント行を挟むと効かず、CODESCANの再スキャンで
+同じ検知が残る。2026-10-26、babysmile_iyricsで発生）。説明のコメントは`# nosemgrep`の上に書く。
+手元で検知を再現・確認するときは、CODESCANと同じ設定（`semgrep --config=p/security-audit --config=p/secrets`）で実行する。
+`--config p/python`など別のルールセットでは0件になり、見逃す。
+
 ## 自リポジトリの `.gitleaks.toml`（allowlist）の書式
 `GitleaksScanner.run`は対象リポジトリのルートに`.gitleaks.toml`があれば`--config`で渡す。**gitleaks 8.xは
 allowlistを「テーブル」`[allowlist]`として読む**。配列`[[allowlist]]`だと`expected a map, got slice`で
