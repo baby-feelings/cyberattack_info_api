@@ -18,7 +18,8 @@ description: 言語・実行環境のバージョン監視（RUNTIME。Issue #37
 | `eol_client.py` | 最新版・サポート期限の取得（endoflife.date と Flutter 公式の `releases_linux.json`） |
 | `status.py` | 使っている版の状態の判定（純粋。日付は引数） |
 | `repository.py` | 永続化（`runtime_releases` の upsert、`repo_runtimes` のリポジトリ単位の全置換） |
-| `crawler.py` | 毎日のジョブ（`CrawlJob`。種別 `RUNTIME`。成功しても Slack へ流さない） |
+| `crawler.py` | 毎日のジョブ（`CrawlJob`。種別 `RUNTIME`。成功を Slack へ流さず、変化があったときだけ`alerts`で通知） |
+| `alerts.py` | 通知の判定（新しい系列の公開・サポート終了が近い・サポート終了）と、送信済みの記録（`runtime_alerts`） |
 | `filters.py` | 絞り込み条件の値オブジェクト`RuntimeFilter`（`for_owner`・`apply`。`depscan/inventory/filters.py`と同じ設計） |
 | `browse.py` | 閲覧用の絞り込み・集計（状態は保存せず、閲覧のたびに求める） |
 | `router.py` / `schemas.py` | `GET /api/runtimes`・`/repos`・`/releases`、`POST /admin/runtime-crawl` |
@@ -77,6 +78,24 @@ description: 言語・実行環境のバージョン監視（RUNTIME。Issue #37
   絞り込みと、リポジトリ別の件数（`/repos`）の対象
 - 状態は DB に保存しない（期限が日々近づくため、保存すると古くなる）。件数が少ない（リポジトリ数×数件）
   ため、条件に合う行を全て取って Python で判定し、絞り込む（DB のページネーションは使わない）
+
+## Slack 通知（`alerts.py`・`core/notifications/runtime_alerts.py`）
+毎日の実行の成功後に、**変化があったときだけ**、管理者（`GITHUB_USERNAME`）の Slack に送る。毎日同じ内容を
+送ると見なくなるため。3種類（言語・系列ごと。キーは`<種類>:<言語>:<系列>`、例`eol_soon:python:3.11`）:
+
+| 種類 | 条件 |
+|---|---|
+| `new_release` | 新しい系列が公開された（公開から`NEW_RELEASE_WINDOW_DAYS`=90日以内。その言語を使う運用中のアプリがあるときだけ） |
+| `eol_soon` | 使っている系列のサポート終了が`EOL_SOON_DAYS`=180日以内（運用中のアプリが**版を固定**して使うものだけ） |
+| `eol` | 使っている系列のサポートが終了した（同上） |
+
+- **送った通知は`runtime_alerts`に記録**し、同じキーは二度と送らない。**送信に失敗したものは記録せず**、
+  翌日の実行でもう一度送る
+- **最初の実行は、既存の状況を記録するだけで通知しない**（`initialized`の印を残す。導入した日に、
+  これまでの全系列の通知が一度に届かないため）
+- 通知の失敗でクロールを失敗にしない（`after_success`で`try/except`）。coreは`RuntimeAlertItem`を知らず、
+  辞書（`as_dict()`）を受け取る
+- 下限の指定（`pinned=False`）・運用停止中のアプリは、通知の対象にしない
 
 ## API とアクセス制御
 DEPSCAN と同じく `X-API-KEY` または GitHub ログインのセッションが必要（`require_api_key_or_session`）。

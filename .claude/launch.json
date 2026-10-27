@@ -2,9 +2,28 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "api-dev",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--env-file",
+        ".env.development",
+        "--port",
+        "8000"
+      ],
+      "port": 8000
+    },
+    {
       "name": "dashboard-dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--prefix", "dashboard"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "dashboard"
+      ],
       "port": 5173
     }
   ]

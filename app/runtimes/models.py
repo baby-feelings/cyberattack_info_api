@@ -88,3 +88,25 @@ class RepoRuntime(Base):
 
     def __repr__(self) -> str:
         return f"<RepoRuntime {self.repo_full_name} {self.runtime} {self.cycle}>"
+
+
+class RuntimeAlert(Base):
+    """送信済みの、言語・実行環境の通知（同じ通知を二重に送らないための記録）。
+
+    通知は、言語・系列ごとの出来事（新しい系列の公開・サポート終了が近い・サポート終了）で、
+    `alert_key`（例: `eol_soon:python:3.11`）で一意にする。同じキーは、一度送ったら、送らない。
+    `initialized` という特別なキーは、最初の実行で、既存の状況を記録だけして通知しなかった印。
+    """
+
+    __tablename__ = "runtime_alerts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    alert_key: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+
+    sent_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    def __repr__(self) -> str:
+        return f"<RuntimeAlert {self.alert_key}>"

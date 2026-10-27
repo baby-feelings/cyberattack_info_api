@@ -204,3 +204,37 @@ class TestFetchAndScanRuntimes:
         self._run(repos, detected)
 
         assert self._run(repos, detected, force=False) == (0, 0, 0)
+
+
+class TestAlertsAfterTheCrawl:
+    """毎日の実行が成功したあとに、変化があったときだけ通知する。通知の失敗でクロールを失敗にしない。"""
+
+    def _repos(self):
+        return [{"full_name": "alice/web", "default_branch": "main"}]
+
+    def _detected(self):
+        return {"alice/web": [DetectedRuntime("python", "3.13", "Dockerfile", True)]}
+
+    def test_sends_alerts_after_a_successful_crawl(self, db_session):
+        with patch("app.runtimes.crawler.send_runtime_alerts") as send:
+            TestFetchAndScanRuntimes()._run(self._repos(), self._detected())
+        send.assert_called_once_with()
+
+    def test_not_sent_when_the_crawl_fails(self, db_session):
+        with (
+            patch("app.runtimes.crawler.fetch_all_releases", side_effect=httpx.ConnectError("x")),
+            patch("app.core.crawler_runner.notify_error"),
+            patch("app.runtimes.crawler.send_runtime_alerts") as send,
+        ):
+            try:
+                fetch_and_scan_runtimes(force=True)
+            except httpx.ConnectError:
+                pass
+        send.assert_not_called()
+
+    def test_alert_failure_does_not_fail_the_crawl(self, db_session):
+        with patch("app.runtimes.crawler.send_runtime_alerts", side_effect=RuntimeError("slack")):
+            result = TestFetchAndScanRuntimes()._run(self._repos(), self._detected())
+        assert result == (1, 1, 0)
+        log = db_session.query(CrawlerLog).filter_by(crawler_type="RUNTIME").one()
+        assert log.status == "success"
