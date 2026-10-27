@@ -5,12 +5,12 @@
 すぐに反映されるため。件数は、リポジトリ数 × 数件と少ないので、条件に合う行を全て取り、
 状態を求めてから絞り込む。
 """
+from dataclasses import replace
 from datetime import date
 
 from sqlalchemy.orm import Session
 
-from app.core.operating_status import OperatingStatus, apply_operating_status
-from app.core.owner_scope import restrict_to_owner
+from app.runtimes.filters import RuntimeFilter
 from app.runtimes.models import RepoRuntime, RuntimeRelease
 from app.runtimes.status import NEEDS_ACTION_STATES, RuntimeStatus, evaluate
 
@@ -21,37 +21,22 @@ _STATE_ORDER = {
 
 
 def list_runtimes(
-    db: Session,
-    *,
-    today: date,
-    forced_owner: str | None = None,
-    repo: str | None = None,
-    runtime: str | None = None,
-    needs_action: bool = False,
-    operating: OperatingStatus = "all",
+    db: Session, flt: RuntimeFilter, *, today: date,
 ) -> list[tuple[RepoRuntime, RuntimeStatus]]:
     """使っている言語・実行環境を、状態つきで返す（対応が急ぐものが先頭）。
 
     Args:
-        forced_owner: 指定した場合、そのオーナーのリポジトリのみに強制的に絞る
-        repo: リポジトリ（完全一致。例: owner/repo）
-        runtime: 言語・実行環境（python / nodejs / flutter / dart）
-        needs_action: True なら、対応が必要な状態（期限切れ・期限間近・更新あり）のみ
-        operating: 運用状態（active=運用中 / inactive=運用停止中 / all）
+        flt: 絞り込み条件（所有者の制限・運用状態・対応が必要なものだけ、を含む）
+        today: 状態（サポート期限までの日数）を求める基準の日
     """
-    query = restrict_to_owner(db.query(RepoRuntime), RepoRuntime.repo_full_name, forced_owner)
-    if repo:
-        query = query.filter(RepoRuntime.repo_full_name == repo)
-    if runtime:
-        query = query.filter(RepoRuntime.runtime == runtime)
-    query = apply_operating_status(query, RepoRuntime.repo_full_name, operating)
+    query = flt.apply(db.query(RepoRuntime))
 
     releases = db.query(RuntimeRelease).all()
     rows = [
         (row, evaluate(row.runtime, row.cycle, pinned=row.pinned, releases=releases, today=today))
         for row in query.all()
     ]
-    if needs_action:
+    if flt.needs_action:
         rows = [(row, st) for row, st in rows if st.state in NEEDS_ACTION_STATES]
     rows.sort(key=lambda item: (
         _STATE_ORDER[item[1].state], item[0].repo_full_name, item[0].runtime, item[0].cycle,
@@ -60,20 +45,15 @@ def list_runtimes(
 
 
 def summarize_repos(
-    db: Session,
-    *,
-    today: date,
-    forced_owner: str | None = None,
-    operating: OperatingStatus = "all",
+    db: Session, flt: RuntimeFilter, *, today: date,
 ) -> list[tuple[str, int, int]]:
     """リポジトリごとの、(リポジトリ名, 検出した数, うち対応が必要な数) を返す。
 
-    対応が必要な数が多いリポジトリが先頭（同数ならリポジトリ名の順）。
+    対応が必要な数が多いリポジトリが先頭（同数ならリポジトリ名の順）。件数は、条件に合う
+    全ての行を数える（`needs_action` は、「うち対応が必要な数」を別に数えるため、使わない）。
     """
     totals: dict[str, list[int]] = {}
-    for row, st in list_runtimes(
-        db, today=today, forced_owner=forced_owner, operating=operating,
-    ):
+    for row, st in list_runtimes(db, replace(flt, needs_action=False), today=today):
         counts = totals.setdefault(row.repo_full_name, [0, 0])
         counts[0] += 1
         if st.state in NEEDS_ACTION_STATES:

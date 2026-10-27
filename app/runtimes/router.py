@@ -22,6 +22,7 @@ from app.core.operating_status import OperatingQuery
 from app.runtimes.browse import list_runtimes, summarize_repos
 from app.runtimes.crawler import fetch_and_scan_runtimes
 from app.runtimes.detector import RUNTIME_LABELS, RUNTIMES
+from app.runtimes.filters import RuntimeFilter
 from app.runtimes.models import RuntimeRelease
 from app.runtimes.schemas import (
     RepoRuntimeListResponse,
@@ -49,6 +50,27 @@ def _today() -> date:
 
 def _iso(value: date | None) -> str | None:
     return value.isoformat() if value else None
+
+
+def runtime_filter(
+    repo: str | None = Query(None, description="リポジトリ（完全一致。例: owner/repo）"),
+    runtime: str | None = Query(None, description="python / nodejs / flutter / dart"),
+    needs_action: bool = Query(False, description="true なら、対応が必要なもののみ"),
+    operating: OperatingQuery = "all",
+) -> RuntimeFilter:
+    """クエリパラメータから、言語・実行環境の絞り込み条件を作る。"""
+    return RuntimeFilter(
+        repo=repo,
+        # 未対応の言語名は無視して、絞り込まない（500 にしない）
+        runtime=runtime if runtime in RUNTIMES else None,
+        needs_action=needs_action,
+        operating=operating,
+    )
+
+
+def repo_list_filter(operating: OperatingQuery = "all") -> RuntimeFilter:
+    """リポジトリ一覧用の条件（運用状態だけで絞る）。"""
+    return RuntimeFilter(operating=operating)
 
 
 @admin_router.post(
@@ -79,17 +101,11 @@ def trigger_runtime_crawl(
 def list_repo_runtimes(
     db: Annotated[Session, Depends(get_db)],
     forced_owner: Annotated[str | None, Depends(require_api_key_or_session)],
-    repo: str | None = Query(None, description="リポジトリ（完全一致。例: owner/repo）"),
-    runtime: str | None = Query(None, description="python / nodejs / flutter / dart"),
-    needs_action: bool = Query(False, description="true なら、対応が必要なもののみ"),
-    operating: OperatingQuery = "all",
+    flt: Annotated[RuntimeFilter, Depends(runtime_filter)],
 ) -> RepoRuntimeListResponse:
     """使っている言語・実行環境を、状態つきで返す。セッション認証時は本人所有のみ。"""
-    rows = list_runtimes(
-        db, today=_today(), forced_owner=forced_owner, repo=repo,
-        runtime=runtime if runtime in RUNTIMES else None,
-        needs_action=needs_action, operating=operating,
-    )
+    flt = flt.for_owner(forced_owner)
+    rows = list_runtimes(db, flt, today=_today())
     data = [
         RepoRuntimeOut(
             repo_full_name=row.repo_full_name,
@@ -107,10 +123,7 @@ def list_repo_runtimes(
         )
         for row, st in rows
     ]
-    logger.info(
-        "list_repo_runtimes: total=%d, repo=%r, runtime=%r, needs_action=%r, operating=%r",
-        len(data), repo, runtime, needs_action, operating,
-    )
+    logger.info("list_repo_runtimes: total=%d, filter=%r", len(data), flt)
     return RepoRuntimeListResponse(total=len(data), data=data)
 
 
@@ -124,10 +137,10 @@ def list_repo_runtimes(
 def list_runtime_repos(
     db: Annotated[Session, Depends(get_db)],
     forced_owner: Annotated[str | None, Depends(require_api_key_or_session)],
-    operating: OperatingQuery = "all",
+    flt: Annotated[RuntimeFilter, Depends(repo_list_filter)],
 ) -> RepoRuntimeRepoListResponse:
     """リポジトリ別の件数を返す。セッション認証時は本人所有のリポジトリのみ。"""
-    rows = summarize_repos(db, today=_today(), forced_owner=forced_owner, operating=operating)
+    rows = summarize_repos(db, flt.for_owner(forced_owner), today=_today())
     return RepoRuntimeRepoListResponse(repos=[
         RepoRuntimeRepoStat(repo_full_name=repo, total=total, needs_action=needs)
         for repo, total, needs in rows

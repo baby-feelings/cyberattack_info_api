@@ -137,7 +137,9 @@ OWASP Top 10:2025「ソフトウェアサプライチェーンの失敗」対策
 - **SPDX**: コア仕様（2.3）には脆弱性を表現する概念が無いため、`packages`のみを返す
 - レスポンスの`Content-Type`は`application/vnd.cyclonedx+json`・`application/spdx+json`
 
-### 依存の全量（インベントリ。`app/depscan/inventory.py`、`repo_dependencies`テーブル）
+### 依存の全量（インベントリ。`app/depscan/inventory/`パッケージ、`repo_dependencies`テーブル）
+**`inventory/`は、依存の全量に関する処理を1つにまとめたパッケージ**: `repository.py`（保存。`RepoDependencyRepository`）・
+`filters.py`（検索条件）・`search.py`（検索・集計）・`router.py`（閲覧のAPI）。SBOMの出力は`depscan/sbom.py`のまま。
 `DependencyFinding`は脆弱な依存だけを持つため、SBOMとして必要な「使っている依存の全量」は
 別テーブルに保存する（`RepoDependency`: repo・ecosystem・package_name・version・manifest_path）。
 
@@ -153,11 +155,15 @@ OWASP Top 10:2025「ソフトウェアサプライチェーンの失敗」対策
   コミットしない（本リポジトリはpublic）。DBに保存し、既存の認証で守る
 - テストの後始末（`tests/conftest.py`の`clean_db`）に新テーブルの`DELETE`を足すこと
 
-### 依存パッケージの閲覧・横断検索（`dependency_search.py`、`GET /api/depscan/dependencies`）
+### 依存パッケージの閲覧・横断検索（`inventory/search.py`・`router.py`、`GET /api/depscan/dependencies`）
 新しい脆弱性が公表されたとき「どのリポジトリが、そのパッケージのどの版を使っているか」を引く。
 何を検索すればよいか分からなくても使えるよう、リポジトリごとに依存を一覧する閲覧にも使う
 （`repo`で絞り、`package`等は省略可。`vulnerable=true`で未解決の検知がある依存だけ）。
 
+- **検索条件は値オブジェクト`DependencyFilter`**（`inventory/filters.py`。frozen dataclass）。ルーターが
+  クエリパラメータから作り（`dependency_filter`）、`for_owner(forced_owner)`で所有者の制限を加え、
+  `search_dependencies(db, flt, page=, per_page=)`・`summarize_repos(db, flt)`に渡す。DBやリクエストに
+  依存しないため、テストでは`DependencyFilter(package="undici")`のように直接作れる。`list_filters`と同じ設計
 - **検索対象は`RepoDependency`（全量）**。`package`は部分一致（大文字小文字を区別しない。`%`・`_`は
   リテラル扱い＝`autoescape`）、`version`・`ecosystem`・`repo`は完全一致。並びは固定（ページ間で安定）
 - **`GET /api/depscan/dependencies/repos`**: リポジトリごとの依存の数（`total`）と、未解決の検知がある

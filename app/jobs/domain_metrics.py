@@ -33,6 +33,7 @@ from app.core.operating_status import is_inactive_repo
 from app.crawler_logs.models import CrawlerLog
 from app.depscan.models import DependencyFinding, RepoDependency
 from app.runtimes.browse import list_runtimes
+from app.runtimes.filters import RuntimeFilter
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +139,7 @@ def _runtime_family(db: Session) -> GaugeMetricFamily:
     """使っている言語・実行環境の数（言語・状態・運用状態別）。"""
     today = datetime.now(UTC).date()
     counts: dict[tuple[str, str, str], int] = {}
-    for row, status in list_runtimes(db, today=today):
+    for row, status in list_runtimes(db, RuntimeFilter(), today=today):
         key = (row.runtime, status.state, _operating(row.repo_full_name))
         counts[key] = counts.get(key, 0) + 1
     gauge = GaugeMetricFamily(

@@ -19,6 +19,7 @@ import hashlib
 import html
 import logging
 from collections.abc import Callable
+from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 import httpx
@@ -130,12 +131,21 @@ GitHub のリポジトリの内容には触れません。</p>
     return _page("MCP サーバーへの接続を許可", body)
 
 
-def build_consent_router(session_factory: SessionFactory) -> APIRouter:
-    """同意画面のルーター（`GET`=表示、`POST`=許可/拒否）を作る。"""
-    router = APIRouter(include_in_schema=False)
+class ConsentFlow:
+    """同意画面の表示と、許可・拒否の処理。
 
-    def _show(request_id: str, browser_nonce: str | None) -> Response:
-        with session_factory() as db:
+    DB セッションの生成（`session_factory`）を受け取って持つ。以前は、`build_consent_router` の中の
+    入れ子の関数（クロージャー）が `session_factory` を暗黙に捕まえていたため、振る舞いごとの
+    テストと読み取りがしにくかった。画面の表示（`show`）、許可・拒否の判断（`decide`）、
+    拒否（`_deny`）、許可して GitHub へ（`_approve`）に分け、ルーターは HTTP の入出力だけを担う。
+    """
+
+    def __init__(self, session_factory: SessionFactory) -> None:
+        self._session_factory = session_factory
+
+    def show(self, request_id: str, browser_nonce: str | None) -> Response:
+        """同意画面を表示する。最初に開いたブラウザに紐づけ、別のブラウザには見せない。"""
+        with self._session_factory() as db:
             row = oauth_flow.load_pending(db, request_id)
             if row is None:
                 return _error_page("認可リクエストが無効か、期限切れです。")
@@ -154,8 +164,9 @@ def build_consent_router(session_factory: SessionFactory) -> APIRouter:
                 )
             return page
 
-    def _decide(request_id: str, action: str, browser_nonce: str | None) -> Response:
-        with session_factory() as db:
+    def decide(self, request_id: str, action: str, browser_nonce: str | None) -> Response:
+        """許可・拒否を受け付ける。同意画面を開いたブラウザ以外からは受け付けない。"""
+        with self._session_factory() as db:
             row = oauth_flow.load_pending(db, request_id)
             if row is None:
                 return _error_page("認可リクエストが無効か、期限切れです。")
@@ -163,25 +174,41 @@ def build_consent_router(session_factory: SessionFactory) -> APIRouter:
             if not oauth_flow.is_bound_to(row, browser_nonce):
                 return _error_page("同意画面を開いたブラウザから操作してください。", 403)
             if action == "deny":
-                redirect_uri, state = row.redirect_uri, row.state
-                oauth_flow.discard_request(db, request_id)
-                return _redirect_with(redirect_uri, state, error="access_denied")
+                return self._deny(db, request_id, row)
             if action != "approve":
                 return _error_page("不正な操作です。")
-            if not settings.GITHUB_OAUTH_CLIENT_ID:
-                return _error_page("GitHub ログインが設定されていません。", 503)
-            # 本人確認だけ（scope=None）。GitHub のコールバックは既存の /auth/github/callback
-            github_url = build_authorize_url(
-                settings.GITHUB_OAUTH_CLIENT_ID,
-                f"{settings.API_BASE_URL_FOR_OAUTH}{CALLBACK_PATH}",
-                oauth_flow.encode_state(request_id),
-                scope=None,
-            )
-            return RedirectResponse(github_url, status_code=303, headers=_NO_STORE)
+            return self._approve(request_id)
+
+    @staticmethod
+    def _deny(db: Session, request_id: str, row: Any) -> Response:
+        """拒否: 認可リクエストを捨てて、クライアントへ `access_denied` を返す。"""
+        redirect_uri, state = row.redirect_uri, row.state
+        oauth_flow.discard_request(db, request_id)
+        return _redirect_with(redirect_uri, state, error="access_denied")
+
+    @staticmethod
+    def _approve(request_id: str) -> Response:
+        """許可: GitHub のログインへ進む（本人確認だけで、リポジトリの内容は読まない）。"""
+        if not settings.GITHUB_OAUTH_CLIENT_ID:
+            return _error_page("GitHub ログインが設定されていません。", 503)
+        # 本人確認だけ（scope=None）。GitHub のコールバックは既存の /auth/github/callback
+        github_url = build_authorize_url(
+            settings.GITHUB_OAUTH_CLIENT_ID,
+            f"{settings.API_BASE_URL_FOR_OAUTH}{CALLBACK_PATH}",
+            oauth_flow.encode_state(request_id),
+            scope=None,
+        )
+        return RedirectResponse(github_url, status_code=303, headers=_NO_STORE)
+
+
+def build_consent_router(session_factory: SessionFactory) -> APIRouter:
+    """同意画面のルーター（`GET`=表示、`POST`=許可/拒否）を作る。"""
+    router = APIRouter(include_in_schema=False)
+    flow = ConsentFlow(session_factory)
 
     @router.get(CONSENT_PATH)
     def consent_page(request: Request, request_id: str = "") -> Response:
-        return _show(request_id, request.cookies.get(BROWSER_COOKIE))
+        return flow.show(request_id, request.cookies.get(BROWSER_COOKIE))
 
     @router.post(CONSENT_PATH)
     async def consent_submit(request: Request) -> Response:
@@ -192,7 +219,7 @@ def build_consent_router(session_factory: SessionFactory) -> APIRouter:
         request_id = (form.get("request_id") or [""])[0]
         action = (form.get("action") or [""])[0]
         return await run_in_threadpool(
-            _decide, request_id, action, request.cookies.get(BROWSER_COOKIE),
+            flow.decide, request_id, action, request.cookies.get(BROWSER_COOKIE),
         )
 
     return router

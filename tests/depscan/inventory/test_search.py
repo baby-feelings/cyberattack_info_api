@@ -1,4 +1,4 @@
-"""app.depscan.dependency_search と GET /api/depscan/dependencies（横断検索）のテスト。"""
+"""app.depscan.inventory（検索・集計）と GET /api/depscan/dependencies（横断検索）のテスト。"""
 import os
 from datetime import UTC, datetime
 from unittest.mock import patch
@@ -8,9 +8,21 @@ os.environ.setdefault("API_KEY", "test-api-key-for-pytest")
 os.environ.setdefault("ENVIRONMENT", "development")
 
 from app.auth.session import create_session_token  # noqa: E402
-from app.depscan.dependency_search import search_dependencies, summarize_repos  # noqa: E402
+from app.depscan.inventory.filters import DependencyFilter  # noqa: E402
+from app.depscan.inventory.search import search_dependencies, summarize_repos  # noqa: E402
 from app.depscan.models import RepoDependency  # noqa: E402
 from tests.depscan.support import make_finding  # noqa: E402
+
+
+def _search(db, *, page=1, per_page=50, forced_owner=None, **conditions):
+    """条件（package・version など）から `DependencyFilter` を作って、検索する。"""
+    flt = DependencyFilter(owner=forced_owner, **conditions)
+    return search_dependencies(db, flt, page=page, per_page=per_page)
+
+
+def _summarize(db, *, forced_owner=None, **conditions):
+    return summarize_repos(db, DependencyFilter(owner=forced_owner, **conditions))
+
 
 HEADERS = {"X-API-KEY": "test-api-key-for-pytest"}
 _URL = "/api/depscan/dependencies"
@@ -35,19 +47,19 @@ def _seed(db_session):
 class TestSearchDependencies:
     def test_returns_all_without_filters(self, db_session):
         _seed(db_session)
-        total, rows = search_dependencies(db_session, page=1, per_page=50)
+        total, rows = _search(db_session, page=1, per_page=50)
         assert total == 5
         assert len(rows) == 5
 
     def test_package_is_partial_and_case_insensitive(self, db_session):
         _seed(db_session)
-        total, rows = search_dependencies(db_session, page=1, per_page=50, package="UNDI")
+        total, rows = _search(db_session, page=1, per_page=50, package="UNDI")
         assert total == 3
         assert {r.package_name for r, _ in rows} == {"undici"}
 
     def test_version_is_exact_match(self, db_session):
         _seed(db_session)
-        total, rows = search_dependencies(
+        total, rows = _search(
             db_session, page=1, per_page=50, package="undici", version="8.11.2",
         )
         assert total == 2
@@ -55,22 +67,22 @@ class TestSearchDependencies:
 
     def test_ecosystem_and_repo_filters(self, db_session):
         _seed(db_session)
-        _, rows = search_dependencies(db_session, page=1, per_page=50, ecosystem="PyPI")
+        _, rows = _search(db_session, page=1, per_page=50, ecosystem="PyPI")
         assert [r.package_name for r, _ in rows] == ["fastapi"]
-        _, rows = search_dependencies(db_session, page=1, per_page=50, repo="alice/api")
+        _, rows = _search(db_session, page=1, per_page=50, repo="alice/api")
         assert {r.package_name for r, _ in rows} == {"undici", "fastapi"}
 
     def test_like_wildcards_in_package_are_literal(self, db_session):
         """`%` `_` を含む検索語がワイルドカードとして働かず、全件にヒットしないこと。"""
         _seed(db_session)
-        total, _ = search_dependencies(db_session, page=1, per_page=50, package="%")
+        total, _ = _search(db_session, page=1, per_page=50, package="%")
         assert total == 0
-        total, _ = search_dependencies(db_session, page=1, per_page=50, package="_")
+        total, _ = _search(db_session, page=1, per_page=50, package="_")
         assert total == 0
 
     def test_forced_owner_limits_to_that_owner(self, db_session):
         _seed(db_session)
-        total, rows = search_dependencies(
+        total, rows = _search(
             db_session, page=1, per_page=50, package="undici", forced_owner="alice",
         )
         assert total == 2
@@ -79,14 +91,14 @@ class TestSearchDependencies:
     def test_forced_owner_does_not_match_a_longer_owner_name(self, db_session):
         """オーナー名の前方一致が「alice」で「alice2/...」にも当たらないこと（'/'まで含めて比較する）。"""
         _dep(db_session, "alice2/app", "undici")
-        total, _ = search_dependencies(db_session, page=1, per_page=50, forced_owner="alice")
+        total, _ = _search(db_session, page=1, per_page=50, forced_owner="alice")
         assert total == 0
 
     def test_pagination_is_stable(self, db_session):
         _seed(db_session)
-        _, first = search_dependencies(db_session, page=1, per_page=2)
-        _, second = search_dependencies(db_session, page=2, per_page=2)
-        _, third = search_dependencies(db_session, page=3, per_page=2)
+        _, first = _search(db_session, page=1, per_page=2)
+        _, second = _search(db_session, page=2, per_page=2)
+        _, third = _search(db_session, page=3, per_page=2)
         keys = [(r.repo_full_name, r.package_name, r.version) for r, _ in first + second + third]
         assert len(keys) == 5
         assert len(set(keys)) == 5
@@ -109,7 +121,7 @@ class TestSearchDependencies:
             db_session, repo_full_name="alice/api", ecosystem="npm", package_name="undici",
             installed_version="8.11.2", osv_id="GHSA-4",
         )
-        _, rows = search_dependencies(db_session, page=1, per_page=50, package="undici")
+        _, rows = _search(db_session, page=1, per_page=50, package="undici")
         counts = {(r.repo_full_name, r.version): n for r, n in rows}
         assert counts == {
             ("alice/web", "8.11.2"): 2,
@@ -118,7 +130,7 @@ class TestSearchDependencies:
         }
 
     def test_empty_result(self, db_session):
-        assert search_dependencies(db_session, page=1, per_page=50, package="nothing") == (0, [])
+        assert _search(db_session, page=1, per_page=50, package="nothing") == (0, [])
 
     def test_vulnerable_only_returns_dependencies_with_open_findings(self, db_session):
         _seed(db_session)
@@ -130,18 +142,18 @@ class TestSearchDependencies:
             db_session, repo_full_name="alice/web", ecosystem="npm", package_name="axios",
             installed_version="1.6.0", resolved_at=datetime.now(UTC),
         )
-        total, rows = search_dependencies(db_session, page=1, per_page=50, vulnerable=True)
+        total, rows = _search(db_session, page=1, per_page=50, vulnerable=True)
         assert total == 1
         assert [(r.repo_full_name, r.package_name) for r, _ in rows] == [("alice/web", "undici")]
 
     def test_operating_filter_uses_inactive_repos(self, db_session):
         _seed(db_session)
         with patch("app.core.operating_status.settings.INACTIVE_REPOS", "bob/app"):
-            active, _ = search_dependencies(db_session, page=1, per_page=50, operating="active")
-            inactive, rows = search_dependencies(
+            active, _ = _search(db_session, page=1, per_page=50, operating="active")
+            inactive, rows = _search(
                 db_session, page=1, per_page=50, operating="inactive",
             )
-            everything, _ = search_dependencies(db_session, page=1, per_page=50, operating="all")
+            everything, _ = _search(db_session, page=1, per_page=50, operating="all")
         assert (active, inactive, everything) == (4, 1, 5)
         assert rows[0][0].repo_full_name == "bob/app"
 
@@ -158,22 +170,22 @@ class TestSummarizeRepos:
             installed_version="8.11.2", osv_id="GHSA-2",
         )
         # 検知がある alice/web が先頭、あとはリポジトリ名順
-        assert summarize_repos(db_session) == [
+        assert _summarize(db_session) == [
             ("alice/web", 2, 1), ("alice/api", 2, 0), ("bob/app", 1, 0),
         ]
 
     def test_forced_owner_and_operating(self, db_session):
         _seed(db_session)
-        assert [r for r, _, _ in summarize_repos(db_session, forced_owner="alice")] == [
+        assert [r for r, _, _ in _summarize(db_session, forced_owner="alice")] == [
             "alice/api", "alice/web",
         ]
         with patch("app.core.operating_status.settings.INACTIVE_REPOS", "alice/api"):
-            assert [r for r, _, _ in summarize_repos(db_session, operating="active")] == [
+            assert [r for r, _, _ in _summarize(db_session, operating="active")] == [
                 "alice/web", "bob/app",
             ]
 
     def test_empty(self, db_session):
-        assert summarize_repos(db_session) == []
+        assert _summarize(db_session) == []
 
 
 class TestDependenciesEndpoint:
