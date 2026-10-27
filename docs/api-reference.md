@@ -23,6 +23,9 @@
 | - | `operating=active\|inactive\|all` | 上の DEPSCAN・CODESCAN・DEPSOPS の一覧・統計共通の絞り込み。運用中／運用停止中（`INACTIVE_REPOS`）で分ける。未指定は `all`（全件） |
 | GET | `/api/depscan/dependencies` | 使っている依存パッケージの閲覧・横断検索（`package`部分一致・`version`・`ecosystem`・`repo`・`vulnerable`・`operating`。各行に未解決の検知件数`open_vulnerabilities`。MCP: `search_dependencies`） |
 | GET | `/api/depscan/dependencies/repos` | リポジトリごとの依存の数と、未解決の検知がある依存の数（`operating`で絞り込み） |
+| GET | `/api/runtimes` | 使っている言語・実行環境（Python・Node.js・Flutter・Dart）の版と状態（`eol`/`eol_soon`/`update_available`/`latest`/`reference`。`repo`・`runtime`・`needs_action`・`operating`。Issue #373） |
+| GET | `/api/runtimes/repos` | リポジトリごとの検出数と、対応が必要な数 |
+| GET | `/api/runtimes/releases` | 最新版とサポート期限（系列ごと。`recommended`が推奨の系列） |
 | GET | `/api/depscan/assets` | リポジトリ資産コンテキスト一覧（Issue #131） |
 | GET | `/api/depscan/export` | DEPSCAN検知結果をCycloneDX/SPDX形式でエクスポート（`repo`必須、Issue #133。`content=inventory`で使っている依存の全量） |
 | GET | `/api/codescan` | CODESCAN検知結果一覧（Semgrep静的解析 + gitleaksシークレット検知。`cvss_score`はベストエフォート推定〈Issue #203〉。GitHubログイン必須〈`X-API-KEY`またはセッションJWT、Issue #219〉） |
@@ -46,6 +49,7 @@
 | POST | `/admin/osv-crawl` | OSV手動クロール（`?days=N`・`?force=true`対応） |
 | POST | `/admin/jvn-crawl` | JVN手動クロール（`?days=N`・`?force=true`対応） |
 | POST | `/admin/depscan-crawl` | DEPSCAN手動実行（`?force=true`対応） |
+| POST | `/admin/runtime-crawl` | 言語・実行環境のバージョン監視の手動実行（`?force=true`対応） |
 | PUT | `/admin/depscan/assets/{owner}/{repo}` | リポジトリ資産コンテキスト設定（Upsert、Issue #131） |
 | POST | `/admin/codescan-crawl` | CODESCAN手動実行（GitHub全リポジトリをSemgrep + gitleaksで再スキャン。`?force=true`対応） |
 | POST | `/admin/dependabot-ops` | DEPSOPS手動実行（安全なPRのみ自動マージ。`?force=true`対応） |

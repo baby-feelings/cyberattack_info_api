@@ -17,6 +17,7 @@ from app.kev.crawler import fetch_and_store_kev
 from app.mcp_server.mcp_token_expiry import run_mcp_token_expiry_notices
 from app.mcp_server.oauth.cleanup import run_oauth_cleanup
 from app.osv.crawler import fetch_and_store_osv
+from app.runtimes.crawler import fetch_and_scan_runtimes
 
 
 class TestBuildScheduledJobs:
@@ -26,7 +27,7 @@ class TestBuildScheduledJobs:
         assert set(jobs) == {
             "cisa_kev_crawler", "osv_crawler", "jvn_crawler", "depscan_crawler",
             "codescan_crawler", "dependabot_ops", "repo_cleanup", "user_crawl",
-            "mcp_token_expiry_notice", "oauth_cleanup",
+            "mcp_token_expiry_notice", "oauth_cleanup", "runtime_crawler",
         }
         expected = {
             "cisa_kev_crawler": (fetch_and_store_kev, settings.CRON_HOUR_UTC,
@@ -36,6 +37,8 @@ class TestBuildScheduledJobs:
             "depscan_crawler": (fetch_and_scan_dependencies, settings.DEPSCAN_CRON_HOUR_UTC, 0),
             "codescan_crawler": (fetch_and_scan_code, settings.CODESCAN_CRON_HOUR_UTC,
                                  settings.CODESCAN_CRON_MINUTE_UTC),
+            "runtime_crawler": (fetch_and_scan_runtimes, settings.RUNTIME_CRON_HOUR_UTC,
+                                settings.RUNTIME_CRON_MINUTE_UTC),
             "dependabot_ops": (run_dependabot_ops, settings.DEPSOPS_CRON_HOUR_UTC, 0),
             "repo_cleanup": (run_repo_cleanup, settings.REPO_CLEANUP_CRON_HOUR_UTC,
                              settings.REPO_CLEANUP_CRON_MINUTE_UTC),

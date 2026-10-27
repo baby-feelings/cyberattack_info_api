@@ -28,8 +28,9 @@ from app.core.github.accounts import is_excluded_repo, list_target_repos
 from app.core.github.repo import GitHubRepo
 from app.crawler_logs.writer import now_utc, write_crawler_log
 from app.depscan.issue_management import ISSUE_TITLE as DEPSCAN_ISSUE_TITLE
-from app.depscan.models import DependencyFinding
+from app.depscan.models import DependencyFinding, RepoDependency
 from app.depsops.models import DependabotPrLog
+from app.runtimes.models import RepoRuntime
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ def _find_known_repos(db: Session, owner: str) -> set[str]:
     """
     known: set[str] = set()
     prefix = f"{owner}/"
-    for model in (DependencyFinding, CodeFinding, DependabotPrLog):
+    for model in (DependencyFinding, CodeFinding, DependabotPrLog, RepoDependency, RepoRuntime):
         rows = (
             db.query(model.repo_full_name)
             .filter(model.repo_full_name.like(f"{prefix}%"))
@@ -67,6 +68,17 @@ def _purge_repo_data(db: Session, repo_full_name: str) -> dict[str, int]:
         "dependabot_pr_logs": (
             db.query(DependabotPrLog)
             .filter(DependabotPrLog.repo_full_name == repo_full_name)
+            .delete(synchronize_session=False)
+        ),
+        # 依存の全量（SBOM）・使っている言語・実行環境も、リポジトリが無くなったら残さない
+        "repo_dependencies": (
+            db.query(RepoDependency)
+            .filter(RepoDependency.repo_full_name == repo_full_name)
+            .delete(synchronize_session=False)
+        ),
+        "repo_runtimes": (
+            db.query(RepoRuntime)
+            .filter(RepoRuntime.repo_full_name == repo_full_name)
             .delete(synchronize_session=False)
         ),
     }
