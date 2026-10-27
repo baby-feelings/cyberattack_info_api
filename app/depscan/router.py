@@ -22,7 +22,7 @@ from app.core.pagination import paginate
 from app.core.schemas import SeverityStat
 from app.depscan.crawler import fetch_and_scan_dependencies
 from app.depscan.filters import DepscanListFilter
-from app.depscan.models import DependencyFinding, RepoAssetContext
+from app.depscan.models import DependencyFinding, RepoAssetContext, RepoDependency
 from app.depscan.priority import (
     compute_priority_reasons,
     fetch_asset_context_map,
@@ -233,7 +233,8 @@ _SBOM_MEDIA_TYPES = {
     description="指定リポジトリの検知結果をCycloneDX 1.5またはSPDX 2.3形式でエクスポートする"
     "（Issue #133）。パッケージ識別にはpurl（Package URL）を使用する。SPDXはコア仕様に"
     "脆弱性を表現する概念が無いためパッケージ一覧のみを返す（脆弱性はCycloneDX形式か"
-    "GET /api/depscan で確認する）。",
+    "GET /api/depscan で確認する）。content=inventory を指定すると、脆弱性の有無にかかわらず"
+    "使っている依存の全量を含める（既定の content=findings は検知された依存のみ）。",
 )
 def export_depscan_sbom(
     db: Annotated[Session, Depends(get_db)],
@@ -241,6 +242,10 @@ def export_depscan_sbom(
     repo: str = Query(..., description="対象リポジトリ（例: owner/repo）"),
     format: Literal["cyclonedx", "spdx"] = Query("cyclonedx", description="出力形式"),
     resolved: bool | None = Query(None, description="解決状態で絞り込み（未指定なら全件）"),
+    content: Literal["findings", "inventory"] = Query(
+        "findings",
+        description="findings=検知された依存のみ（既定）／inventory=使っている依存の全量",
+    ),
 ) -> Response:
     """指定リポジトリのDEPSCAN検知結果をSBOM形式でエクスポートする。"""
     if forced_owner is not None and not repo.startswith(f"{forced_owner}/"):
@@ -257,12 +262,27 @@ def export_depscan_sbom(
             query = query.filter(DependencyFinding.resolved_at.is_(None))
     findings = query.all()
 
-    sbom = build_spdx_sbom(repo, findings) if format == "spdx" else build_cyclonedx_sbom(
-        repo, findings,
+    # 全量モードでは、保存済みの依存の全量（repo_dependencies）を並べて渡す
+    inventory: list[RepoDependency] | None = None
+    if content == "inventory":
+        inventory = (
+            db.query(RepoDependency)
+            .filter(RepoDependency.repo_full_name == repo)
+            .order_by(
+                RepoDependency.ecosystem, RepoDependency.package_name, RepoDependency.version,
+            )
+            .all()
+        )
+
+    sbom = (
+        build_spdx_sbom(repo, findings, inventory) if format == "spdx"
+        else build_cyclonedx_sbom(repo, findings, inventory)
     )
 
     logger.info(
-        "export_depscan_sbom: repo=%s, format=%s, resolved=%r, findings=%d",
-        repo, format, resolved, len(findings),
+        "export_depscan_sbom: repo=%s, format=%s, content=%s, resolved=%r, "
+        "findings=%d, inventory=%s",
+        repo, format, content, resolved, len(findings),
+        len(inventory) if inventory is not None else "-",
     )
     return Response(content=json.dumps(sbom), media_type=_SBOM_MEDIA_TYPES[format])

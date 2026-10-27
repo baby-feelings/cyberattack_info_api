@@ -22,7 +22,7 @@
 | GET | `/api/depscan/stats` | DEPSCAN統計（リポジトリ別・重要度別） |
 | - | `operating=active\|inactive\|all` | 上の DEPSCAN・CODESCAN・DEPSOPS の一覧・統計共通の絞り込み。運用中／運用停止中（`INACTIVE_REPOS`）で分ける。未指定は `all`（全件） |
 | GET | `/api/depscan/assets` | リポジトリ資産コンテキスト一覧（Issue #131） |
-| GET | `/api/depscan/export` | DEPSCAN検知結果をCycloneDX/SPDX形式でエクスポート（`repo`必須、Issue #133） |
+| GET | `/api/depscan/export` | DEPSCAN検知結果をCycloneDX/SPDX形式でエクスポート（`repo`必須、Issue #133。`content=inventory`で使っている依存の全量） |
 | GET | `/api/codescan` | CODESCAN検知結果一覧（Semgrep静的解析 + gitleaksシークレット検知。`cvss_score`はベストエフォート推定〈Issue #203〉。GitHubログイン必須〈`X-API-KEY`またはセッションJWT、Issue #219〉） |
 | GET | `/api/codescan/stats` | CODESCAN統計（リポジトリ別・重要度別） |
 | GET | `/api/depsops` | DEPSOPS判定履歴（`is_security_update`・`compatibility_badge_url`含む） |

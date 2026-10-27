@@ -121,11 +121,30 @@ OWASP Top 10:2025「ソフトウェアサプライチェーンの失敗」対策
   （`groupId:artifactId`）・Packagist（`vendor/name`）・npm（`@scope/name`）は
   namespace/nameに分解、それ以外はパッケージ名をそのまま`name`として扱う
 - **`GET /api/depscan/export`**: `repo`（必須）・`format`（`cyclonedx`/`spdx`）・
-  `resolved`で絞り込み。認証は`GET /api/depscan`と同じ`_resolve_access`
-- **CycloneDX**: `components`は`(ecosystem, package_name, installed_version)`単位で
-  重複排除、`vulnerabilities`は元のfindingごとに1件。1パッケージに複数CVEが紐づく場合、
-  componentは1つにまとまり`vulnerabilities`だけ複数件になる
+  `resolved`で絞り込み・`content`（`findings`=検知された依存のみ〔既定。従来どおり〕／
+  `inventory`=使っている依存の全量）。認証は`GET /api/depscan`と同じ`_resolve_access`
+  （`inventory`でも本人所有リポジトリ以外は403）
+- **CycloneDX**: `components`は`(ecosystem, package_name, version)`単位で重複排除、
+  `vulnerabilities`は元のfindingごとに1件。1パッケージに複数CVEが紐づく場合、
+  componentは1つにまとまり`vulnerabilities`だけ複数件になる。`content=inventory`では
+  脆弱性の無い依存もcomponentsに入り、`vulnerabilities`は検知された依存だけに紐づく
 - **SPDX**: コア仕様（2.3）には脆弱性を表現する概念が無いため、`packages`のみを返す
+
+### 依存の全量（インベントリ。`app/depscan/inventory.py`、`repo_dependencies`テーブル）
+`DependencyFinding`は脆弱な依存だけを持つため、SBOMとして必要な「使っている依存の全量」は
+別テーブルに保存する（`RepoDependency`: repo・ecosystem・package_name・version・manifest_path）。
+
+- **保存のタイミング**: `collect_dependencies`の直後に`RepoDependencyRepository.replace`を呼ぶ
+  （毎日の定期実行`crawler.py`とオンデマンド`user_scan.py`の両方）。OSVへの照合には依存しない
+- **全置換**: スキャンしたリポジトリ（`repo_visibility`のキー。依存が0件だったものも含む）の
+  既存行を消して入れ直す（ロックファイルが現在の正）。スキャン対象外のリポジトリには触れない。
+  削除と挿入は同一トランザクションで、失敗時はロールバックして古い行を残す
+- **失敗してもスキャンは止めない**（try/exceptでログのみ。他の任意ステップと同じ方針）
+- 一時的なGitHub APIの失敗でロックファイルを取得できなかったリポジトリは、その回だけ
+  依存が0件に見えて行が消える（次回のスキャンで復元される）
+- **public/privateの注意**: private リポジトリの依存一覧は機密のため、SBOMをファイルとして
+  コミットしない（本リポジトリはpublic）。DBに保存し、既存の認証で守る
+- テストの後始末（`tests/conftest.py`の`clean_db`）に新テーブルの`DELETE`を足すこと
 - レスポンスの`Content-Type`は`application/vnd.cyclonedx+json`・`application/spdx+json`
 
 ## DEPSCAN の解決済みレコードは保持期間超過で自動削除する（未解決は対象外）

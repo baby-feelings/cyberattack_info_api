@@ -189,3 +189,51 @@ class RepoAssetContext(Base):
             f"<RepoAssetContext {self.repo_full_name} "
             f"production={self.is_production} importance={self.importance}>"
         )
+
+
+class RepoDependency(Base):
+    """リポジトリが使う依存パッケージの全量（SBOM・横断検索用のインベントリ）。
+
+    `DependencyFinding` は脆弱な依存だけを保存するため、SBOM（Software Bill of Materials）
+    として必要な「使っている依存の全量」はここに保存する。DEPSCAN のスキャンのたびに、
+    スキャンしたリポジトリ単位で全置換する（ロックファイルが現在の正）。
+    """
+
+    __tablename__ = "repo_dependencies"
+    __table_args__ = (
+        UniqueConstraint(
+            "repo_full_name", "ecosystem", "package_name", "version", "manifest_path",
+            name="uq_repo_dependencies",
+        ),
+        Index("ix_repo_dependencies_repo", "repo_full_name"),
+        # 「どのリポジトリが、そのパッケージを使っているか」の横断検索用
+        Index("ix_repo_dependencies_package", "ecosystem", "package_name"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    # 対象リポジトリ（例: baby-feelings/baby_grow）
+    repo_full_name: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    # エコシステム（例: PyPI / npm / Pub）
+    ecosystem: Mapped[str] = mapped_column(String(50), nullable=False)
+
+    # パッケージ名
+    package_name: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    # ロックファイルに記載されていたバージョン
+    version: Mapped[str] = mapped_column(String(100), nullable=False)
+
+    # 由来のロックファイルのパス（例: functions/requirements.txt）
+    manifest_path: Mapped[str] = mapped_column(String(1000), nullable=False)
+
+    # 最後にスキャンで確認した日時
+    scanned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<RepoDependency {self.repo_full_name} "
+            f"{self.ecosystem}:{self.package_name}@{self.version}>"
+        )

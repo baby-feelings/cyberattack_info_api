@@ -337,6 +337,11 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
   "https://168.138.213.240.nip.io/api/depscan/export?repo=baby-feelings/baby_grow&format=spdx" \
   -o baby_grow.spdx.json
 
+# 使っている依存の全量（SBOM）。脆弱性の無い依存も含む
+curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
+  "https://168.138.213.240.nip.io/api/depscan/export?repo=baby-feelings/baby_grow&content=inventory" \
+  -o baby_grow.full.cdx.json
+
 # 未解決の検知結果のみに絞り込む
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
   "https://168.138.213.240.nip.io/api/depscan/export?repo=baby-feelings/baby_grow&resolved=false"
@@ -347,7 +352,11 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | `repo` | string | 対象リポジトリ（必須。例: `owner/repo`） |
 | `format` | string | 出力形式（`cyclonedx` / `spdx`、デフォルト: `cyclonedx`） |
 | `resolved` | bool | 解決状態で絞り込み（未指定なら全件） |
+| `content` | string | `findings`=検知された依存のみ（デフォルト） / `inventory`=使っている依存の全量（脆弱性の無い依存も含む SBOM） |
 
+> 依存の全量は、DEPSCAN のスキャンごとに保存される（毎日 JST 04:xx の定期実行・ログイン時の
+> オンデマンド）。デプロイ直後は、次回のスキャンが終わるまで `inventory` は空になる。
+>
 > `Content-Type`はSBOM専用のメディアタイプ（`application/vnd.cyclonedx+json` /
 > `application/spdx+json`）を返す。外部SBOMの入力受け付け・VEX
 > （Vulnerability Exploitability eXchange）状態拡張は現時点では未対応。
