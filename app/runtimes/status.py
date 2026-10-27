@@ -7,7 +7,7 @@
 
 - `eol`: サポートが終了している（セキュリティ修正が提供されない）
 - `eol_soon`: サポート終了が近い（`EOL_SOON_DAYS` 日以内）
-- `update_available`: 新しい系列が出ている
+- `update_available`: 推奨の系列（サポート中で公開から経った最新）が、使っている系列より新しい
 - `latest`: 最新の系列を使っている
 - `reference`: 下限の指定（`engines` など）で、実際に動いている版が分からない。参考表示のみ
 - `unknown`: リリース情報に無い系列（取得前・未対応）
@@ -24,6 +24,10 @@ RuntimeState = Literal["eol", "eol_soon", "update_available", "latest", "referen
 # サポート終了まで、この日数以内になったら「期限間近」とする
 EOL_SOON_DAYS = 180
 
+# 公開からこの日数が経った系列を、推奨の対象にする。公開直後の系列は、ライブラリの対応が
+# 追いつかないことが多く、使っているリポジトリが全て「更新あり」になって警告が多くなるため
+RECOMMEND_MIN_AGE_DAYS = 180
+
 # 対応が必要な状態（ダッシュボードの「更新が必要なものだけ」・通知の対象）
 NEEDS_ACTION_STATES: frozenset[str] = frozenset({"eol", "eol_soon", "update_available"})
 
@@ -34,7 +38,7 @@ class RuntimeStatus:
 
     state: RuntimeState
     latest_version: str | None  # 使っている系列の最新版（パッチの更新の目安）
-    recommended_cycle: str | None  # 推奨の系列（保守されている最新。Node.js は LTS のみ）
+    recommended_cycle: str | None  # 推奨の系列（サポート中で公開から経った最新。Node は LTS のみ）
     recommended_version: str | None  # 推奨の系列の最新版
     eol_date: date | None
     days_to_eol: int | None
@@ -49,14 +53,21 @@ def cycle_key(cycle: str) -> tuple[int, ...]:
 
 
 def recommended_release(
-    runtime: str, releases: list[RuntimeRelease],
+    runtime: str, releases: list[RuntimeRelease], today: date,
 ) -> RuntimeRelease | None:
-    """推奨の系列を返す。サポート中の系列のうち最新のもの（Node.js は、LTS のみ）。"""
+    """推奨の系列を返す。サポート中で、公開から十分に経った系列のうち最新のもの。
+
+    Node.js は LTS のみ。公開から十分に経った系列が無いときは、サポート中の最新を返す。
+    """
     candidates = [
         r for r in releases
         if r.runtime == runtime and not r.is_eol and (r.is_lts or runtime != NODEJS)
     ]
-    return max(candidates, key=lambda r: cycle_key(r.cycle), default=None)
+    settled = [
+        r for r in candidates
+        if r.release_date is None or (today - r.release_date).days >= RECOMMEND_MIN_AGE_DAYS
+    ]
+    return max(settled or candidates, key=lambda r: cycle_key(r.cycle), default=None)
 
 
 def evaluate(
@@ -65,7 +76,7 @@ def evaluate(
     """使っている版（系列）の状態を判定する。"""
     own = [r for r in releases if r.runtime == runtime]
     used = next((r for r in own if r.cycle == cycle), None)
-    recommended = recommended_release(runtime, own)
+    recommended = recommended_release(runtime, own, today)
 
     eol_date = used.eol_date if used else None
     days_to_eol = (eol_date - today).days if eol_date else None

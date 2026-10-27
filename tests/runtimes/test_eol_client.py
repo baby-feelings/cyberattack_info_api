@@ -95,7 +95,8 @@ class TestFetchFlutterAndDart:
 
         # 同じ系列の複数リリースは、最新の版にまとめる
         assert by_key[("flutter", "3.47")].latest_version == "3.47.8"
-        assert by_key[("flutter", "3.47")].release_date == date(2026, 10, 23)
+        # 公開日は、系列の最初のリリース（3.47.7）の日。最新のパッチ（3.47.8）の日ではない
+        assert by_key[("flutter", "3.47")].release_date == date(2026, 10, 8)
         assert by_key[("dart", "3.13")].latest_version == "3.13.7"
         # beta・古い 1.x/2.x は含めない
         assert ("flutter", "3.48") not in by_key

@@ -19,10 +19,10 @@ def _today():
     return patch("app.runtimes.router._today", return_value=_TODAY)
 
 
-def _release(runtime, cycle, latest, *, eol=None, is_eol=False, lts=False):
+def _release(runtime, cycle, latest, *, eol=None, is_eol=False, lts=False, released=None):
     return RuntimeRelease(
         runtime=runtime, cycle=cycle, latest_version=latest, eol_date=eol,
-        is_eol=is_eol, is_lts=lts,
+        is_eol=is_eol, is_lts=lts, release_date=released,
     )
 
 
@@ -34,7 +34,9 @@ def _use(repo, runtime, cycle, path="Dockerfile", pinned=True):
 
 def _seed(db_session):
     db_session.add_all([
-        _release("python", "3.15", "3.15.2", eol=date(2031, 10, 31)),
+        # 3.15 は公開から 18 日で、まだ推奨にならない（推奨は、公開から 6 か月以上の 3.14）
+        _release("python", "3.15", "3.15.2", eol=date(2031, 10, 31), released=date(2026, 10, 9)),
+        _release("python", "3.14", "3.14.10", eol=date(2030, 10, 31), released=date(2025, 10, 7)),
         _release("python", "3.13", "3.13.17", eol=date(2029, 10, 31)),
         _release("python", "3.10", "3.10.20", eol=date(2026, 10, 1), is_eol=True),
         _release("nodejs", "24", "24.22.1", eol=date(2028, 4, 30), lts=True),
@@ -68,7 +70,7 @@ class TestListRuntimes:
         assert first["runtime_label"] == "Python"
         assert first["eol_date"] == "2026-10-01"
         assert first["days_to_eol"] == -26
-        assert first["recommended_cycle"] == "3.15"
+        assert first["recommended_cycle"] == "3.14"
 
     def test_needs_action_filters_to_actionable_states(self, client, db_session):
         _seed(db_session)
@@ -145,13 +147,14 @@ class TestListRepos:
 class TestListReleases:
     def test_marks_recommended_cycle_per_runtime(self, client, db_session):
         _seed(db_session)
-        res = client.get("/api/runtimes/releases", headers=HEADERS)
+        with _today():
+            res = client.get("/api/runtimes/releases", headers=HEADERS)
 
         assert res.status_code == 200
         data = res.json()["data"]
         python = [r for r in data if r["runtime"] == "python"]
-        assert [r["cycle"] for r in python] == ["3.15", "3.13", "3.10"]  # 新しい系列が先頭
-        assert [r["cycle"] for r in python if r["recommended"]] == ["3.15"]
+        assert [r["cycle"] for r in python] == ["3.15", "3.14", "3.13", "3.10"]  # 新しい系列が先頭
+        assert [r["cycle"] for r in python if r["recommended"]] == ["3.14"]
         node = [r for r in data if r["runtime"] == "nodejs"]
         assert [r["cycle"] for r in node if r["recommended"]] == ["24"]
         assert python[0]["eol_date"] == "2031-10-31"

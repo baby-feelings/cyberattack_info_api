@@ -7,23 +7,27 @@ from app.runtimes.status import cycle_key, evaluate, recommended_release
 TODAY = date(2026, 10, 27)
 
 
-def _rel(runtime, cycle, latest, *, eol=None, is_eol=False, lts=False):
+def _rel(runtime, cycle, latest, *, eol=None, is_eol=False, lts=False, released=None):
     return RuntimeRelease(
         runtime=runtime, cycle=cycle, latest_version=latest, eol_date=eol,
-        is_eol=is_eol, is_lts=lts,
+        is_eol=is_eol, is_lts=lts, release_date=released,
     )
 
 
 PYTHON_RELEASES = [
-    _rel("python", "3.15", "3.15.2", eol=date(2031, 10, 31)),
-    _rel("python", "3.13", "3.13.17", eol=date(2029, 10, 31)),
-    _rel("python", "3.11", "3.11.16", eol=date(2027, 10, 31)),
+    # 3.15 は公開から 18 日で、まだ推奨の対象にならない
+    _rel("python", "3.15", "3.15.2", eol=date(2031, 10, 31), released=date(2026, 10, 9)),
+    _rel("python", "3.14", "3.14.10", eol=date(2030, 10, 31), released=date(2025, 10, 7)),
+    _rel("python", "3.13", "3.13.17", eol=date(2029, 10, 31), released=date(2024, 10, 7)),
+    _rel("python", "3.11", "3.11.16", eol=date(2027, 10, 31), released=date(2022, 10, 24)),
     _rel("python", "3.10", "3.10.20", eol=date(2026, 10, 1), is_eol=True),
 ]
 NODE_RELEASES = [
     _rel("nodejs", "25", "25.1.0", eol=date(2026, 6, 1), is_eol=True),
-    _rel("nodejs", "24", "24.22.1", eol=date(2028, 4, 30), lts=True),
-    _rel("nodejs", "22", "22.17.1", eol=date(2027, 4, 30), lts=True),
+    _rel("nodejs", "24", "24.22.1", eol=date(2028, 4, 30), lts=True,
+         released=date(2025, 5, 6)),
+    _rel("nodejs", "22", "22.17.1", eol=date(2027, 4, 30), lts=True,
+         released=date(2024, 4, 24)),
 ]
 
 
@@ -37,15 +41,33 @@ class TestCycleKey:
 
 
 class TestRecommendedRelease:
-    def test_python_is_latest_maintained(self):
-        assert recommended_release("python", PYTHON_RELEASES).cycle == "3.15"
+    def test_python_skips_a_cycle_released_less_than_six_months_ago(self):
+        # 3.15 は公開から 18 日。公開から 6 か月以上経った 3.14 が推奨
+        assert recommended_release("python", PYTHON_RELEASES, TODAY).cycle == "3.14"
+
+    def test_newest_becomes_recommended_once_it_has_settled(self):
+        # 3.15 の公開（2026-10-09）から 180 日後
+        assert recommended_release(
+            "python", PYTHON_RELEASES, date(2027, 4, 7),
+        ).cycle == "3.15"
+        assert recommended_release(
+            "python", PYTHON_RELEASES, date(2027, 4, 6),
+        ).cycle == "3.14"
+
+    def test_falls_back_to_newest_when_nothing_has_settled(self):
+        fresh = [_rel("python", "3.15", "3.15.0", released=date(2026, 10, 9))]
+        assert recommended_release("python", fresh, TODAY).cycle == "3.15"
+
+    def test_unknown_release_date_counts_as_settled(self):
+        rels = [_rel("flutter", "3.47", "3.47.8"), _rel("flutter", "3.40", "3.40.2")]
+        assert recommended_release("flutter", rels, TODAY).cycle == "3.47"
 
     def test_nodejs_is_latest_lts_not_odd_release(self):
         # 25 はサポート終了済みで LTS でもない。24 が推奨
-        assert recommended_release("nodejs", NODE_RELEASES).cycle == "24"
+        assert recommended_release("nodejs", NODE_RELEASES, TODAY).cycle == "24"
 
     def test_none_without_releases(self):
-        assert recommended_release("python", []) is None
+        assert recommended_release("python", [], TODAY) is None
 
 
 class TestEvaluate:
@@ -80,7 +102,12 @@ class TestEvaluate:
         st = evaluate("python", "3.13", pinned=True, releases=PYTHON_RELEASES, today=TODAY)
         assert st.state == "update_available"
         assert st.latest_version == "3.13.17"
-        assert (st.recommended_cycle, st.recommended_version) == ("3.15", "3.15.2")
+        assert (st.recommended_cycle, st.recommended_version) == ("3.14", "3.14.10")
+
+    def test_on_the_recommended_cycle_is_latest_even_if_a_newer_one_just_came_out(self):
+        """公開直後の 3.15 が出ていても、推奨の 3.14 を使っていれば最新として扱う。"""
+        st = evaluate("python", "3.14", pinned=True, releases=PYTHON_RELEASES, today=TODAY)
+        assert st.state == "latest"
 
     def test_latest_when_on_recommended_cycle(self):
         st = evaluate("nodejs", "24", pinned=True, releases=NODE_RELEASES, today=TODAY)

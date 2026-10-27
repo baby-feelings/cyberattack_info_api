@@ -153,7 +153,7 @@ def list_runtime_releases(
             (r for r in releases if r.runtime == runtime),
             key=lambda r: cycle_key(r.cycle), reverse=True,
         )
-        recommended = recommended_release(runtime, own)
+        recommended = recommended_release(runtime, own, _today())
         data.extend(
             RuntimeReleaseOut(
                 runtime=r.runtime,
