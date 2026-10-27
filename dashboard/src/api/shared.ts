@@ -1,7 +1,21 @@
 // API クライアント共通部分: BASE_URL・認証ヘッダー付与・共通型・共通エラー型。
 // KEV/OSV/JVN/DEPSCAN/DEPSOPS の各ドメインモジュール（kev.ts 等）から利用する。
 
-export const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://cyberattack-info-api.onrender.com'
+// API の向き先。環境変数（VITE_API_BASE_URL）で決める。
+// - 開発（vite dev）・単体テストで未設定なら、ローカルの API
+// - 本番ビルドで未設定なら、どこにも接続しない（以前は、移行済みの旧サーバーへ静かに
+//   接続していた）。設定漏れに気づけるよう、コンソールにエラーを出す
+function resolveBaseUrl(): string {
+  const configured = import.meta.env.VITE_API_BASE_URL
+  if (configured) return configured
+  if (!import.meta.env.PROD) return 'http://localhost:8000'
+  console.error('VITE_API_BASE_URL が設定されていません。API に接続できません。')
+  return ''
+}
+export const BASE_URL = resolveBaseUrl()
+
+// 一覧 API の1ページあたりの既定の件数（各ドメインの API クライアントが共通で使う）
+export const DEFAULT_PER_PAGE = 50
 // このダッシュボードはブラウザに配信される公開資産のため、/admin/* も保護する
 // 管理者用キーではなく、読み取り専用エンドポイント（KEV/OSV/JVN/crawler-logs）にしか
 // 通用しない PUBLIC_API_KEY を埋め込む（バックエンド側は require_public_api_key で受理）。

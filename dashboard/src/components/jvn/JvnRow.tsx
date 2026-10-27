@@ -3,6 +3,8 @@ import { ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
 import { type JvnVulnerabilityOut } from '../../api/client'
 import { SeverityBadge } from '../shared/VulnPanelParts'
 import { safeHttpUrl } from '../shared/safeUrl'
+import { nvdUrl } from '../shared/externalLinks'
+
 
 export function JvnRow({
   item, severityClassMap,
@@ -49,7 +51,7 @@ export function JvnRow({
               {item.cve_ids.slice(0, 2).map(cve => (
                 <a
                   key={cve}
-                  href={`https://nvd.nist.gov/vuln/detail/${cve}`}
+                  href={nvdUrl(cve)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-[10px] font-mono text-slate-500 hover:text-slate-300"
@@ -119,7 +121,7 @@ export function JvnRow({
                 {item.cve_ids.map(cve => (
                   <a
                     key={cve}
-                    href={`https://nvd.nist.gov/vuln/detail/${cve}`}
+                    href={nvdUrl(cve)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-[10px] font-mono text-violet-400 hover:text-violet-300"

@@ -1,6 +1,6 @@
 // API クライアントのテスト用: fetch のレスポンスの組み立て。
 
-export const BASE_URL = 'https://cyberattack-info-api.onrender.com'
+export const BASE_URL = 'http://localhost:8000'
 
 export function jsonResponse(body: unknown, init: { ok?: boolean; status?: number } = {}) {
   return {

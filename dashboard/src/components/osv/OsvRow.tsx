@@ -3,6 +3,8 @@ import { ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
 import { type OsvVulnerabilityOut } from '../../api/client'
 import { SeverityBadge } from '../shared/VulnPanelParts'
 import { safeHttpUrl } from '../shared/safeUrl'
+import { nvdUrl, osvUrl } from '../shared/externalLinks'
+
 import { Markdown } from '../shared/Markdown'
 
 // エコシステムバッジの色
@@ -55,7 +57,7 @@ export function OsvRow({
         <td className="py-2.5 pr-3">
           {/* OSV ID */}
           <a
-            href={`https://osv.dev/vulnerability/${item.osv_id}`}
+            href={osvUrl(item.osv_id)}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 font-mono text-violet-400 hover:text-violet-300 text-xs transition-colors"
@@ -70,7 +72,7 @@ export function OsvRow({
               {cveAliases.slice(0, 2).map(cve => (
                 <a
                   key={cve}
-                  href={`https://nvd.nist.gov/vuln/detail/${cve}`}
+                  href={nvdUrl(cve)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-[10px] font-mono text-slate-500 hover:text-slate-300"

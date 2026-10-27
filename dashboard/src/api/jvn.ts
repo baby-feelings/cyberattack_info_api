@@ -1,6 +1,6 @@
 // JVN（Japan Vulnerability Notes）関連の API クライアント。
 
-import { apiFetch, type MonthlyStat } from './shared'
+import { DEFAULT_PER_PAGE, apiFetch, type MonthlyStat } from './shared'
 
 export interface JvnAffectedProduct {
   vendor: string
@@ -51,7 +51,7 @@ export async function fetchJvnList(params: {
 }): Promise<JvnListResponse> {
   const p = new URLSearchParams()
   p.set('page', String(params.page ?? 1))
-  p.set('per_page', String(params.perPage ?? 50))
+  p.set('per_page', String(params.perPage ?? DEFAULT_PER_PAGE))
   p.set('days', String(params.days ?? 180))
   if (params.severity) p.set('severity', params.severity)
   if (params.search) p.set('search', params.search)

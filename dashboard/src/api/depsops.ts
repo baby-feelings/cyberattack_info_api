@@ -1,6 +1,6 @@
 // DEPSOPS（Dependabot PR 自動運用の判定履歴）関連の API クライアント。
 
-import { apiFetch, withOperating, type OperatingStatus } from './shared'
+import { DEFAULT_PER_PAGE, apiFetch, withOperating, type OperatingStatus } from './shared'
 
 export interface DependabotPrLogOut {
   repo_full_name: string
@@ -29,7 +29,7 @@ export async function fetchDepsOpsList(params: {
 }): Promise<DepsOpsListResponse> {
   const p = new URLSearchParams()
   p.set('page', String(params.page ?? 1))
-  p.set('per_page', String(params.perPage ?? 50))
+  p.set('per_page', String(params.perPage ?? DEFAULT_PER_PAGE))
   if (params.repo) p.set('repo', params.repo)
   if (params.action) p.set('action', params.action)
   if (params.operating && params.operating !== 'all') p.set('operating', params.operating)

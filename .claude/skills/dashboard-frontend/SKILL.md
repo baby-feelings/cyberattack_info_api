@@ -161,6 +161,16 @@ http(s)のみリンクにする（`javascript:`等を弾くXSS対策）。
 '../api/client'`は全て動き続ける。新しいAPI呼び出し関数を追加する場合は対応ドメインの
 ファイルに追加すること。
 
+- **API の向き先（`BASE_URL`）は`VITE_API_BASE_URL`だけで決める**（`shared.ts`）。開発・単体テストで
+  未設定ならローカル（`http://localhost:8000`）、**本番ビルドで未設定なら、どこにも接続せず**
+  コンソールにエラーを出す（以前は、移行済みの旧サーバーへ静かに接続していた）。URL を
+  コンポーネントに直書きしない（ログインのリンクは`githubLoginUrl()`）
+- **単体テストの接続先は`vite.config.ts`の`test.env`で固定**している（開発者の手元の`.env.local`に
+  別のURLがあっても、結果が変わらないように）
+- **外部サイト（NVD・OSV・GitHub）へのリンクは`components/shared/externalLinks.ts`**
+  （`nvdUrl`・`osvUrl`・`githubRepoUrl`・`githubPullUrl`）で組み立てる。1ページあたりの既定の件数は
+  `shared.ts`の`DEFAULT_PER_PAGE`
+
 ## E2Eテスト（Playwright、dashboard/e2e/）
 `npm run e2e`（`dashboard/`で実行）。Vitest（`src/**/*.test.*`）とは別系統で、`vite.config.ts`の
 `test.include`を`src/`に限定してPlaywrightのspecを拾わないようにしている。
