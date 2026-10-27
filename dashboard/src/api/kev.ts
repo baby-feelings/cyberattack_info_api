@@ -1,6 +1,6 @@
 // CISA KEV（Known Exploited Vulnerabilities）関連の API クライアント。
 
-import { apiFetch, BASE_URL, type MonthlyStat } from './shared'
+import { DEFAULT_PER_PAGE, apiFetch, BASE_URL, type MonthlyStat } from './shared'
 
 export interface HealthResponse {
   status: 'ok' | 'degraded'
@@ -68,7 +68,7 @@ export async function fetchVulnerabilities(params: {
 }): Promise<VulnerabilityListResponse> {
   const p = new URLSearchParams()
   p.set('page', String(params.page ?? 1))
-  p.set('per_page', String(params.perPage ?? 50))
+  p.set('per_page', String(params.perPage ?? DEFAULT_PER_PAGE))
   if (params.search) p.set('search', params.search)
   if (params.minEpss !== undefined) p.set('min_epss', String(params.minEpss))
   return apiFetch<VulnerabilityListResponse>(`/api/vulnerabilities?${p}`)

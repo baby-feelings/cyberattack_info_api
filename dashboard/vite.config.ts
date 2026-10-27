@@ -10,6 +10,9 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     globals: true,
     css: false,
+    // テストの接続先は固定する（開発者の手元の .env.local に、別の API の URL が書かれていても、
+    // テストの結果が変わらないようにするため）
+    env: { VITE_API_BASE_URL: 'http://localhost:8000' },
     // e2e/ 配下は Playwright のテスト（`npm run e2e`）。Vitest が拾わないよう src/ に限定する
     include: ['src/**/*.test.{ts,tsx}'],
     coverage: {

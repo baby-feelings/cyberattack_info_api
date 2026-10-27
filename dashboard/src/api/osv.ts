@@ -1,6 +1,6 @@
 // OSV（Open Source Vulnerabilities）関連の API クライアント。
 
-import { apiFetch, type MonthlyStat } from './shared'
+import { DEFAULT_PER_PAGE, apiFetch, type MonthlyStat } from './shared'
 
 export interface OsvVulnerabilityOut {
   osv_id: string
@@ -53,7 +53,7 @@ export async function fetchOsvList(params: {
 }): Promise<OsvListResponse> {
   const p = new URLSearchParams()
   p.set('page', String(params.page ?? 1))
-  p.set('per_page', String(params.perPage ?? 50))
+  p.set('per_page', String(params.perPage ?? DEFAULT_PER_PAGE))
   p.set('days', String(params.days ?? 180))
   if (params.ecosystem) p.set('ecosystem', params.ecosystem)
   if (params.severity) p.set('severity', params.severity)

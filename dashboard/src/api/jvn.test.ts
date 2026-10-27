@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { fetchJvnList, fetchJvnStats } from './jvn'
 
-const BASE_URL = 'https://cyberattack-info-api.onrender.com'
+const BASE_URL = 'http://localhost:8000'
 
 function jsonResponse(body: unknown, init: { ok?: boolean; status?: number } = {}) {
   return {

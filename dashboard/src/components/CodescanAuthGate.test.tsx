@@ -8,7 +8,7 @@ vi.mock('../api/client', async () => {
   const actual = await vi.importActual<typeof import('../api/client')>('../api/client')
   return {
     ...actual,
-    githubLoginUrl: vi.fn(() => 'https://cyberattack-info-api.onrender.com/auth/github/login'),
+    githubLoginUrl: vi.fn(() => 'http://localhost:8000/auth/github/login'),
   }
 })
 
@@ -36,7 +36,7 @@ describe('CodescanAuthGate', () => {
     render(<CodescanAuthGate />)
     await waitFor(() => expect(screen.getByText('GitHubでログイン')).toBeInTheDocument())
     expect(screen.getByText('GitHubでログイン').closest('a')).toHaveAttribute(
-      'href', 'https://cyberattack-info-api.onrender.com/auth/github/login',
+      'href', 'http://localhost:8000/auth/github/login',
     )
     expect(githubLoginUrl).toHaveBeenCalled()
   })

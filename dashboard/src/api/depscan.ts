@@ -1,6 +1,6 @@
 // DEPSCAN（自作アプリの依存ライブラリ脆弱性）関連の API クライアント。
 
-import { apiFetch, withOperating, type OperatingStatus } from './shared'
+import { DEFAULT_PER_PAGE, apiFetch, withOperating, type OperatingStatus } from './shared'
 
 export interface DependencyFindingOut {
   repo_full_name: string
@@ -57,7 +57,7 @@ export async function fetchDepscanList(params: {
 }): Promise<DepscanListResponse> {
   const p = new URLSearchParams()
   p.set('page', String(params.page ?? 1))
-  p.set('per_page', String(params.perPage ?? 50))
+  p.set('per_page', String(params.perPage ?? DEFAULT_PER_PAGE))
   if (params.owner) p.set('owner', params.owner)
   if (params.operating && params.operating !== 'all') p.set('operating', params.operating)
   if (params.severity) p.set('severity', params.severity)
@@ -103,7 +103,7 @@ export async function fetchRepoDependencies(params: {
 }): Promise<RepoDependencyListResponse> {
   const p = new URLSearchParams()
   p.set('page', String(params.page ?? 1))
-  p.set('per_page', String(params.perPage ?? 50))
+  p.set('per_page', String(params.perPage ?? DEFAULT_PER_PAGE))
   // 前後の空白は検索の邪魔になるだけなので除く
   if (params.packageName?.trim()) p.set('package', params.packageName.trim())
   if (params.version?.trim()) p.set('version', params.version.trim())

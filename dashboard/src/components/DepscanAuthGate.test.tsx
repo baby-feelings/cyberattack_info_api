@@ -10,7 +10,7 @@ vi.mock('../api/client', async () => {
     ...actual,
     fetchScanStatus: vi.fn(),
     exchangeAuthCode: vi.fn(),
-    githubLoginUrl: vi.fn(() => 'https://cyberattack-info-api.onrender.com/auth/github/login'),
+    githubLoginUrl: vi.fn(() => 'http://localhost:8000/auth/github/login'),
   }
 })
 
@@ -43,7 +43,7 @@ describe('DepscanAuthGate', () => {
     render(<DepscanAuthGate />)
     await waitFor(() => expect(screen.getByText('GitHubでログイン')).toBeInTheDocument())
     expect(screen.getByText('GitHubでログイン').closest('a')).toHaveAttribute(
-      'href', 'https://cyberattack-info-api.onrender.com/auth/github/login',
+      'href', 'http://localhost:8000/auth/github/login',
     )
     expect(githubLoginUrl).toHaveBeenCalled()
   })

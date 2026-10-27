@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { ExternalLink, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react'
 import { SeverityBadge } from '../shared/VulnPanelParts'
+import { githubRepoUrl, osvUrl } from '../shared/externalLinks'
+
 import {
   SEVERITY_CLS, severityRank,
   groupFixedVersions, groupIsResolved, groupLatestDetectedAt,
@@ -111,7 +113,7 @@ export function DepscanGroupRow({ group, showRepo = true }: { group: FindingGrou
         {showRepo && <td className="py-2.5 pr-3 w-52">
           <div className="flex items-center gap-1.5">
             <a
-              href={`https://github.com/${group.repo_full_name}`}
+              href={githubRepoUrl(group.repo_full_name)}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-slate-300 hover:text-white text-xs transition-colors truncate max-w-[160px]"
@@ -182,7 +184,7 @@ export function DepscanGroupRow({ group, showRepo = true }: { group: FindingGrou
                         <span className="text-[10px] text-slate-600 tabular-nums">{f.cvss_score.toFixed(1)}</span>
                       )}
                       <a
-                        href={`https://osv.dev/vulnerability/${f.osv_id}`}
+                        href={osvUrl(f.osv_id)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 text-violet-400 hover:text-violet-300 font-mono text-[10px]"

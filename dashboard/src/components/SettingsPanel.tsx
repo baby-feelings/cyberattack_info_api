@@ -4,6 +4,7 @@ import { useGithubSession } from '../hooks/useGithubSession'
 import {
   deleteNotificationSettings, fetchNotificationSettings, putNotificationSettings,
 } from '../api/auth'
+import { githubLoginUrl } from '../api/client'
 import { UnauthorizedError } from '../api/shared'
 import { McpTokenSection } from './McpTokenSection'
 import { OAuthConnectionsSection } from './OAuthConnectionsSection'
@@ -49,7 +50,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               Slack通知の登録にはGitHubアカウントでのログインが必要です。
             </p>
             <a
-              href={`${import.meta.env.VITE_API_BASE_URL || 'https://cyberattack-info-api.onrender.com'}/auth/github/login`}
+              href={githubLoginUrl()}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium transition-colors"
             >
               GitHubでログイン

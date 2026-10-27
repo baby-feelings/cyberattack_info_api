@@ -6,6 +6,8 @@ import {
 } from '../../api/client'
 import { TableLoadingSkeleton, EmptyState, Pagination } from '../shared/VulnPanelParts'
 import { OperatingFilter } from '../shared/OperatingFilter'
+import { githubPullUrl } from '../shared/externalLinks'
+
 import { DepsOpsRepoBarChart } from './DepsOpsRepoBarChart'
 
 const PER_PAGE = 20
@@ -217,7 +219,7 @@ export function DependabotOpsModal({ open, onClose }: { open: boolean; onClose: 
                         </td>
                         <td className="py-2.5 pr-3">
                           <a
-                            href={`https://github.com/${item.repo_full_name}/pull/${item.pr_number}`}
+                            href={githubPullUrl(item.repo_full_name, item.pr_number)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 text-violet-400 hover:text-violet-300 text-xs transition-colors"

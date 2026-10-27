@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
 import { type VulnerabilityOut } from '../../api/client'
+import { nvdUrl } from '../shared/externalLinks'
+
 
 // EPSSスコア（0.0〜1.0）の高さに応じた色分け（重要度バッジに準じた配色）
 function epssColorClass(score: number): string {
@@ -25,7 +27,7 @@ export function KevRow({ item }: { item: VulnerabilityOut }) {
       >
         <td className="py-2.5 pr-3">
           <a
-            href={`https://nvd.nist.gov/vuln/detail/${item.cve_id}`}
+            href={nvdUrl(item.cve_id)}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 font-mono text-violet-400 hover:text-violet-300 text-xs transition-colors"

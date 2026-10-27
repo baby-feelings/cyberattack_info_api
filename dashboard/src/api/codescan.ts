@@ -2,6 +2,9 @@
 
 import { apiFetch, withOperating, type OperatingStatus } from './shared'
 
+// CODESCAN の一覧は、1行が大きい（コードの断片を含む）ため、既定の件数を少なくしている
+const CODESCAN_PER_PAGE = 30
+
 export interface CodeFindingOut {
   repo_full_name: string
   file_path: string
@@ -56,7 +59,7 @@ export async function fetchCodescanList(params: {
 }): Promise<CodescanListResponse> {
   const p = new URLSearchParams()
   p.set('page', String(params.page ?? 1))
-  p.set('per_page', String(params.perPage ?? 30))
+  p.set('per_page', String(params.perPage ?? CODESCAN_PER_PAGE))
   if (params.repo) p.set('repo', params.repo)
   if (params.owner) p.set('owner', params.owner)
   if (params.operating && params.operating !== 'all') p.set('operating', params.operating)
