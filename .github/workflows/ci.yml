@@ -19,7 +19,7 @@ jobs:
       dashboard: ${{ steps.detect.outputs.dashboard }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # 比較元（PR の base・push の直前のコミット）を取得するため全履歴を使う
           fetch-depth: 0
@@ -69,10 +69,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.13
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: "pip"
@@ -99,7 +99,7 @@ jobs:
 
       # ── カバレッジレポート ──────────────────────────────────
       - name: Upload coverage HTML report as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-html-report
           path: htmlcov/
@@ -119,10 +119,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "24"
           cache: "npm"
@@ -143,7 +143,7 @@ jobs:
         run: npm run test:coverage
 
       - name: Upload coverage HTML report as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dashboard-coverage-html-report
           path: dashboard/coverage/
@@ -162,10 +162,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "24"
           cache: "npm"
@@ -190,7 +190,7 @@ jobs:
 
       # HTMLレポート（playwright-report/index.html と scenario-coverage.html）。失敗時も保存する
       - name: Upload Playwright HTML report as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
           name: dashboard-e2e-html-report
