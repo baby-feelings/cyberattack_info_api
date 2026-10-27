@@ -24,7 +24,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # PR のコミット範囲（base..head）を検査するため全履歴を取得する
           fetch-depth: 0
