@@ -1,23 +1,77 @@
 {
-  "title": "サイバー攻撃情報API",
   "uid": "cyberattack-info-api-overview",
-  "schemaVersion": 39,
-  "version": 1,
+  "title": "サイバー攻撃情報API",
+  "tags": [
+    "cyberattack-info-api"
+  ],
   "editable": true,
   "timezone": "browser",
-  "time": { "from": "now-24h", "to": "now" },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
   "refresh": "1m",
-  "tags": ["cyberattack-info-api"],
+  "schemaVersion": 42,
+  "version": 2,
+  "graphTooltip": 1,
+  "fiscalYearStartMonth": 0,
+  "weekStart": "",
+  "timepicker": {},
+  "links": [],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "templating": {
+    "list": []
+  },
   "panels": [
     {
+      "type": "row",
+      "title": "クローラー",
       "id": 1,
-      "title": "クローラー実行結果（直近、1=成功/0=エラー）",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
       "type": "stat",
-      "datasource": { "type": "prometheus", "uid": "prometheus_ds" },
-      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 0 },
+      "title": "クローラー実行結果（直近、1=成功 / 0=エラー）",
+      "description": "種別ごとの、直近1回の実行結果。KEV・OSV・JVN・DEPSCAN・CODESCAN・RUNTIME・DEPSOPS・CLEANUP など、実行記録がある全ての種別が出る。",
+      "id": 2,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_ds"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus_ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus_ds"
+          },
           "expr": "crawler_last_run_success",
           "legendFormat": "{{crawler_type}}",
           "refId": "A"
@@ -25,152 +79,1092 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "mappings": [
-            { "type": "value", "options": { "0": { "text": "エラー", "color": "red" }, "1": { "text": "成功", "color": "green" } } }
-          ],
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "red", "value": null },
-              { "color": "green", "value": 1 }
+              {
+                "color": "red"
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
             ]
-          }
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "エラー",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "成功",
+                  "color": "green"
+                }
+              }
+            }
+          ]
         },
         "overrides": []
       },
-      "options": { "colorMode": "background", "graphMode": "none", "textMode": "value_and_name" }
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
     },
     {
-      "id": 2,
-      "title": "最終実行からの経過時間（分）",
-      "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "prometheus_ds" },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "type": "stat",
+      "title": "最終実行からの経過時間",
+      "description": "毎日動くクローラーが止まっていないかを確認する。30時間を超えると橙、54時間を超えると赤（1日分の実行が飛んだ状態）。",
+      "id": 3,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_ds"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus_ds" },
-          "expr": "(time() - crawler_last_run_timestamp_seconds) / 60",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus_ds"
+          },
+          "expr": "(time() - crawler_last_run_timestamp_seconds) / 3600",
           "legendFormat": "{{crawler_type}}",
           "refId": "A"
         }
       ],
-      "fieldConfig": { "defaults": { "unit": "m" }, "overrides": [] }
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "orange",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 54
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "h",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
     },
     {
-      "id": 3,
-      "title": "クローラー所要時間（秒）",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "prometheus_ds" },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "title": "クローラー所要時間（秒）",
+      "description": "直近の実行にかかった時間。急に長くなったら、外部 API の遅延や対象リポジトリの増加を疑う。",
+      "id": 4,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_ds"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 10
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus_ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus_ds"
+          },
           "expr": "crawler_last_run_duration_seconds",
           "legendFormat": "{{crawler_type}}",
           "refId": "A"
         }
       ],
-      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
     },
     {
-      "id": 4,
-      "title": "クローラー新規挿入件数",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "prometheus_ds" },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+      "title": "クローラー新規挿入件数",
+      "description": "直近の実行での新規挿入件数（DEPSCAN・CODESCAN は新規検知、RUNTIME は検出した使用版）。",
+      "id": 5,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_ds"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 10
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus_ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus_ds"
+          },
           "expr": "crawler_last_run_inserted",
           "legendFormat": "{{crawler_type}}",
           "refId": "A"
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
     },
     {
-      "id": 5,
-      "title": "クローラー更新・削除件数",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "prometheus_ds" },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "title": "クローラー更新・削除件数",
+      "description": "直近の実行での更新件数と削除件数（削除は保持期間超過など）。",
+      "id": 6,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_ds"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus_ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus_ds"
+          },
           "expr": "crawler_last_run_updated",
           "legendFormat": "{{crawler_type}} 更新",
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus_ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus_ds"
+          },
           "expr": "crawler_last_run_deleted",
           "legendFormat": "{{crawler_type}} 削除",
           "refId": "B"
         }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "脆弱性と依存パッケージ（運用中のアプリ）",
+      "id": 7,
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 26
+      }
+    },
+    {
+      "type": "stat",
+      "title": "DEPSCAN 未解決の脆弱性（重要度別）",
+      "description": "依存ライブラリの、未解決の脆弱性の数。運用中のアプリのみ。0件が正常。",
+      "id": 8,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_ds"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 0,
+        "y": 27
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus_ds"
+          },
+          "expr": "sum by (severity) (depscan_open_findings{operating=\"active\"})",
+          "legendFormat": "{{severity}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "CODESCAN 未解決の脆弱性（重要度別）",
+      "description": "自アプリのコード（Semgrep・gitleaks）の、未解決の脆弱性の数。運用中のアプリのみ。0件が正常。",
+      "id": 9,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_ds"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 8,
+        "y": 27
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus_ds"
+          },
+          "expr": "sum by (severity) (codescan_open_findings{operating=\"active\"})",
+          "legendFormat": "{{severity}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "使っている依存パッケージの数",
+      "description": "運用中のアプリが使っている依存パッケージの数（SBOM の全量。同じパッケージも、リポジトリ・ファイルごとに数える）。",
+      "id": 10,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_ds"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 16,
+        "y": 27
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus_ds"
+          },
+          "expr": "sum(repo_dependencies_total{operating=\"active\"})",
+          "legendFormat": "依存パッケージ",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue"
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "言語・実行環境のバージョン（運用中のアプリ）",
+      "id": 11,
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      }
+    },
+    {
+      "type": "stat",
+      "title": "サポート終了",
+      "description": "サポートが終了した版を使っている数。セキュリティ修正が提供されないため、最優先で更新する。",
+      "id": 12,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_ds"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 33
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus_ds"
+          },
+          "expr": "sum(runtime_usage{operating=\"active\",state=\"eol\"}) or vector(0)",
+          "legendFormat": "サポート終了",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "期限間近",
+      "description": "サポート終了まで180日以内の版を使っている数。",
+      "id": 13,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_ds"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 33
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus_ds"
+          },
+          "expr": "sum(runtime_usage{operating=\"active\",state=\"eol_soon\"}) or vector(0)",
+          "legendFormat": "期限間近",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "更新あり",
+      "description": "推奨の系列（サポート中で公開から180日以上経った最新）が、使っている版より新しい数。",
+      "id": 14,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_ds"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 33
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus_ds"
+          },
+          "expr": "sum(runtime_usage{operating=\"active\",state=\"update_available\"}) or vector(0)",
+          "legendFormat": "更新あり",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "最新",
+      "description": "推奨の系列を使っている数。",
+      "id": 15,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_ds"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 33
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus_ds"
+          },
+          "expr": "sum(runtime_usage{operating=\"active\",state=\"latest\"}) or vector(0)",
+          "legendFormat": "最新",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue"
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "言語別・状態別の件数",
+      "description": "運用中のアプリが使っている言語・実行環境の、状態別の数（設定ファイルごとに数える）。詳細はダッシュボードの「言語・実行環境」画面で確認できる。",
+      "id": 16,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_ds"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 37
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus_ds"
+          },
+          "expr": "sum by (runtime, state) (runtime_usage{operating=\"active\"})",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "状態"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "eol": {
+                        "text": "サポート終了",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "eol_soon": {
+                        "text": "期限間近",
+                        "color": "orange",
+                        "index": 1
+                      },
+                      "update_available": {
+                        "text": "更新あり",
+                        "color": "yellow",
+                        "index": 2
+                      },
+                      "latest": {
+                        "text": "最新",
+                        "color": "green",
+                        "index": 3
+                      },
+                      "reference": {
+                        "text": "参考（下限の指定）",
+                        "color": "text",
+                        "index": 4
+                      },
+                      "unknown": {
+                        "text": "不明",
+                        "color": "text",
+                        "index": 5
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "言語"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "python": {
+                        "text": "Python",
+                        "color": "text",
+                        "index": 0
+                      },
+                      "nodejs": {
+                        "text": "Node.js",
+                        "color": "text",
+                        "index": 1
+                      },
+                      "flutter": {
+                        "text": "Flutter",
+                        "color": "text",
+                        "index": 2
+                      },
+                      "dart": {
+                        "text": "Dart",
+                        "color": "text",
+                        "index": 3
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "sortBy": [
+          {
+            "displayName": "件数",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "runtime": "言語",
+              "state": "状態",
+              "Value": "件数"
+            }
+          }
+        }
       ]
     },
     {
-      "id": 6,
-      "title": "CPU使用率（api-prod）",
+      "type": "row",
+      "title": "サーバーのリソース",
+      "id": 17,
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 44
+      }
+    },
+    {
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "prometheus_ds" },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 22 },
+      "title": "CPU使用率（api-prod）",
+      "description": "API プロセスの CPU 使用率（5分間の平均）。",
+      "id": 18,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_ds"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 45
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus_ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus_ds"
+          },
           "expr": "rate(process_cpu_seconds_total{job=\"api-prod\"}[5m]) * 100",
           "legendFormat": "CPU %",
           "refId": "A"
         }
       ],
-      "fieldConfig": { "defaults": { "unit": "percent" }, "overrides": [] }
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
     },
     {
-      "id": 7,
-      "title": "プロセスメモリ使用率（api-prod、ホスト全体に対する割合）",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "prometheus_ds" },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 22 },
+      "title": "プロセスメモリ使用率（api-prod、ホスト全体に対する割合）",
+      "description": "API プロセスが使っているメモリの、ホスト全体に対する割合。",
+      "id": 19,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_ds"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 45
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus_ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus_ds"
+          },
           "expr": "process_resident_memory_bytes{job=\"api-prod\"} / node_memory_MemTotal_bytes{job=\"node-exporter\"} * 100",
           "legendFormat": "メモリ %",
           "refId": "A"
         }
       ],
-      "fieldConfig": { "defaults": { "unit": "percent" }, "overrides": [] }
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
     },
     {
-      "id": 8,
-      "title": "ストレージ使用率（OCIホスト、ルートファイルシステム）",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "prometheus_ds" },
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 30 },
+      "title": "ストレージ使用率（OCIホスト、ルートファイルシステム）",
+      "description": "OCI ホストのルートファイルシステムの使用率。",
+      "id": 20,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_ds"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 53
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus_ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus_ds"
+          },
           "expr": "(1 - node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"}) * 100",
-          "legendFormat": "ディスク使用率 %",
+          "legendFormat": "ストレージ %",
           "refId": "A"
         }
       ],
-      "fieldConfig": { "defaults": { "unit": "percent" }, "overrides": [] }
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
     },
     {
-      "id": 9,
-      "title": "外部API呼び出しのリトライ発生回数（1時間あたり、要因別）",
-      "description": "CISA KEV・OSV・MyJVN・GitHub API呼び出しが一時的エラー（5xx・接続断）や\nレート制限（429・GitHub二次レート制限の403）でリトライされた回数。恒久的な\nエラー（401/403〈権限不足〉/404等）はリトライされないため含まれない\n（Issue #130、app.core.retry参照）。増加傾向が続く場合は外部API側の障害や\nレート制限の恒常的な超過を示唆する。",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "prometheus_ds" },
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 38 },
+      "title": "外部API呼び出しのリトライ発生回数（1時間あたり、要因別）",
+      "description": "外部 API（GitHub・OSV など）の呼び出しがリトライされた回数。急に増えたら、外部 API の障害やレート制限を疑う。",
+      "id": 21,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_ds"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 53
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus_ds" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus_ds"
+          },
           "expr": "sum(increase(external_api_retry_total[1h])) by (reason)",
           "legendFormat": "{{reason}}",
           "refId": "A"
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
     }
   ]
 }
