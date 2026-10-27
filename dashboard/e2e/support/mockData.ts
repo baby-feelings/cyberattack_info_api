@@ -202,6 +202,38 @@ export const repoDependencies = DEPENDENCY_SEEDS.map((s) => ({
   open_vulnerabilities: s.open,
 }))
 
+// 言語・実行環境のバージョン監視（GET /api/runtimes）用。状態は、実APIと同じく、使っている版と
+// リリース情報から決まるが、モックでは結果の状態を直接持たせる
+const RUNTIME_SEEDS = [
+  { repo: 'baby-feelings/app-one', rt: 'python', label: 'Python', cycle: '3.10', state: 'eol', latest: '3.10.20', rec: '3.14', eol: '2026-10-01', days: -26, path: 'Dockerfile', pinned: true },
+  { repo: 'baby-feelings/app-one', rt: 'nodejs', label: 'Node.js', cycle: '24', state: 'latest', latest: '24.22.1', rec: '24', eol: '2028-04-30', days: 550, path: '.nvmrc', pinned: true },
+  { repo: 'baby-feelings/app-two', rt: 'python', label: 'Python', cycle: '3.13', state: 'update_available', latest: '3.13.17', rec: '3.14', eol: '2029-10-31', days: 1100, path: '.github/workflows/ci.yml', pinned: true },
+  { repo: 'baby-feelings/app-two', rt: 'nodejs', label: 'Node.js', cycle: '22', state: 'reference', latest: '22.17.1', rec: '24', eol: '2027-04-30', days: 185, path: 'functions/package.json', pinned: false },
+  { repo: 'other-owner/tool', rt: 'flutter', label: 'Flutter', cycle: '3.47', state: 'latest', latest: '3.47.8', rec: '3.47', eol: null, days: null, path: '.fvmrc', pinned: true },
+]
+
+export const repoRuntimes = RUNTIME_SEEDS.map((s) => ({
+  repo_full_name: s.repo,
+  runtime: s.rt,
+  runtime_label: s.label,
+  cycle: s.cycle,
+  source_path: s.path,
+  pinned: s.pinned,
+  state: s.state,
+  latest_version: s.latest,
+  recommended_cycle: s.rec,
+  recommended_version: s.rec ? `${s.rec}.x` : null,
+  eol_date: s.eol,
+  days_to_eol: s.days,
+}))
+
+// 最新版・サポート期限（GET /api/runtimes/releases）。recommended が推奨の系列
+export const runtimeReleases = [
+  { runtime: 'python', runtime_label: 'Python', cycle: '3.15', latest_version: '3.15.2', release_date: '2026-10-09', eol_date: '2031-10-31', is_eol: false, is_lts: false, recommended: false },
+  { runtime: 'python', runtime_label: 'Python', cycle: '3.14', latest_version: '3.14.10', release_date: '2025-10-07', eol_date: '2030-10-31', is_eol: false, is_lts: false, recommended: true },
+  { runtime: 'nodejs', runtime_label: 'Node.js', cycle: '24', latest_version: '24.22.1', release_date: '2025-05-06', eol_date: '2028-04-30', is_eol: false, is_lts: true, recommended: true },
+]
+
 export function depscanStats(keep: (repo: string) => boolean = () => true) {
   const open = depscanFindings.filter((f) => !f.resolved_at && keep(f.repo_full_name))
   const repos = new Map<string, number>()
