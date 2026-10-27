@@ -8,7 +8,7 @@ os.environ.setdefault("API_KEY", "test-api-key-for-pytest")
 os.environ.setdefault("ENVIRONMENT", "development")
 
 from app.auth.session import create_session_token  # noqa: E402
-from app.depscan.dependency_search import search_dependencies  # noqa: E402
+from app.depscan.dependency_search import search_dependencies, summarize_repos  # noqa: E402
 from app.depscan.models import RepoDependency  # noqa: E402
 from tests.depscan.support import make_finding  # noqa: E402
 
@@ -120,6 +120,61 @@ class TestSearchDependencies:
     def test_empty_result(self, db_session):
         assert search_dependencies(db_session, page=1, per_page=50, package="nothing") == (0, [])
 
+    def test_vulnerable_only_returns_dependencies_with_open_findings(self, db_session):
+        _seed(db_session)
+        make_finding(
+            db_session, repo_full_name="alice/web", ecosystem="npm", package_name="undici",
+            installed_version="8.11.2",
+        )
+        make_finding(  # 解決済みの検知だけの依存は「脆弱性あり」に含めない
+            db_session, repo_full_name="alice/web", ecosystem="npm", package_name="axios",
+            installed_version="1.6.0", resolved_at=datetime.now(UTC),
+        )
+        total, rows = search_dependencies(db_session, page=1, per_page=50, vulnerable=True)
+        assert total == 1
+        assert [(r.repo_full_name, r.package_name) for r, _ in rows] == [("alice/web", "undici")]
+
+    def test_operating_filter_uses_inactive_repos(self, db_session):
+        _seed(db_session)
+        with patch("app.core.operating_status.settings.INACTIVE_REPOS", "bob/app"):
+            active, _ = search_dependencies(db_session, page=1, per_page=50, operating="active")
+            inactive, rows = search_dependencies(
+                db_session, page=1, per_page=50, operating="inactive",
+            )
+            everything, _ = search_dependencies(db_session, page=1, per_page=50, operating="all")
+        assert (active, inactive, everything) == (4, 1, 5)
+        assert rows[0][0].repo_full_name == "bob/app"
+
+
+class TestSummarizeRepos:
+    def test_counts_dependencies_and_vulnerable_ones_per_repo(self, db_session):
+        _seed(db_session)
+        make_finding(
+            db_session, repo_full_name="alice/web", ecosystem="npm", package_name="undici",
+            installed_version="8.11.2", osv_id="GHSA-1",
+        )
+        make_finding(  # 同じ依存への複数の検知は、依存1件として数える
+            db_session, repo_full_name="alice/web", ecosystem="npm", package_name="undici",
+            installed_version="8.11.2", osv_id="GHSA-2",
+        )
+        # 検知がある alice/web が先頭、あとはリポジトリ名順
+        assert summarize_repos(db_session) == [
+            ("alice/web", 2, 1), ("alice/api", 2, 0), ("bob/app", 1, 0),
+        ]
+
+    def test_forced_owner_and_operating(self, db_session):
+        _seed(db_session)
+        assert [r for r, _, _ in summarize_repos(db_session, forced_owner="alice")] == [
+            "alice/api", "alice/web",
+        ]
+        with patch("app.core.operating_status.settings.INACTIVE_REPOS", "alice/api"):
+            assert [r for r, _, _ in summarize_repos(db_session, operating="active")] == [
+                "alice/web", "bob/app",
+            ]
+
+    def test_empty(self, db_session):
+        assert summarize_repos(db_session) == []
+
 
 class TestDependenciesEndpoint:
     def test_requires_auth(self, client):
@@ -171,3 +226,53 @@ class TestDependenciesEndpoint:
             )
         assert res.status_code == 200
         assert res.json()["data"] == []
+
+    def test_vulnerable_filter(self, client, db_session):
+        _seed(db_session)
+        make_finding(
+            db_session, repo_full_name="alice/web", ecosystem="npm", package_name="undici",
+            installed_version="8.11.2",
+        )
+        res = client.get(f"{_URL}?vulnerable=true", headers=HEADERS)
+        assert [row["package_name"] for row in res.json()["data"]] == ["undici"]
+
+    def test_operating_filter(self, client, db_session):
+        _seed(db_session)
+        with patch("app.core.operating_status.settings.INACTIVE_REPOS", "bob/app"):
+            res = client.get(f"{_URL}?operating=inactive", headers=HEADERS)
+        assert [row["repo_full_name"] for row in res.json()["data"]] == ["bob/app"]
+
+    def test_invalid_operating_is_rejected(self, client):
+        assert client.get(f"{_URL}?operating=maybe", headers=HEADERS).status_code == 422
+
+
+class TestDependencyReposEndpoint:
+    def test_requires_auth(self, client):
+        assert client.get(f"{_URL}/repos").status_code == 403
+
+    def test_lists_repos_with_counts_most_vulnerable_first(self, client, db_session):
+        _seed(db_session)
+        make_finding(
+            db_session, repo_full_name="alice/api", ecosystem="npm", package_name="undici",
+            installed_version="8.12.3",
+        )
+        res = client.get(f"{_URL}/repos", headers=HEADERS)
+        assert res.status_code == 200
+        assert res.json()["repos"] == [
+            {"repo_full_name": "alice/api", "total": 2, "vulnerable": 1},
+            {"repo_full_name": "alice/web", "total": 2, "vulnerable": 0},
+            {"repo_full_name": "bob/app", "total": 1, "vulnerable": 0},
+        ]
+
+    def test_session_token_sees_only_own_repos(self, client, db_session):
+        _seed(db_session)
+        with patch("app.auth.session.settings.SESSION_SECRET_KEY", "test-secret"):
+            token = create_session_token("alice")
+            res = client.get(f"{_URL}/repos", headers={"Authorization": f"Bearer {token}"})
+        assert {r["repo_full_name"] for r in res.json()["repos"]} == {"alice/api", "alice/web"}
+
+    def test_operating_filter(self, client, db_session):
+        _seed(db_session)
+        with patch("app.core.operating_status.settings.INACTIVE_REPOS", "bob/app"):
+            res = client.get(f"{_URL}/repos?operating=active", headers=HEADERS)
+        assert {r["repo_full_name"] for r in res.json()["repos"]} == {"alice/api", "alice/web"}

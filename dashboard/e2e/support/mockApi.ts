@@ -175,14 +175,33 @@ function defaultResponse(req: RecordedRequest, state: MockState): MockResponse {
       return { body: paginate(items, query, 50) }
     }
 
+    case 'GET /api/depscan/dependencies/repos': {
+      const keep = operatingKeep(query, state)
+      const repos = new Map<string, { total: number; vulnerable: number }>()
+      for (const d of repoDependencies.filter((x) => keep(x.repo_full_name))) {
+        const stat = repos.get(d.repo_full_name) ?? { total: 0, vulnerable: 0 }
+        stat.total += 1
+        if (d.open_vulnerabilities > 0) stat.vulnerable += 1
+        repos.set(d.repo_full_name, stat)
+      }
+      // 実APIと同じく、検知がある（対応が必要な）アプリを先頭に、同数ならアプリ名順
+      const sorted = [...repos].sort(([a, x], [b, y]) => y.vulnerable - x.vulnerable || a.localeCompare(b))
+      return { body: { repos: sorted.map(([repo_full_name, s]) => ({ repo_full_name, ...s })) } }
+    }
     case 'GET /api/depscan/dependencies': {
       const pkg = query.get('package')
       const version = query.get('version')
       const ecosystem = query.get('ecosystem')
+      const repo = query.get('repo')
+      const vulnerable = query.get('vulnerable') === 'true'
+      const keep = operatingKeep(query, state)
       const items = repoDependencies.filter((d) =>
-        (!pkg || includesCI(d.package_name, pkg))
+        keep(d.repo_full_name)
+        && (!pkg || includesCI(d.package_name, pkg))
         && (!version || d.version === version)
-        && (!ecosystem || d.ecosystem === ecosystem))
+        && (!ecosystem || d.ecosystem === ecosystem)
+        && (!repo || d.repo_full_name === repo)
+        && (!vulnerable || d.open_vulnerabilities > 0))
       return { body: paginate(items, query, 50) }
     }
 

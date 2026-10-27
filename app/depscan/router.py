@@ -21,7 +21,7 @@ from app.core.operating_status import OperatingQuery, apply_operating_status
 from app.core.pagination import paginate
 from app.core.schemas import SeverityStat
 from app.depscan.crawler import fetch_and_scan_dependencies
-from app.depscan.dependency_search import search_dependencies
+from app.depscan.dependency_search import search_dependencies, summarize_repos
 from app.depscan.filters import DepscanListFilter
 from app.depscan.models import DependencyFinding, RepoAssetContext, RepoDependency
 from app.depscan.priority import (
@@ -39,6 +39,8 @@ from app.depscan.schemas import (
     RepoAssetContextOut,
     RepoDependencyListResponse,
     RepoDependencyOut,
+    RepoDependencyRepoListResponse,
+    RepoDependencyRepoStat,
     RepoStat,
 )
 
@@ -188,6 +190,8 @@ def search_repo_dependencies(
     version: str | None = Query(None, description="バージョン（完全一致。例: 8.11.2）"),
     ecosystem: str | None = Query(None, description="エコシステム（例: PyPI / npm / Pub）"),
     repo: str | None = Query(None, description="リポジトリ（完全一致。例: owner/repo）"),
+    vulnerable: bool = Query(False, description="true なら、未解決の検知がある依存のみ"),
+    operating: OperatingQuery = "all",
 ) -> RepoDependencyListResponse:
     """依存パッケージを横断検索する。
 
@@ -197,11 +201,12 @@ def search_repo_dependencies(
     total, rows = search_dependencies(
         db, page=page, per_page=per_page, forced_owner=forced_owner,
         package=package, version=version, ecosystem=ecosystem, repo=repo,
+        vulnerable=vulnerable, operating=operating,
     )
     logger.info(
         "search_repo_dependencies: total=%d, page=%d, package=%r, version=%r, "
-        "ecosystem=%r, repo=%r",
-        total, page, package, version, ecosystem, repo,
+        "ecosystem=%r, repo=%r, vulnerable=%r, operating=%r",
+        total, page, package, version, ecosystem, repo, vulnerable, operating,
     )
     data = [
         RepoDependencyOut.model_validate(dep).model_copy(update={
@@ -211,6 +216,26 @@ def search_repo_dependencies(
         for dep, open_count in rows
     ]
     return RepoDependencyListResponse(total=total, page=page, per_page=per_page, data=data)
+
+
+@router.get(
+    "/dependencies/repos",
+    response_model=RepoDependencyRepoListResponse,
+    summary="リポジトリごとの、使っている依存パッケージの数",
+    description="リポジトリごとに、使っている依存の数と、うち未解決の検知がある依存の数を返す"
+    "（対応が必要なリポジトリが先頭）。依存パッケージの閲覧画面の、リポジトリ一覧に使う。",
+)
+def list_dependency_repos(
+    db: Annotated[Session, Depends(get_db)],
+    forced_owner: Annotated[str | None, Depends(_resolve_access)],
+    operating: OperatingQuery = "all",
+) -> RepoDependencyRepoListResponse:
+    """リポジトリ別の依存の数を返す。セッション認証時は本人所有のリポジトリのみ。"""
+    rows = summarize_repos(db, forced_owner=forced_owner, operating=operating)
+    return RepoDependencyRepoListResponse(repos=[
+        RepoDependencyRepoStat(repo_full_name=repo, total=total, vulnerable=vulnerable)
+        for repo, total, vulnerable in rows
+    ])
 
 
 @router.get(

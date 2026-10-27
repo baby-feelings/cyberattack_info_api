@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { DepscanPanel } from './DepscanPanel'
 import {
   fetchAllDepscanFindings, fetchDepscanStats, fetchCrawlerLogs,
-  fetchDepsOpsList, fetchDepsOpsStats,
+  fetchDepsOpsList, fetchDepsOpsStats, fetchRepoDependencies, fetchRepoDependencyRepos,
   type DependencyFindingOut, type DepscanStatsResponse,
 } from '../api/client'
 
@@ -17,6 +17,8 @@ vi.mock('../api/client', async () => {
     fetchCrawlerLogs: vi.fn(),
     fetchDepsOpsList: vi.fn(),
     fetchDepsOpsStats: vi.fn(),
+    fetchRepoDependencies: vi.fn(),
+    fetchRepoDependencyRepos: vi.fn(),
   }
 })
 
@@ -100,18 +102,20 @@ describe('DepscanPanel', () => {
     })
   })
 
-  it('opens the dependency search modal when its button is clicked, and closes it', async () => {
+  it('opens the dependencies modal when its button is clicked, and closes it', async () => {
     mockedFindings.mockResolvedValue([])
     mockedStats.mockResolvedValue(EMPTY_STATS)
+    vi.mocked(fetchRepoDependencies).mockResolvedValue({ total: 0, page: 1, per_page: 20, data: [] })
+    vi.mocked(fetchRepoDependencyRepos).mockResolvedValue({ repos: [] })
 
     render(<DepscanPanel />)
     await waitFor(() => expect(screen.getByText('該当する依存ライブラリ脆弱性はありません')).toBeInTheDocument())
 
-    await userEvent.click(screen.getByRole('button', { name: '依存パッケージ検索' }))
-    expect(screen.getByRole('dialog', { name: '依存パッケージ検索' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: '依存パッケージ' }))
+    expect(screen.getByRole('dialog', { name: '依存パッケージ' })).toBeInTheDocument()
 
     await userEvent.click(screen.getByLabelText('閉じる'))
-    expect(screen.queryByRole('dialog', { name: '依存パッケージ検索' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: '依存パッケージ' })).not.toBeInTheDocument()
   })
 
   it('reloads the data when the manual refresh button is clicked', async () => {

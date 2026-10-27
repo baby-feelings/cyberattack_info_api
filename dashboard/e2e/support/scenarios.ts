@@ -88,7 +88,8 @@ export const SCENARIOS = [
   { id: 'DEP-20', area: 'DEPSCAN', title: '運用中／運用停止中を切り替えると、リクエストと一覧が分かれる' },
   { id: 'DEP-21', area: 'DEPSCAN', title: 'Dependabot運用状況モーダルも運用中／運用停止中で分かれる' },
   { id: 'DEP-22', area: 'DEPSCAN', title: '左のアプリ一覧で、対応が必要なアプリが上に並び、選ぶと一覧がそのアプリに絞られる' },
-  { id: 'DEP-23', area: 'DEPSCAN', title: '依存パッケージ検索モーダルで、パッケージ・版・エコシステムを指定して横断検索できる' },
+  { id: 'DEP-23', area: 'DEPSCAN', title: '依存パッケージのモーダルで、アプリごとに閲覧し、パッケージ・版・エコシステムで検索できる' },
+  { id: 'DEP-24', area: 'DEPSCAN', title: 'スマホ幅でも、操作ボタンが縦に崩れず、タイトルの下に折り返して並ぶ' },
 
   // ── CODESCAN ──────────────────────────────────────────────────────
   { id: 'COD-01', area: 'CODESCAN', title: '未ログイン時はGitHubログイン案内が表示される' },

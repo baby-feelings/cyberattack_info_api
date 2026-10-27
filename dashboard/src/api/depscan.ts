@@ -94,6 +94,11 @@ export async function fetchRepoDependencies(params: {
   packageName?: string
   version?: string
   ecosystem?: string | null
+  // 指定したリポジトリ（owner/repo）の依存だけ。null = すべて
+  repo?: string | null
+  // 未解決の検知がある依存だけ
+  vulnerableOnly?: boolean
+  operating?: OperatingStatus
   authToken?: string
 }): Promise<RepoDependencyListResponse> {
   const p = new URLSearchParams()
@@ -103,7 +108,30 @@ export async function fetchRepoDependencies(params: {
   if (params.packageName?.trim()) p.set('package', params.packageName.trim())
   if (params.version?.trim()) p.set('version', params.version.trim())
   if (params.ecosystem) p.set('ecosystem', params.ecosystem)
+  if (params.repo) p.set('repo', params.repo)
+  if (params.vulnerableOnly) p.set('vulnerable', 'true')
+  if (params.operating && params.operating !== 'all') p.set('operating', params.operating)
   return apiFetch<RepoDependencyListResponse>(`/api/depscan/dependencies?${p}`, params.authToken)
+}
+
+// リポジトリごとの、使っている依存の数と、うち未解決の検知がある依存の数
+// （依存パッケージの閲覧画面の、左のリポジトリ一覧用。対応が必要なリポジトリが先頭）
+export interface RepoDependencyRepoStat {
+  repo_full_name: string
+  total: number
+  vulnerable: number
+}
+
+export interface RepoDependencyRepoListResponse {
+  repos: RepoDependencyRepoStat[]
+}
+
+export async function fetchRepoDependencyRepos(
+  authToken?: string, operating?: OperatingStatus,
+): Promise<RepoDependencyRepoListResponse> {
+  return apiFetch<RepoDependencyRepoListResponse>(
+    withOperating('/api/depscan/dependencies/repos', operating), authToken,
+  )
 }
 
 export async function fetchDepscanStats(

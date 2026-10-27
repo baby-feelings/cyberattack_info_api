@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
-  fetchDepscanList, fetchDepscanStats, fetchAllDepscanFindings, fetchRepoDependencies,
+  fetchDepscanList, fetchDepscanStats, fetchAllDepscanFindings, fetchRepoDependencies, fetchRepoDependencyRepos,
   type DepscanListResponse,
 } from './depscan'
 
@@ -122,6 +122,7 @@ describe('api/depscan', () => {
       fetchMock.mockResolvedValueOnce(jsonResponse({ total: 0, page: 1, per_page: 20, data: [] }))
       await fetchRepoDependencies({
         page: 2, perPage: 20, packageName: 'undici', version: '8.11.2', ecosystem: 'npm',
+        repo: 'baby-feelings/app-one', vulnerableOnly: true, operating: 'active',
         authToken: 'session-token-abc',
       })
       const [url, opts] = fetchMock.mock.calls[0]
@@ -132,6 +133,9 @@ describe('api/depscan', () => {
       expect(query.get('package')).toBe('undici')
       expect(query.get('version')).toBe('8.11.2')
       expect(query.get('ecosystem')).toBe('npm')
+      expect(query.get('repo')).toBe('baby-feelings/app-one')
+      expect(query.get('vulnerable')).toBe('true')
+      expect(query.get('operating')).toBe('active')
       expect(opts.headers).toEqual({ Authorization: 'Bearer session-token-abc' })
     })
 
@@ -143,6 +147,21 @@ describe('api/depscan', () => {
       expect(query.get('package')).toBe('undici')
       expect(query.has('version')).toBe(false)
       expect(query.has('ecosystem')).toBe(false)
+      expect(query.has('repo')).toBe(false)
+      expect(query.has('vulnerable')).toBe(false)
+      expect(query.has('operating')).toBe(false)
+    })
+  })
+
+  describe('fetchRepoDependencyRepos', () => {
+    it('requests the per-app counts with the operating filter and the session token', async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ repos: [] }))
+      await fetchRepoDependencyRepos('session-token-abc', 'inactive')
+      const [url, opts] = fetchMock.mock.calls[0]
+      const parsed = new URL(url, 'http://localhost')
+      expect(parsed.pathname).toMatch(/\/api\/depscan\/dependencies\/repos$/)
+      expect(parsed.searchParams.get('operating')).toBe('inactive')
+      expect(opts.headers).toEqual({ Authorization: 'Bearer session-token-abc' })
     })
   })
 })

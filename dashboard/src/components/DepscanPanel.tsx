@@ -10,7 +10,7 @@ import {
 import { DepscanGroupRow } from './depscan/DepscanGroupRow'
 import { RepoBarChart } from './depscan/RepoBarChart'
 import { DependabotOpsModal } from './depscan/DependabotOpsModal'
-import { DependencySearchModal } from './depscan/DependencySearchModal'
+import { DependenciesModal } from './depscan/DependenciesModal'
 import { SEVERITY_CLS, SEVERITY_COLORS } from './depscan/grouping'
 import { useDepscanData } from './depscan/useDepscanData'
 import { OperatingFilter } from './shared/OperatingFilter'
@@ -75,35 +75,39 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
       )}
 
       {/* ヘッダー */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Bug size={16} className="text-slate-400" />
-          <span className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
-            自作アプリの依存ライブラリ脆弱性（未解決）
-          </span>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setSearchOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
-          >
-            <Package size={13} />
-            依存パッケージ検索
-          </button>
-          <button
-            onClick={() => setDepsOpsOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
-          >
-            <GitPullRequest size={13} />
-            Dependabot運用状況
-          </button>
+      {/* 1段目: タイトルと再読み込み／2段目: 操作ボタン。幅が足りなければボタン単位で折り返す
+          （1行に詰めると、スマホ幅でボタンの文字が縦に折り返されて崩れる） */}
+      <div className="flex flex-col gap-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <Bug size={16} className="text-slate-400 shrink-0" />
+            <span className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
+              自作アプリの依存ライブラリ脆弱性（未解決）
+            </span>
+          </div>
           <button
             onClick={() => load(owner, severity, showResolved, operating)}
             disabled={loading}
-            className="text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40 p-1 rounded"
+            className="shrink-0 text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40 p-1 rounded"
             title="再読み込み"
           >
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+          </button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setSearchOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
+          >
+            <Package size={13} />
+            依存パッケージ
+          </button>
+          <button
+            onClick={() => setDepsOpsOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
+          >
+            <GitPullRequest size={13} />
+            Dependabot運用状況
           </button>
         </div>
       </div>
@@ -236,8 +240,8 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
       {/* Dependabot PR 自動運用（DEPSOPS）の判定履歴。専用タブは作らず全画面モーダルで表示する */}
       <DependabotOpsModal open={depsOpsOpen} onClose={() => setDepsOpsOpen(false)} />
 
-      {/* 使っている依存パッケージの横断検索（新しい脆弱性の影響範囲の確認用）。同じく全画面モーダル */}
-      <DependencySearchModal open={searchOpen} onClose={() => setSearchOpen(false)} authToken={authToken} />
+      {/* 使っている依存パッケージの閲覧・検索（アプリごとの一覧／新しい脆弱性の影響範囲の確認）。同じく全画面モーダル */}
+      <DependenciesModal open={searchOpen} onClose={() => setSearchOpen(false)} authToken={authToken} />
     </div>
   )
 }

@@ -129,6 +129,7 @@ OWASP Top 10:2025「ソフトウェアサプライチェーンの失敗」対策
   componentは1つにまとまり`vulnerabilities`だけ複数件になる。`content=inventory`では
   脆弱性の無い依存もcomponentsに入り、`vulnerabilities`は検知された依存だけに紐づく
 - **SPDX**: コア仕様（2.3）には脆弱性を表現する概念が無いため、`packages`のみを返す
+- レスポンスの`Content-Type`は`application/vnd.cyclonedx+json`・`application/spdx+json`
 
 ### 依存の全量（インベントリ。`app/depscan/inventory.py`、`repo_dependencies`テーブル）
 `DependencyFinding`は脆弱な依存だけを持つため、SBOMとして必要な「使っている依存の全量」は
@@ -146,11 +147,16 @@ OWASP Top 10:2025「ソフトウェアサプライチェーンの失敗」対策
   コミットしない（本リポジトリはpublic）。DBに保存し、既存の認証で守る
 - テストの後始末（`tests/conftest.py`の`clean_db`）に新テーブルの`DELETE`を足すこと
 
-### 依存パッケージの横断検索（`dependency_search.py`、`GET /api/depscan/dependencies`）
+### 依存パッケージの閲覧・横断検索（`dependency_search.py`、`GET /api/depscan/dependencies`）
 新しい脆弱性が公表されたとき「どのリポジトリが、そのパッケージのどの版を使っているか」を引く。
+何を検索すればよいか分からなくても使えるよう、リポジトリごとに依存を一覧する閲覧にも使う
+（`repo`で絞り、`package`等は省略可。`vulnerable=true`で未解決の検知がある依存だけ）。
 
 - **検索対象は`RepoDependency`（全量）**。`package`は部分一致（大文字小文字を区別しない。`%`・`_`は
   リテラル扱い＝`autoescape`）、`version`・`ecosystem`・`repo`は完全一致。並びは固定（ページ間で安定）
+- **`GET /api/depscan/dependencies/repos`**: リポジトリごとの依存の数（`total`）と、未解決の検知がある
+  依存の数（`vulnerable`。同じ依存への複数の検知は1件）。検知がある順→リポジトリ名順。左のアプリ一覧用
+- **`operating`**（`active`/`inactive`/`all`）は両エンドポイントで使える（`INACTIVE_REPOS`。DEPSOPSと同じ）
 - **各行の`open_vulnerabilities`**: その(リポジトリ, エコシステム, パッケージ, 版)に対する**未解決**の
   `DependencyFinding`の件数（ページ内の行だけ1クエリで集計。無ければ0）
 - **認可**: `GET /api/depscan`と同じ`_resolve_access`。セッション認証では`forced_owner`で本人所有のみ
@@ -159,9 +165,9 @@ OWASP Top 10:2025「ソフトウェアサプライチェーンの失敗」対策
   `RestGateway.enforce_owner`が再検証するため、応答は`data`配列に`repo_full_name`を持つ形を保つこと
 - **`RepoDependencyOut`の計算フィールド**（`purl`・`open_vulnerabilities`）は`| None`にする。
   `OrmDatetimeModel`はORMに無い属性を`None`で渡すため、`int`のままだと500になる（実際に踏んだ）
-- **ダッシュボード**: DEPSCANタブの「依存パッケージ検索」ボタン→全画面モーダル
-  （`components/depscan/DependencySearchModal.tsx`。Dependabot運用状況と同じ作り）
-- レスポンスの`Content-Type`は`application/vnd.cyclonedx+json`・`application/spdx+json`
+- **ダッシュボード**: DEPSCANタブの「依存パッケージ」ボタン→全画面モーダル。左にアプリ一覧
+  （検知がある依存の数を赤バッジ）、右に一覧と、パッケージ名・版・エコシステムの検索、「脆弱性ありのみ」
+  （`components/depscan/DependenciesModal.tsx`。Dependabot運用状況と同じ作り）
 
 ## DEPSCAN の解決済みレコードは保持期間超過で自動削除する（未解決は対象外）
 `app.depscan.repository.DependencyFindingRepository.delete_old_resolved` が、`resolved_at` が

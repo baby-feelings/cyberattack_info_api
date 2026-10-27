@@ -15,10 +15,13 @@ description: Reactダッシュボード（dashboard/）のアーキテクチャ�
 ## タブ切り替え UI（App.tsx）
 KEV / OSV / JVN / DEPSCAN / CODESCAN の 5 データソースは、画面下部固定のタブバーで切り替え
 表示する構成（縦並び表示ではない）。DEPSOPS（Dependabot 運用状況）に専用タブは作らず、DEPSCAN
-タブ内のボタンから開く全画面モーダルとして統合している。「依存パッケージ検索」
-（`DependencySearchModal.tsx`。`GET /api/depscan/dependencies`）も同じ作りで、検索は入力のたびではなく
-「検索」ボタン／Enterで確定し、取得は`useEffect`ではなくイベントハンドラーから呼ぶ
-（効果内の`setState`はESLint警告`react-hooks/set-state-in-effect`になり、警告数の上限に触れる）。
+タブ内のボタンから開く全画面モーダルとして統合している。「依存パッケージ」
+（`DependenciesModal.tsx`。`GET /api/depscan/dependencies`）も同じ作りで、左のアプリ一覧（`RepoRail`）で
+アプリごとに閲覧し、パッケージ名・版は「検索」ボタン／Enterで確定する（入力のたびには取得しない）。
+取得は`useEffect`の中で非同期に行い、`setState`は完了時（`.then`）だけにする（効果内で同期的に
+`setState`するとESLint警告`react-hooks/set-state-in-effect`になり、警告数の上限に触れる）。
+DEPSCANパネルのヘッダーは、1段目をタイトルと再読み込み、2段目を操作ボタン（`flex-wrap`・`whitespace-nowrap`）
+にする（1行に詰めると、スマホ幅でボタンの文字が縦に折り返される。E2E DEP-24で検査）。
 `App.tsx`（約70行）は組み立てのみ。タブごとの定義（キー・ラベル・アイコン・見出し・サブタイトル・
 枠線色・本体パネル）は `components/layout/tabs.tsx` の `TAB_DEFINITIONS` に集約しており
 （新しいタブはここに1件足す。以前は`App.tsx`にタブ数×約20行の同じ構造が並んでいた）、
