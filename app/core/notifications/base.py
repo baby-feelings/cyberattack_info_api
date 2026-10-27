@@ -11,6 +11,7 @@ CRAWLER_LABELS: dict[str, tuple[str, str]] = {
     "DEPSCAN": (":rotating_light:", "依存ライブラリ脆弱性"),
     "DEPSOPS": (":robot_face:", "Dependabot PR 自動運用"),
     "CODESCAN": (":mag:", "自アプリコード脆弱性"),
+    "RUNTIME": (":arrows_counterclockwise:", "言語・実行環境のバージョン"),
 }
 
 

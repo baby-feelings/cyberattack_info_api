@@ -25,6 +25,7 @@ from app.kev.crawler import fetch_and_store_kev
 from app.mcp_server.mcp_token_expiry import run_mcp_token_expiry_notices
 from app.mcp_server.oauth.cleanup import run_oauth_cleanup
 from app.osv.crawler import fetch_and_store_osv
+from app.runtimes.crawler import fetch_and_scan_runtimes
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,11 @@ def build_scheduled_jobs() -> list[ScheduledJob]:
         ScheduledJob(
             "codescan_crawler", "CODESCAN", fetch_and_scan_code,
             settings.CODESCAN_CRON_HOUR_UTC, settings.CODESCAN_CRON_MINUTE_UTC,
+        ),
+        # 言語・実行環境のバージョン監視（RUNTIME）: CODESCAN の後段に配置
+        ScheduledJob(
+            "runtime_crawler", "RUNTIME", fetch_and_scan_runtimes,
+            settings.RUNTIME_CRON_HOUR_UTC, settings.RUNTIME_CRON_MINUTE_UTC,
         ),
         # Dependabot PR 自動運用（DEPSOPS）
         ScheduledJob(

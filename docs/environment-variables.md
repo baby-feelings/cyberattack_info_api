@@ -24,6 +24,7 @@
 | `DEPSCAN_CRON_HOUR_UTC` | - | DEPSCAN 実行時刻（時・UTC）（デフォルト: `22`） |
 | `DEPSCAN_RETENTION_DAYS` | - | DEPSCAN データの保持期間（日数・デフォルト: `180`）。解決済み（`resolved_at` 設定済み）のままこの日数を超えたレコードのみ自動削除（未解決レコードは対象外） |
 | `CODESCAN_CRON_HOUR_UTC` / `CODESCAN_CRON_MINUTE_UTC` | - | CODESCAN 実行時刻（時・分・UTC）（デフォルト: `22`時`30`分。DEPSCANの後段） |
+| `RUNTIME_CRON_HOUR_UTC` / `RUNTIME_CRON_MINUTE_UTC` | - | 言語・実行環境のバージョン監視（RUNTIME）の実行時刻（時・分・UTC）（デフォルト: `22`時`45`分。CODESCANの後段） |
 | `CODESCAN_RETENTION_DAYS` | - | CODESCAN データの保持期間（日数・デフォルト: `180`）。解決済みのままこの日数を超えたレコードのみ自動削除（未解決レコードは対象外） |
 | `DEPSOPS_CRON_HOUR_UTC` | - | DEPSOPS 実行時刻（時・UTC）（デフォルト: `23`） |
 | `DEPSOPS_RETENTION_DAYS` | - | DEPSOPS のPR判定履歴ログの保持期間（日数・デフォルト: `180`）。`processed_at`基準で削除（解決済みPRの履歴は保持期間を待たず実行時に削除される） |

@@ -95,9 +95,9 @@ DEPSCAN・CODESCAN の手動実行（`?force=true`）で、起動とクローラ
 | アプリ起動時 | DB テーブルの自動作成 |
 | `POST /admin/*-crawl` 実行時 | 各クローラーをバックグラウンド取得（詳細は [api-reference.md](api-reference.md)） |
 
-> **Note:** APScheduler（アプリ内スケジューラ）は UTC 19:00 / 20:00 / 21:00 / 22:00 / 22:30 / 23:00 /
-> 23:15 / 23:30（KEV/OSV/JVN/DEPSCAN/CODESCAN/DEPSOPS/削除済みリポジトリ掃除/登録済み他ユーザー向け
-> の順）に設定されており、OCI移行後はこちらが主経路として機能する（OCIは常時稼働のためスリープしない）。
+> **Note:** APScheduler（アプリ内スケジューラ）は UTC 19:00 / 20:00 / 21:00 / 22:00 / 22:30 / 22:45 /
+> 23:00 / 23:15 / 23:30（KEV/OSV/JVN/DEPSCAN/CODESCAN/RUNTIME/DEPSOPS/削除済みリポジトリ掃除/
+> 登録済み他ユーザー向けの順）に設定されており、OCI移行後はこちらが主経路として機能する（OCIは常時稼働のためスリープしない）。
 > GitHub Actions の単一 cron（KEV〜DEPSOPSのみ）は、ネットワーク障害等で APScheduler が不発火だった
 > 場合の二重バックアップとして維持している（削除済みリポジトリ掃除・登録済み他ユーザー向け実行は
 > APScheduler側のみ）。KEV/OSV/JVN/DEPSCAN/CODESCAN/DEPSOPSは今日（UTC日付）既に成功実行済みなら

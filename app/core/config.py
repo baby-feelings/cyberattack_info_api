@@ -75,6 +75,11 @@ class Settings(BaseSettings):
     # この日数を超えて経過したレコードのみ定期削除する（未解決レコードは対象外）
     CODESCAN_RETENTION_DAYS: int = 180
 
+    # 言語・実行環境のバージョン監視（RUNTIME）設定
+    # CODESCAN の後段・DEPSOPS の前に配置: JST 7:45 = UTC 22:45
+    RUNTIME_CRON_HOUR_UTC: int = 22
+    RUNTIME_CRON_MINUTE_UTC: int = 45
+
     # Dependabot PR 自動運用（DEPSOPS）設定
     # JST 8:00 = UTC 23:00（DEPSCAN の後段。Dependabot が新規検知に反応する時間を確保）
     DEPSOPS_CRON_HOUR_UTC: int = 23

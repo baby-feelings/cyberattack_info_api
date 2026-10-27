@@ -6,9 +6,10 @@ import httpx
 
 from app.codescan.models import CodeFinding
 from app.crawler_logs.models import CrawlerLog
-from app.depscan.models import DependencyFinding
+from app.depscan.models import DependencyFinding, RepoDependency
 from app.depsops.models import DependabotPrLog
 from app.jobs.repo_cleanup import purge_deleted_repos, run_repo_cleanup
+from app.runtimes.models import RepoRuntime
 
 _NOW = datetime.now(UTC)
 
@@ -71,6 +72,37 @@ class TestPurgeDeletedRepos:
         assert db_session.query(DependencyFinding).count() == 0
         assert db_session.query(CodeFinding).count() == 0
         assert db_session.query(DependabotPrLog).count() == 0
+
+    def test_purges_inventory_and_runtimes_even_without_any_finding(self, db_session):
+        """検知が無く、依存の全量・使っている版だけが残っているリポジトリも、削除済みなら片付ける。"""
+        db_session.add_all([
+            RepoDependency(
+                repo_full_name="baby-feelings/deleted-repo", ecosystem="npm",
+                package_name="undici", version="8.12.3", manifest_path="package-lock.json",
+            ),
+            RepoRuntime(
+                repo_full_name="baby-feelings/deleted-repo", runtime="python", cycle="3.13",
+                source_path="Dockerfile", pinned=True,
+            ),
+            RepoRuntime(
+                repo_full_name="baby-feelings/kept-repo", runtime="python", cycle="3.13",
+                source_path="Dockerfile", pinned=True,
+            ),
+        ])
+        db_session.commit()
+
+        def exists(self):
+            return self.full_name != "baby-feelings/deleted-repo"
+
+        with patch(f"{_REPO}.exists", exists):
+            purged = purge_deleted_repos(
+                "baby-feelings", "token", current_repo_full_names={"baby-feelings/kept-repo"},
+            )
+
+        assert purged == 1
+        assert db_session.query(RepoDependency).count() == 0
+        assert [r.repo_full_name for r in db_session.query(RepoRuntime).all()] == [
+            "baby-feelings/kept-repo"]
 
     def test_keeps_data_when_repo_still_exists(self, db_session):
         """アーカイブ化・可視性変更等で一覧から除外されているだけの場合は削除しない。"""

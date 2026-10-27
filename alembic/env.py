@@ -17,6 +17,7 @@ from app.jvn import models as _jvn_models  # noqa: F401
 from app.kev import models as _kev_models  # noqa: F401
 from app.mcp_server import models as _mcp_models  # noqa: F401
 from app.osv import models as _osv_models  # noqa: F401
+from app.runtimes import models as _runtimes_models  # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

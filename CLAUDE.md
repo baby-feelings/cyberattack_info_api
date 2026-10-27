@@ -90,14 +90,13 @@ app/
 ├── depscan/      # 依存ライブラリ脆弱性スキャン（crawler=ジョブ組み立て+manifests/inventory〈依存の全量→SBOM〉/finding_builder/
 │                 #   reachability_scan/repository+issue_management/priority/sbom/user_scan/source_files/parsers/）
 ├── depsops/      # Dependabot PR 自動運用（runner/pr_judge/pr_log_repository/classify/github_client〈PR操作〉/user_scan）
+├── runtimes/     # 言語・実行環境（Python/Node.js/Flutter/Dart）の使用版の検出と、最新版・サポート期限（EOL）の判定
 ├── codescan/     # 自アプリのコード脆弱性診断（Semgrep静的解析+gitleaksシークレット検知。GitHubログイン
-│                 #   必須〈DEPSCANとセッション共有〉。+scanners〈Strategy〉/archive/repository/issue_management/cvss_mapping。
-│                 #   CVSS計算式自体はcodescan/cvss.py）
-├── mcp_server/   # AIエージェント向けリモートMCPサーバー（/mcp、Streamable HTTP。組み立て=server.py・
-│                 #   ツール=tools/・REST窓口=gateway.py・認証=auth.py・OAuth 2.1=oauth/。MCPトークンの台帳/JWT・OAuth 2.1・管理API（management_router）・
-│                 #   モデル（models）もここ。DEPSCAN/CODESCANは本人所有のみ。docs/mcp-server.md）
-├── zapscan/      # OWASP ZAP（API Scan）の結果→GitHub Issue起票（`python -m app.zapscan`）。
-│                 #   スキャン自体は deploy/zap/（使い捨てAPIコンテナ向け。詳細は docs/zap-scan.md）
+│                 #   必須〈DEPSCANとセッション共有〉。+scanners〈Strategy〉/archive/repository/issue_management/cvss_mapping/cvss）
+├── mcp_server/   # AIエージェント向けリモートMCPサーバー（/mcp、Streamable HTTP。組み立て=server.py・ツール=tools/・
+│                 #   REST窓口=gateway.py・認証=auth.py・OAuth 2.1=oauth/・トークン台帳/JWT・管理API（management_router）・
+│                 #   models。DEPSCAN/CODESCANは本人所有のみ。docs/mcp-server.md）
+├── zapscan/      # OWASP ZAP の結果→GitHub Issue起票（`python -m app.zapscan`。スキャンは deploy/zap/。docs/zap-scan.md）
 └── crawler_logs/ # クローラー実行ログ
 
 tests/        # app/ と同じドメイン構成でミラーリング
@@ -116,6 +115,7 @@ deploy/       # OCIデプロイ関連（deploy_to_oci.ps1・docker-compose.yml�
 | `api-usage` | 本番APIの使い方（curl例・MCPサーバー）・フィールド定義・エラーレスポンス |
 | `crawler-internals` | KEV/OSV/JVN共通基盤（retry/notifications/pagination等）・STIX/TAXII・Alembic |
 | `depscan-depsops` | DEPSCAN/DEPSOPSの検知・優先度推薦・SBOM・自動マージ判定・GitHub OAuth・ユーザー別Slack通知登録 |
+| `runtimes` | 言語・実行環境のバージョン監視（RUNTIME）: 設定ファイルからの検出・最新版/EOLの取得元・状態判定 |
 | `codescan` | CODESCAN（Semgrep静的解析+gitleaks）の設計判断・tarball取得方式・CVSSベストエフォート推定・ログイン必須と本人所有リポジトリのみの絞り込み |
 | `dashboard-frontend` | Reactダッシュボードのコンポーネント構成・集約ロジック・E2E（Playwright）の設計 |
 | `deployment-ops` | CI/CD（ESLint・gitleaks・ZAP含む）・OCIデプロイ手順・環境変数・Prometheus/Grafana監視 |
