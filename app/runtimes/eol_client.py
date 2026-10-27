@@ -84,7 +84,7 @@ def fetch_flutter_and_dart(client: httpx.Client) -> list[ReleaseInfo]:
     """Flutter 公式のリリース情報から、Flutter・Dart の系列ごとの最新版を求める（stable のみ）。"""
     resp = client.get(_FLUTTER_RELEASES_URL)
     resp.raise_for_status()
-    # 系列 → (最新版のタプル, 最新版の文字列, 公開日)
+    # 系列 → (最新版のタプル, 最新版の文字列, 系列の最初の公開日)
     latest: dict[tuple[str, str], tuple[tuple[int, int, int], str, date | None]] = {}
     for release in resp.json().get("releases", []):
         if release.get("channel") != "stable":
@@ -99,8 +99,15 @@ def fetch_flutter_and_dart(client: httpx.Client) -> list[ReleaseInfo]:
             numbers = (int(match.group(1)), int(match.group(2)), int(match.group(3)))
             key = (runtime, f"{numbers[0]}.{numbers[1]}")
             current = latest.get(key)
+            # 公開日は、系列の最初のリリースの日（最新のパッチの日ではない）。推奨の系列の判定で
+            # 「公開から十分に経った系列か」を見るため、パッチが出るたびに新しくならないようにする
+            first_released = min(
+                (d for d in (released, current[2] if current else None) if d), default=None,
+            )
             if current is None or numbers > current[0]:
-                latest[key] = (numbers, ".".join(map(str, numbers)), released)
+                latest[key] = (numbers, ".".join(map(str, numbers)), first_released)
+            else:
+                latest[key] = (current[0], current[1], first_released)
     return [
         ReleaseInfo(
             runtime=runtime, cycle=cycle, latest_version=version, release_date=released,
