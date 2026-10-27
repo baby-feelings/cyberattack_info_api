@@ -18,6 +18,7 @@ from app.auth.api_key import require_api_key, require_api_key_or_session, requir
 from app.core.background import run_in_background
 from app.core.database import get_db
 from app.core.operating_status import OperatingQuery, apply_operating_status
+from app.core.owner_scope import is_owned_by
 from app.core.pagination import paginate
 from app.core.schemas import SeverityStat
 from app.depscan.crawler import fetch_and_scan_dependencies
@@ -319,7 +320,7 @@ def export_depscan_sbom(
     ),
 ) -> Response:
     """指定リポジトリのDEPSCAN検知結果をSBOM形式でエクスポートする。"""
-    if forced_owner is not None and not repo.startswith(f"{forced_owner}/"):
+    if forced_owner is not None and not is_owned_by(repo, forced_owner):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You can only export repositories you own.",

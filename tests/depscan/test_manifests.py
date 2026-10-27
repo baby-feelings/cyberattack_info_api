@@ -42,7 +42,7 @@ class TestCollectDependencies:
         with patch("app.depscan.manifests.list_target_repos", return_value=repos), \
              patch("app.depscan.manifests.discover_manifests", return_value=["requirements.txt"]), \
              patch(f"{_REPO}.file_content", return_value="fastapi==0.115.6\n"):
-            dep_to_repos, repos_scanned, repo_visibility = collect_dependencies("u", "token")
+            dep_to_repos, repos_scanned, repo_visibility = collect_dependencies("token")
 
         assert repos_scanned == 1
         assert dep_to_repos[("PyPI", "fastapi", "0.115.6")] == [("u/repo1", "requirements.txt")]
@@ -58,7 +58,7 @@ class TestCollectDependencies:
                      "404", request=MagicMock(), response=MagicMock()
                  ),
              ):
-            dep_to_repos, repos_scanned, repo_visibility = collect_dependencies("u", "token")
+            dep_to_repos, repos_scanned, repo_visibility = collect_dependencies("token")
         assert dep_to_repos == {}
         assert repos_scanned == 1
 
@@ -70,5 +70,5 @@ class TestCollectDependencies:
         ]
         with patch("app.depscan.manifests.list_target_repos", return_value=repos), \
              patch("app.depscan.manifests.discover_manifests", return_value=[]):
-            _, _, repo_visibility = collect_dependencies("u", "token")
+            _, _, repo_visibility = collect_dependencies("token")
         assert repo_visibility == {"u/public-repo": "public", "u/private-repo": "private"}

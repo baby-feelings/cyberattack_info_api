@@ -11,6 +11,7 @@ DEPSOPS の PR 操作のようにドメイン固有の判断を含むものは�
 import base64
 import logging
 from dataclasses import dataclass, field
+from http import HTTPStatus
 from typing import Any
 
 import httpx
@@ -75,7 +76,7 @@ class GitHubRepo:
                 api.get(self.path())
             return True
         except httpx.HTTPStatusError as exc:
-            if exc.response.status_code == 404:
+            if exc.response.status_code == HTTPStatus.NOT_FOUND:
                 return False
             logger.warning("exists: unexpected status for %s: %s", self.full_name, exc)
             return None

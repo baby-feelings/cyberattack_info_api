@@ -20,6 +20,7 @@
 | `GITHUB_TOKEN` | - | DEPSCAN/DEPSOPS/CODESCAN 共用の GitHub PAT（fine-grained: Contents Read-only + **Issues Write** + **Pull requests Write** / classic: repo スコープ）。未設定時は DEPSCAN/DEPSOPS/CODESCAN のみエラー終了。Issues Write が無い場合、Issue自動起票・自動クローズのみ失敗（DEPSCAN/CODESCAN自体は成功扱い）。Pull requests Write が無い場合、DEPSOPSのPRマージ・rebase依頼のみ失敗。DEPSOPS の `is_security_update` 判定には別途 Dependabot alerts の読み取り権限（fine-grained: 「Dependabot alerts: Read-only」/ classic: `security_events` スコープ）が必要（無い場合は判定結果が `null` のまま記録されるのみで、DEPSOPS本来のマージ判定には影響しない） |
 | `GITHUB_USERNAME` | ✅ | DEPSCAN/CODESCAN のスキャン対象 GitHub アカウント。コード側にデフォルト値は持たないため、**未設定だとアプリ全体が起動しない** |
 | `SCAN_EXCLUDE_REPOS` | - | スキャン対象外にするリポジトリ（カンマ区切りの `owner/name`。例 `baby-feelings/AppGoat_web_v305`）。DEPSCAN・CODESCAN・DEPSOPS のすべてで対象外にし、すでにあるデータと起票済みの Issue は、毎日のクリーンアップ（UTC 23:15）で片付ける。形式が不正なら起動時にエラー（Issue #342） |
+| `DASHBOARD_URL` | - | ダッシュボードの URL（末尾スラッシュなし。デフォルト: `https://cyberattackinfoapi.vercel.app`）。Slack 通知・GitHub Issue のリンクと、本番で CORS を許可するオリジンに使う。ダッシュボードのドメインを変えたら変更する |
 | `INACTIVE_REPOS` | - | 運用を止めたアプリのリポジトリ（カンマ区切りの `owner/name`）。ダッシュボードの DEPSCAN・DEPSOPS・CODESCAN で「運用中」「運用停止中」に分けて見られる（初期表示は運用中）。**スキャンは止めない**（止めるのは `SCAN_EXCLUDE_REPOS`）。載っていないリポジトリは運用中。取得のたびに照合するため、運用を再開するときは外して再起動（デプロイ）するだけで、過去の検知もすぐに入れ替わる。形式が不正なら起動時にエラー |
 | `DEPSCAN_CRON_HOUR_UTC` | - | DEPSCAN 実行時刻（時・UTC）（デフォルト: `22`） |
 | `DEPSCAN_RETENTION_DAYS` | - | DEPSCAN データの保持期間（日数・デフォルト: `180`）。解決済み（`resolved_at` 設定済み）のままこの日数を超えたレコードのみ自動削除（未解決レコードは対象外） |

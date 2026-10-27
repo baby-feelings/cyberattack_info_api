@@ -6,6 +6,7 @@ Dependabot が作成した PR の一覧取得・マージ・リベース依頼�
 `GitHubRepo` の `api()` / `path()` を使って組み立てる。
 """
 import logging
+from http import HTTPStatus
 from typing import Any
 
 import httpx
@@ -72,7 +73,7 @@ def has_ci_workflows(repo: GitHubRepo) -> bool:
         except httpx.HTTPStatusError as exc:
             # 404（workflowsディレクトリが無い）は正常系のため、リトライ対象外・
             # エラーとせずFalseを返す
-            if exc.response.status_code == 404:
+            if exc.response.status_code == HTTPStatus.NOT_FOUND:
                 return False
             raise
     data = resp.json()

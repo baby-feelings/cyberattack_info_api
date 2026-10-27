@@ -7,10 +7,11 @@ app.depscan.github_client（サービスレベル PAT を使うロックファ�
 """
 import httpx
 
+from app.core.github.api import GITHUB_API_BASE
+
 _GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
 # S105: 変数名に TOKEN を含むだけの公開 URL であり、秘密情報ではない
 _GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"  # noqa: S105
-_GITHUB_API_BASE = "https://api.github.com"
 _TIMEOUT = 15.0
 
 # private リポジトリを読み取るには repo スコープが必要（GitHub OAuth App は
@@ -63,7 +64,7 @@ def get_authenticated_user_login(access_token: str) -> str:
     """アクセストークンからログインユーザーの GitHub ユーザー名（login）を取得する。"""
     with httpx.Client(timeout=_TIMEOUT) as client:
         resp = client.get(
-            f"{_GITHUB_API_BASE}/user",
+            f"{GITHUB_API_BASE}/user",
             headers={
                 "Authorization": f"Bearer {access_token}",
                 "Accept": "application/vnd.github+json",

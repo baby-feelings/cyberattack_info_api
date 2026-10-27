@@ -283,7 +283,8 @@ CIで自動実行される。間接依存（他パッケージ経由で入る依
 留めしている（更新時は`pip-audit`で前後比較）。
 
 ## CORS・Swagger の本番制限
-- CORS: 本番は `["https://cyberattackinfoapi.vercel.app"]` のみ許可。開発時は localhost も追加
+- CORS: 本番は**設定の`DASHBOARD_URL`**（既定`https://cyberattackinfoapi.vercel.app`）のみ許可。開発時は localhost も追加。
+  Slack通知・GitHub Issueのリンクも同じ設定を使う。ダッシュボードのドメインを変えたら、`DASHBOARD_URL`を変える
 - Swagger UI / ReDoc: `settings.ENVIRONMENT != "production"` の場合のみ有効
 - **`allow_methods`に新しいHTTPメソッドを使うエンドポイントを追加したら必ず更新する**:
   `PUT/DELETE /auth/notification-settings`（Issue #227）追加時、CORSミドルウェアの

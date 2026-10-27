@@ -9,6 +9,7 @@ CISA KEVフィード・OSV API・MyJVN API・GitHub APIへの呼び出しは一�
 import logging
 import time
 from collections.abc import Callable
+from http import HTTPStatus
 
 import httpx
 from prometheus_client import Counter
@@ -50,7 +51,7 @@ def _is_rate_limited_403(response: httpx.Response) -> bool:
 def _is_retriable(response: httpx.Response) -> bool:
     if response.status_code in _RETRIABLE_STATUS_CODES:
         return True
-    if response.status_code == 403:
+    if response.status_code == HTTPStatus.FORBIDDEN:
         return _is_rate_limited_403(response)
     return False
 

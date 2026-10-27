@@ -31,6 +31,9 @@ _ENDOFLIFE_PRODUCTS = {PYTHON: "python", NODEJS: "nodejs"}
 # 古すぎる系列（Flutter・Dart の 1.x・2.x）は、使っているかの判定に不要なため保存しない
 _MIN_MAJOR = 3
 
+# ISO 8601 の日付部分（`YYYY-MM-DD`）の長さ
+_ISO_DATE_LENGTH = 10
+
 _VERSION_RE = re.compile(r"v?(\d{1,4})\.(\d{1,4})\.(\d{1,4})")
 
 
@@ -49,7 +52,7 @@ class ReleaseInfo:
 
 def _parse_date(value: object) -> date | None:
     """`2026-10-09` や `2026-10-23T19:02:25Z` の先頭10文字を日付にする。読めなければ None。"""
-    if not isinstance(value, str) or len(value) < 10:
+    if not isinstance(value, str) or len(value) < _ISO_DATE_LENGTH:
         return None
     try:
         return date.fromisoformat(value[:10])

@@ -24,7 +24,7 @@ def discover_manifests(repo: GitHubRepo, default_branch: str) -> list[str]:
 
 
 def collect_dependencies(
-    username: str, token: str,
+    token: str,
 ) -> tuple[dict[DepKey, list[tuple[str, str]]], int, dict[str, str]]:
     """全対象リポジトリからロックファイルを収集・パースする。
 
@@ -37,7 +37,7 @@ def collect_dependencies(
         )
     """
     dep_to_repos: dict[DepKey, list[tuple[str, str]]] = {}
-    repos = list_target_repos(username, token)
+    repos = list_target_repos(token)
     logger.info("DEPSCAN: %d target repos to scan", len(repos))
 
     repo_visibility: dict[str, str] = {

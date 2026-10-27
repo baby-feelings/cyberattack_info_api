@@ -151,7 +151,7 @@ class _DepsopsJob(CrawlJob):
 
     def execute(self, db: Session, counters: CrawlCounters) -> None:
         started_at = now_utc()
-        repos = list_target_repos(settings.GITHUB_USERNAME, settings.GITHUB_TOKEN)
+        repos = list_target_repos(settings.GITHUB_TOKEN)
         logger.info("DEPSOPS: %d target repos to scan", len(repos))
 
         self.merged, self.flagged, resolved, self.error_count = scan_target_repos(db, repos)

@@ -9,14 +9,12 @@ import logging
 import httpx
 
 from app.core.github.repo import GitHubRepo
+from app.core.github.tree_paths import VENDORED_DIR_SEGMENTS, is_under_excluded_dir
 
 logger = logging.getLogger(__name__)
 
 # 到達可能性解析でソース走査から除外するディレクトリ（ベンダー化・生成物・依存物）
-_EXCLUDED_DIR_SEGMENTS = frozenset({
-    "node_modules", "vendor", ".git", "dist", "build", "venv", ".venv",
-    "__pycache__", "target", "deps", "_build", "packages",
-})
+_EXCLUDED_DIR_SEGMENTS = VENDORED_DIR_SEGMENTS | {"deps", "_build", "packages"}
 
 # 到達可能性解析で1リポジトリあたり取得するソースファイル数の上限
 # （巨大リポジトリでの過剰な API 呼び出し・処理時間を防ぐための安全弁）
@@ -39,7 +37,7 @@ def collect_source_files(
     matched_paths = [
         path for path in repo.tree(default_branch)
         if path.endswith(extensions)
-        and not any(f"/{seg}/" in f"/{path}" for seg in _EXCLUDED_DIR_SEGMENTS)
+        and not is_under_excluded_dir(path, _EXCLUDED_DIR_SEGMENTS)
     ][:_MAX_SOURCE_FILES]
 
     files: dict[str, str] = {}

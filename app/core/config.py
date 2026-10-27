@@ -75,6 +75,10 @@ class Settings(BaseSettings):
     # この日数を超えて経過したレコードのみ定期削除する（未解決レコードは対象外）
     CODESCAN_RETENTION_DAYS: int = 180
 
+    # ダッシュボードのURL（末尾スラッシュなし）。Slack通知・GitHub Issue のリンクと、
+    # CORS で許可するオリジン（本番）に使う。ダッシュボードのドメインを変えたら、ここを変える
+    DASHBOARD_URL: str = "https://cyberattackinfoapi.vercel.app"
+
     # 言語・実行環境のバージョン監視（RUNTIME）設定
     # CODESCAN の後段・DEPSOPS の前に配置: JST 7:45 = UTC 22:45
     RUNTIME_CRON_HOUR_UTC: int = 22

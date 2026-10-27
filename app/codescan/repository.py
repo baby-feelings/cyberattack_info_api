@@ -49,12 +49,12 @@ class CodeFindingRepository:
         CODESCAN はリポジトリ単位で全ファイルを検査し直すため、DEPSCAN のような全体横断の差分判定
         ではなく、リポジトリ単位で「今回の結果に含まれない前回の未解決 finding」を解決済みにする。
         """
-        inserted, snapshots = self.upsert(full_name, records)
+        inserted, snapshots = self.upsert(records)
         resolved = self.resolve_stale(full_name, {key_of(r) for r in records})
         return SyncResult(inserted=inserted, new_snapshots=snapshots, resolved=resolved)
 
     def upsert(
-        self, full_name: str, records: list[dict[str, Any]],
+        self, records: list[dict[str, Any]],
     ) -> tuple[int, list[dict[str, Any]]]:
         """1リポジトリ分の `CodeFinding` を Upsert する。
 

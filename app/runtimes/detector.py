@@ -41,6 +41,9 @@ RUNTIME_LABELS = {
 _MAX_LINE_LENGTH = 500
 _MAX_FILE_LINES = 5000
 
+# firebase.json の Python の runtime（`python313`）の数字の最小の桁数（メジャー1桁＋マイナー2桁）
+_PYTHON_RUNTIME_MIN_DIGITS = 3
+
 # バージョン文字列（先頭の演算子・v を除いた、`3.13` `3.13.5` `24` `24.x` など）
 _VERSION_RE = re.compile(r"v?(\d{1,4})(?:\.(\d{1,4}|x|\*))?")
 # 比較演算子（`>=3.13` `^3.13.0` `~22` など。先頭から取り除く）
@@ -173,7 +176,7 @@ def _detect_firebase(path: str, content: str) -> list[DetectedRuntime]:
         runtime, digits = match.group(1), match.group(2)
         if runtime == NODEJS:
             found.append(DetectedRuntime(NODEJS, str(int(digits)), path, True))
-        elif len(digits) >= 3:
+        elif len(digits) >= _PYTHON_RUNTIME_MIN_DIGITS:
             # python313 → 3.13（先頭1桁がメジャー、残りがマイナー）
             found.append(DetectedRuntime(PYTHON, f"{digits[0]}.{int(digits[1:])}", path, True))
     return found

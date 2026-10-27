@@ -123,7 +123,7 @@ def run_depscan_for_user(username: str, token: str) -> None:
     try:
         _set_user_scan_status(db, username, "running", started_at=started_at)
 
-        dep_to_repos, repos_scanned, repo_visibility = collect_dependencies(username, token)
+        dep_to_repos, repos_scanned, repo_visibility = collect_dependencies(token)
         # 依存の全量（SBOM・横断検索用）の保存失敗はスキャン全体を失敗させない
         try:
             RepoDependencyRepository(db).replace(dep_to_repos, repo_visibility)

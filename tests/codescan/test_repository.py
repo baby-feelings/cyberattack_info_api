@@ -25,7 +25,7 @@ class TestUpsertRepoFindings:
             "cvss_score": 5.0, "cvss_vector": "v", "detected_at": _NOW,
             "resolved_at": None,
         }
-        inserted, snapshots = CodeFindingRepository(db_session).upsert("owner/repo", [rec])
+        inserted, snapshots = CodeFindingRepository(db_session).upsert([rec])
         assert inserted == 1
         assert len(snapshots) == 1
         assert db_session.query(CodeFinding).count() == 1
@@ -38,7 +38,7 @@ class TestUpsertRepoFindings:
             "cvss_score": 5.0, "cvss_vector": "v", "detected_at": _NOW,
             "resolved_at": None,
         }
-        inserted, _ = CodeFindingRepository(db_session).upsert("owner/repo", [rec, dict(rec)])
+        inserted, _ = CodeFindingRepository(db_session).upsert([rec, dict(rec)])
         assert inserted == 1
 
     def test_existing_unresolved_finding_is_updated_not_duplicated(self, db_session):
@@ -51,7 +51,7 @@ class TestUpsertRepoFindings:
             "cvss_vector": "v2", "detected_at": _NOW, "resolved_at": None,
         }
         repository = CodeFindingRepository(db_session)
-        inserted, snapshots = repository.upsert("baby-feelings/baby_grow", [rec])
+        inserted, snapshots = repository.upsert([rec])
         assert inserted == 0
         assert snapshots == []
         assert db_session.query(CodeFinding).count() == 1
@@ -69,7 +69,7 @@ class TestUpsertRepoFindings:
             "detected_at": _NOW, "resolved_at": None,
         }
         repository = CodeFindingRepository(db_session)
-        inserted, snapshots = repository.upsert("baby-feelings/baby_grow", [rec])
+        inserted, snapshots = repository.upsert([rec])
         assert inserted == 0  # 再発は新規カウントしない
         updated = db_session.query(CodeFinding).first()
         assert updated.resolved_at is None

@@ -23,6 +23,7 @@ from app.core.config import settings
 from app.core.crawler_runner import CrawlCounters, CrawlJob
 from app.core.github.accounts import list_target_repos
 from app.core.github.repo import GitHubRepo
+from app.core.github.tree_paths import VENDORED_DIR_SEGMENTS, is_under_excluded_dir
 from app.runtimes.detector import DetectedRuntime, detect_runtimes, is_candidate
 from app.runtimes.eol_client import fetch_all_releases
 from app.runtimes.repository import RepoRuntimeRepository, RuntimeReleaseRepository
@@ -35,10 +36,7 @@ _MAX_FILES_PER_REPO = 40
 _MAX_FILE_SIZE = 300_000
 
 # 検出の対象から外すディレクトリ（依存物・生成物・仮想環境）
-_EXCLUDED_DIR_SEGMENTS = frozenset({
-    "node_modules", "vendor", ".git", "dist", "build", ".dart_tool", "venv", ".venv",
-    "__pycache__", "Pods", "target",
-})
+_EXCLUDED_DIR_SEGMENTS = VENDORED_DIR_SEGMENTS | {".dart_tool", "Pods"}
 
 
 def detect_repo_runtimes(repo: GitHubRepo, default_branch: str) -> list[DetectedRuntime] | None:
@@ -57,7 +55,7 @@ def detect_repo_runtimes(repo: GitHubRepo, default_branch: str) -> list[Detected
     candidates = [
         path for path in paths
         if is_candidate(path)
-        and not any(segment in _EXCLUDED_DIR_SEGMENTS for segment in path.split("/")[:-1])
+        and not is_under_excluded_dir(path, _EXCLUDED_DIR_SEGMENTS)
     ][:_MAX_FILES_PER_REPO]
 
     detected: list[DetectedRuntime] = []
@@ -86,7 +84,7 @@ class _RuntimeJob(CrawlJob):
         counters.updated = RuntimeReleaseRepository(db).upsert(fetch_all_releases())
 
         # 2. 全対象リポジトリの設定ファイルから、使っている版を検出する
-        repos = list_target_repos(settings.GITHUB_USERNAME, settings.GITHUB_TOKEN)
+        repos = list_target_repos(settings.GITHUB_TOKEN)
         logger.info("RUNTIME: %d target repos to scan", len(repos))
         repository = RepoRuntimeRepository(db)
         for repo_info in repos:

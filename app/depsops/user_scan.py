@@ -31,7 +31,7 @@ def run_dependabot_ops_for_user(username: str, token: str, webhook_url: str) -> 
     logger.info("=== DEPSOPS (for %s) started ===", username)
     db: Session = SessionLocal()
     try:
-        repos = list_target_repos(username, token)
+        repos = list_target_repos(token)
         logger.info("DEPSOPS (for %s): %d target repos to scan", username, len(repos))
 
         merged, flagged, resolved, error_count = scan_target_repos(db, repos, token)

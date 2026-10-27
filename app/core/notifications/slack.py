@@ -3,10 +3,20 @@ import logging
 
 import httpx
 
+from app.core.config import settings
+
 logger = logging.getLogger(__name__)
 
 _WEBHOOK_TIMEOUT = 10.0
-DASHBOARD_URL = "https://cyberattackinfoapi.vercel.app/"
+
+
+def dashboard_link(base_url: str) -> str:
+    """通知本文に載せるダッシュボードへのリンク。設定は末尾スラッシュなしで持つため、そろえる。"""
+    return base_url.rstrip("/") + "/"
+
+
+# 通知本文に載せるダッシュボードへのリンク（設定の `DASHBOARD_URL`）
+DASHBOARD_URL = dashboard_link(settings.DASHBOARD_URL)
 
 # Slack Incoming Webhook の正規のURLプレフィックス（登録時のバリデーション用）
 SLACK_WEBHOOK_URL_PREFIX = "https://hooks.slack.com/"

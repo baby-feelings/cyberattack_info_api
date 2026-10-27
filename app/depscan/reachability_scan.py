@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def apply_reachability(
-    records: list[dict[str, Any]], username: str, token: str,
+    records: list[dict[str, Any]], token: str,
 ) -> None:
     """検知レコードに到達可能性（import レベル）を付与する（records を in-place 更新）。
 
@@ -34,7 +34,7 @@ def apply_reachability(
 
     branch_map = {
         repo_info["full_name"]: repo_info.get("default_branch") or "main"
-        for repo_info in list_target_repos(username, token)
+        for repo_info in list_target_repos(token)
     }
 
     source_cache: dict[tuple[str, str], dict[str, str]] = {}

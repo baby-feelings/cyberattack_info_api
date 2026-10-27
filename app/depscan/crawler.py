@@ -46,7 +46,7 @@ class _DepscanJob(CrawlJob):
 
     def execute(self, db: Session, counters: CrawlCounters) -> None:
         dep_to_repos, self.repos_scanned, repo_visibility = collect_dependencies(
-            settings.GITHUB_USERNAME, settings.GITHUB_TOKEN,
+            settings.GITHUB_TOKEN,
         )
         logger.info(
             "DEPSCAN: %d repos scanned, %d unique (ecosystem,package,version) found",
@@ -63,7 +63,7 @@ class _DepscanJob(CrawlJob):
 
         # 到達可能性の判定失敗はクロール全体を失敗させない（"unknown" のまま据え置く）
         try:
-            apply_reachability(records, settings.GITHUB_USERNAME, settings.GITHUB_TOKEN)
+            apply_reachability(records, settings.GITHUB_TOKEN)
         except Exception as exc:
             logger.error("Failed to compute reachability: %s", exc, exc_info=True)
 

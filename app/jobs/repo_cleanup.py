@@ -179,7 +179,7 @@ def run_repo_cleanup() -> int:
     logger.info("=== Repo cleanup (deleted repo purge) started ===")
     started_at = now_utc()
     try:
-        repos = list_target_repos(settings.GITHUB_USERNAME, settings.GITHUB_TOKEN)
+        repos = list_target_repos(settings.GITHUB_TOKEN)
         current_names = {r["full_name"] for r in repos}
         purged = purge_deleted_repos(settings.GITHUB_USERNAME, settings.GITHUB_TOKEN, current_names)
     except Exception as exc:
