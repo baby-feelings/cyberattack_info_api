@@ -81,7 +81,7 @@ deploy/zap/run_zap_scan.ps1           # OWASP ZAP の動的診断（Docker Deskt
 ```
 
 **テスト結果（最新）:** バックエンド 1466 テスト / カバレッジ 99%（Windows は、POSIXパス前提の1件をスキップ）、ダッシュボード 520 テスト
-（Vitest）/ カバレッジ 98%、E2E 103 シナリオ
+（Vitest）/ カバレッジ 98%、E2E 104 シナリオ
 
 ダッシュボードのE2Eテスト（Playwright、API全モック）は `dashboard/` で `npm run e2e`。
 HTMLレポートは `npm run e2e:report`、画面・機能のシナリオ網羅率（90%未満で失敗）は

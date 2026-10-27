@@ -9,6 +9,9 @@ vi.mock('../api/client', async () => {
   return {
     ...actual,
     githubLoginUrl: vi.fn(() => 'http://localhost:8000/auth/github/login'),
+    // セッション延長は実サーバーへ送らない（手元で API が動いていると、無効トークンとして
+    // 401 が返りログアウトされ、結果が環境に左右されるため）。未設定の戻り値は「延長失敗（維持）」扱い
+    refreshSession: vi.fn(),
   }
 })
 
