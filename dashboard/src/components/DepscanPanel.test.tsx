@@ -100,6 +100,20 @@ describe('DepscanPanel', () => {
     })
   })
 
+  it('opens the dependency search modal when its button is clicked, and closes it', async () => {
+    mockedFindings.mockResolvedValue([])
+    mockedStats.mockResolvedValue(EMPTY_STATS)
+
+    render(<DepscanPanel />)
+    await waitFor(() => expect(screen.getByText('該当する依存ライブラリ脆弱性はありません')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: '依存パッケージ検索' }))
+    expect(screen.getByRole('dialog', { name: '依存パッケージ検索' })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByLabelText('閉じる'))
+    expect(screen.queryByRole('dialog', { name: '依存パッケージ検索' })).not.toBeInTheDocument()
+  })
+
   it('reloads the data when the manual refresh button is clicked', async () => {
     mockedFindings.mockResolvedValue([])
     mockedStats.mockResolvedValue(EMPTY_STATS)

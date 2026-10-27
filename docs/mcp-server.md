@@ -53,6 +53,7 @@ claude mcp add --transport http cyberattack-info https://<API のドメイン>/m
 | `search_jvn` | JVN を検索（重要度・期間） | 全員 |
 | `list_depscan_findings` | 依存ライブラリの脆弱性（DEPSCAN） | user / admin |
 | `get_depscan_stats` | DEPSCAN の件数（リポジトリ別・重要度別） | user / admin |
+| `search_dependencies` | どのリポジトリが、どのパッケージのどの版を使っているか（影響範囲の確認） | user / admin |
 | `list_codescan_findings` | コードの脆弱性（CODESCAN） | user / admin |
 | `get_codescan_stats` | CODESCAN の件数 | user / admin |
 | `whoami` | 現在の権限と見える範囲（接続確認用） | 全員 |

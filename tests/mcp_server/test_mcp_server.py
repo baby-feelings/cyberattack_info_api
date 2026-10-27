@@ -246,7 +246,7 @@ class TestPrivateDataIsolation:
         _depscan(db_session, "alice/app", "GHSA-1")
         _codescan(db_session, "alice/app", "rule.1")
         headers = {"X-API-KEY": _PUBLIC_KEY}
-        for tool in ("list_depscan_findings", "get_depscan_stats",
+        for tool in ("list_depscan_findings", "get_depscan_stats", "search_dependencies",
                      "list_codescan_findings", "get_codescan_stats"):
             is_error, text = _call(mcp_client, tool, headers=headers)
             assert is_error, tool
@@ -275,6 +275,46 @@ class TestPrivateDataIsolation:
             is_error, text = _call(mcp_client, tool, {"repo": "bob/app"}, _mcp_headers("alice"))
             assert is_error, tool
             assert "アクセス権" in text
+
+    def test_user_searches_only_own_dependencies(self, mcp_client, db_session):
+        from app.depscan.models import RepoDependency
+
+        for repo in ("alice/app", "bob/app"):
+            db_session.add(RepoDependency(
+                repo_full_name=repo, ecosystem="npm", package_name="undici",
+                version="8.11.2", manifest_path="package-lock.json",
+            ))
+        db_session.commit()
+        is_error, body = _call(mcp_client, "search_dependencies", {"package": "undici"},
+                               _mcp_headers("alice"))
+        assert not is_error
+        assert [d["repo_full_name"] for d in body["data"]] == ["alice/app"]
+
+    def test_user_cannot_search_other_users_dependencies_by_repo(self, mcp_client, db_session):
+        from app.depscan.models import RepoDependency
+
+        db_session.add(RepoDependency(
+            repo_full_name="bob/app", ecosystem="npm", package_name="undici",
+            version="8.11.2", manifest_path="package-lock.json",
+        ))
+        db_session.commit()
+        is_error, body = _call(mcp_client, "search_dependencies", {"repo": "bob/app"},
+                               _mcp_headers("alice"))
+        assert not is_error
+        assert body["data"] == []
+
+    def test_admin_searches_all_dependencies(self, mcp_client, db_session):
+        from app.depscan.models import RepoDependency
+
+        for repo in ("alice/app", "bob/app"):
+            db_session.add(RepoDependency(
+                repo_full_name=repo, ecosystem="npm", package_name="undici",
+                version="8.11.2", manifest_path="package-lock.json",
+            ))
+        db_session.commit()
+        is_error, body = _call(mcp_client, "search_dependencies", {"package": "undici"}, _ADMIN)
+        assert not is_error
+        assert body["total"] == 2
 
     def test_user_stats_are_scoped(self, mcp_client, db_session):
         _depscan(db_session, "alice/app", "GHSA-1")

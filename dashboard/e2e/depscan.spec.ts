@@ -482,3 +482,44 @@ scenario('DEP-22', '左のアプリ一覧で、対応が必要なアプリが上
   await expect(table.getByRole('row')).toHaveCount(4)
   await expect(table.getByRole('columnheader', { name: 'リポジトリ' })).toBeVisible()
 })
+
+
+scenario('DEP-23', '依存パッケージ検索モーダルで、パッケージ・版・エコシステムを指定して横断検索できる', async ({ page, api }) => {
+  await openDepscan(page)
+  await page.getByRole('button', { name: '依存パッケージ検索' }).click()
+
+  const dialog = page.getByRole('dialog', { name: '依存パッケージ検索' })
+  await expect(dialog).toBeVisible()
+  // 検索するまでは取得せず、入力を促す表示になる。入力が空のままでは検索できない
+  await expect(dialog.getByText('パッケージ名かバージョンを入力して検索してください')).toBeVisible()
+  await expect(dialog.getByRole('button', { name: '検索' })).toBeDisabled()
+  expect(api.requestsTo('/api/depscan/dependencies')).toHaveLength(0)
+
+  // パッケージ名（部分一致）で検索。未解決の検知がある版は赤いバッジ、無い版は「検知なし」
+  await dialog.getByLabel('パッケージ名（部分一致）').fill('lodash')
+  await dialog.getByRole('button', { name: '検索' }).click()
+  const table = dialog.getByRole('table', { name: '依存パッケージ検索結果' })
+  await expect(table.getByRole('row')).toHaveCount(3)
+  await expect(table.getByRole('row').nth(1)).toContainText('baby-feelings/app-one')
+  await expect(table.getByRole('row').nth(1)).toContainText('4.17.15')
+  await expect(table.getByRole('row').nth(1)).toContainText('未解決 2 件')
+  await expect(table.getByRole('row').nth(2)).toContainText('4.17.21')
+  await expect(table.getByRole('row').nth(2)).toContainText('検知なし')
+  expect(api.lastQuery('/api/depscan/dependencies')?.get('package')).toBe('lodash')
+  // ログイン済みのため、Bearer トークンで取得している
+  expect(api.requestsTo('/api/depscan/dependencies')[0].headers.authorization).toMatch(/^Bearer /)
+
+  // バージョンを足すと完全一致で絞られる
+  await dialog.getByLabel('バージョン（完全一致）').fill('4.17.21')
+  await dialog.getByRole('button', { name: '検索' }).click()
+  await expect(table.getByRole('row')).toHaveCount(2)
+  await expect(table.getByRole('row').nth(1)).toContainText('baby-feelings/app-two')
+  expect(api.lastQuery('/api/depscan/dependencies')?.get('version')).toBe('4.17.21')
+
+  // エコシステムで絞り込み、該当なしの表示
+  await dialog.getByLabel('バージョン（完全一致）').fill('')
+  await dialog.getByLabel('エコシステム').selectOption('PyPI')
+  await dialog.getByRole('button', { name: '検索' }).click()
+  await expect(dialog.getByText('該当する依存パッケージはありません')).toBeVisible()
+  expect(api.lastQuery('/api/depscan/dependencies')?.get('ecosystem')).toBe('PyPI')
+})

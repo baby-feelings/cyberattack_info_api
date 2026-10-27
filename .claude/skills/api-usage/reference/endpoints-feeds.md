@@ -320,6 +320,31 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 ---
 
+### スキル 10b: 使っている依存パッケージを横断検索する（影響範囲の確認）
+
+新しい脆弱性が公表されたとき、「どのリポジトリが、そのパッケージのどの版を使っているか」を引く。
+`open_vulnerabilities`は、その版に対する未解決の検知件数（0なら検知なし）。
+
+```bash
+# undici を使っているリポジトリと版（部分一致）
+curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \n  "https://168.138.213.240.nip.io/api/depscan/dependencies?package=undici"
+
+# 特定の版だけ（完全一致）
+curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \n  "https://168.138.213.240.nip.io/api/depscan/dependencies?package=undici&version=8.11.2&ecosystem=npm"
+```
+
+| パラメータ | 型 | 説明 |
+|-----------|-----|------|
+| `package` | string | パッケージ名（部分一致・大文字小文字を区別しない） |
+| `version` | string | バージョン（完全一致） |
+| `ecosystem` | string | エコシステム（`npm` / `PyPI` / `Pub` など） |
+| `repo` | string | リポジトリ（完全一致。`owner/repo`） |
+| `page` / `per_page` | int | ページ番号／1ページの件数（最大200） |
+
+> 依存の全量はDEPSCANのスキャンごとに保存される。MCPでは`search_dependencies`ツールで同じ検索ができる。
+
+---
+
 ### スキル 11: DEPSCAN検知結果をSBOM形式でエクスポートする（Issue #133）
 
 **用途:** 指定リポジトリの検知結果をCycloneDX 1.5またはSPDX 2.3形式でエクスポートし、

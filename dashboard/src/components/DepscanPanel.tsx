@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import {
-  Bug, RefreshCw, CheckCircle2, Sparkles, GitPullRequest,
+  Bug, RefreshCw, CheckCircle2, Sparkles, GitPullRequest, Package,
 } from 'lucide-react'
 import {
   SeverityPieChart,
@@ -10,6 +10,7 @@ import {
 import { DepscanGroupRow } from './depscan/DepscanGroupRow'
 import { RepoBarChart } from './depscan/RepoBarChart'
 import { DependabotOpsModal } from './depscan/DependabotOpsModal'
+import { DependencySearchModal } from './depscan/DependencySearchModal'
 import { SEVERITY_CLS, SEVERITY_COLORS } from './depscan/grouping'
 import { useDepscanData } from './depscan/useDepscanData'
 import { OperatingFilter } from './shared/OperatingFilter'
@@ -42,6 +43,7 @@ function RepoBadge({ crit, high, total }: { crit: number; high: number; total: n
 // 所有するリポジトリのみに強制的に絞り込まれる（オーナーフィルターは実質不要になる）
 export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
   const [depsOpsOpen, setDepsOpsOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
 
   const {
     owner, severity, showResolved, operating, page, setPage,
@@ -81,6 +83,13 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
           </span>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setSearchOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
+          >
+            <Package size={13} />
+            依存パッケージ検索
+          </button>
           <button
             onClick={() => setDepsOpsOpen(true)}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
@@ -226,6 +235,9 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
 
       {/* Dependabot PR 自動運用（DEPSOPS）の判定履歴。専用タブは作らず全画面モーダルで表示する */}
       <DependabotOpsModal open={depsOpsOpen} onClose={() => setDepsOpsOpen(false)} />
+
+      {/* 使っている依存パッケージの横断検索（新しい脆弱性の影響範囲の確認用）。同じく全画面モーダル */}
+      <DependencySearchModal open={searchOpen} onClose={() => setSearchOpen(false)} authToken={authToken} />
     </div>
   )
 }

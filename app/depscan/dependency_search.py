@@ -1,0 +1,89 @@
+"""依存パッケージの横断検索（DEPSCAN。「どのリポジトリが、そのパッケージのどの版を使っているか」）。
+
+新しい脆弱性が公表されたときの影響範囲の確認に使う。検索対象は `RepoDependency`（依存の全量）で、
+脆弱性の有無にかかわらず、使っている依存を引く。各行には、その版に未解決の検知が何件あるかを
+付ける（検知が無い版と、対応が必要な版を一目で区別できるようにするため）。
+"""
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
+from app.depscan.models import DependencyFinding, RepoDependency
+
+DependencyKey = tuple[str, str, str, str]
+
+
+def search_dependencies(
+    db: Session,
+    *,
+    page: int,
+    per_page: int,
+    forced_owner: str | None = None,
+    package: str | None = None,
+    version: str | None = None,
+    ecosystem: str | None = None,
+    repo: str | None = None,
+) -> tuple[int, list[tuple[RepoDependency, int]]]:
+    """条件に合う依存を返す（(総件数, [(依存, 未解決の検知件数)])）。
+
+    Args:
+        forced_owner: 指定した場合、そのオーナーのリポジトリのみに強制的に絞る
+            （セッション認証時に、本人所有のリポジトリ以外を返さないため）
+        package: パッケージ名（部分一致・大文字小文字を区別しない）
+        version: バージョン（完全一致）
+        ecosystem: エコシステム（完全一致。例: PyPI / npm / Pub）
+        repo: リポジトリ（完全一致。例: owner/repo）
+    """
+    query = db.query(RepoDependency)
+    if forced_owner is not None:
+        # `_` を含むオーナー名でも他のオーナーに一致しないよう、LIKE ではなく前方一致で絞る
+        query = query.filter(RepoDependency.repo_full_name.startswith(
+            f"{forced_owner}/", autoescape=True,
+        ))
+    if package:
+        query = query.filter(RepoDependency.package_name.icontains(package, autoescape=True))
+    if version:
+        query = query.filter(RepoDependency.version == version)
+    if ecosystem:
+        query = query.filter(RepoDependency.ecosystem == ecosystem)
+    if repo:
+        query = query.filter(RepoDependency.repo_full_name == repo)
+
+    total = query.count()
+    rows = (
+        query.order_by(
+            RepoDependency.repo_full_name, RepoDependency.ecosystem,
+            RepoDependency.package_name, RepoDependency.version,
+            RepoDependency.manifest_path,
+        )
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+    open_counts = _open_vulnerability_counts(db, rows)
+    return total, [
+        (row, open_counts.get(
+            (row.repo_full_name, row.ecosystem, row.package_name, row.version), 0,
+        ))
+        for row in rows
+    ]
+
+
+def _open_vulnerability_counts(
+    db: Session, rows: list[RepoDependency],
+) -> dict[DependencyKey, int]:
+    """ページ内の依存ごとの、未解決の検知件数を返す（検知が無い依存はキー自体が無い）。"""
+    if not rows:
+        return {}
+    findings = db.query(
+        DependencyFinding.repo_full_name, DependencyFinding.ecosystem,
+        DependencyFinding.package_name, DependencyFinding.installed_version,
+        func.count(DependencyFinding.id),
+    ).filter(
+        DependencyFinding.resolved_at.is_(None),
+        DependencyFinding.repo_full_name.in_({r.repo_full_name for r in rows}),
+        DependencyFinding.package_name.in_({r.package_name for r in rows}),
+    ).group_by(
+        DependencyFinding.repo_full_name, DependencyFinding.ecosystem,
+        DependencyFinding.package_name, DependencyFinding.installed_version,
+    ).all()
+    return {(repo, eco, name, ver): count for repo, eco, name, ver, count in findings}
