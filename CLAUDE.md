@@ -87,7 +87,7 @@ app/
 ├── kev/          # CISA KEV（models/schemas/crawler/stix/router）
 ├── osv/          # OSV（10エコシステム対応、+packages.py）
 ├── jvn/          # JVN（MyJVN API / RDF-RSS）
-├── depscan/      # 依存ライブラリ脆弱性スキャン（crawler=ジョブ組み立て+manifests/inventory〈依存の全量→SBOM〉/finding_builder/
+├── depscan/      # 依存ライブラリ脆弱性スキャン（crawler=ジョブ組み立て+manifests/inventory/〈依存の全量の保存・検索・API〉/finding_builder/
 │                 #   reachability_scan/repository+issue_management/priority/sbom/user_scan/source_files/parsers/）
 ├── depsops/      # Dependabot PR 自動運用（runner/pr_judge/pr_log_repository/classify/github_client〈PR操作〉/user_scan）
 ├── runtimes/     # 言語・実行環境（Python/Node.js/Flutter/Dart）の使用版の検出と、最新版・サポート期限（EOL）の判定

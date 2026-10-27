@@ -23,6 +23,7 @@ from app.core.metrics import router as metrics_router
 from app.core.schemas import HealthResponse
 from app.core.security_headers import SecurityHeadersMiddleware
 from app.crawler_logs.router import router as crawler_logs_router
+from app.depscan.inventory.router import router as depscan_inventory_router
 from app.depscan.router import admin_router as depscan_admin_router
 from app.depscan.router import router as depscan_router
 from app.depsops.router import admin_router as depsops_admin_router
@@ -140,6 +141,7 @@ app.include_router(osv_router)
 app.include_router(jvn_router)
 app.include_router(crawler_logs_router)
 app.include_router(depscan_router)
+app.include_router(depscan_inventory_router)
 app.include_router(depsops_router)
 app.include_router(codescan_router)
 app.include_router(runtimes_router)

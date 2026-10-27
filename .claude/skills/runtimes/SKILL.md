@@ -19,6 +19,7 @@ description: 言語・実行環境のバージョン監視（RUNTIME。Issue #37
 | `status.py` | 使っている版の状態の判定（純粋。日付は引数） |
 | `repository.py` | 永続化（`runtime_releases` の upsert、`repo_runtimes` のリポジトリ単位の全置換） |
 | `crawler.py` | 毎日のジョブ（`CrawlJob`。種別 `RUNTIME`。成功しても Slack へ流さない） |
+| `filters.py` | 絞り込み条件の値オブジェクト`RuntimeFilter`（`for_owner`・`apply`。`depscan/inventory/filters.py`と同じ設計） |
 | `browse.py` | 閲覧用の絞り込み・集計（状態は保存せず、閲覧のたびに求める） |
 | `router.py` / `schemas.py` | `GET /api/runtimes`・`/repos`・`/releases`、`POST /admin/runtime-crawl` |
 

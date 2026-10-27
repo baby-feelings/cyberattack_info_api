@@ -20,6 +20,7 @@
   の対応関係が慣習的なものでしかなく、精度は最も低い（best-effort）。
 """
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 
 # PyPI: パッケージ名とimport名が大きく異なる著名なケースのみ個別対応する
@@ -114,40 +115,77 @@ def _candidate_names(ecosystem: str, package_name: str) -> list[str]:
     return [package_name]
 
 
+def _pypi_pattern(escaped: str) -> re.Pattern[str]:
+    return re.compile(
+        r"^\s*(?:from\s+" + escaped + r"(?:\.\S+)?\s+import\b"
+        r"|import\s+" + escaped + r"(?:\.\S+)?(?:\s|,|$))",
+        re.MULTILINE,
+    )
+
+
+def _npm_pattern(escaped: str) -> re.Pattern[str]:
+    return re.compile(
+        r"""(?:require\(|from\s+|import\s*\()\s*['"]"""
+        + escaped + r"""(?:/[^'"]*)?['"]""",
+    )
+
+
+def _pub_pattern(escaped: str) -> re.Pattern[str]:
+    return re.compile(r"""import\s+['"]package:""" + escaped + r"/")
+
+
+def _rubygems_pattern(escaped: str) -> re.Pattern[str]:
+    return re.compile(
+        r"""require(?:_relative)?\s+['"]""" + escaped + r"""(?:/[^'"]*)?['"]""",
+    )
+
+
+def _go_pattern(escaped: str) -> re.Pattern[str]:
+    return re.compile(r'"' + escaped + r'(?:/[^"]*)?"')
+
+
+def _maven_pattern(escaped: str) -> re.Pattern[str]:
+    return re.compile(r"\bimport\s+(?:static\s+)?" + escaped + r"\.")
+
+
+def _crates_pattern(escaped: str) -> re.Pattern[str]:
+    return re.compile(r"\b(?:use|extern\s+crate)\s+" + escaped + r"\b")
+
+
+def _packagist_pattern(escaped: str) -> re.Pattern[str]:
+    return re.compile(r"\buse\s+[^;]*" + escaped, re.IGNORECASE)
+
+
+def _hex_pattern(escaped: str) -> re.Pattern[str]:
+    return re.compile(r"\b(?:alias|import|use)\s+" + escaped + r"\b")
+
+
+def _nuget_pattern(escaped: str) -> re.Pattern[str]:
+    return re.compile(r"\busing\s+" + escaped + r"[;.]")
+
+
+# エコシステム → 「import / use の文」を探す正規表現を作る関数（エスケープ済みの識別子を受け取る）。
+# 候補名の生成（`_CANDIDATE_GENERATORS`）と同じ、エコシステム別の対応表にして、
+# 新しいエコシステムは、ここに1行足すだけにする（開放閉鎖の原則）
+_PATTERN_BUILDERS: dict[str, Callable[[str], re.Pattern[str]]] = {
+    "PyPI": _pypi_pattern,
+    "npm": _npm_pattern,
+    "Pub": _pub_pattern,
+    "RubyGems": _rubygems_pattern,
+    "Go": _go_pattern,
+    "Maven": _maven_pattern,
+    "crates.io": _crates_pattern,
+    "Packagist": _packagist_pattern,
+    "Hex": _hex_pattern,
+    "NuGet": _nuget_pattern,
+}
+
+
 def _build_pattern(ecosystem: str, candidate: str) -> re.Pattern[str]:
-    escaped = re.escape(candidate)
-
-    if ecosystem == "PyPI":
-        return re.compile(
-            r"^\s*(?:from\s+" + escaped + r"(?:\.\S+)?\s+import\b"
-            r"|import\s+" + escaped + r"(?:\.\S+)?(?:\s|,|$))",
-            re.MULTILINE,
-        )
-    if ecosystem == "npm":
-        return re.compile(
-            r"""(?:require\(|from\s+|import\s*\()\s*['"]"""
-            + escaped + r"""(?:/[^'"]*)?['"]""",
-        )
-    if ecosystem == "Pub":
-        return re.compile(r"""import\s+['"]package:""" + escaped + r"/")
-    if ecosystem == "RubyGems":
-        return re.compile(
-            r"""require(?:_relative)?\s+['"]""" + escaped + r"""(?:/[^'"]*)?['"]""",
-        )
-    if ecosystem == "Go":
-        return re.compile(r'"' + escaped + r'(?:/[^"]*)?"')
-    if ecosystem == "Maven":
-        return re.compile(r"\bimport\s+(?:static\s+)?" + escaped + r"\.")
-    if ecosystem == "crates.io":
-        return re.compile(r"\b(?:use|extern\s+crate)\s+" + escaped + r"\b")
-    if ecosystem == "Packagist":
-        return re.compile(r"\buse\s+[^;]*" + escaped, re.IGNORECASE)
-    if ecosystem == "Hex":
-        return re.compile(r"\b(?:alias|import|use)\s+" + escaped + r"\b")
-    if ecosystem == "NuGet":
-        return re.compile(r"\busing\s+" + escaped + r"[;.]")
-
-    raise ValueError(f"Unsupported ecosystem for reachability check: {ecosystem}")
+    builder = _PATTERN_BUILDERS.get(ecosystem)
+    if builder is None:
+        raise ValueError(f"Unsupported ecosystem for reachability check: {ecosystem}")
+    return builder(re.escape(candidate))
 
 
 def check_reachability(

@@ -25,6 +25,7 @@ from app.auth.session import create_session_token  # noqa: E402
 from app.codescan.models import CodeFinding  # noqa: E402
 from app.codescan.router import router as codescan_router  # noqa: E402
 from app.core.database import get_db  # noqa: E402
+from app.depscan.inventory.router import router as depscan_inventory_router  # noqa: E402
 from app.depscan.models import DependencyFinding  # noqa: E402
 from app.depscan.router import router as depscan_router  # noqa: E402
 from app.jvn.router import router as jvn_router  # noqa: E402
@@ -80,7 +81,11 @@ def mcp_client(db_session):
             yield
 
     test_app = FastAPI(lifespan=lifespan)
-    for r in (kev_router, osv_router, jvn_router, depscan_router, codescan_router):
+    routers = (
+        kev_router, osv_router, jvn_router, depscan_router, depscan_inventory_router,
+        codescan_router,
+    )
+    for r in routers:
         test_app.include_router(r)
     server.mount(test_app)
 
