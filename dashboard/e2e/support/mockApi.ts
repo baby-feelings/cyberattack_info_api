@@ -1,7 +1,8 @@
 import type { Page, Route } from '@playwright/test'
 import {
   codescanItems, codescanStats, depscanFindings, depscanStats, depsopsItems,
-  jvnItems, jvnStats, kevItems, kevStats, osvItems, osvStats, repoDependencies,
+  jvnItems, jvnStats, kevItems, kevStats, osvItems, osvStats, repoDependencies, repoRuntimes,
+  runtimeReleases,
 } from './mockData'
 
 // バックエンドAPIのモック。全リクエストは `/__api` 配下（playwright.config.ts の
@@ -203,6 +204,37 @@ function defaultResponse(req: RecordedRequest, state: MockState): MockResponse {
         && (!repo || d.repo_full_name === repo)
         && (!vulnerable || d.open_vulnerabilities > 0))
       return { body: paginate(items, query, 50) }
+    }
+
+    // ── RUNTIME（言語・実行環境のバージョン監視）──
+    case 'GET /api/runtimes/repos': {
+      const keep = operatingKeep(query, state)
+      const actionable = new Set(['eol', 'eol_soon', 'update_available'])
+      const repos = new Map<string, { total: number; needs_action: number }>()
+      for (const r of repoRuntimes.filter((x) => keep(x.repo_full_name))) {
+        const stat = repos.get(r.repo_full_name) ?? { total: 0, needs_action: 0 }
+        stat.total += 1
+        if (actionable.has(r.state)) stat.needs_action += 1
+        repos.set(r.repo_full_name, stat)
+      }
+      // 実APIと同じく、対応が必要な数が多いアプリを先頭に、同数ならアプリ名順
+      const sorted = [...repos].sort(([a, x], [b, y]) => y.needs_action - x.needs_action || a.localeCompare(b))
+      return { body: { repos: sorted.map(([repo_full_name, s]) => ({ repo_full_name, ...s })) } }
+    }
+    case 'GET /api/runtimes/releases':
+      return { body: { data: runtimeReleases } }
+    case 'GET /api/runtimes': {
+      const repo = query.get('repo')
+      const runtime = query.get('runtime')
+      const needsAction = query.get('needs_action') === 'true'
+      const actionable = new Set(['eol', 'eol_soon', 'update_available'])
+      const keep = operatingKeep(query, state)
+      const items = repoRuntimes.filter((r) =>
+        keep(r.repo_full_name)
+        && (!repo || r.repo_full_name === repo)
+        && (!runtime || r.runtime === runtime)
+        && (!needsAction || actionable.has(r.state)))
+      return { body: { total: items.length, data: items } }
     }
 
     // ── DEPSOPS ──

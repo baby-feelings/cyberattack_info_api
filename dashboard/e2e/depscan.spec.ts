@@ -546,12 +546,14 @@ scenario('DEP-24', 'スマホ幅でも、操作ボタンが縦に崩れず、タ
 
   const heading = page.getByText('自作アプリの依存ライブラリ脆弱性（未解決）')
   const packages = page.getByRole('button', { name: '依存パッケージ' })
+  const runtimes = page.getByRole('button', { name: '言語・実行環境' })
   const depsops = page.getByRole('button', { name: 'Dependabot運用状況' })
   await expect(packages).toBeVisible()
+  await expect(runtimes).toBeVisible()
   await expect(depsops).toBeVisible()
 
   // ボタンの文字は折り返されず、1行の高さに収まる（以前は幅が足りず、1文字ずつ縦に折り返していた）
-  for (const button of [packages, depsops]) {
+  for (const button of [packages, runtimes, depsops]) {
     const box = await button.boundingBox()
     expect(box!.height).toBeLessThan(40)
     expect(box!.width).toBeGreaterThan(90)
@@ -560,4 +562,56 @@ scenario('DEP-24', 'スマホ幅でも、操作ボタンが縦に崩れず、タ
   const headingBox = await heading.boundingBox()
   const packagesBox = await packages.boundingBox()
   expect(packagesBox!.y).toBeGreaterThan(headingBox!.y + headingBox!.height - 1)
+})
+
+scenario('DEP-25', '言語・実行環境のモーダルで、アプリごとに版と状態を閲覧し、更新が必要なものだけに絞れる', async ({ page, api }) => {
+  await openDepscan(page)
+  await page.getByRole('button', { name: '言語・実行環境' }).click()
+
+  const dialog = page.getByRole('dialog', { name: '言語・実行環境' })
+  await expect(dialog).toBeVisible()
+  // 開いただけで、運用中のアプリすべての言語・実行環境が一覧に出る（何も入力しなくてよい）。Bearer トークンで取得する
+  const table = dialog.getByRole('table', { name: '言語・実行環境一覧' })
+  // ヘッダー行 + 5件
+  await expect(table.getByRole('row')).toHaveCount(6)
+  expect(api.lastQuery('/api/runtimes')?.get('operating')).toBe('active')
+  expect(api.requestsTo('/api/runtimes')[0].headers.authorization).toMatch(/^Bearer /)
+
+  // 対応が急ぐもの（サポート終了）が先頭の行に、状態のバッジと終了済みの表示が出る
+  await expect(table.getByRole('row').nth(1)).toContainText('サポート終了')
+  await expect(table.getByRole('row').nth(1)).toContainText('終了済み')
+  // 下限の指定は「参考」として、警告にしない
+  await expect(table).toContainText('参考（下限の指定）')
+
+  // 言語ごとの推奨の版（サポート中で公開から経った最新）。公開直後の 3.15 は出さない
+  const strip = dialog.getByLabel('推奨の版')
+  await expect(strip).toContainText('Python 3.14')
+  await expect(strip).toContainText('Node.js 24')
+  await expect(strip).not.toContainText('3.15')
+
+  // 左のアプリ一覧: 対応が必要な数が多いアプリが先頭。「すべてのアプリ」には検出した数の合計
+  const rail = dialog.getByRole('navigation', { name: 'アプリ一覧' })
+  await expect(rail.getByRole('button').first()).toContainText('すべてのアプリ')
+  await expect(rail.getByRole('button').nth(1)).toContainText('app-one')
+
+  // アプリを選ぶと、そのアプリの設定だけになり、アプリ列は消える
+  await rail.getByRole('button', { name: /app-two/ }).click()
+  await expect(table.getByRole('row')).toHaveCount(3)
+  expect(api.lastQuery('/api/runtimes')?.get('repo')).toBe('baby-feelings/app-two')
+  await expect(table.getByRole('columnheader', { name: 'アプリ' })).toHaveCount(0)
+  await rail.getByRole('button', { name: /すべてのアプリ/ }).click()
+  await expect(table.getByRole('columnheader', { name: 'アプリ' })).toBeVisible()
+
+  // 更新が必要なものだけ（サポート終了・期限間近・更新あり）
+  await dialog.getByRole('button', { name: '更新が必要なものだけ' }).click()
+  await expect(table.getByRole('row')).toHaveCount(3)
+  expect(api.lastQuery('/api/runtimes')?.get('needs_action')).toBe('true')
+  await dialog.getByRole('button', { name: '更新が必要なものだけ' }).click()
+  await expect(table.getByRole('row')).toHaveCount(6)
+
+  // 言語で絞り込み、該当なしの表示
+  // 「言語」は、一覧の列見出しとは別の、絞り込みの選択欄（コンボボックス）を指す
+  await dialog.getByRole('combobox', { name: '言語' }).selectOption('dart')
+  await expect(dialog.getByText('該当する言語・実行環境はありません')).toBeVisible()
+  expect(api.lastQuery('/api/runtimes')?.get('runtime')).toBe('dart')
 })
