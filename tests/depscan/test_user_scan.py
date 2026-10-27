@@ -214,3 +214,35 @@ class TestShouldRescanForUser:
         db_session.add(UserScan(username="octocat", status="running", started_at=recent))
         db_session.commit()
         assert should_rescan_for_user(db_session, "octocat") is False
+
+
+class TestInventorySaved:
+    _DEPS = (
+        {("PyPI", "pkg", "1.0.0"): [("octocat/repo", "requirements.txt")]},
+        1,
+        {"octocat/repo": "public"},
+    )
+
+    def test_inventory_is_saved_for_the_users_repos(self, db_session):
+        from app.depscan.models import RepoDependency
+
+        with patch("app.depscan.user_scan.collect_dependencies", return_value=self._DEPS), \
+             patch("app.depscan.user_scan.build_findings", return_value=[]), \
+             patch("app.depscan.user_scan.SessionLocal", return_value=db_session):
+            run_depscan_for_user("octocat", "gho_token")
+
+        rows = db_session.query(RepoDependency).all()
+        assert [(r.repo_full_name, r.package_name) for r in rows] == [("octocat/repo", "pkg")]
+
+    def test_inventory_failure_does_not_fail_scan(self, db_session):
+        with patch("app.depscan.user_scan.collect_dependencies", return_value=self._DEPS), \
+             patch("app.depscan.user_scan.build_findings", return_value=[]), \
+             patch(
+                 "app.depscan.user_scan.RepoDependencyRepository.replace",
+                 side_effect=Exception("db error"),
+             ), \
+             patch("app.depscan.user_scan.SessionLocal", return_value=db_session):
+            run_depscan_for_user("octocat", "gho_token")
+
+        scan = db_session.query(UserScan).filter_by(username="octocat").first()
+        assert scan.status == "done"

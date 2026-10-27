@@ -8,6 +8,7 @@ Slack 通知する。APScheduler から毎日呼び出される。
 役割ごとの実装は次にある。
 
 - `manifests`: ロックファイルの収集とパース
+- `inventory`: 依存の全量の永続化（SBOM・横断検索用）
 - `finding_builder`: OSV への照合と検知レコードの構築
 - `reachability_scan`: 到達可能性（import レベル）の付与
 - `repository`: 検知結果の永続化（Upsert・解決済み化・保持期間超過の削除）
@@ -21,6 +22,7 @@ from app.core.config import settings
 from app.core.crawler_runner import CrawlCounters, CrawlJob
 from app.core.notifications.dependency_findings import notify_dependency_findings
 from app.depscan.finding_builder import build_findings
+from app.depscan.inventory import RepoDependencyRepository
 from app.depscan.issue_management import close_resolved_repo_issues, file_github_issues
 from app.depscan.manifests import collect_dependencies
 from app.depscan.reachability_scan import apply_reachability
@@ -50,6 +52,12 @@ class _DepscanJob(CrawlJob):
             "DEPSCAN: %d repos scanned, %d unique (ecosystem,package,version) found",
             self.repos_scanned, len(dep_to_repos),
         )
+
+        # 依存の全量（SBOM・横断検索用）の保存失敗はクロール全体を失敗させない
+        try:
+            RepoDependencyRepository(db).replace(dep_to_repos, repo_visibility)
+        except Exception as exc:
+            logger.error("Failed to save dependency inventory: %s", exc, exc_info=True)
 
         records = build_findings(dep_to_repos, repo_visibility)
 

@@ -120,3 +120,38 @@ class TestFetchAndScanDependencies:
             with pytest.raises(RuntimeError):
                 fetch_and_scan_dependencies()
         mock_notify_error.assert_called_once()
+
+
+class TestInventorySaved:
+    """依存の全量（SBOM用）がスキャンごとに保存されること。"""
+
+    _DEPS = ({("PyPI", "pkg", "1.0.0"): [("u/r", "requirements.txt")]}, 1, {"u/r": "public"})
+
+    def _run(self, db_session):
+        with patch("app.depscan.crawler.collect_dependencies", return_value=self._DEPS), \
+             patch("app.depscan.crawler.build_findings", return_value=[]), \
+             patch("app.core.crawler_runner.SessionLocal", return_value=db_session), \
+             patch("app.depscan.crawler.apply_reachability"), \
+             patch("app.depscan.crawler.notify_dependency_findings"), \
+             patch("app.depscan.crawler.file_github_issues"):
+            return fetch_and_scan_dependencies()
+
+    def test_inventory_is_saved(self, db_session):
+        from app.depscan.models import RepoDependency
+
+        self._run(db_session)
+
+        rows = db_session.query(RepoDependency).all()
+        assert [(r.repo_full_name, r.package_name, r.version) for r in rows] == [
+            ("u/r", "pkg", "1.0.0"),
+        ]
+
+    def test_inventory_failure_does_not_fail_crawler(self, db_session):
+        with patch(
+            "app.depscan.crawler.RepoDependencyRepository.replace",
+            side_effect=Exception("db error"),
+        ):
+            new_count, _, repos_scanned = self._run(db_session)
+
+        assert new_count == 0
+        assert repos_scanned == 1

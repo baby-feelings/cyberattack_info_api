@@ -1,7 +1,7 @@
 """app.depscan.sbom（CycloneDX/SPDX SBOMエクスポート、Issue #133）のテスト。"""
 from datetime import UTC, datetime
 
-from app.depscan.models import DependencyFinding
+from app.depscan.models import DependencyFinding, RepoDependency
 from app.depscan.sbom import build_cyclonedx_sbom, build_purl, build_spdx_sbom
 
 _NOW = datetime.now(UTC)
@@ -151,3 +151,50 @@ class TestBuildSpdxSbom:
     def test_empty_findings_produces_empty_package_list(self):
         sbom = build_spdx_sbom("u/r", [])
         assert sbom["packages"] == []
+
+
+class TestInventory:
+    """inventory（依存の全量）を渡したときのSBOM。"""
+
+    def _dep(self, name, version="1.0.0", ecosystem="PyPI") -> RepoDependency:
+        return RepoDependency(
+            repo_full_name="baby-feelings/baby_grow", ecosystem=ecosystem,
+            package_name=name, version=version, manifest_path="requirements.txt",
+        )
+
+    def test_cyclonedx_includes_dependencies_without_vulnerabilities(self):
+        inventory = [self._dep("cryptography", "3.4.7"), self._dep("httpx", "0.28.1")]
+        sbom = build_cyclonedx_sbom("u/r", [_finding()], inventory)
+
+        refs = {c["bom-ref"] for c in sbom["components"]}
+        assert refs == {"pkg:pypi/cryptography@3.4.7", "pkg:pypi/httpx@0.28.1"}
+        # 脆弱性は検知された依存だけに紐づく
+        assert [v["affects"][0]["ref"] for v in sbom["vulnerabilities"]] == [
+            "pkg:pypi/cryptography@3.4.7",
+        ]
+
+    def test_cyclonedx_without_findings_lists_all_dependencies(self):
+        sbom = build_cyclonedx_sbom("u/r", [], [self._dep("httpx", "0.28.1")])
+        assert len(sbom["components"]) == 1
+        assert sbom["vulnerabilities"] == []
+
+    def test_cyclonedx_default_still_lists_only_findings(self):
+        """inventory省略時は従来どおり検知された依存のみ（後方互換）。"""
+        sbom = build_cyclonedx_sbom("u/r", [_finding()])
+        assert len(sbom["components"]) == 1
+
+    def test_spdx_includes_all_dependencies_without_duplicates(self):
+        inventory = [self._dep("cryptography", "3.4.7"), self._dep("httpx", "0.28.1")]
+        sbom = build_spdx_sbom("u/r", [_finding()], inventory)
+
+        names = [p["name"] for p in sbom["packages"]]
+        assert names == ["cryptography", "httpx"]
+        assert [p["SPDXID"] for p in sbom["packages"]] == [
+            "SPDXRef-Package-0", "SPDXRef-Package-1",
+        ]
+
+    def test_scoped_npm_dependency_gets_purl(self):
+        sbom = build_cyclonedx_sbom(
+            "u/r", [], [self._dep("@babel/core", "7.24.0", ecosystem="npm")],
+        )
+        assert sbom["components"][0]["purl"] == "pkg:npm/babel/core@7.24.0"

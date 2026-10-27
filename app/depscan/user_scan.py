@@ -22,6 +22,7 @@ from app.core.database import SessionLocal
 from app.core.notifications.dependency_findings import notify_dependency_findings
 from app.crawler_logs.writer import now_utc
 from app.depscan.finding_builder import build_findings
+from app.depscan.inventory import RepoDependencyRepository
 from app.depscan.issue_management import file_github_issues
 from app.depscan.manifests import collect_dependencies
 from app.depscan.models import UserScan
@@ -123,6 +124,14 @@ def run_depscan_for_user(username: str, token: str) -> None:
         _set_user_scan_status(db, username, "running", started_at=started_at)
 
         dep_to_repos, repos_scanned, repo_visibility = collect_dependencies(username, token)
+        # 依存の全量（SBOM・横断検索用）の保存失敗はスキャン全体を失敗させない
+        try:
+            RepoDependencyRepository(db).replace(dep_to_repos, repo_visibility)
+        except Exception as exc:
+            logger.error(
+                "DEPSCAN (on-demand for %s): failed to save dependency inventory: %s",
+                username, exc, exc_info=True,
+            )
         records = build_findings(dep_to_repos, repo_visibility)
         result = DependencyFindingRepository(db).sync(records, repo_owner_prefix=username)
         new_count, new_snapshots = result.inserted, result.new_snapshots

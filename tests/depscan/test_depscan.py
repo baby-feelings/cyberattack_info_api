@@ -502,6 +502,77 @@ class TestExportDepscanSbom:
         assert res.status_code == 403
 
 
+class TestExportDepscanSbomInventory:
+    """content=inventory（依存の全量）のエクスポート。"""
+
+    def _add_inventory(self, db_session, repo="baby-feelings/baby_grow"):
+        from app.depscan.models import RepoDependency
+
+        db_session.add_all([
+            RepoDependency(
+                repo_full_name=repo, ecosystem="PyPI", package_name="cryptography",
+                version="3.4.7", manifest_path="requirements.txt",
+            ),
+            RepoDependency(
+                repo_full_name=repo, ecosystem="PyPI", package_name="httpx",
+                version="0.28.1", manifest_path="requirements.txt",
+            ),
+        ])
+        db_session.commit()
+
+    def test_inventory_includes_dependencies_without_findings(self, client, db_session):
+        make_finding(db_session)
+        self._add_inventory(db_session)
+        res = client.get(
+            "/api/depscan/export?repo=baby-feelings/baby_grow&content=inventory",
+            headers=HEADERS,
+        )
+        assert res.status_code == 200
+        body = res.json()
+        assert len(body["components"]) == 2
+        assert len(body["vulnerabilities"]) == 1
+
+    def test_inventory_spdx(self, client, db_session):
+        self._add_inventory(db_session)
+        res = client.get(
+            "/api/depscan/export?repo=baby-feelings/baby_grow&format=spdx&content=inventory",
+            headers=HEADERS,
+        )
+        assert res.status_code == 200
+        assert len(res.json()["packages"]) == 2
+
+    def test_default_content_is_findings_only(self, client, db_session):
+        make_finding(db_session)
+        self._add_inventory(db_session)
+        res = client.get("/api/depscan/export?repo=baby-feelings/baby_grow", headers=HEADERS)
+        assert len(res.json()["components"]) == 1
+
+    def test_inventory_of_other_repo_is_not_mixed_in(self, client, db_session):
+        self._add_inventory(db_session, repo="baby-feelings/other")
+        res = client.get(
+            "/api/depscan/export?repo=baby-feelings/baby_grow&content=inventory",
+            headers=HEADERS,
+        )
+        assert res.json()["components"] == []
+
+    def test_invalid_content_is_rejected(self, client):
+        res = client.get(
+            "/api/depscan/export?repo=baby-feelings/baby_grow&content=all", headers=HEADERS,
+        )
+        assert res.status_code == 422
+
+    def test_session_token_rejects_other_owners_inventory(self, client, db_session):
+        """全量モードでも、他人のリポジトリは取得できないこと。"""
+        self._add_inventory(db_session)
+        with patch("app.auth.session.settings.SESSION_SECRET_KEY", "test-secret"):
+            token = create_session_token("octocat")
+            res = client.get(
+                "/api/depscan/export?repo=baby-feelings/baby_grow&content=inventory",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        assert res.status_code == 403
+
+
 # ──────────────────────────────────────────────────────────────
 # app.depscan.crawler
 # ──────────────────────────────────────────────────────────────

@@ -9,11 +9,12 @@ SBOM/SCAツールとの相互運用性を高める。
 （スコープ外）。
 """
 import urllib.parse
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from app.depscan.models import DependencyFinding
+from app.depscan.models import DependencyFinding, RepoDependency
 
 # エコシステム名 → purl type のマッピング（package-url/purl-spec の既知タイプに準拠）
 _ECOSYSTEM_TO_PURL_TYPE = {
@@ -60,31 +61,48 @@ def build_purl(ecosystem: str, package_name: str, version: str) -> str:
     return f"pkg:{purl_type}/{encoded_name}{version_part}"
 
 
+def _add_component(
+    components: dict[tuple[str, str, str], dict[str, Any]],
+    ecosystem: str, package_name: str, version: str,
+) -> str:
+    """CycloneDXのcomponentを(未登録なら)追加し、そのbom-ref（purl）を返す。"""
+    key = (ecosystem, package_name, version)
+    if key not in components:
+        purl = build_purl(ecosystem, package_name, version)
+        components[key] = {
+            "type": "library",
+            "bom-ref": purl,
+            "name": package_name,
+            "version": version,
+            "purl": purl,
+        }
+    return components[key]["bom-ref"]
+
+
 def build_cyclonedx_sbom(
     repo_full_name: str, findings: list[DependencyFinding],
+    inventory: Sequence[RepoDependency] | None = None,
 ) -> dict[str, Any]:
     """CycloneDX 1.5 JSON形式のSBOMを構築する。
 
-    パッケージ（components）は(ecosystem, package_name, installed_version)単位で
-    重複排除し、脆弱性（vulnerabilities）は元のfindingごとに1件、affectsで
-    該当componentのbom-refを参照する（1パッケージに複数CVEが紐づく場合、
-    componentは1つにまとまりvulnerabilitiesだけが複数件になる）。
+    パッケージ（components）は(ecosystem, package_name, version)単位で重複排除し、
+    脆弱性（vulnerabilities）は元のfindingごとに1件、affectsで該当componentの
+    bom-refを参照する（1パッケージに複数CVEが紐づく場合、componentは1つにまとまり
+    vulnerabilitiesだけが複数件になる）。
+
+    `inventory`（依存の全量）を渡すと、脆弱性の有無にかかわらず使っている全依存を
+    componentsに含める（SBOMとしての完全な一覧）。省略時は検知された依存のみ。
     """
     components: dict[tuple[str, str, str], dict[str, Any]] = {}
     vulnerabilities: list[dict[str, Any]] = []
 
+    for dep in inventory or ():
+        _add_component(components, dep.ecosystem, dep.package_name, dep.version)
+
     for finding in findings:
-        key = (finding.ecosystem, finding.package_name, finding.installed_version)
-        if key not in components:
-            purl = build_purl(finding.ecosystem, finding.package_name, finding.installed_version)
-            components[key] = {
-                "type": "library",
-                "bom-ref": purl,
-                "name": finding.package_name,
-                "version": finding.installed_version,
-                "purl": purl,
-            }
-        bom_ref = components[key]["bom-ref"]
+        bom_ref = _add_component(
+            components, finding.ecosystem, finding.package_name, finding.installed_version,
+        )
 
         vuln: dict[str, Any] = {
             "id": finding.osv_id,
@@ -124,6 +142,7 @@ def build_cyclonedx_sbom(
 
 def build_spdx_sbom(
     repo_full_name: str, findings: list[DependencyFinding],
+    inventory: Sequence[RepoDependency] | None = None,
 ) -> dict[str, Any]:
     """SPDX 2.3 JSON形式のSBOM（パッケージ一覧）を構築する。
 
@@ -131,20 +150,25 @@ def build_spdx_sbom(
     プロファイルや別建てのVEX文書で扱うのが標準的で、Issue #133でスコープ外と
     したVEX拡張の実装が前提になる）。そのためpackagesのみを出力する
     （脆弱性検知結果自体はCycloneDX形式かGET /api/depscanで確認する）。
+
+    `inventory`（依存の全量）を渡すと、全依存をpackagesに含める。省略時は検知された依存のみ。
     """
     seen: set[tuple[str, str, str]] = set()
     packages: list[dict[str, Any]] = []
 
-    for finding in findings:
-        key = (finding.ecosystem, finding.package_name, finding.installed_version)
+    # (ecosystem, package_name, version) の並びに揃えて、全量→検知の順に重複なく並べる
+    deps = [(d.ecosystem, d.package_name, d.version) for d in inventory or ()]
+    deps += [(f.ecosystem, f.package_name, f.installed_version) for f in findings]
+    for ecosystem, package_name, version in deps:
+        key = (ecosystem, package_name, version)
         if key in seen:
             continue
         seen.add(key)
-        purl = build_purl(finding.ecosystem, finding.package_name, finding.installed_version)
+        purl = build_purl(ecosystem, package_name, version)
         packages.append({
             "SPDXID": f"SPDXRef-Package-{len(packages)}",
-            "name": finding.package_name,
-            "versionInfo": finding.installed_version,
+            "name": package_name,
+            "versionInfo": version,
             "downloadLocation": "NOASSERTION",
             "externalRefs": [{
                 "referenceCategory": "PACKAGE-MANAGER",
