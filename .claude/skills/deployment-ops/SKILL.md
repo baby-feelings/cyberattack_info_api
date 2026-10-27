@@ -203,17 +203,40 @@ Issue #227でダッシュボードからのユーザー別登録方式（`UserAc
 
 ## 運用監視（Prometheus + Grafana、Issue #167）
 - **`app/core/metrics.py`**: `Authorization: Bearer`（`METRICS_API_KEY`、未設定時は
-  503でopt-in）で保護する`/metrics`エンドポイント。クローラー実行結果を
-  `crawler_last_run_success`/`_timestamp_seconds`/`_duration_seconds`/`_inserted`/
-  `_updated`/`_deleted`のGauge（`crawler_type`ラベル付き）として公開する。Counterでは
-  なくGaugeなのは「直近の実行結果」を一目で見たいため
+  503でopt-in）で保護する`/metrics`エンドポイント。プロセスの指標・`external_api_retry_total`
+  （Counter）などを公開する
+- **`app/jobs/domain_metrics.py`**: 各ドメインの状態を表す指標を、**DBから求めて**`/metrics`に載せる
+  （`prometheus_client`のカスタムコレクタ。coreは個別のドメインを知らない方針のためjobsに置く）。
+  `crawler_last_run_success`/`_timestamp_seconds`/`_duration_seconds`/`_inserted`/`_updated`/
+  `_deleted`（`crawler_logs`の種別ごとの最新の1行。`crawler_type`ラベル）、
+  `depscan_open_findings`・`codescan_open_findings`（`operating`・`severity`ラベル）、
+  `repo_dependencies_total`（`operating`）、`runtime_usage`（`runtime`・`state`・`operating`）。
+  - メモリ上のGaugeを更新する方式だった頃は、**API再起動（デプロイ）のたびに消え**、次のクロール
+    まで「クローラー実行結果」等のパネルが空になっていた。DBから求めるので消えない
+  - **結果は`CACHE_TTL_SECONDS`（1時間）キャッシュする**。本番DB（Neon）は、アクセスが無いと
+    休止するため、30秒ごとのスクレイプのたびに問い合わせると常時起動になってしまうため。
+    集計に失敗したら直前の結果を返し、5分後に再試行する（`/metrics`全体は止めない）
+  - コレクタは`describe()`で何も返す（何も集計しない）。Prometheusは**登録時に`collect()`を
+    呼んで指標名を調べる**ため、定義しないと起動直後（DBの準備前）の結果が1時間キャッシュされる
+  - 新しい指標を足すときは、ここに`GaugeMetricFamily`を足し、ダッシュボードJSONにパネルを足す
 - **`deploy/docker-compose.yml`**: `prometheus`（30秒間隔でスクレイプ、`127.0.0.1`のみ
   バインド）・`node-exporter`・`grafana`（Caddy経由でHTTPS公開）。**`node-exporter`の
   `/:/host:ro,rslave`マウントはWindows Docker Desktop（WSL2）ではエラーになる**が、
   OCI（ネイティブLinux）では問題ない（ローカル検証時は`--no-deps prometheus grafana`で除外）
 - **`deploy/grafana/`**: `provisioning/datasources/prometheus.yml`で`uid: prometheus_ds`
   を固定（自動生成uidだと再プロビジョニングのたびに変わりダッシュボードJSON側の参照が
-  壊れるため）
+  壊れるため）。ダッシュボード`dashboards/cyberattack-info-api-overview.json`は**スキーマ42**
+  （Grafana 13）。行（クローラー／脆弱性と依存パッケージ／言語・実行環境／サーバーのリソース）で
+  分けている
+- **イメージの版は固定**（`grafana/grafana:13.2.4`・`prom/prometheus:v3.15.1`・
+  `prom/node-exporter:v1.12.1`）。更新するときは、①`grafana_data`ボリュームを退避してから
+  `docker compose up -d`する、②Prometheus 3系は`Content-Type`を厳密に見る（本アプリの
+  `/metrics`は`CONTENT_TYPE_LATEST`で問題ない）
+- **ダッシュボードJSONを直すとき**: Grafanaを手元のDockerで起動し、`POST /api/dashboards/db`で
+  読み込ませ、`GET /apis/dashboard.grafana.app/v1beta1/namespaces/default/dashboards/<uid>`の
+  `spec`と比べる。差分が無い形（基準の閾値の`value: null`を省く、空の`fieldConfig`を省く、
+  `fiscalYearStartMonth`・`weekStart`・`timepicker`を入れる）にしておくと、Grafana側の
+  正規化で勝手に変わらない。見た目の確認には、Prometheusに実際のコレクタの出力を取り込ませる
 - **Grafana管理者ユーザー名の変更**: `GF_SECURITY_ADMIN_USER`は初回シードのみに効くため、
   既存adminユーザーの改名にはGrafana API（`PUT /api/users/:id`）が必要
 

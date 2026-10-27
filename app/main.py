@@ -27,6 +27,7 @@ from app.depscan.router import admin_router as depscan_admin_router
 from app.depscan.router import router as depscan_router
 from app.depsops.router import admin_router as depsops_admin_router
 from app.depsops.router import router as depsops_router
+from app.jobs.domain_metrics import register_domain_metrics
 from app.jobs.repo_cleanup_router import admin_router as repo_cleanup_admin_router
 from app.jobs.scheduler_jobs import build_scheduled_jobs, register_jobs
 from app.jobs.user_crawl_router import admin_router as user_crawl_admin_router
@@ -151,6 +152,7 @@ app.include_router(runtimes_admin_router)
 app.include_router(user_crawl_admin_router)
 app.include_router(repo_cleanup_admin_router)
 app.include_router(metrics_router)
+register_domain_metrics()  # DB から求める指標（/metrics に載る）
 app.include_router(taxii_router)
 # リモート MCP サーバー（POST /mcp。認証は McpAuthMiddleware）
 mcp_server.mount(app)
