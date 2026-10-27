@@ -338,9 +338,12 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \n  "https://168.138.213.240.nip.io
 | `package` | string | パッケージ名（部分一致・大文字小文字を区別しない） |
 | `version` | string | バージョン（完全一致） |
 | `ecosystem` | string | エコシステム（`npm` / `PyPI` / `Pub` など） |
-| `repo` | string | リポジトリ（完全一致。`owner/repo`） |
+| `repo` | string | リポジトリ（完全一致。`owner/repo`）。リポジトリごとの依存の一覧にも使う |
+| `vulnerable` | bool | `true` なら、未解決の検知がある依存のみ |
+| `operating` | string | `active`（運用中） / `inactive`（運用停止中） / `all`（デフォルト） |
 | `page` / `per_page` | int | ページ番号／1ページの件数（最大200） |
 
+> リポジトリごとの依存の数は `GET /api/depscan/dependencies/repos`（`total`・`vulnerable`）で取れる。
 > 依存の全量はDEPSCANのスキャンごとに保存される。MCPでは`search_dependencies`ツールで同じ検索ができる。
 
 ---

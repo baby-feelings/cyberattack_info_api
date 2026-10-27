@@ -1,15 +1,40 @@
-"""依存パッケージの横断検索（DEPSCAN。「どのリポジトリが、そのパッケージのどの版を使っているか」）。
+"""依存パッケージの横断検索・閲覧（DEPSCAN。「どのリポジトリが、そのパッケージのどの版を使っているか」）。
 
-新しい脆弱性が公表されたときの影響範囲の確認に使う。検索対象は `RepoDependency`（依存の全量）で、
-脆弱性の有無にかかわらず、使っている依存を引く。各行には、その版に未解決の検知が何件あるかを
-付ける（検知が無い版と、対応が必要な版を一目で区別できるようにするため）。
+新しい脆弱性が公表されたときの影響範囲の確認や、リポジトリごとに使っている依存の一覧に使う。
+検索対象は `RepoDependency`（依存の全量）で、脆弱性の有無にかかわらず、使っている依存を引く。
+各行には、その版に未解決の検知が何件あるかを付ける（検知が無い版と、対応が必要な版を
+一目で区別できるようにするため）。
 """
-from sqlalchemy import func
-from sqlalchemy.orm import Session
+from typing import Any
 
+from sqlalchemy import case, exists, func
+from sqlalchemy.orm import Query, Session
+
+from app.core.operating_status import OperatingStatus, apply_operating_status
 from app.depscan.models import DependencyFinding, RepoDependency
 
 DependencyKey = tuple[str, str, str, str]
+
+
+def _has_open_finding() -> Any:
+    """その依存（リポジトリ・エコシステム・パッケージ・版が一致）に、未解決の検知がある、という条件。"""
+    return exists().where(
+        DependencyFinding.resolved_at.is_(None),
+        DependencyFinding.repo_full_name == RepoDependency.repo_full_name,
+        DependencyFinding.ecosystem == RepoDependency.ecosystem,
+        DependencyFinding.package_name == RepoDependency.package_name,
+        DependencyFinding.installed_version == RepoDependency.version,
+    )
+
+
+def _restrict_to_owner(query: Query[Any], forced_owner: str | None) -> Query[Any]:
+    """セッション認証時は、そのオーナーのリポジトリのみに強制的に絞る。"""
+    if forced_owner is None:
+        return query
+    # `_` を含むオーナー名でも他のオーナーに一致しないよう、LIKE ではなく前方一致で絞る
+    return query.filter(RepoDependency.repo_full_name.startswith(
+        f"{forced_owner}/", autoescape=True,
+    ))
 
 
 def search_dependencies(
@@ -22,6 +47,8 @@ def search_dependencies(
     version: str | None = None,
     ecosystem: str | None = None,
     repo: str | None = None,
+    vulnerable: bool = False,
+    operating: OperatingStatus = "all",
 ) -> tuple[int, list[tuple[RepoDependency, int]]]:
     """条件に合う依存を返す（(総件数, [(依存, 未解決の検知件数)])）。
 
@@ -32,13 +59,13 @@ def search_dependencies(
         version: バージョン（完全一致）
         ecosystem: エコシステム（完全一致。例: PyPI / npm / Pub）
         repo: リポジトリ（完全一致。例: owner/repo）
+        vulnerable: True なら、未解決の検知がある依存だけ
+        operating: 運用状態（運用中／運用停止中／すべて）
     """
-    query = db.query(RepoDependency)
-    if forced_owner is not None:
-        # `_` を含むオーナー名でも他のオーナーに一致しないよう、LIKE ではなく前方一致で絞る
-        query = query.filter(RepoDependency.repo_full_name.startswith(
-            f"{forced_owner}/", autoescape=True,
-        ))
+    query = apply_operating_status(
+        _restrict_to_owner(db.query(RepoDependency), forced_owner),
+        RepoDependency.repo_full_name, operating,
+    )
     if package:
         query = query.filter(RepoDependency.package_name.icontains(package, autoescape=True))
     if version:
@@ -47,6 +74,8 @@ def search_dependencies(
         query = query.filter(RepoDependency.ecosystem == ecosystem)
     if repo:
         query = query.filter(RepoDependency.repo_full_name == repo)
+    if vulnerable:
+        query = query.filter(_has_open_finding())
 
     total = query.count()
     rows = (
@@ -66,6 +95,25 @@ def search_dependencies(
         ))
         for row in rows
     ]
+
+
+def summarize_repos(
+    db: Session, *, forced_owner: str | None = None, operating: OperatingStatus = "all",
+) -> list[tuple[str, int, int]]:
+    """リポジトリごとの、使っている依存の数と、未解決の検知がある依存の数を返す。
+
+    戻り値は (リポジトリ, 依存の数, うち未解決の検知がある依存の数) で、対応が必要な
+    リポジトリ（検知がある依存が多い順）を先に、同数ならリポジトリ名順に並べる。
+    """
+    vulnerable_count = func.sum(case((_has_open_finding(), 1), else_=0))
+    base = db.query(
+        RepoDependency.repo_full_name, func.count(RepoDependency.id), vulnerable_count,
+    )
+    query = apply_operating_status(
+        _restrict_to_owner(base, forced_owner), RepoDependency.repo_full_name, operating,
+    ).group_by(RepoDependency.repo_full_name)
+    rows = [(repo, int(total), int(vulnerable or 0)) for repo, total, vulnerable in query.all()]
+    return sorted(rows, key=lambda r: (-r[2], r[0]))
 
 
 def _open_vulnerability_counts(

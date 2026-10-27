@@ -129,6 +129,20 @@ class RepoDependencyOut(OrmDatetimeModel):
     model_config = {"from_attributes": True}
 
 
+class RepoDependencyRepoStat(BaseModel):
+    """リポジトリごとの、使っている依存の数（依存パッケージの閲覧画面の、左のリポジトリ一覧用）。"""
+
+    repo_full_name: str
+    total: int = Field(description="使っている依存の数")
+    vulnerable: int = Field(description="うち、未解決の検知がある依存の数")
+
+
+class RepoDependencyRepoListResponse(BaseModel):
+    """リポジトリ別の依存の数（対応が必要なリポジトリが先頭）。"""
+
+    repos: list[RepoDependencyRepoStat]
+
+
 class RepoDependencyListResponse(BaseModel):
     """依存パッケージの横断検索レスポンス（ページネーション付き）。"""
 

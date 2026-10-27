@@ -21,7 +21,8 @@
 | GET | `/api/depscan` | DEPSCAN検知結果一覧（`reachability`到達可能性判定・`repo_visibility`・`asset_context`・`priority_reasons`含む） |
 | GET | `/api/depscan/stats` | DEPSCAN統計（リポジトリ別・重要度別） |
 | - | `operating=active\|inactive\|all` | 上の DEPSCAN・CODESCAN・DEPSOPS の一覧・統計共通の絞り込み。運用中／運用停止中（`INACTIVE_REPOS`）で分ける。未指定は `all`（全件） |
-| GET | `/api/depscan/dependencies` | 使っている依存パッケージの横断検索（`package`部分一致・`version`・`ecosystem`・`repo`。各行に未解決の検知件数`open_vulnerabilities`。MCP: `search_dependencies`） |
+| GET | `/api/depscan/dependencies` | 使っている依存パッケージの閲覧・横断検索（`package`部分一致・`version`・`ecosystem`・`repo`・`vulnerable`・`operating`。各行に未解決の検知件数`open_vulnerabilities`。MCP: `search_dependencies`） |
+| GET | `/api/depscan/dependencies/repos` | リポジトリごとの依存の数と、未解決の検知がある依存の数（`operating`で絞り込み） |
 | GET | `/api/depscan/assets` | リポジトリ資産コンテキスト一覧（Issue #131） |
 | GET | `/api/depscan/export` | DEPSCAN検知結果をCycloneDX/SPDX形式でエクスポート（`repo`必須、Issue #133。`content=inventory`で使っている依存の全量） |
 | GET | `/api/codescan` | CODESCAN検知結果一覧（Semgrep静的解析 + gitleaksシークレット検知。`cvss_score`はベストエフォート推定〈Issue #203〉。GitHubログイン必須〈`X-API-KEY`またはセッションJWT、Issue #219〉） |

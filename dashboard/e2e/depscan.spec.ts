@@ -484,42 +484,80 @@ scenario('DEP-22', '左のアプリ一覧で、対応が必要なアプリが上
 })
 
 
-scenario('DEP-23', '依存パッケージ検索モーダルで、パッケージ・版・エコシステムを指定して横断検索できる', async ({ page, api }) => {
+scenario('DEP-23', '依存パッケージのモーダルで、アプリごとに閲覧し、パッケージ・版・エコシステムで検索できる', async ({ page, api }) => {
   await openDepscan(page)
-  await page.getByRole('button', { name: '依存パッケージ検索' }).click()
+  await page.getByRole('button', { name: '依存パッケージ' }).click()
 
-  const dialog = page.getByRole('dialog', { name: '依存パッケージ検索' })
+  const dialog = page.getByRole('dialog', { name: '依存パッケージ' })
   await expect(dialog).toBeVisible()
-  // 検索するまでは取得せず、入力を促す表示になる。入力が空のままでは検索できない
-  await expect(dialog.getByText('パッケージ名かバージョンを入力して検索してください')).toBeVisible()
-  await expect(dialog.getByRole('button', { name: '検索' })).toBeDisabled()
-  expect(api.requestsTo('/api/depscan/dependencies')).toHaveLength(0)
-
-  // パッケージ名（部分一致）で検索。未解決の検知がある版は赤いバッジ、無い版は「検知なし」
-  await dialog.getByLabel('パッケージ名（部分一致）').fill('lodash')
-  await dialog.getByRole('button', { name: '検索' }).click()
-  const table = dialog.getByRole('table', { name: '依存パッケージ検索結果' })
-  await expect(table.getByRole('row')).toHaveCount(3)
-  await expect(table.getByRole('row').nth(1)).toContainText('baby-feelings/app-one')
-  await expect(table.getByRole('row').nth(1)).toContainText('4.17.15')
-  await expect(table.getByRole('row').nth(1)).toContainText('未解決 2 件')
-  await expect(table.getByRole('row').nth(2)).toContainText('4.17.21')
-  await expect(table.getByRole('row').nth(2)).toContainText('検知なし')
-  expect(api.lastQuery('/api/depscan/dependencies')?.get('package')).toBe('lodash')
-  // ログイン済みのため、Bearer トークンで取得している
+  // 開いただけで、運用中のアプリすべての依存が一覧に出る（何も入力しなくてよい）。Bearer トークンで取得する
+  const table = dialog.getByRole('table', { name: '依存パッケージ一覧' })
+  // ヘッダー行 + 4件
+  await expect(table.getByRole('row')).toHaveCount(5)
+  expect(api.lastQuery('/api/depscan/dependencies')?.get('operating')).toBe('active')
   expect(api.requestsTo('/api/depscan/dependencies')[0].headers.authorization).toMatch(/^Bearer /)
 
-  // バージョンを足すと完全一致で絞られる
+  // 左のアプリ一覧: 検知がある依存の多いアプリが先頭。「すべてのアプリ」には依存の総数
+  const rail = dialog.getByRole('navigation', { name: 'アプリ一覧' })
+  await expect(rail.getByRole('button').first()).toContainText('すべてのアプリ')
+  await expect(rail.getByRole('button').nth(1)).toContainText('app-one')
+  await expect(rail.getByRole('button').nth(1)).toContainText('1')
+
+  // アプリを選ぶと、そのアプリの依存だけになり、アプリ列は消える
+  await rail.getByRole('button', { name: /app-two/ }).click()
+  await expect(table.getByRole('row')).toHaveCount(3)
+  expect(api.lastQuery('/api/depscan/dependencies')?.get('repo')).toBe('baby-feelings/app-two')
+  await expect(table.getByRole('columnheader', { name: 'アプリ' })).toHaveCount(0)
+  await rail.getByRole('button', { name: /すべてのアプリ/ }).click()
+  await expect(table.getByRole('columnheader', { name: 'アプリ' })).toBeVisible()
+
+  // 脆弱性ありのみ: 未解決の検知がある版は赤いバッジ
+  await dialog.getByRole('button', { name: '脆弱性ありのみ' }).click()
+  await expect(table.getByRole('row')).toHaveCount(4)
+  await expect(table.getByRole('row').nth(1)).toContainText('未解決 2 件')
+  expect(api.lastQuery('/api/depscan/dependencies')?.get('vulnerable')).toBe('true')
+  await dialog.getByRole('button', { name: '脆弱性ありのみ' }).click()
+  await expect(table.getByRole('row')).toHaveCount(5)
+
+  // パッケージ名（部分一致）で検索
+  await dialog.getByLabel('パッケージ名（部分一致）').fill('lodash')
+  await dialog.getByRole('button', { name: '検索' }).click()
+  await expect(table.getByRole('row')).toHaveCount(3)
+  await expect(table.getByRole('row').nth(2)).toContainText('検知なし')
+  expect(api.lastQuery('/api/depscan/dependencies')?.get('package')).toBe('lodash')
+
+  // バージョン（完全一致）を足す
   await dialog.getByLabel('バージョン（完全一致）').fill('4.17.21')
   await dialog.getByRole('button', { name: '検索' }).click()
   await expect(table.getByRole('row')).toHaveCount(2)
   await expect(table.getByRole('row').nth(1)).toContainText('baby-feelings/app-two')
-  expect(api.lastQuery('/api/depscan/dependencies')?.get('version')).toBe('4.17.21')
 
   // エコシステムで絞り込み、該当なしの表示
   await dialog.getByLabel('バージョン（完全一致）').fill('')
-  await dialog.getByLabel('エコシステム').selectOption('PyPI')
-  await dialog.getByRole('button', { name: '検索' }).click()
+  await dialog.getByLabel('パッケージ名（部分一致）').fill('')
+  await dialog.getByLabel('エコシステム').selectOption('Pub')
   await expect(dialog.getByText('該当する依存パッケージはありません')).toBeVisible()
-  expect(api.lastQuery('/api/depscan/dependencies')?.get('ecosystem')).toBe('PyPI')
+  expect(api.lastQuery('/api/depscan/dependencies')?.get('ecosystem')).toBe('Pub')
+})
+
+scenario('DEP-24', 'スマホ幅でも、操作ボタンが縦に崩れず、タイトルの下に折り返して並ぶ', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openDepscan(page)
+
+  const heading = page.getByText('自作アプリの依存ライブラリ脆弱性（未解決）')
+  const packages = page.getByRole('button', { name: '依存パッケージ' })
+  const depsops = page.getByRole('button', { name: 'Dependabot運用状況' })
+  await expect(packages).toBeVisible()
+  await expect(depsops).toBeVisible()
+
+  // ボタンの文字は折り返されず、1行の高さに収まる（以前は幅が足りず、1文字ずつ縦に折り返していた）
+  for (const button of [packages, depsops]) {
+    const box = await button.boundingBox()
+    expect(box!.height).toBeLessThan(40)
+    expect(box!.width).toBeGreaterThan(90)
+  }
+  // 操作ボタンは、タイトルの下の段に並ぶ
+  const headingBox = await heading.boundingBox()
+  const packagesBox = await packages.boundingBox()
+  expect(packagesBox!.y).toBeGreaterThan(headingBox!.y + headingBox!.height - 1)
 })
