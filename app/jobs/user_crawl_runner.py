@@ -65,7 +65,7 @@ def run_user_crawls_for_all_accounts() -> int:
             run_codescan_for_user(username, token)
             run_dependabot_ops_for_user(username, token, webhook_url)
             # 削除済みリポジトリのデータ掃除（Issue #228）。本人のリポジトリのみ対象
-            current_names = {r["full_name"] for r in list_target_repos(username, token)}
+            current_names = {r["full_name"] for r in list_target_repos(token)}
             purge_deleted_repos(username, token, current_names)
             processed += 1
         except Exception as exc:

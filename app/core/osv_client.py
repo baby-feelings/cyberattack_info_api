@@ -13,6 +13,18 @@ from app.core.retry import request_with_retry
 
 # OSV REST API ベース URL
 OSV_API_BASE = "https://api.osv.dev/v1"
+# OSV の脆弱性の詳細ページ（人が読むための Web サイト）
+OSV_WEB_BASE = "https://osv.dev/vulnerability"
+
+# CVSS v3 の定性的な重要度の下限（FIRST の評価尺度: 9.0 以上=CRITICAL、7.0=HIGH、4.0=MEDIUM）
+_CVSS_CRITICAL_MIN = 9.0
+_CVSS_HIGH_MIN = 7.0
+_CVSS_MEDIUM_MIN = 4.0
+
+
+def osv_vulnerability_url(osv_id: str) -> str:
+    """OSV の脆弱性の詳細ページの URL。"""
+    return f"{OSV_WEB_BASE}/{osv_id}"
 
 # 1回の /v1/querybatch で送れる最大クエリ数
 BATCH_SIZE = 1000
@@ -47,11 +59,11 @@ def parse_severity(vuln: dict[str, Any]) -> tuple[str | None, float | None]:
     for sev in vuln.get("severity", []):
         try:
             score = float(sev.get("score", ""))
-            if score >= 9.0:
+            if score >= _CVSS_CRITICAL_MIN:
                 return "CRITICAL", score
-            elif score >= 7.0:
+            elif score >= _CVSS_HIGH_MIN:
                 return "HIGH", score
-            elif score >= 4.0:
+            elif score >= _CVSS_MEDIUM_MIN:
                 return "MEDIUM", score
             else:
                 return "LOW", score

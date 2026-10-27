@@ -79,9 +79,8 @@ def _run_codescan_body(db: Session, counters: CrawlCounters) -> None:
     `CrawlCounters` へのマッピングは DEPSCAN の crawler_logs 記録方針を踏襲する:
     inserted=新規検知件数、deleted=今回解決済みにした件数、updated=保持期間超過の実削除件数。
     """
-    username = settings.GITHUB_USERNAME
     token = settings.GITHUB_TOKEN
-    repos = list_target_repos(username, token)
+    repos = list_target_repos(token)
     logger.info("CODESCAN: %d target repos to scan", len(repos))
 
     repository = CodeFindingRepository(db)

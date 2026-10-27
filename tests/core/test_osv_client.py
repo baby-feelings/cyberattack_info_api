@@ -11,6 +11,7 @@ import pytest
 from app.core.osv_client import (
     extract_fixed_versions,
     fetch_vuln_by_id,
+    osv_vulnerability_url,
     parse_severity,
     query_packages_batch,
     query_versions_batch,
@@ -93,6 +94,15 @@ class TestParseSeverity:
         vuln = {"severity": [{"type": "CVSS_V3", "score": "5.0"}]}
         sev, score = parse_severity(vuln)
         assert sev == "MEDIUM"
+
+    @pytest.mark.parametrize("score,expected", [
+        ("9.0", "CRITICAL"), ("8.9", "HIGH"), ("7.0", "HIGH"), ("6.9", "MEDIUM"),
+        ("4.0", "MEDIUM"), ("3.9", "LOW"), ("0.0", "LOW"),
+    ])
+    def test_severity_thresholds_at_the_boundaries(self, score, expected):
+        """CVSS v3 の定性的な評価尺度の境界（9.0・7.0・4.0）で、重要度が切り替わる。"""
+        sev, _ = parse_severity({"severity": [{"type": "CVSS_V3", "score": score}]})
+        assert sev == expected
 
     def test_numeric_score_low(self):
         vuln = {"severity": [{"type": "CVSS_V3", "score": "2.0"}]}
@@ -329,3 +339,10 @@ class TestFetchVulnById:
         with patch("app.core.osv_client.httpx.Client", return_value=mock_client):
             with pytest.raises(httpx.HTTPStatusError):
                 fetch_vuln_by_id("GHSA-not-found")
+
+
+class TestOsvVulnerabilityUrl:
+    def test_builds_the_detail_page_url(self):
+        assert osv_vulnerability_url("GHSA-aaaa-bbbb-cccc") == (
+            "https://osv.dev/vulnerability/GHSA-aaaa-bbbb-cccc"
+        )

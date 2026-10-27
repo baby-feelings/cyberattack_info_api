@@ -55,7 +55,7 @@ class TestRunUserCrawlsForAllAccounts:
         mock_depsops.assert_called_once_with(
             "alice", "token-alice", "https://hooks.slack.com/services/alice",
         )
-        mock_list.assert_called_once_with("alice", "token-alice")
+        mock_list.assert_called_once_with("token-alice")
         mock_purge.assert_called_once_with("alice", "token-alice", set())
 
     def test_one_user_failure_does_not_stop_others(self, db_session, monkeypatch):

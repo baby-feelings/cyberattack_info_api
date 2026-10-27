@@ -25,6 +25,12 @@ Contents: Read-only + **Issues: Write** 推奨）を使用する。
 
 `list_target_repos` は `GET /user/repos`（`affiliation=owner`）を使う（`GET /users/{username}/repos`
 は公開リポジトリのみ返す仕様のため、プライベートリポジトリを含めるにはこちらが必須。PR #72で修正）。
+引数は`token`のみ（以前の`username`は使っておらず、紛らわしいため削除した）。
+
+**所有者による絞り込みは`app/core/owner_scope.py`**（`restrict_to_owner`・`is_owned_by`）に集約している。
+依存の検索・言語バージョンの閲覧・一覧の絞り込み・SBOMエクスポートが共通で使う。前方一致で判定する
+（`LIKE`だと`_`がワイルドカードになり、`a_b`が`aXb`に一致する）。**ファイルツリーの除外ディレクトリ**
+は`app/core/github/tree_paths.py`（`VENDORED_DIR_SEGMENTS`）で共通にし、用途ごとの違いだけを足す。
 
 ロックファイル検出は `GitHubRepo.tree`（`app.core.github.repo`）で `git/trees/{branch}?recursive=1`
 を使い、サブディレクトリ（monorepo）も含めて全ファイルパスを1回のAPI呼び出しで取得する。

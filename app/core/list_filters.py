@@ -20,6 +20,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Query as SaQuery
 
 from app.core.operating_status import OperatingStatus, apply_operating_status
+from app.core.owner_scope import is_owned_by
 
 
 class FeedListFilter:
@@ -104,7 +105,7 @@ class RepoFindingFilter:
         if forced_owner is None:
             return
         self.owner = forced_owner
-        if self.repo is not None and not self.repo.startswith(f"{forced_owner}/"):
+        if self.repo is not None and not is_owned_by(self.repo, forced_owner):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You can only query repositories you own.",

@@ -43,7 +43,7 @@ class TestListTargetRepos:
         ]
         mock_client = _mock_httpx_client(get_return=_mock_response(repos))
         with patch("httpx.Client", return_value=mock_client):
-            result = list_target_repos("u", "token")
+            result = list_target_repos("token")
         assert [r["full_name"] for r in result] == ["u/a"]
 
     def test_paginates_until_short_page(self):
@@ -53,7 +53,7 @@ class TestListTargetRepos:
         mock_client = _mock_httpx_client()
         mock_client.get = MagicMock(side_effect=responses)
         with patch("httpx.Client", return_value=mock_client):
-            result = list_target_repos("u", "token")
+            result = list_target_repos("token")
         assert len(result) == 101
         assert mock_client.get.call_count == 2
 
@@ -62,7 +62,7 @@ class TestListTargetRepos:
         repos = [{"full_name": "u/private", "fork": False, "archived": False, "private": True}]
         mock_client = _mock_httpx_client(get_return=_mock_response(repos))
         with patch("httpx.Client", return_value=mock_client):
-            list_target_repos("u", "token")
+            list_target_repos("token")
         call = mock_client.get.call_args
         assert call.args[0].endswith("/user/repos")
         assert call.kwargs["params"]["affiliation"] == "owner"
@@ -81,7 +81,7 @@ class TestScanExclusion:
         with patch("httpx.Client", return_value=mock_client), \
              patch("app.core.github.accounts.settings.SCAN_EXCLUDE_REPOS",
                    "U/appgoat_web_v305, u/other"):
-            result = list_target_repos("u", "token")
+            result = list_target_repos("token")
         assert [r["full_name"] for r in result] == ["u/keep"]
 
     def test_nothing_is_excluded_by_default(self):

@@ -10,6 +10,7 @@ REST 側の実装がそのまま効く。ここには、その呼び出しに必
 - 応答の検証（user の応答に他人のリポジトリが混じっていたら fail closed。多層防御）
 """
 import logging
+from http import HTTPStatus
 from typing import Any
 
 import httpx
@@ -92,11 +93,11 @@ class RestGateway:
             transport=httpx.ASGITransport(app=app), base_url="http://mcp.internal",
         ) as client:
             resp = await client.get(path, params=clean_params(params or {}), headers=headers)
-        if resp.status_code == 404:
+        if resp.status_code == HTTPStatus.NOT_FOUND:
             raise ToolError("該当するデータが見つかりませんでした。")
-        if resp.status_code == 403:
+        if resp.status_code == HTTPStatus.FORBIDDEN:
             raise ToolError("このデータへのアクセス権がありません。")
-        if resp.status_code != 200:
+        if resp.status_code != HTTPStatus.OK:
             logger.warning("MCP internal call failed: %s -> %s", path, resp.status_code)
             raise ToolError(f"データの取得に失敗しました（HTTP {resp.status_code}）。")
         payload = resp.json()

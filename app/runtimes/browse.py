@@ -6,11 +6,11 @@
 状態を求めてから絞り込む。
 """
 from datetime import date
-from typing import Any
 
-from sqlalchemy.orm import Query, Session
+from sqlalchemy.orm import Session
 
 from app.core.operating_status import OperatingStatus, apply_operating_status
+from app.core.owner_scope import restrict_to_owner
 from app.runtimes.models import RepoRuntime, RuntimeRelease
 from app.runtimes.status import NEEDS_ACTION_STATES, RuntimeStatus, evaluate
 
@@ -18,14 +18,6 @@ from app.runtimes.status import NEEDS_ACTION_STATES, RuntimeStatus, evaluate
 _STATE_ORDER = {
     "eol": 0, "eol_soon": 1, "update_available": 2, "unknown": 3, "latest": 4, "reference": 5,
 }
-
-
-def _restrict_to_owner(query: Query[Any], forced_owner: str | None) -> Query[Any]:
-    """セッション認証時は、そのオーナーのリポジトリのみに強制的に絞る。"""
-    if forced_owner is None:
-        return query
-    # `_` を含むオーナー名でも他のオーナーに一致しないよう、LIKE ではなく前方一致で絞る
-    return query.filter(RepoRuntime.repo_full_name.startswith(f"{forced_owner}/", autoescape=True))
 
 
 def list_runtimes(
@@ -47,7 +39,7 @@ def list_runtimes(
         needs_action: True なら、対応が必要な状態（期限切れ・期限間近・更新あり）のみ
         operating: 運用状態（active=運用中 / inactive=運用停止中 / all）
     """
-    query = _restrict_to_owner(db.query(RepoRuntime), forced_owner)
+    query = restrict_to_owner(db.query(RepoRuntime), RepoRuntime.repo_full_name, forced_owner)
     if repo:
         query = query.filter(RepoRuntime.repo_full_name == repo)
     if runtime:

@@ -35,7 +35,7 @@ def run_codescan_for_user(username: str, token: str) -> None:
     new_count = 0
     all_new_snapshots: list[dict[str, Any]] = []
     try:
-        repos = list_target_repos(username, token)
+        repos = list_target_repos(token)
         logger.info("CODESCAN (for %s): %d target repos to scan", username, len(repos))
 
         for repo_info in repos:

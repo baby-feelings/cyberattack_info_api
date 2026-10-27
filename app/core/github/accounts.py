@@ -24,7 +24,7 @@ def is_excluded_repo(full_name: str) -> bool:
     return full_name.lower() in excluded_repo_names()
 
 
-def list_target_repos(username: str, token: str) -> list[dict[str, Any]]:
+def list_target_repos(token: str) -> list[dict[str, Any]]:
     """トークンの持ち主が所有する全リポジトリを取得する（fork・archived・対象外指定は除外）。
 
     `GET /users/{username}/repos` は公開リポジトリしか返さないため、プライベートリポジトリも
@@ -32,8 +32,6 @@ def list_target_repos(username: str, token: str) -> list[dict[str, Any]]:
     （`affiliation=owner`）を使う必要がある。
 
     Args:
-        username: GitHub ユーザー名（トークンの持ち主と一致している前提。ログ・呼び出し側の
-            意図を明示するための引数で、API の絞り込みには使わない）
         token: GitHub PAT（Contents: Read-only 推奨）
 
     Returns:

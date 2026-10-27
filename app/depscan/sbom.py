@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
+from app.core.osv_client import osv_vulnerability_url
 from app.depscan.models import DependencyFinding, RepoDependency
 
 # エコシステム名 → purl type のマッピング（package-url/purl-spec の既知タイプに準拠）
@@ -106,7 +107,7 @@ def build_cyclonedx_sbom(
 
         vuln: dict[str, Any] = {
             "id": finding.osv_id,
-            "source": {"name": "OSV", "url": f"https://osv.dev/vulnerability/{finding.osv_id}"},
+            "source": {"name": "OSV", "url": osv_vulnerability_url(finding.osv_id)},
             "description": finding.summary,
             "affects": [{"ref": bom_ref}],
         }

@@ -28,7 +28,7 @@ class TestApplyReachability:
                  "app.depscan.reachability_scan.collect_source_files",
                  return_value={"app/main.py": "import requests\n"},
              ):
-            apply_reachability(records, "user", "token")
+            apply_reachability(records, "token")
 
         assert records[0]["reachability"] == "reachable"
 
@@ -43,7 +43,7 @@ class TestApplyReachability:
                  "app.depscan.reachability_scan.collect_source_files",
                  return_value={"app/main.py": "import requests\n"},
              ) as mock_get_source:
-            apply_reachability(records, "user", "token")
+            apply_reachability(records, "token")
 
         mock_get_source.assert_called_once()
         assert records[0]["reachability"] == "reachable"
@@ -60,11 +60,11 @@ class TestApplyReachability:
         http_error = httpx.HTTPStatusError("500", request=MagicMock(), response=MagicMock())
         with patch("app.depscan.reachability_scan.list_target_repos", return_value=repos), \
              patch("app.depscan.reachability_scan.collect_source_files", side_effect=http_error):
-            apply_reachability(records, "user", "token")
+            apply_reachability(records, "token")
 
         assert records[0]["reachability"] == "unknown"
 
     def test_empty_records_does_not_call_github(self):
         with patch("app.depscan.reachability_scan.list_target_repos") as mock_list:
-            apply_reachability([], "user", "token")
+            apply_reachability([], "token")
         mock_list.assert_not_called()

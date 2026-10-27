@@ -8,9 +8,10 @@
 from typing import Any
 
 from sqlalchemy import case, exists, func
-from sqlalchemy.orm import Query, Session
+from sqlalchemy.orm import Session
 
 from app.core.operating_status import OperatingStatus, apply_operating_status
+from app.core.owner_scope import restrict_to_owner
 from app.depscan.models import DependencyFinding, RepoDependency
 
 DependencyKey = tuple[str, str, str, str]
@@ -25,16 +26,6 @@ def _has_open_finding() -> Any:
         DependencyFinding.package_name == RepoDependency.package_name,
         DependencyFinding.installed_version == RepoDependency.version,
     )
-
-
-def _restrict_to_owner(query: Query[Any], forced_owner: str | None) -> Query[Any]:
-    """セッション認証時は、そのオーナーのリポジトリのみに強制的に絞る。"""
-    if forced_owner is None:
-        return query
-    # `_` を含むオーナー名でも他のオーナーに一致しないよう、LIKE ではなく前方一致で絞る
-    return query.filter(RepoDependency.repo_full_name.startswith(
-        f"{forced_owner}/", autoescape=True,
-    ))
 
 
 def search_dependencies(
@@ -63,7 +54,7 @@ def search_dependencies(
         operating: 運用状態（運用中／運用停止中／すべて）
     """
     query = apply_operating_status(
-        _restrict_to_owner(db.query(RepoDependency), forced_owner),
+        restrict_to_owner(db.query(RepoDependency), RepoDependency.repo_full_name, forced_owner),
         RepoDependency.repo_full_name, operating,
     )
     if package:
@@ -110,7 +101,8 @@ def summarize_repos(
         RepoDependency.repo_full_name, func.count(RepoDependency.id), vulnerable_count,
     )
     query = apply_operating_status(
-        _restrict_to_owner(base, forced_owner), RepoDependency.repo_full_name, operating,
+        restrict_to_owner(base, RepoDependency.repo_full_name, forced_owner),
+        RepoDependency.repo_full_name, operating,
     ).group_by(RepoDependency.repo_full_name)
     rows = [(repo, int(total), int(vulnerable or 0)) for repo, total, vulnerable in query.all()]
     return sorted(rows, key=lambda r: (-r[2], r[0]))

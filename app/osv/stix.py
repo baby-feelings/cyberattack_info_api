@@ -10,6 +10,7 @@ OSVは `(osv_id, ecosystem, package_name)` の複合キーが自然キーのた�
 import uuid
 from typing import Any
 
+from app.core.osv_client import osv_vulnerability_url
 from app.core.stix import STIX_ID_NAMESPACE, stix_timestamp
 from app.osv.models import OsvVulnerability
 
@@ -36,7 +37,7 @@ def build_stix_vulnerability(vuln: OsvVulnerability) -> dict[str, Any]:
         {
             "source_name": "osv",
             "external_id": vuln.osv_id,
-            "url": f"https://osv.dev/vulnerability/{vuln.osv_id}",
+            "url": osv_vulnerability_url(vuln.osv_id),
         },
     ]
     # aliasesのうちCVE IDのみ外部参照として追加する（CVE以外のエイリアス

@@ -116,10 +116,11 @@ app = FastAPI(
 )
 
 # CORS 設定（本番はダッシュボードドメインのみ許可、開発時は localhost も許可）
+_dashboard_origin = settings.DASHBOARD_URL.rstrip("/")
 _cors_origins = (
-    ["https://cyberattackinfoapi.vercel.app", "http://localhost:5173", "http://localhost:3000"]
+    [_dashboard_origin, "http://localhost:5173", "http://localhost:3000"]
     if settings.ENVIRONMENT != "production"
-    else ["https://cyberattackinfoapi.vercel.app"]
+    else [_dashboard_origin]
 )
 app.add_middleware(
     CORSMiddleware,
