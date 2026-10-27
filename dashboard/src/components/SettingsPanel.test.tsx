@@ -11,6 +11,8 @@ vi.mock('../api/auth', async () => {
     fetchNotificationSettings: vi.fn(),
     putNotificationSettings: vi.fn(),
     deleteNotificationSettings: vi.fn(),
+    // セッション延長は実サーバーへ送らない（手元で API が動いていると結果が環境に左右されるため）
+    refreshSession: vi.fn(),
   }
 })
 
