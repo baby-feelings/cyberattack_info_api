@@ -33,6 +33,27 @@ def register(mcp: FastMCP) -> None:
         }, private=True)
 
     @mcp.tool()
+    async def search_dependencies(
+        ctx: Context,
+        package: str | None = None,
+        version: str | None = None,
+        ecosystem: str | None = None,
+        repo: str | None = None,
+        page: int = 1,
+        per_page: int = 20,
+    ) -> dict[str, Any]:
+        """自分のどのリポジトリが、どの依存パッケージのどの版を使っているかを検索する。
+
+        新しい脆弱性の影響範囲の確認に使う。package は部分一致、version は完全一致、
+        ecosystem は PyPI / npm / Pub など、repo は "owner/repo"。各結果の
+        open_vulnerabilities は、その版に対する未解決の検知件数。MCP トークンが必要。
+        """
+        return await RestGateway(ctx).get("/api/depscan/dependencies", {
+            "package": package, "version": version, "ecosystem": ecosystem, "repo": repo,
+            "page": page, "per_page": per_page,
+        }, private=True)
+
+    @mcp.tool()
     async def get_depscan_stats(ctx: Context) -> dict[str, Any]:
         """自分のリポジトリの、未解決の依存ライブラリ脆弱性の件数（リポジトリ別・重要度別）。"""
         return await RestGateway(ctx).get("/api/depscan/stats", private=True)

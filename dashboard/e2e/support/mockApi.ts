@@ -1,7 +1,7 @@
 import type { Page, Route } from '@playwright/test'
 import {
   codescanItems, codescanStats, depscanFindings, depscanStats, depsopsItems,
-  jvnItems, jvnStats, kevItems, kevStats, osvItems, osvStats,
+  jvnItems, jvnStats, kevItems, kevStats, osvItems, osvStats, repoDependencies,
 } from './mockData'
 
 // バックエンドAPIのモック。全リクエストは `/__api` 配下（playwright.config.ts の
@@ -172,6 +172,17 @@ function defaultResponse(req: RecordedRequest, state: MockState): MockResponse {
         && (!owner || f.repo_full_name.startsWith(`${owner}/`))
         && (!sev || f.severity === sev)
         && (resolved === null || (resolved === 'true') === !!f.resolved_at))
+      return { body: paginate(items, query, 50) }
+    }
+
+    case 'GET /api/depscan/dependencies': {
+      const pkg = query.get('package')
+      const version = query.get('version')
+      const ecosystem = query.get('ecosystem')
+      const items = repoDependencies.filter((d) =>
+        (!pkg || includesCI(d.package_name, pkg))
+        && (!version || d.version === version)
+        && (!ecosystem || d.ecosystem === ecosystem))
       return { body: paginate(items, query, 50) }
     }
 

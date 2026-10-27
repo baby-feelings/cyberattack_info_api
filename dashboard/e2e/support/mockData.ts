@@ -183,6 +183,25 @@ export const depscanFindings = FINDING_SEEDS.map((s) => ({
   resolved_at: s.resolved ? '2026-09-18T00:00:00Z' : null,
 }))
 
+// 依存パッケージの横断検索（GET /api/depscan/dependencies）用。open は未解決の検知件数
+const DEPENDENCY_SEEDS = [
+  { repo: 'baby-feelings/app-one', eco: 'npm', pkg: 'lodash', version: '4.17.15', path: 'package-lock.json', open: 2 },
+  { repo: 'baby-feelings/app-two', eco: 'npm', pkg: 'lodash', version: '4.17.21', path: 'web/package-lock.json', open: 0 },
+  { repo: 'baby-feelings/app-two', eco: 'PyPI', pkg: 'requests', version: '2.19.0', path: 'requirements.txt', open: 1 },
+  { repo: 'other-owner/tool', eco: 'npm', pkg: 'express', version: '4.16.0', path: 'package-lock.json', open: 1 },
+]
+
+export const repoDependencies = DEPENDENCY_SEEDS.map((s) => ({
+  repo_full_name: s.repo,
+  ecosystem: s.eco,
+  package_name: s.pkg,
+  version: s.version,
+  manifest_path: s.path,
+  scanned_at: '2026-09-20T00:00:00Z',
+  purl: `pkg:${s.eco === 'PyPI' ? 'pypi' : 'npm'}/${s.pkg}@${s.version}`,
+  open_vulnerabilities: s.open,
+}))
+
 export function depscanStats(keep: (repo: string) => boolean = () => true) {
   const open = depscanFindings.filter((f) => !f.resolved_at && keep(f.repo_full_name))
   const repos = new Map<string, number>()

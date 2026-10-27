@@ -67,6 +67,45 @@ export async function fetchDepscanList(params: {
   return apiFetch<DepscanListResponse>(`/api/depscan?${p}`, params.authToken)
 }
 
+// 使っている依存パッケージ（SBOM の全量）の横断検索。「どのリポジトリが、そのパッケージの
+// どの版を使っているか」を引く（新しい脆弱性の影響範囲の確認用）
+export interface RepoDependencyOut {
+  repo_full_name: string
+  ecosystem: string
+  package_name: string
+  version: string
+  manifest_path: string
+  scanned_at: string
+  purl: string | null
+  // この版に対する未解決の検知件数（0なら検知なし）
+  open_vulnerabilities: number | null
+}
+
+export interface RepoDependencyListResponse {
+  total: number
+  page: number
+  per_page: number
+  data: RepoDependencyOut[]
+}
+
+export async function fetchRepoDependencies(params: {
+  page?: number
+  perPage?: number
+  packageName?: string
+  version?: string
+  ecosystem?: string | null
+  authToken?: string
+}): Promise<RepoDependencyListResponse> {
+  const p = new URLSearchParams()
+  p.set('page', String(params.page ?? 1))
+  p.set('per_page', String(params.perPage ?? 50))
+  // 前後の空白は検索の邪魔になるだけなので除く
+  if (params.packageName?.trim()) p.set('package', params.packageName.trim())
+  if (params.version?.trim()) p.set('version', params.version.trim())
+  if (params.ecosystem) p.set('ecosystem', params.ecosystem)
+  return apiFetch<RepoDependencyListResponse>(`/api/depscan/dependencies?${p}`, params.authToken)
+}
+
 export async function fetchDepscanStats(
   authToken?: string, operating?: OperatingStatus,
 ): Promise<DepscanStatsResponse> {

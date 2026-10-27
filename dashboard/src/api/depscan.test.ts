@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { fetchDepscanList, fetchDepscanStats, fetchAllDepscanFindings, type DepscanListResponse } from './depscan'
+import {
+  fetchDepscanList, fetchDepscanStats, fetchAllDepscanFindings, fetchRepoDependencies,
+  type DepscanListResponse,
+} from './depscan'
 
 function jsonResponse(body: unknown, init: { ok?: boolean; status?: number } = {}) {
   return {
@@ -112,6 +115,34 @@ describe('api/depscan', () => {
       fetchMock.mockResolvedValue(jsonResponse({ total: 0, repos: [], severities: [] }))
       await fetchDepscanStats(undefined, 'inactive')
       expect(fetchMock.mock.calls[0][0]).toContain('/api/depscan/stats?operating=inactive')
+    })
+  })
+  describe('fetchRepoDependencies', () => {
+    it('sends the search conditions and the session token', async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ total: 0, page: 1, per_page: 20, data: [] }))
+      await fetchRepoDependencies({
+        page: 2, perPage: 20, packageName: 'undici', version: '8.11.2', ecosystem: 'npm',
+        authToken: 'session-token-abc',
+      })
+      const [url, opts] = fetchMock.mock.calls[0]
+      const query = new URL(url, 'http://localhost').searchParams
+      expect(new URL(url, 'http://localhost').pathname).toMatch(/\/api\/depscan\/dependencies$/)
+      expect(query.get('page')).toBe('2')
+      expect(query.get('per_page')).toBe('20')
+      expect(query.get('package')).toBe('undici')
+      expect(query.get('version')).toBe('8.11.2')
+      expect(query.get('ecosystem')).toBe('npm')
+      expect(opts.headers).toEqual({ Authorization: 'Bearer session-token-abc' })
+    })
+
+    it('trims the input and omits empty conditions', async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ total: 0, page: 1, per_page: 50, data: [] }))
+      await fetchRepoDependencies({ packageName: '  undici  ', version: '   ', ecosystem: null })
+      const [url] = fetchMock.mock.calls[0]
+      const query = new URL(url, 'http://localhost').searchParams
+      expect(query.get('package')).toBe('undici')
+      expect(query.has('version')).toBe(false)
+      expect(query.has('ecosystem')).toBe(false)
     })
   })
 })

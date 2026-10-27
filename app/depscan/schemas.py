@@ -110,6 +110,34 @@ class DependencyFindingListResponse(BaseModel):
     data: list[DependencyFindingOut] = Field(description="依存ライブラリ脆弱性一覧")
 
 
+class RepoDependencyOut(OrmDatetimeModel):
+    """リポジトリが使っている依存パッケージ1件（横断検索の結果）。"""
+
+    repo_full_name: str = Field(description="使っているリポジトリ（例: baby-feelings/baby_grow）")
+    ecosystem: str = Field(description="エコシステム（PyPI / npm / Pub など）")
+    package_name: str
+    version: str = Field(description="ロックファイルに記載されていたバージョン")
+    manifest_path: str = Field(description="由来のロックファイルのパス")
+    scanned_at: str = Field(description="最後にスキャンで確認した日時（ISO 8601）")
+    # RepoDependency には存在しない計算フィールド（DependencyFindingOut.purl と同様）。
+    # OrmDatetimeModel は ORM に無い属性を None として渡すため、None を許容する
+    purl: str | None = Field(None, description="Package URL（purl）")
+    open_vulnerabilities: int | None = Field(
+        None, description="この版に対する、未解決の脆弱性の検知件数（0なら検知なし）",
+    )
+
+    model_config = {"from_attributes": True}
+
+
+class RepoDependencyListResponse(BaseModel):
+    """依存パッケージの横断検索レスポンス（ページネーション付き）。"""
+
+    total: int = Field(description="総件数")
+    page: int = Field(description="現在のページ番号")
+    per_page: int = Field(description="1ページあたりの件数")
+    data: list[RepoDependencyOut] = Field(description="該当した依存の一覧")
+
+
 class RepoStat(BaseModel):
     """リポジトリ別件数（DEPSCAN）。"""
 

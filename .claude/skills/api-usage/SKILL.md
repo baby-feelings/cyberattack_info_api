@@ -52,7 +52,7 @@ API キーの比較には `hmac.compare_digest` を使用し、タイミング�
 ## MCPサーバーとして使う（AIエージェント向け・推奨）
 curlの代わりに、リモートMCPサーバー（`https://168.138.213.240.nip.io/mcp`、Streamable HTTP）を
 登録すると、ツール（`search_kev`/`get_recent_kev`/`get_kev`/`search_osv`/`search_jvn`/
-`list_depscan_findings`/`get_depscan_stats`/`list_codescan_findings`/`get_codescan_stats`/`whoami`）として
+`list_depscan_findings`/`get_depscan_stats`/`search_dependencies`/`list_codescan_findings`/`get_codescan_stats`/`whoami`）として
 使える。キーはMCPの設定に閉じ、CLAUDE.mdにcurl例を書く必要がない。読み取り専用で`/admin/*`は無い。
 
 | 認証 | 見えるもの |
