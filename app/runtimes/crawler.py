@@ -24,6 +24,7 @@ from app.core.crawler_runner import CrawlCounters, CrawlJob
 from app.core.github.accounts import list_target_repos
 from app.core.github.repo import GitHubRepo
 from app.core.github.tree_paths import VENDORED_DIR_SEGMENTS, is_under_excluded_dir
+from app.runtimes.alerts import send_runtime_alerts
 from app.runtimes.detector import DetectedRuntime, detect_runtimes, is_candidate
 from app.runtimes.eol_client import fetch_all_releases
 from app.runtimes.repository import RepoRuntimeRepository, RuntimeReleaseRepository
@@ -100,11 +101,16 @@ class _RuntimeJob(CrawlJob):
                 logger.error("RUNTIME: failed to save %s: %s", full_name, exc, exc_info=True)
 
     def after_success(self, counters: CrawlCounters) -> None:
-        # 毎日の成功を Slack へ流さない（新しい版・サポート期限の通知は、別途行う）
+        # 毎日の成功を Slack へ流さない。変化があったとき（新しい系列の公開・サポート終了が近い・
+        # サポート終了）だけ、管理者に知らせる（`alerts`）。通知の失敗で、クロールを失敗にしない
         logger.info(
             "=== RUNTIME completed: detected=%d, releases=%d ===",
             counters.inserted, counters.updated,
         )
+        try:
+            send_runtime_alerts()
+        except Exception as exc:
+            logger.error("RUNTIME: failed to send alerts: %s", exc, exc_info=True)
 
 
 def fetch_and_scan_runtimes(*, force: bool = False) -> tuple[int, int, int]:

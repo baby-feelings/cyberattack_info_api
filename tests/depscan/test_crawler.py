@@ -155,3 +155,21 @@ class TestInventorySaved:
 
         assert new_count == 0
         assert repos_scanned == 1
+
+    def test_inventory_failure_is_notified_to_the_admin(self, db_session):
+        """ログだけでは気づけないため、管理者の Slack にエラーとして知らせる。"""
+        with patch(
+            "app.depscan.crawler.RepoDependencyRepository.replace",
+            side_effect=Exception("db error"),
+        ), patch("app.depscan.crawler.notify_error") as notify:
+            self._run(db_session)
+
+        notify.assert_called_once()
+        crawler_type, message = notify.call_args.args
+        assert crawler_type == "DEPSCAN"
+        assert "SBOM" in message and "db error" in message
+
+    def test_inventory_success_is_not_notified(self, db_session):
+        with patch("app.depscan.crawler.notify_error") as notify:
+            self._run(db_session)
+        notify.assert_not_called()

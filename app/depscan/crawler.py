@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.crawler_runner import CrawlCounters, CrawlJob
+from app.core.notifications.crawler import notify_error
 from app.core.notifications.dependency_findings import notify_dependency_findings
 from app.depscan.finding_builder import build_findings
 from app.depscan.inventory import RepoDependencyRepository
@@ -58,6 +59,9 @@ class _DepscanJob(CrawlJob):
             RepoDependencyRepository(db).replace(dep_to_repos, repo_visibility)
         except Exception as exc:
             logger.error("Failed to save dependency inventory: %s", exc, exc_info=True)
+            # ログだけでは気づけないため、管理者の Slack にも知らせる（スキャンは成功扱いで続ける。
+            # SBOM・依存の検索は、次回のスキャンまで、前回の内容のままになる）
+            notify_error("DEPSCAN", f"依存の全量（SBOM）の保存に失敗しました: {exc}")
 
         records = build_findings(dep_to_repos, repo_visibility)
 
