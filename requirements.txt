@@ -7,7 +7,7 @@ uvicorn[standard]>=0.54.0
 # 2.0系を明示的に上限指定して回避する
 sqlalchemy>=2.0.54,<2.1
 psycopg2-binary>=2.9.13
-alembic>=1.20.0
+alembic>=1.20.1
 pydantic>=2.14.1
 pydantic-settings>=2.15.0
 python-dotenv>=1.2.4
