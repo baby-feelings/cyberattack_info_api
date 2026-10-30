@@ -285,3 +285,27 @@ scenario('COD-13', '左のアプリ一覧でアプリを選ぶと、そのリポ
   await expect.poll(() => api.lastQuery('/api/codescan')?.get('repo')).toBeNull()
   await expect(table.getByRole('columnheader', { name: 'リポジトリ' })).toBeVisible()
 })
+
+scenario('COD-14', '検知を例外（影響なし）にすると一覧でタグが付く。受容は期限が必須', async ({ page, api }) => {
+  const table = await openCodescan(page)
+
+  await table.getByRole('row').nth(1).click()
+  await page.getByRole('button', { name: '例外にする' }).click()
+  const form = page.getByRole('form', { name: '例外の登録' })
+
+  // 状態を「影響なし」にすると、期限は任意（空）になる
+  await form.getByLabel('状態').selectOption('not_affected')
+  await expect(form.getByLabel(/期限/)).toHaveValue('')
+  await form.getByLabel(/理由/).fill('意図的な設定')
+  await form.getByRole('button', { name: '登録' }).click()
+
+  await expect.poll(() => api.requestsTo('/api/exceptions', 'POST')).toHaveLength(1)
+  expect(api.requestsTo('/api/exceptions', 'POST')[0].body).toMatchObject({
+    kind: 'code', status: 'not_affected', reason: '意図的な設定', expires_at: null,
+  })
+
+  // 一覧が読み直され、行にもタグが付く。展開すると、理由が出る
+  await expect(table.getByText('影響なし', { exact: true }).first()).toBeVisible()
+  await table.getByRole('row').nth(1).click()
+  await expect(page.getByRole('group', { name: '例外' })).toContainText('理由: 意図的な設定')
+})

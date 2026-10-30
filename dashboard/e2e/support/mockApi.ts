@@ -46,6 +46,11 @@ export interface MockState {
     connected_at: string | null; last_refreshed_at: string | null
     last_used_at: string | null; expires_at: string | null
   }>
+  // 検知の例外（受容など。Issue #403）。POST で追加・DELETE で解除し、検知の一覧に反映される
+  exceptions: Array<{
+    id: number; kind: string; repo_full_name: string; finding_key: string
+    status: string; reason: string; expires_at: string | null; approver: string
+  }>
   // 運用停止中のリポジトリ（バックエンドの INACTIVE_REPOS 相当）。既定は空＝すべて運用中
   inactiveRepos: string[]
   username: string
@@ -84,8 +89,33 @@ const includesCI = (haystack: string, needle: string) =>
   haystack.toLowerCase().includes(needle.toLowerCase())
 
 // 既定ハンドラー: 実APIと同様にクエリパラメータでデータを絞り込む
+// 検知の一覧に埋め込む、有効な例外（実 API の `exception_key`・`exception` と同じ形）
+function withException<T extends object>(
+  state: MockState, kind: string, item: T & { repo_full_name: string }, key: string,
+) {
+  const found = state.exceptions.find(
+    (e) => e.kind === kind && e.repo_full_name === item.repo_full_name && e.finding_key === key,
+  )
+  return {
+    ...item,
+    exception_key: key,
+    exception: found
+      ? { id: found.id, status: found.status, reason: found.reason, expires_at: found.expires_at, approver: found.approver }
+      : null,
+  }
+}
+
 function defaultResponse(req: RecordedRequest, state: MockState): MockResponse {
   const { path, query, method } = req
+
+  // 例外の解除（パスに ID を含むため、switch の前で処理する）
+  if (method === 'DELETE' && path.startsWith('/api/exceptions/')) {
+    const id = Number(path.split('/').pop())
+    const index = state.exceptions.findIndex((e) => e.id === id)
+    if (index < 0) return { status: 404, body: { detail: '例外が見つかりません。' } }
+    const [removed] = state.exceptions.splice(index, 1)
+    return { body: { ...removed, ended_reason: 'revoked' } }
+  }
 
   // パスに可変部分（トークンID）を含むため、switch の前で処理する
   if (method === 'DELETE' && path.startsWith('/auth/mcp-tokens/')) {
@@ -173,7 +203,20 @@ function defaultResponse(req: RecordedRequest, state: MockState): MockResponse {
         && (!owner || f.repo_full_name.startsWith(`${owner}/`))
         && (!sev || f.severity === sev)
         && (resolved === null || (resolved === 'true') === !!f.resolved_at))
-      return { body: paginate(items, query, 50) }
+      const data = items.map((f) => withException(
+        state, 'dependency', f, `${f.ecosystem}|${f.package_name}|${f.osv_id}`,
+      ))
+      return { body: paginate(data, query, 50) }
+    }
+
+    case 'POST /api/exceptions': {
+      const body = req.body as Omit<MockState['exceptions'][number], 'id' | 'approver'>
+      if (body.status === 'accepted' && !body.expires_at) {
+        return { status: 422, body: { detail: '受容には、期限が必要です。' } }
+      }
+      const row = { ...body, id: state.exceptions.length + 1, approver: state.username }
+      state.exceptions.push(row)
+      return { status: 201, body: row }
     }
 
     case 'GET /api/depscan/dependencies/repos': {
@@ -304,7 +347,10 @@ function defaultResponse(req: RecordedRequest, state: MockState): MockResponse {
         && (!repo || f.repo_full_name === repo)
         && (!sev || f.severity === sev)
         && (resolved === null || (resolved === 'true') === !!f.resolved_at))
-      return { body: paginate(items, query, 30) }
+      const data = items.map((f) => withException(
+        state, 'code', f, `${f.file_path}|${f.rule_id}`,
+      ))
+      return { body: paginate(data, query, 30) }
     }
 
     // ── 認証・設定 ──
@@ -366,6 +412,7 @@ export async function installMockApi(page: Page): Promise<MockApi> {
     mcpTokens: [],
     oauthConnections: [],
     inactiveRepos: [],
+    exceptions: [],
     username: 'octocat',
   }
   const requests: RecordedRequest[] = []

@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, computed_field
 
 from app.core.osv_client import is_malicious_advisory
 from app.core.schemas import OrmDatetimeModel, SeverityStat
+from app.finding_exceptions.schemas import FindingExceptionSummary
 
 
 class RepoAssetContextOut(OrmDatetimeModel):
@@ -74,6 +75,14 @@ class DependencyFindingOut(OrmDatetimeModel):
         default=None,
         description="パッケージURL（例: pkg:pypi/cryptography@3.4.7）。"
         "app.depscan.sbom.build_purlによるbest-effort生成",
+    )
+    # 例外（受容・誤検知・影響なし。Issue #403）。list_depscan が model_copy で付与する
+    # 計算フィールド
+    exception_key: str | None = Field(
+        default=None, description="例外の登録に使う、検知の同一性キー（ecosystem|package|osv_id）",
+    )
+    exception: FindingExceptionSummary | None = Field(
+        default=None, description="有効な例外（受容・誤検知・影響なし）。無ければ null",
     )
     manifest_path: str = Field(description="検知元のロックファイルパス")
     reachability: str | None = Field(

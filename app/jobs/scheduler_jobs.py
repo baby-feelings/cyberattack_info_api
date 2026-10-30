@@ -18,6 +18,7 @@ from app.codescan.crawler import fetch_and_scan_code
 from app.core.config import settings
 from app.depscan.crawler import fetch_and_scan_dependencies
 from app.depsops.runner import run_dependabot_ops
+from app.finding_exceptions.lifecycle import run_exception_lifecycle
 from app.jobs.repo_cleanup import run_repo_cleanup
 from app.jobs.user_crawl_runner import run_user_crawls_for_all_accounts
 from app.jvn.crawler import fetch_and_store_jvn
@@ -94,6 +95,11 @@ def build_scheduled_jobs() -> list[ScheduledJob]:
         ScheduledJob(
             "oauth_cleanup", "OAUTH_CLEANUP", run_oauth_cleanup,
             settings.OAUTH_CLEANUP_CRON_HOUR_UTC, settings.OAUTH_CLEANUP_CRON_MINUTE_UTC,
+        ),
+        # 例外（受容など）の期限切れ・修正版の公開の確認と通知（Issue #403）: DEPSCAN・CODESCAN の後
+        ScheduledJob(
+            "exception_lifecycle", "EXCEPTION_LIFECYCLE", run_exception_lifecycle,
+            settings.EXCEPTION_CRON_HOUR_UTC, settings.EXCEPTION_CRON_MINUTE_UTC,
         ),
         # 脆弱性への対応状況（期限超過・MTTR）の週次のまとめ（Issue #404）: 毎週月曜。
         # 前日までの DEPSCAN の結果を集計するため、毎日のジョブとは別の時刻に置く

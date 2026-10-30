@@ -34,6 +34,9 @@ from app.core.database import get_db
 from app.core.operating_status import OperatingQuery, apply_operating_status
 from app.core.pagination import paginate
 from app.core.schemas import SeverityStat
+from app.finding_exceptions.matching import exception_map, key_of_finding, not_excepted
+from app.finding_exceptions.models import KIND_CODE
+from app.finding_exceptions.schemas import FindingExceptionSummary
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +96,15 @@ def list_codescan(
         total, page, flt.repo, flt.owner, flt.severity, flt.resolved, flt.min_cvss,
     )
 
-    data = [CodeFindingOut.model_validate(item) for item in items]
+    exceptions = exception_map(db, KIND_CODE, {item.repo_full_name for item in items})
+    data = []
+    for item in items:
+        exception_key = key_of_finding(KIND_CODE, item)
+        exception = exceptions.get((item.repo_full_name, exception_key))
+        data.append(CodeFindingOut.model_validate(item).model_copy(update={
+            "exception_key": exception_key,
+            "exception": FindingExceptionSummary.model_validate(exception) if exception else None,
+        }))
     return CodeFindingListResponse(total=total, page=page, per_page=per_page, data=data)
 
 
@@ -118,6 +129,8 @@ def get_codescan_stats(
     if forced_owner is not None:
         base = base.filter(CodeFinding.repo_full_name.like(f"{forced_owner}/%"))
     base = apply_operating_status(base, CodeFinding.repo_full_name, operating)
+    # 例外（受容など）にした検知は、「要対応」の集計から外す（一覧では確認できる）
+    base = not_excepted(base, KIND_CODE)
     total = base.count()
 
     repo_rows = (

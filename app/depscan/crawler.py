@@ -28,6 +28,8 @@ from app.depscan.issue_management import close_resolved_repo_issues, file_github
 from app.depscan.manifests import collect_dependencies
 from app.depscan.reachability_scan import apply_reachability
 from app.depscan.repository import DependencyFindingRepository
+from app.finding_exceptions.matching import drop_excepted
+from app.finding_exceptions.models import KIND_DEPENDENCY
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +75,9 @@ class _DepscanJob(CrawlJob):
 
         repository = DependencyFindingRepository(db)
         result = repository.sync(records)
-        counters.inserted, self.new_snapshots = result.inserted, result.new_snapshots
+        counters.inserted = result.inserted
+        # 例外（受容など）のある検知は、再発しても、通知・Issue 起票の対象にしない（Issue #403）
+        self.new_snapshots = drop_excepted(db, KIND_DEPENDENCY, result.new_snapshots)
         counters.deleted = result.resolved
 
         # Issue クローズ失敗はクロール全体を失敗させない（Issue起票と同じ方針）

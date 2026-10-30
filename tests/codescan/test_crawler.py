@@ -97,6 +97,35 @@ class TestRunCodescanBody:
         assert fail_count == 0
         mock_issues.assert_called_once()
 
+    def test_excepted_findings_are_stored_but_not_filed_as_new_issues(self, db_session):
+        """例外（受容など）のある検知は、再発しても、Issue 起票・通知の対象にしない（#403）。"""
+        from datetime import timedelta
+
+        from app.finding_exceptions.models import FindingException
+
+        db_session.add(FindingException(
+            kind="code", repo_full_name="owner/repo", finding_key="a.py|rule.x",
+            status="not_affected", reason="意図的", approver="owner",
+            expires_at=_NOW + timedelta(days=5)))
+        db_session.commit()
+        records = [{
+            "repo_full_name": "owner/repo", "file_path": "a.py", "line_start": 1,
+            "line_end": 1, "rule_id": rule, "message": "m", "severity": "ERROR",
+            "cwe_ids": [], "owasp_categories": [], "code_snippet": "x",
+            "cvss_score": None, "cvss_vector": None, "detected_at": _NOW,
+        } for rule in ("rule.x", "rule.y")]
+        counters = CrawlCounters()
+
+        repos = [{"full_name": "owner/repo", "default_branch": "main"}]
+        with patch("app.codescan.crawler.list_target_repos", return_value=repos), \
+             patch("app.codescan.crawler.scan_repo", return_value=records), \
+             patch("app.codescan.crawler.file_github_issues") as mock_issues:
+            _run_codescan_body(db_session, counters)
+
+        assert db_session.query(CodeFinding).count() == 2
+        filed = mock_issues.call_args.args[0]
+        assert [s["rule_id"] for s in filed] == ["rule.y"]
+
     def test_issue_filing_failure_does_not_raise(self, db_session):
         repos = [{"full_name": "owner/repo", "default_branch": "main"}]
         counters = CrawlCounters()

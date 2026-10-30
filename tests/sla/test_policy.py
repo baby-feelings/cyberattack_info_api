@@ -43,35 +43,22 @@ class TestDeadlineDays:
         assert POLICY.deadline_days("LOW") is None
 
 
-class TestExclusion:
-    def test_is_excluded_matches_listed_osv_ids_only(self):
-        policy = SlaPolicy(
-            critical_days=7, high_days=30, medium_days=90, kev_days=7,
-            excluded_osv_ids=frozenset({"GHSA-aaaa"}),
-        )
-        assert policy.is_excluded("GHSA-aaaa") is True
-        assert policy.is_excluded("GHSA-bbbb") is False
-
-
 class TestFromSettings:
     def test_defaults(self):
         policy = SlaPolicy.from_settings()
 
         assert (policy.critical_days, policy.high_days, policy.medium_days) == (7, 30, 90)
         assert policy.kev_days == 7
-        assert policy.excluded_osv_ids == frozenset()
 
-    def test_reads_overrides_and_trims_the_exclusion_list(self):
+    def test_reads_overrides(self):
         with patch("app.sla.policy.settings") as mock_settings:
             mock_settings.SLA_CRITICAL_DAYS = 3
             mock_settings.SLA_HIGH_DAYS = 14
             mock_settings.SLA_MEDIUM_DAYS = 60
             mock_settings.SLA_KEV_DAYS = 3
-            mock_settings.SLA_EXCLUDE_OSV_IDS = " GHSA-a , ,GHSA-b "
             policy = SlaPolicy.from_settings()
 
         assert (policy.critical_days, policy.high_days, policy.medium_days) == (3, 14, 60)
-        assert policy.excluded_osv_ids == frozenset({"GHSA-a", "GHSA-b"})
 
 
 class TestSettingsValidation:

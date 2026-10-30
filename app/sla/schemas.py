@@ -10,7 +10,7 @@ class SlaPolicyOut(BaseModel):
     medium_days: int = Field(description="MEDIUM の対応期限（日）")
     kev_days: int = Field(description="CISA KEV 掲載済みの対応期限（日。重要度によらず短縮）")
     excluded_osv_ids: list[str] = Field(
-        description="期限の計算から外している OSV ID（受容した検知。SLA_EXCLUDE_OSV_IDS）",
+        description="期限の計算から外している OSV ID（例外〈受容など〉にした検知）",
     )
 
 

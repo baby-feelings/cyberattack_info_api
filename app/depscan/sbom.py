@@ -9,7 +9,7 @@ SBOM/SCAツールとの相互運用性を高める。
 （スコープ外）。
 """
 import urllib.parse
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
@@ -83,6 +83,7 @@ def _add_component(
 def build_cyclonedx_sbom(
     repo_full_name: str, findings: list[DependencyFinding],
     inventory: Sequence[RepoDependency] | None = None,
+    analysis_by_finding: Mapping[tuple[str, str, str], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """CycloneDX 1.5 JSON形式のSBOMを構築する。
 
@@ -93,6 +94,9 @@ def build_cyclonedx_sbom(
 
     `inventory`（依存の全量）を渡すと、脆弱性の有無にかかわらず使っている全依存を
     componentsに含める（SBOMとしての完全な一覧）。省略時は検知された依存のみ。
+
+    `analysis_by_finding`（(ecosystem, package_name, osv_id) → CycloneDX の `analysis`）を渡すと、
+    例外（受容・誤検知・影響なし。Issue #403）のある脆弱性に、VEX の状態を埋め込む。
     """
     components: dict[tuple[str, str, str], dict[str, Any]] = {}
     vulnerabilities: list[dict[str, Any]] = []
@@ -125,6 +129,11 @@ def build_cyclonedx_sbom(
             vuln["ratings"] = [rating]
         if finding.fixed_versions:
             vuln["recommendation"] = f"Upgrade to {', '.join(finding.fixed_versions)}"
+        analysis = (analysis_by_finding or {}).get(
+            (finding.ecosystem, finding.package_name, finding.osv_id),
+        )
+        if analysis:
+            vuln["analysis"] = analysis
         vulnerabilities.append(vuln)
 
     return {

@@ -21,7 +21,8 @@ export function summarizeRepos(findings: DependencyFindingOut[]): RepoSummary[] 
       map.set(f.repo_full_name, s)
     }
     s.total += 1
-    if (!f.resolved_at) {
+    // 例外（受容など）にした検知は、対応が要らないため、「対応が必要」に数えない
+    if (!f.resolved_at && !f.exception) {
       if (f.severity === 'CRITICAL') s.crit += 1
       else if (f.severity === 'HIGH') s.high += 1
     }

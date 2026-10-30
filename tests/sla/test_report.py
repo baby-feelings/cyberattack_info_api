@@ -8,6 +8,7 @@ os.environ.setdefault("ENVIRONMENT", "development")
 
 from app.depscan.filters import DepscanListFilter  # noqa: E402
 from app.depscan.models import DependencyFinding  # noqa: E402
+from app.finding_exceptions.models import FindingException  # noqa: E402
 from app.kev.models import Vulnerability  # noqa: E402
 from app.sla.policy import SlaPolicy  # noqa: E402
 from app.sla.report import SlaItem, build_report  # noqa: E402
@@ -162,19 +163,43 @@ class TestByRepo:
 
 
 class TestExclusionAndScope:
-    def test_excluded_osv_ids_are_left_out_of_every_count(self, db_session):
-        policy = SlaPolicy(
-            critical_days=7, high_days=30, medium_days=90, kev_days=7,
-            excluded_osv_ids=frozenset({"GHSA-accepted"}),
-        )
+    def test_excepted_findings_are_left_out_of_every_count(self, db_session):
+        # 受容（有効な例外）にした検知は、期限の計算から外れる（Issue #403）
+        db_session.add(FindingException(
+            kind="dependency", repo_full_name="u/app", finding_key="npm|pkg|GHSA-accepted",
+            status="accepted", reason="修正版が無い", approver="u",
+            expires_at=datetime.now(UTC) + timedelta(days=30),
+        ))
         report = _report(db_session, [
             _finding(detected_days_ago=100, osv_id="GHSA-accepted"),
             _finding(detected_days_ago=100, osv_id="GHSA-other"),
-        ], policy=policy)
+        ])
 
         assert report.summary.overdue == 1
         assert report.overdue[0].osv_id == "GHSA-other"
         assert report.policy.excluded_osv_ids == ["GHSA-accepted"]
+
+    def test_expired_exception_no_longer_excludes_the_finding(self, db_session):
+        db_session.add(FindingException(
+            kind="dependency", repo_full_name="u/app", finding_key="npm|pkg|GHSA-accepted",
+            status="accepted", reason="r", approver="u",
+            expires_at=datetime.now(UTC) - timedelta(days=1),
+        ))
+        report = _report(db_session, [_finding(detected_days_ago=100, osv_id="GHSA-accepted")])
+
+        assert report.summary.overdue == 1
+        assert report.policy.excluded_osv_ids == []
+
+    def test_resolved_findings_with_an_exception_still_count_for_mttr(self, db_session):
+        db_session.add(FindingException(
+            kind="dependency", repo_full_name="u/app", finding_key="npm|pkg|GHSA-x",
+            status="not_affected", reason="r", approver="u",
+        ))
+        report = _report(db_session, [
+            _finding(detected_days_ago=20, resolved_days_ago=10, osv_id="GHSA-x"),
+        ])
+
+        assert report.summary.resolved == 1
 
     def test_owner_filter_limits_to_that_owners_repos(self, db_session):
         report = _report(db_session, [

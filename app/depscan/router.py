@@ -39,6 +39,10 @@ from app.depscan.schemas import (
     RepoAssetContextOut,
     RepoStat,
 )
+from app.finding_exceptions.matching import exception_map, key_of_finding, not_excepted
+from app.finding_exceptions.models import KIND_DEPENDENCY
+from app.finding_exceptions.schemas import FindingExceptionSummary
+from app.finding_exceptions.vex import analysis_by_finding
 
 logger = logging.getLogger(__name__)
 
@@ -105,12 +109,17 @@ def list_depscan(
     asset_context_map = fetch_asset_context_map(
         db, {item.repo_full_name for item in items},
     )
+    exceptions = exception_map(db, KIND_DEPENDENCY, {item.repo_full_name for item in items})
     kev_map = fetch_kev_map(db, items)
 
     data = []
     for item in items:
         asset_context = asset_context_map.get(item.repo_full_name)
+        exception_key = key_of_finding(KIND_DEPENDENCY, item)
+        exception = exceptions.get((item.repo_full_name, exception_key))
         data.append(DependencyFindingOut.model_validate(item).model_copy(update={
+            "exception_key": exception_key,
+            "exception": FindingExceptionSummary.model_validate(exception) if exception else None,
             "asset_context": asset_context,
             "priority_reasons": compute_priority_reasons(item, asset_context, kev_map),
             "purl": build_purl(item.ecosystem, item.package_name, item.installed_version),
@@ -139,6 +148,8 @@ def get_depscan_stats(
     if forced_owner is not None:
         base = base.filter(DependencyFinding.repo_full_name.like(f"{forced_owner}/%"))
     base = apply_operating_status(base, DependencyFinding.repo_full_name, operating)
+    # 例外（受容など）にした検知は、「要対応」の集計から外す（一覧では確認できる）
+    base = not_excepted(base, KIND_DEPENDENCY)
 
     total = base.count()
 
@@ -275,9 +286,11 @@ def export_depscan_sbom(
             .all()
         )
 
+    # 例外（受容など）のある脆弱性には、CycloneDX の analysis（VEX の状態）を埋め込む（Issue #403）
+    analysis = analysis_by_finding(exception_map(db, KIND_DEPENDENCY, {repo}).values())
     sbom = (
         build_spdx_sbom(repo, findings, inventory) if format == "spdx"
-        else build_cyclonedx_sbom(repo, findings, inventory)
+        else build_cyclonedx_sbom(repo, findings, inventory, analysis)
     )
 
     logger.info(

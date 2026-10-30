@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ExternalLink, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react'
 import { SeverityBadge } from '../shared/VulnPanelParts'
+import { ExceptionControl, ExceptionTag } from '../shared/ExceptionControl'
 import { githubRepoUrl, osvUrl } from '../shared/externalLinks'
 
 import {
@@ -95,7 +96,18 @@ function PriorityReasonBadges({ reasons }: { reasons: string[] }) {
 }
 
 // showRepo=false のときはリポジトリ列を隠す（左の一覧でアプリを選んでいて、リポジトリが自明なため）
-export function DepscanGroupRow({ group, showRepo = true }: { group: FindingGroup; showRepo?: boolean }) {
+// authToken: ログイン中のセッショントークン（例外の登録・解除に使う。無ければ操作できない）
+// onExceptionChanged: 例外を登録・解除したとき（一覧と件数を読み直す）
+interface DepscanGroupRowProps {
+  group: FindingGroup
+  showRepo?: boolean
+  authToken?: string
+  onExceptionChanged?: () => void
+}
+
+export function DepscanGroupRow({
+  group, showRepo = true, authToken, onExceptionChanged,
+}: DepscanGroupRowProps) {
   const [open, setOpen] = useState(false)
   const bestSeverity = group.findings
     .slice()
@@ -104,6 +116,8 @@ export function DepscanGroupRow({ group, showRepo = true }: { group: FindingGrou
   const reachability = groupReachability(group)
   const hasKevListed = group.findings.some(f => f.priority_reasons.includes('kev_listed'))
   const hasMalicious = group.findings.some(f => f.is_malicious)
+  // 全件が例外（受容など）のグループは、一覧でも分かるようにする（件数からは外れている）
+  const allExcepted = group.findings.every(f => f.exception)
   const latestDate = new Date(groupLatestDetectedAt(group)).toLocaleDateString('ja-JP', {
     year: 'numeric', month: 'short', day: 'numeric',
   })
@@ -120,6 +134,9 @@ export function DepscanGroupRow({ group, showRepo = true }: { group: FindingGrou
             <SeverityBadge severity={bestSeverity} classMap={SEVERITY_CLS} />
             <KevListedBadge show={hasKevListed} />
             <MaliciousBadge show={hasMalicious} />
+            {allExcepted && group.findings[0].exception && (
+              <ExceptionTag exception={group.findings[0].exception} />
+            )}
           </div>
           <span className="block text-[10px] text-slate-600 mt-0.5 tabular-nums">
             計{group.findings.length}件
@@ -219,6 +236,16 @@ export function DepscanGroupRow({ group, showRepo = true }: { group: FindingGrou
                           <span key={v} className="text-emerald-500 font-mono text-[10px]">{v}</span>
                         ))}
                       </p>
+                    )}
+                    {f.exception_key && (
+                      <ExceptionControl
+                        kind="dependency"
+                        repo={f.repo_full_name}
+                        findingKey={f.exception_key}
+                        exception={f.exception}
+                        authToken={authToken}
+                        onChanged={() => onExceptionChanged?.()}
+                      />
                     )}
                   </div>
                 ))}

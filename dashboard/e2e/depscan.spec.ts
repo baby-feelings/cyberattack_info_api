@@ -685,3 +685,47 @@ scenario('DEP-27', '対応状況のモーダルで、期限超過の検知と平
   await page.keyboard.press('Escape')
   await expect(dialog).toBeHidden()
 })
+
+scenario('DEP-28', '検知を受容（理由・期限つき）にすると一覧でタグが付き、解除すると元に戻る', async ({ page, api }) => {
+  const table = await openDepscan(page)
+
+  // 展開して、検知ごとの「例外にする」から、受容を登録する
+  await table.getByText('lodash').click()
+  const form = async () => {
+    await page.getByRole('button', { name: '例外にする' }).first().click()
+    return page.getByRole('form', { name: '例外の登録' })
+  }
+  const registerForm = await form()
+  // 受容は期限が必須（既定の期限が入っている）。理由が空の間は、登録できない
+  await expect(registerForm.getByLabel(/期限/)).not.toHaveValue('')
+  await expect(registerForm.getByRole('button', { name: '登録' })).toBeDisabled()
+  await registerForm.getByLabel(/理由/).fill('修正版が公開されるまで受容する')
+  await registerForm.getByRole('button', { name: '登録' }).click()
+
+  // Bearer トークンで POST し、同一性キー・状態・理由・期限を送る
+  await expect.poll(() => api.requestsTo('/api/exceptions', 'POST')).toHaveLength(1)
+  const posted = api.requestsTo('/api/exceptions', 'POST')[0]
+  expect(posted.headers.authorization).toMatch(/^Bearer /)
+  expect(posted.body).toMatchObject({
+    kind: 'dependency', repo_full_name: 'baby-feelings/app-one',
+    finding_key: expect.stringMatching(/^npm\|lodash\|GHSA-lodash-/),
+    status: 'accepted', reason: '修正版が公開されるまで受容する',
+  })
+  expect((posted.body as { expires_at: string }).expires_at).toMatch(/T23:59:59Z$/)
+
+  // 登録後に一覧と件数が読み直され（行は閉じる）、再び展開すると、受容の内容（理由・承認者）が出る
+  await expect.poll(() => api.requestsTo('/api/depscan').length).toBeGreaterThan(1)
+  await table.getByText('lodash').click()
+  const group = page.getByRole('group', { name: '例外' })
+  await expect(group).toContainText('受容')
+  await expect(group).toContainText('理由: 修正版が公開されるまで受容する')
+  await expect(group).toContainText('承認者: octocat')
+
+  // 解除すると、DELETE して、元の「例外にする」に戻る
+  await group.getByRole('button', { name: '解除' }).click()
+  await expect.poll(() => api.requestsTo('/api/exceptions/1', 'DELETE')).toHaveLength(1)
+  await expect.poll(() => api.requestsTo('/api/depscan').length).toBeGreaterThan(2)
+  await table.getByText('lodash').click()
+  await expect(page.getByRole('group', { name: '例外' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '例外にする' }).first()).toBeVisible()
+})
