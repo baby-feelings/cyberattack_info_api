@@ -254,3 +254,21 @@ allowlistを「テーブル」`[allowlist]`として読む**。配列`[[allowlis
 場合は`[[allowlists]]`（複数形、8.25以降）を使う。除外が効くことは`docker run ghcr.io/gitleaks/gitleaks
 :v8.30.1 git --log-opts="--all -- <path>" /repo`で確認できる（`dir`モードは設定を対象ディレクトリ内で
 探すためリポジトリルートの設定が使われない点に注意）。
+
+## インフラ設定の診断（Issue #400、`InfraScanner`・`iac_rules.py`）
+
+Firebaseのルール・Dockerfile・docker-composeの代表的な不備を、**外部ツールを使わずPythonで**判定する
+（サブプロセス・ネットワークなし。Firebaseのルールは、市販のIaC診断ツールが対応していないため自前が必須）。
+Terraform・Kubernetesは対象外（YAGNI。使うアプリが出たら`iac_rules`に足す）。
+
+- **対象ファイル**: `firestore.rules`・`storage.rules`・`database.rules.json`・`firebase.json`・`Dockerfile*`・`*.Dockerfile`・
+  `docker-compose*.y(a)ml`・`compose*.y(a)ml`。`node_modules`・`.git`・`vendor`等は読まない。1ファイル200KB・1リポジトリ200ファイルまで
+- **ルール**: Firebase=`allow ... if true`（書き込みはERROR・読み取りはWARNING。ログインしていれば誰でも書ける・期限つきの
+  テストモードも検知）・RTDBの`.read/.write: true`・`firebase.json`の`"public": "."`。Dockerfile=root実行・`latest`/タグなし・
+  シークレットのCOPY・`ENV/ARG`の認証情報の直書き・`curl|sh`。compose=特権・Dockerソケット・ホストネットワーク・DB等の
+  外部公開（`127.0.0.1`以外）・環境変数の認証情報の直書き
+- **シークレットの値は結果に残さない**（gitleaksと同じ方針。スニペットは`KEY=***`）。`dummy`・`example`・`changeme`等の
+  明らかなダミー値は直書きと見なさない。`${VAR}`・`*_FILE`・`/run/secrets/`も対象外
+- **レコード**: `rule_id`=`iac:<ルール名>`・`tool`=`"iac"`・`cwe_ids`あり・CVSSなし。メッセージに「対策:」（修正方法）を含める
+- 意図的な指摘（公開してよいルール・開発用composeの公開ポート等）は、**例外（受容・影響なし。#403）**で管理する
+- ダッシュボードは`CodescanRow.tsx`のツールバッジ（インフラ設定）

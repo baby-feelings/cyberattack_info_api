@@ -38,7 +38,7 @@ cyberattack_info_api/
 │   │                           # router〈GET /api/sla・POST /admin/sla-digest〉・digest〈週次まとめのSlack通知ジョブ〉。DBの変更なし
 │   ├── finding_exceptions/      # 検知の例外（Issue #403）: models〈finding_exceptions。検知とは別テーブル〉・matching〈同一性キー・除外・照合〉・
 │   │                           # repository・router〈/api/exceptions・VEX〉・lifecycle〈期限切れ・修正版の公開の毎日の確認〉・issue_sync〈Issueの整合〉・vex
-│   ├── codescan/                # 自アプリコード脆弱性診断（CODESCAN）ドメイン（Semgrep静的解析 + gitleaks
+│   ├── codescan/                # 自アプリコード脆弱性診断（CODESCAN）ドメイン（Semgrep・インフラ設定〈iac_rules〉・Semgrep静的解析 + gitleaks
 │   │                           # シークレット検知。issue_management・cvss_mapping含む）
 │   ├── mcp_server/             # AIエージェント向けリモートMCPサーバー（/mcp、Streamable HTTP。server〈組み立て〉・
 │   │                           # tools〈public/private/identity〉・gateway〈RestGateway〉・oauth/〈OAuth 2.1 認可サーバー〉・auth〈admin/public/userの認証。台帳で失効確認〉。詳細は docs/mcp-server.md）
