@@ -11,7 +11,7 @@ GET    /api/exceptions/vex      – VEX（OpenVEX・CycloneDX）での出力
 """
 import json
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, Security
@@ -21,6 +21,7 @@ from app.auth.api_key import require_api_key, require_api_key_or_session
 from app.core.background import run_in_background
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.db_utils import as_utc
 from app.core.owner_scope import is_owned_by
 from app.crawler_logs.writer import now_utc
 from app.depscan.models import DependencyFinding
@@ -72,17 +73,13 @@ def _owns(repo_full_name: str, forced_owner: str | None) -> bool:
     return forced_owner is None or is_owned_by(repo_full_name, forced_owner)
 
 
-def _as_utc(value: datetime) -> datetime:
-    return value if value.tzinfo else value.replace(tzinfo=UTC)
-
-
 def _validate_expiry(body: FindingExceptionIn) -> datetime | None:
     """期限を検証する（受容は必須・未来・上限日数以内）。"""
     if body.expires_at is None:
         if body.requires_expiry():
             raise HTTPException(status_code=422, detail="受容には、期限が必要です。")
         return None
-    expires_at = _as_utc(body.expires_at)
+    expires_at = as_utc(body.expires_at)
     now = now_utc()
     if expires_at <= now:
         raise HTTPException(status_code=422, detail="期限は、現在より後の日時にしてください。")
