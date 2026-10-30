@@ -62,3 +62,22 @@ tarball方式のCODESCANは現在のツリーしか見えないため、GitHub�
 - **トークン**: `repo`スコープのclassic PATで、所有リポジトリの設定を読める。fine-grainedにする場合は、Administration（読み取り）が要る。
   最小権限化は、この点検で取れる範囲に影響するため、ユーザー判断
 - API: `GET /api/repo-audit`（スコアの低い順・`only_issues`）。認可は他のAPIと同じ。ダッシュボードの画面は未実装
+
+## 公開サイトの外形監視（Issue #401。`app/external_monitor/`）
+
+全アプリの公開サイトを、毎日、**非侵入**（GETのみ・少数のパス・リダイレクトを辿らない）で点検する（ZAPは月1回・手動・一部のみのため）。
+
+- **対象URL**（`targets.py`）: リポジトリのHomepage欄・Firebase（`.firebaserc`のプロジェクトID→`https://<id>.web.app`。Firestoreの確認先も）・
+  GitHub Pages（`has_pages`→`https://<owner>.github.io`）を自動検出し、`EXTERNAL_MONITOR_URLS`（https・カンマ区切り）で追加できる。
+  URLは`normalize_url`でスキーム＋ホストに整える。**自分の所有するドメインのみ**（リポジトリの情報由来か、明示した設定）
+- **SSRF対策**（`probes.is_safe_target`）: https以外・IPの直接指定・**内部アドレス**（プライベート・ループバック・リンクローカル・予約）に
+  解決されるホスト（1つでも）は、点検しない。リポジトリのHomepage等は外部入力のため、点検の直前に毎回検査する
+- **点検**（`probes.py`。判定は純粋な`evaluate_*`・`looks_like_exposure`）: TLS証明書の残り日数（30日以内=WARNING・7日以内/期限切れ/検証失敗=ERROR）・
+  セキュリティヘッダー（CSP・HSTSが無い=WARNING、nosniff・frame・Referrer-Policyは INFO）・露出ファイル（`/.env`・`/.git/HEAD`・`/.git/config`・
+  `/firebase.json`・`/backup.zip`。**内容で判定**し、何でも200のHTMLを返すSPAを誤検知しない。内容は記録しない=ERROR）・宙ぶらりんのDNS
+  （名前が解決できない・サービス側のリソースが無い表示=ERROR）・Firestore RESTの認証なし読み取り（WARNING。意図した公開範囲か確認）
+- **保存**: `site_checks`（URLごとに最新の1行）。クローラー種別`EXTMON`・毎日UTC 22:35（`EXTMON_*`）
+- **通知**（`core/notifications/site_alerts.py`）: **前回より増えた**ERROR・WARNING（INFOは一覧で確認）だけ、管理者のSlackへ。**初回は通知しない**
+  （既存の問題が溢れるため）。外部由来の文字列は`escape_mrkdwn`で無害化
+- API: `GET /api/site-monitor`（問題の重いサイトが先・`only_issues`）。セッション認証時は本人所有のリポジトリに紐づくサイトのみ
+  （設定で足したサイトは管理者のみ）。ダッシュボードの画面は未実装

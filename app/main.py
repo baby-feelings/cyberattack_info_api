@@ -28,6 +28,8 @@ from app.depscan.router import admin_router as depscan_admin_router
 from app.depscan.router import router as depscan_router
 from app.depsops.router import admin_router as depsops_admin_router
 from app.depsops.router import router as depsops_router
+from app.external_monitor.router import admin_router as site_monitor_admin_router
+from app.external_monitor.router import router as site_monitor_router
 from app.finding_exceptions.router import admin_router as exceptions_admin_router
 from app.finding_exceptions.router import router as exceptions_router
 from app.github_alerts.router import admin_router as github_alerts_admin_router
@@ -157,6 +159,7 @@ app.include_router(sla_router)
 app.include_router(exceptions_router)
 app.include_router(github_alerts_router)
 app.include_router(repo_audit_router)
+app.include_router(site_monitor_router)
 app.include_router(kev_admin_router)
 app.include_router(osv_admin_router)
 app.include_router(jvn_admin_router)
@@ -168,6 +171,7 @@ app.include_router(sla_admin_router)
 app.include_router(exceptions_admin_router)
 app.include_router(github_alerts_admin_router)
 app.include_router(repo_audit_admin_router)
+app.include_router(site_monitor_admin_router)
 app.include_router(user_crawl_admin_router)
 app.include_router(repo_cleanup_admin_router)
 app.include_router(metrics_router)

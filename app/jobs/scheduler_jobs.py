@@ -18,6 +18,7 @@ from app.codescan.crawler import fetch_and_scan_code
 from app.core.config import settings
 from app.depscan.crawler import fetch_and_scan_dependencies
 from app.depsops.runner import run_dependabot_ops
+from app.external_monitor.crawler import fetch_and_monitor_sites
 from app.finding_exceptions.lifecycle import run_exception_lifecycle
 from app.github_alerts.crawler import fetch_and_store_github_alerts
 from app.jobs.repo_cleanup import run_repo_cleanup
@@ -97,6 +98,11 @@ def build_scheduled_jobs() -> list[ScheduledJob]:
         ScheduledJob(
             "oauth_cleanup", "OAUTH_CLEANUP", run_oauth_cleanup,
             settings.OAUTH_CLEANUP_CRON_HOUR_UTC, settings.OAUTH_CLEANUP_CRON_MINUTE_UTC,
+        ),
+        # 公開サイトの外形監視（Issue #401）
+        ScheduledJob(
+            "site_monitor", "EXTMON", fetch_and_monitor_sites,
+            settings.EXTMON_CRON_HOUR_UTC, settings.EXTMON_CRON_MINUTE_UTC,
         ),
         # リポジトリの設定の監査（Issue #398）
         ScheduledJob(

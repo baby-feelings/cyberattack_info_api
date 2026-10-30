@@ -15,6 +15,7 @@ from app.depscan import models as _depscan_models  # noqa: F401
 from app.depsops import models as _depsops_models  # noqa: F401
 from app.finding_exceptions import models as _finding_exceptions_models  # noqa: F401
 from app.github_alerts import models as _github_alerts_models  # noqa: F401
+from app.external_monitor import models as _external_monitor_models  # noqa: F401
 from app.repo_audit import models as _repo_audit_models  # noqa: F401
 from app.jvn import models as _jvn_models  # noqa: F401
 from app.kev import models as _kev_models  # noqa: F401

@@ -80,7 +80,7 @@ cd dashboard && npm run lint          # ESLint（警告数の上限あり）
 deploy/zap/run_zap_scan.ps1           # OWASP ZAP の動的診断（Docker Desktop。docs/zap-scan.md）
 ```
 
-**テスト結果（最新）:** バックエンド 1780 テスト / カバレッジ 99%（Windows は、POSIXパス前提の1件をスキップ）、ダッシュボード 567 テスト
+**テスト結果（最新）:** バックエンド 1827 テスト / カバレッジ 99%（Windows は、POSIXパス前提の1件をスキップ）、ダッシュボード 567 テスト
 （Vitest）/ カバレッジ 98%、E2E 108 シナリオ
 
 ダッシュボードのE2Eテスト（Playwright、API全モック）は `dashboard/` で `npm run e2e`。

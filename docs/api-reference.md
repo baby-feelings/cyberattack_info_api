@@ -27,6 +27,7 @@
 | GET | `/api/runtimes/repos` | リポジトリごとの検出数と、対応が必要な数 |
 | GET | `/api/runtimes/releases` | 最新版とサポート期限（系列ごと。`recommended`が推奨の系列） |
 | GET | `/api/sla` | 脆弱性への対応状況（Issue #404）。DEPSCANの検知の、重要度別の対応期限（CRITICAL 7日・HIGH 30日・MEDIUM 90日・KEV掲載7日。`SLA_*`で変更）を超えた検知と、重要度別・リポジトリ別の件数、平均対応日数（MTTR）。`operating`・`repo`・`owner`・`window_days`（MTTRの集計期間。既定90・最大180）。セッション認証時は本人所有のみ |
+| GET | `/api/site-monitor` | 公開サイトの外形監視（Issue #401）。TLS証明書の残り日数・ヘッダー・露出ファイル・宙ぶらりんのDNS・認証なしで読めるFirestoreの点検結果。`only_issues`。セッション認証時は本人所有のリポジトリのサイトのみ |
 | GET | `/api/repo-audit` | リポジトリのセキュリティ設定の監査（Issue #398）。スコア（0〜100）・各項目の判定（`ok`/`ng`/`unavailable`〈取得不可〉/`not_enforceable`〈強制できない〉）・前回からの変化。`only_issues`。セッション認証時は本人所有のみ |
 | GET | `/api/github-alerts` | GitHubのセキュリティアラート（secret scanning・Dependabot alerts・code scanning。Issue #402）。`kind`・`repo`・`resolved`。取得できない項目は`unavailable`に示す。セッション認証時は本人所有のみ。シークレットの値は含まない |
 | GET | `/api/github-alerts/compare` | Dependabot alertsとDEPSCANの検知の突き合わせ（`both`・`only_github`・`only_depscan`） |
@@ -57,6 +58,7 @@
 | POST | `/admin/osv-crawl` | OSV手動クロール（`?days=N`・`?force=true`対応） |
 | POST | `/admin/jvn-crawl` | JVN手動クロール（`?days=N`・`?force=true`対応） |
 | POST | `/admin/depscan-crawl` | DEPSCAN手動実行（`?force=true`対応） |
+| POST | `/admin/site-monitor-crawl` | 公開サイトの外形監視をいま実行（`?force=true`対応。バックグラウンド） |
 | POST | `/admin/repo-audit-crawl` | リポジトリの設定の監査をいま実行（`?force=true`対応。バックグラウンド） |
 | POST | `/admin/github-alerts-crawl` | GitHubのセキュリティアラートの取り込みをいま実行（`?force=true`対応。バックグラウンド） |
 | POST | `/admin/exception-lifecycle` | 例外の期限切れ・修正版の公開の確認と通知をいま実行（バックグラウンド） |
