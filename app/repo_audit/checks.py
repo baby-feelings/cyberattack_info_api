@@ -7,6 +7,7 @@
 - `not_enforceable`: 設定できない（非公開の無料リポジトリのブランチ保護）。
   不備とは区別し、分母に含めない
 """
+import hashlib
 from dataclasses import asdict, dataclass
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
@@ -110,14 +111,23 @@ def _deploy_keys(keys: list[dict[str, Any]] | None) -> Check:
 
 
 def sanitize_url(url: str) -> str:
-    """URL から、認証情報（`user:pass@`）・クエリ・フラグメントを除く（表示・保存・通知用）。
+    """URL を、スキームとホスト（とポート）だけにする（表示・保存・通知用）。
 
-    Webhook の送信先の URL には、トークンがクエリや認証情報として含まれることがある。
+    Webhook の送信先の URL には、シークレットが、認証情報（`user:pass@`）・クエリ・**パス**
+    （Slack の `/services/T…/B…/xxxx` など）として含まれる。ホスト以外は、残さない。
     """
     parts = urlsplit(url)
     host = parts.hostname or ""
     netloc = f"{host}:{parts.port}" if parts.port else host
-    return urlunsplit((parts.scheme, netloc, parts.path, "", ""))
+    return urlunsplit((parts.scheme, netloc, "", "", ""))
+
+
+def url_fingerprint(url: str) -> str:
+    """URL 全体の短いハッシュ（変化の検知用。元の URL は復元できない）。
+
+    ホストだけでは、同じホストのまま送信先（パス）が差し替えられても、気づけないため。
+    """
+    return hashlib.sha256(url.encode("utf-8")).hexdigest()[:8]
 
 
 def hook_url(hook: dict[str, Any]) -> str:

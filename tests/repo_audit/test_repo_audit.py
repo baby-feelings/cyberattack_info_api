@@ -102,9 +102,10 @@ class TestEvaluate:
         })
 
         assert checks["deploy_keys"].status == c.NG and "ci" in checks["deploy_keys"].detail
-        assert checks["webhooks"].status == c.NG and "http://plain.example/x" in checks["webhooks"].detail
+        assert checks["webhooks"].status == c.NG and "http://plain.example" in checks["webhooks"].detail
         # 認証情報・クエリ（トークン）は、表示に残さない
         assert "SECRET" not in checks["webhooks"].detail and "pw" not in checks["webhooks"].detail
+        assert "plain.example/x" not in checks["webhooks"].detail   # パスも出さない
 
     def test_score_is_weighted(self):
         # secret_scanning(3) が ng・他の点検できた項目は ok → 重みの比で計算する
@@ -126,7 +127,8 @@ class TestSecurityHardening:
         hook = {"id": 3, "config": {"url": "https://u:p@h.example:8443/a/b?token=T#frag"}}
 
         assert c.hook_url(hook).startswith("https://u:p@")
-        assert c.sanitize_url(c.hook_url(hook)) == "https://h.example:8443/a/b"
+        # スキームとホスト（とポート）だけを残す。パスにも、シークレットが入る（Slack など）
+        assert c.sanitize_url(c.hook_url(hook)) == "https://h.example:8443"
         assert c.hook_url({"url": "http://legacy"}) == "http://legacy"   # 互換
         assert c.hook_url({}) == ""
 
@@ -140,8 +142,18 @@ class TestSecurityHardening:
         assert len(c.diff_snapshot(before, replaced)) == 2
 
     def test_the_snapshot_never_holds_credentials_from_webhook_urls(self):
-        snap = collector.snapshot_of({"hooks": [{"id": 1, "config": {"url": "https://a:b@h.example/p?k=SECRET"}}]})
-        assert snap["hooks"] == ["1:https://h.example/p"]
+        secret_url = "https://hooks.slack.test/services/T0/B0/PATH-SECRET?k=QUERY-SECRET"
+        snap = collector.snapshot_of({"hooks": [{"id": 1, "config": {"url": secret_url}}]})
+
+        assert snap["hooks"] == [f"1:https://hooks.slack.test#{c.url_fingerprint(secret_url)}"]
+        assert "PATH-SECRET" not in repr(snap) and "QUERY-SECRET" not in repr(snap)
+
+    def test_a_webhook_redirected_to_another_path_on_the_same_host_is_still_a_change(self):
+        host = "https://hooks.slack.test/services/"
+        before = collector.snapshot_of({"hooks": [{"id": 1, "config": {"url": host + "A"}}]})
+        after = collector.snapshot_of({"hooks": [{"id": 1, "config": {"url": host + "B"}}]})
+
+        assert len(c.diff_snapshot(before, after)) == 2
 
     def test_a_kind_that_could_not_be_fetched_keeps_the_previous_snapshot(self):
         old = {"keys": ["1:a:ro"], "hooks": ["h"], "collaborators": ["alice:admin"]}

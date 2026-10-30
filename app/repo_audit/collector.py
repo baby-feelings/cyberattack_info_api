@@ -9,7 +9,7 @@ from typing import Any
 
 from app.core.github.api import GitHubApi
 from app.core.github.repo import GitHubRepo
-from app.repo_audit.checks import hook_url, sanitize_url
+from app.repo_audit.checks import hook_url, sanitize_url, url_fingerprint
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +92,10 @@ def snapshot_of(raw: dict[str, Any]) -> dict[str, list[str] | None]:
             ),
         ),
         "hooks": identities(
-            raw.get("hooks"), lambda h: f"{h.get('id')}:{sanitize_url(hook_url(h))}",
+            raw.get("hooks"),
+            lambda h: (
+                f"{h.get('id')}:{sanitize_url(hook_url(h))}#{url_fingerprint(hook_url(h))}"
+            ),
         ),
         "collaborators": identities(
             raw.get("collaborators"),
