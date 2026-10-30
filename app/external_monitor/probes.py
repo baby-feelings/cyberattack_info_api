@@ -186,19 +186,28 @@ def looks_like_exposure(rule: str, content_type: str, body: str) -> bool:
 
 
 def fetch_limited(
-    client: httpx.Client, url: str, *, read_body: bool = True, **params: str | int,
+    client: httpx.Client, url: str, *, read_body: bool = True, deadline: float | None = None,
+    **params: str | int,
 ) -> tuple[int, httpx.Headers, str]:
     """GET して (ステータス, ヘッダー, 本文) を返す。本文は、`_MAX_BODY_BYTES` までしか読まない。
 
     `client.get` は、本文をすべてメモリに読み込む。ストリームで受け、上限で打ち切る。
     `read_body=False` のときは、本文を読まない（ステータスとヘッダーだけで判定できるとき）。
+
+    - 圧縮（gzip 等）の応答は、伸長すると上限を超えて膨らむ（圧縮爆弾）ため、**伸長しない**。
+      クライアントは `Accept-Encoding: identity` を送り、それでも圧縮されていたら、本文は読まない
+    - `deadline`（`time.monotonic()` の時刻）を過ぎたら、読み取りの途中でも打ち切る
+      （接続のタイムアウトは、1回の読み取りごとのため、少しずつ送り続ける応答に、時間の上限を守れない）
     """
     with client.stream("GET", url, params=params or None) as response:
-        if not read_body:
+        encoding = response.headers.get("content-encoding", "identity").strip().lower()
+        if not read_body or encoding not in ("", "identity"):
             return response.status_code, response.headers, ""
         chunks: list[bytes] = []
         size = 0
-        for chunk in response.iter_bytes():
+        for chunk in response.iter_raw():
+            if deadline is not None and time.monotonic() > deadline:
+                raise httpx.ReadTimeout("point-in-time budget exceeded for the site check")
             chunks.append(chunk)
             size += len(chunk)
             if size >= _MAX_BODY_BYTES:
@@ -222,6 +231,7 @@ def probe_exposure(
             # バックアップ（zip）は、種類（Content-Type）だけで判定できるため、本文は読まない
             status, headers, text = fetch_limited(
                 client, f"{base_url}{path}", read_body=rule != "exposed-backup",
+                deadline=deadline,
             )
         except httpx.HTTPError:
             continue
@@ -259,14 +269,16 @@ def evaluate_takeover(
     return []
 
 
-def probe_firestore(client: httpx.Client, project_id: str) -> list[dict[str, str]]:
+def probe_firestore(
+    client: httpx.Client, project_id: str, deadline: float | None = None,
+) -> list[dict[str, str]]:
     """Firestore の REST API を、認証なしで読めるか。読めるなら、意図した公開範囲か確認を促す。"""
     url = (
         f"https://firestore.googleapis.com/v1/projects/{project_id}"
         "/databases/(default)/documents"
     )
     try:
-        status, _, _ = fetch_limited(client, url, read_body=False, pageSize=1)
+        status, _, _ = fetch_limited(client, url, read_body=False, deadline=deadline, pageSize=1)
     except httpx.HTTPError:
         return []
     if status == 200:
@@ -297,15 +309,17 @@ def probe_site(url: str, project_id: str | None = None) -> tuple[int | None, lis
     body = ""
     if addresses is not None:
         with httpx.Client(timeout=_TIMEOUT, follow_redirects=False,
-                          headers={"User-Agent": "cyberattack-info-api-monitor/1.0"}) as client:
+                          headers={"User-Agent": "cyberattack-info-api-monitor/1.0",
+                                    # 圧縮させない（伸長後のサイズを、上限で守れないため）
+                                    "Accept-Encoding": "identity"}) as client:
             try:
-                status, headers, body = fetch_limited(client, base + "/")
+                status, headers, body = fetch_limited(client, base + "/", deadline=deadline)
                 findings += evaluate_headers(headers)
             except httpx.HTTPError as exc:
                 findings.append(_finding("unreachable", WARNING, f"サイトに接続できません: {exc}"))
             # 露出の判定は、内容を見る（何でも index.html を返す SPA を、誤検知しない）
             findings += probe_exposure(client, base, deadline)
             if project_id:
-                findings += probe_firestore(client, project_id)
+                findings += probe_firestore(client, project_id, deadline)
     findings += evaluate_takeover(host, addresses, status, body)
     return days_left, findings

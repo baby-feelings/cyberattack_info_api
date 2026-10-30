@@ -31,9 +31,9 @@ GOOD_HEADERS = {
 class _Stream:
     """`client.stream(...)` の戻り値（コンテキストマネージャー）の偽物。読んだバイト数を数える。"""
 
-    def __init__(self, status, content_type, body, chunk=1000):
+    def __init__(self, status, content_type, body, chunk=1000, encoding=None):
         self.status_code = status
-        self.headers = httpx.Headers({"content-type": content_type})
+        self.headers = httpx.Headers({"content-type": content_type, **({"content-encoding": encoding} if encoding else {})})
         self._body = body.encode() if isinstance(body, str) else body
         self._chunk = chunk
         self.bytes_read = 0
@@ -45,7 +45,7 @@ class _Stream:
     def __exit__(self, *exc):
         return False
 
-    def iter_bytes(self):
+    def iter_raw(self):
         self.iterated = True
         for i in range(0, len(self._body), self._chunk):
             part = self._body[i:i + self._chunk]
@@ -217,6 +217,47 @@ class TestResponseLimits:
         assert status == 200 and len(text) == probes._MAX_BODY_BYTES
         # 100万バイトを、すべて読まない（上限に達したら打ち切る）
         assert client.streams[0].bytes_read < 100_000
+
+    def test_compressed_responses_are_never_read_or_decompressed(self):
+        stream = _Stream(200, "text/html", "x" * 5000, encoding="gzip")
+        client = MagicMock()
+        client.stream.return_value = stream
+
+        status, _, text = probes.fetch_limited(client, "https://a.example/")
+
+        assert (status, text) == (200, "") and stream.iterated is False
+        # identity（圧縮なし）は、読む
+        plain = MagicMock()
+        plain.stream.return_value = _Stream(200, "text/html", "ok", encoding="identity")
+        assert probes.fetch_limited(plain, "https://a.example/")[2] == "ok"
+
+    def test_the_deadline_stops_a_response_that_keeps_trickling(self):
+        client = _stream_client({"/": (200, "text/html", "a" * 50_000)})
+
+        try:
+            probes.fetch_limited(client, "https://a.example/", deadline=0.0)   # すでに超過
+        except httpx.TimeoutException:
+            return
+        raise AssertionError("expected a timeout")
+
+    def test_the_site_check_asks_for_uncompressed_responses(self):
+        created = {}
+        real_client = httpx.Client
+
+        def spy(**kwargs):
+            created.update(kwargs)
+            return real_client(**kwargs)
+
+        with patch.object(probes, "resolve_host", return_value=None), patch("httpx.Client", spy):
+            probes.probe_site("https://gone.example")   # 名前が解決できない → ネットワークには出ない
+        assert created == {}
+        with patch.object(probes, "resolve_host", return_value=["93.184.216.34"]), \
+             patch.object(probes, "check_tls", return_value=(100, [])), \
+             patch.object(probes, "fetch_limited", side_effect=httpx.ConnectError("x")), \
+             patch.object(probes, "probe_exposure", return_value=[]), \
+             patch("httpx.Client", spy):
+            probes.probe_site("https://a.example")
+        assert created["headers"]["Accept-Encoding"] == "identity"
 
     def test_the_body_can_be_skipped_entirely(self):
         client = _stream_client({"/": (200, "application/zip", "x" * 5000)})
