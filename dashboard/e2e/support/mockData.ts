@@ -178,6 +178,7 @@ export const depscanFindings = FINDING_SEEDS.map((s) => ({
   manifest_path: 'package-lock.json',
   reachability: s.reachability ?? null,
   repo_visibility: s.visibility ?? null,
+  is_malicious: false,
   priority_reasons: s.reasons ?? [],
   detected_at: '2026-09-15T00:00:00Z',
   resolved_at: s.resolved ? '2026-09-18T00:00:00Z' : null,

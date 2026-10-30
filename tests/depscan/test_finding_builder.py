@@ -240,3 +240,39 @@ class TestFindingBuilder:
 
         assert records[0]["fixed_versions"] == ["2.0.0"]
         mock_latest.assert_called_once()
+
+
+class TestMaliciousAdvisory:
+    """OSV の MAL-*（悪意あるパッケージ）は CVSS が無くても CRITICAL にする。"""
+
+    def _build(self, osv_id, vuln):
+        dep_to_repos = {("npm", "evil-pkg", "1.0.0"): [("u/repo1", "package-lock.json")]}
+        with patch(
+            "app.depscan.finding_builder.query_versions_batch",
+            return_value={("npm", "evil-pkg", "1.0.0"): [osv_id]},
+        ), patch("app.depscan.finding_builder.fetch_vuln_by_id", return_value=vuln):
+            return build_findings(dep_to_repos)
+
+    def test_mal_advisory_without_severity_becomes_critical(self):
+        vuln = {
+            "id": "MAL-2026-1234",
+            "summary": "Malicious code in evil-pkg (npm)",
+            "affected": [{"ranges": [{"events": [{"introduced": "0"}]}]}],
+        }
+
+        records = self._build("MAL-2026-1234", vuln)
+
+        assert len(records) == 1
+        assert records[0]["severity"] == "CRITICAL"
+        assert records[0]["cvss_score"] is None
+
+    def test_ordinary_advisory_without_severity_is_not_escalated(self):
+        vuln = {
+            "id": "GHSA-aaaa-bbbb-cccc",
+            "summary": "x",
+            "affected": [{"ranges": [{"events": [{"introduced": "0"}]}]}],
+        }
+
+        records = self._build("GHSA-aaaa-bbbb-cccc", vuln)
+
+        assert records[0]["severity"] != "CRITICAL"

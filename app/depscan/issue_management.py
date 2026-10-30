@@ -12,7 +12,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.finding_format import format_package_lines
+from app.core.finding_format import format_malicious_section, format_package_lines, split_malicious
 from app.core.github.repo import GitHubRepo
 from app.core.issue_filing import file_or_update_repo_issues
 from app.core.notifications.slack import DASHBOARD_URL
@@ -44,9 +44,15 @@ def file_github_issues(new_snapshots: list[dict[str, Any]], token: str | None = 
     token = token if token is not None else settings.GITHUB_TOKEN
 
     def format_body(findings: list[dict[str, Any]]) -> str:
+        malicious, others = split_malicious(findings)
+        # 悪意あるパッケージは、脆弱性の一覧より前に、対応手順つきで示す
+        malicious_section = (
+            "\n".join(format_malicious_section(malicious)) + "\n\n" if malicious else ""
+        )
         return (
             f"DEPSCAN が依存ライブラリの脆弱性を検知しました（{timestamp}）。\n\n"
-            + "\n".join(format_package_lines(findings))
+            + malicious_section
+            + "\n".join(format_package_lines(others))
             + f"\n\n---\n詳細: {DASHBOARD_URL}"
         )
 

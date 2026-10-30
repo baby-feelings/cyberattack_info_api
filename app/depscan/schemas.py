@@ -1,8 +1,9 @@
 """DEPSCAN（依存ライブラリ脆弱性スキャン）ドメインの Pydantic スキーマ定義。"""
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
+from app.core.osv_client import is_malicious_advisory
 from app.core.schemas import OrmDatetimeModel, SeverityStat
 
 
@@ -58,6 +59,14 @@ class DependencyFindingOut(OrmDatetimeModel):
         default_factory=list,
         description="OSVエントリのaliasesから抽出したCVE ID一覧（無ければ空配列）",
     )
+    @computed_field(  # type: ignore[prop-decorator]
+        description="悪意あるパッケージ（OSV IDが MAL-*）か。脆弱性ではなくマルウェアで、"
+        "更新ではなく削除と認証情報の再発行が必要",
+    )
+    @property
+    def is_malicious(self) -> bool:
+        return is_malicious_advisory(self.osv_id)
+
     # cve_ids/priority_reasons と同様、DependencyFindingには存在しない計算フィールド
     # （list_depscan が model_copy で必ず上書きする）。Issue #133: 他のSBOM/SCA
     # ツールとの相互運用性のため、パッケージ識別にpurl（Package URL）を使う
@@ -93,7 +102,8 @@ class DependencyFindingOut(OrmDatetimeModel):
         description="優先度判定に寄与した要因の機械可読な一覧（Issue #135）。"
         "kev_listed（CISA KEV掲載）/ epss_high（EPSSスコア高） / reachable（到達可能）/ "
         "public_repo（公開リポジトリ）/ internet_facing_asset（インターネット公開資産）/ "
-        "production_asset（本番資産）/ high_importance_asset（重要度high）のいずれか0件以上",
+        "production_asset（本番資産）/ high_importance_asset（重要度high）/ "
+        "malicious_package（悪意あるパッケージ）のいずれか0件以上",
     )
     detected_at: str = Field(description="初回検知日時（ISO 8601）")
     resolved_at: str | None = Field(None, description="解決日時（未解決なら null）")

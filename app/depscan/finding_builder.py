@@ -5,7 +5,12 @@ from typing import Any
 
 import httpx
 
-from app.core.osv_client import fetch_vuln_by_id, parse_severity, query_versions_batch
+from app.core.osv_client import (
+    fetch_vuln_by_id,
+    is_malicious_advisory,
+    parse_severity,
+    query_versions_batch,
+)
 from app.crawler_logs.writer import now_utc
 from app.depscan.manifests import DepKey
 from app.depscan.registry_client import fetch_latest_version, is_newer_version
@@ -126,6 +131,9 @@ class FindingBuilder:
                     continue
 
                 severity, cvss_score = parse_severity(vuln)
+                if is_malicious_advisory(osv_id):
+                    # 悪意あるパッケージには CVSS が付かない。実害が既に起きうるため最上位にする
+                    severity = "CRITICAL"
                 shared = {
                     "ecosystem": ecosystem,
                     "package_name": package_name,

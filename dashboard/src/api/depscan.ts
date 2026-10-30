@@ -16,8 +16,11 @@ export interface DependencyFindingOut {
   reachability: 'reachable' | 'unreachable' | 'unknown' | null
   // GitHub APIの"private"フィールドから自動取得（Issue #131）。旧レコードはnull
   repo_visibility: 'public' | 'private' | null
+  // 悪意あるパッケージ（OSV IDが MAL-*）か。脆弱性ではなくマルウェアで、更新ではなく
+  // 削除と認証情報の再発行が必要（Issue #399）
+  is_malicious: boolean
   // 優先度判定に寄与した要因（Issue #135）。kev_listed/epss_high/reachable/
-  // public_repo/internet_facing_asset/production_asset/high_importance_asset
+  // public_repo/internet_facing_asset/production_asset/high_importance_asset/malicious_package
   priority_reasons: string[]
   detected_at: string
   resolved_at: string | null

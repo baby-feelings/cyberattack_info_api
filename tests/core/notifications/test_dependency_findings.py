@@ -115,3 +115,52 @@ class TestNotifyDependencyFindings:
             "（メッセージが長すぎるため以降省略。詳細は API / ダッシュボードを参照）"
         )
         assert not message.endswith("\n")
+
+
+class TestMaliciousPackageNotification:
+    def _finding(self, **kwargs):
+        base = {
+            "repo_full_name": "u/a",
+            "package_name": "evil-pkg",
+            "installed_version": "1.0.0",
+            "severity": "CRITICAL",
+            "fixed_versions": [],
+            "osv_id": "MAL-2026-1",
+        }
+        base.update(kwargs)
+        return base
+
+    def test_sends_separate_urgent_message_with_steps_before_the_digest(self):
+        findings = [
+            self._finding(package_name="cryptography", osv_id="GHSA-1", severity="HIGH"),
+            self._finding(),
+        ]
+        with patch("app.core.notifications.slack.send_slack") as mock_send:
+            notify_dependency_findings(findings, recipients=["https://hooks.slack.com/x"])
+
+        assert mock_send.call_count == 2
+        urgent, digest = (c[0][0] for c in mock_send.call_args_list)
+        assert "【緊急】悪意あるパッケージ" in urgent
+        assert "対応手順" in urgent
+        assert "evil-pkg" in urgent
+        # ダイジェストには、悪意あるパッケージを混ぜない（二重に通知しない）
+        assert "evil-pkg" not in digest
+        assert "cryptography" in digest
+        assert "1件検知" in digest
+
+    def test_only_malicious_sends_only_the_urgent_message(self):
+        with patch("app.core.notifications.slack.send_slack") as mock_send:
+            notify_dependency_findings([self._finding()], recipients=["https://hooks.slack.com/x"])
+
+        mock_send.assert_called_once()
+        assert "【緊急】" in mock_send.call_args[0][0]
+
+    def test_no_urgent_message_without_malicious(self):
+        with patch("app.core.notifications.slack.send_slack") as mock_send:
+            notify_dependency_findings(
+                [self._finding(osv_id="GHSA-1", severity="HIGH")],
+                recipients=["https://hooks.slack.com/x"],
+            )
+
+        mock_send.assert_called_once()
+        assert "【緊急】" not in mock_send.call_args[0][0]

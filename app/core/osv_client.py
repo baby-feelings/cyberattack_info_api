@@ -22,6 +22,19 @@ _CVSS_HIGH_MIN = 7.0
 _CVSS_MEDIUM_MIN = 4.0
 
 
+# 悪意あるパッケージ（OpenSSF malicious-packages 由来）の OSV ID の接頭辞
+_MALICIOUS_ID_PREFIX = "MAL-"
+
+
+def is_malicious_advisory(osv_id: str) -> bool:
+    """OSV ID が「悪意あるパッケージ」の勧告（`MAL-*`）か。
+
+    脆弱性（更新で直る）ではなくマルウェアそのものなので、該当バージョンの削除と、
+    漏えいした可能性のある認証情報の再発行が必要になり、通常の脆弱性とは対応が異なる。
+    """
+    return osv_id.startswith(_MALICIOUS_ID_PREFIX)
+
+
 def osv_vulnerability_url(osv_id: str) -> str:
     """OSV の脆弱性の詳細ページの URL。"""
     return f"{OSV_WEB_BASE}/{osv_id}"

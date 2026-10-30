@@ -1,6 +1,6 @@
 import { API_PREFIX } from './support/mockApi'
 import { expect, openTab, scenario, seedSession, type Page } from './support/test'
-import { DEPSOPS_TOTAL, depsopsItems } from './support/mockData'
+import { DEPSOPS_TOTAL, depscanFindings, depsopsItems } from './support/mockData'
 
 const TABLE = '依存ライブラリ脆弱性一覧'
 
@@ -614,4 +614,34 @@ scenario('DEP-25', '言語・実行環境のモーダルで、アプリごとに
   await dialog.getByRole('combobox', { name: '言語' }).selectOption('dart')
   await expect(dialog.getByText('該当する言語・実行環境はありません')).toBeVisible()
   expect(api.lastQuery('/api/runtimes')?.get('runtime')).toBe('dart')
+})
+
+scenario('DEP-26', '悪意あるパッケージ（MAL-*）は「悪意あり」バッジで区別され、対応が削除であることが分かる', async ({ page, api }) => {
+  // 既存の検知を1件だけ、悪意あるパッケージ（脆弱性ではなくマルウェア）に差し替えて返す
+  const malicious = {
+    ...depscanFindings[0],
+    package_name: 'evil-pkg',
+    installed_version: '1.0.0',
+    osv_id: 'MAL-2026-1234',
+    severity: 'CRITICAL',
+    cvss_score: null,
+    summary: 'Malicious code in evil-pkg (npm)',
+    fixed_versions: [],
+    is_malicious: true,
+    priority_reasons: ['malicious_package'],
+  }
+  api.override('GET', '/api/depscan', () => ({
+    body: { total: 1, page: 1, per_page: 200, data: [malicious] },
+  }))
+
+  const table = await openDepscan(page)
+
+  const badge = table.getByText('🛑 悪意あり')
+  await expect(badge).toBeVisible()
+  await expect(badge).toHaveAttribute('title', /削除/)
+  await expect(table).toContainText('evil-pkg')
+
+  // 展開すると、優先度の理由として「悪意あるパッケージ」が示される
+  await table.getByText('evil-pkg').click()
+  await expect(table.getByText('悪意あるパッケージ', { exact: true })).toBeVisible()
 })
