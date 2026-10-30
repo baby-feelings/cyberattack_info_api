@@ -90,7 +90,7 @@ app/
 │                 #   reachability_scan/repository+issue_management/priority/sbom/user_scan/source_files/parsers/）
 ├── depsops/      # Dependabot PR 自動運用（runner/pr_judge/pr_log_repository/classify/github_client〈PR操作〉/user_scan）
 ├── runtimes/     # 言語・実行環境（Python/Node.js/Flutter/Dart）の使用版の検出と、最新版・サポート期限（EOL）の判定
-├── sla/ finding_exceptions/ github_alerts/  # 対応状況（期限超過・MTTR）/ 検知の例外（受容等・VEX）/ GitHubのセキュリティアラート取り込み
+├── sla/ finding_exceptions/ github_alerts/ repo_audit/  # 対応状況 / 検知の例外（VEX）/ GitHubアラート取り込み / リポジトリ設定の監査
 ├── codescan/     # 自アプリのコード脆弱性診断（Semgrep+gitleaks+zizmor+インフラ設定〈Firebase・Docker〉。GitHubログイン
 │                 #   必須〈DEPSCANとセッション共有〉。+scanners〈Strategy〉/archive/repository/issue_management/cvss_mapping/cvss）
 ├── mcp_server/   # AIエージェント向けリモートMCPサーバー（/mcp、Streamable HTTP。組み立て=server.py・ツール=tools/・

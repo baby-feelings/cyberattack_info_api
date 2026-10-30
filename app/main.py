@@ -45,6 +45,8 @@ from app.mcp_server.oauth.routes import mount_oauth_routes
 from app.mcp_server.server import McpServer
 from app.osv.router import admin_router as osv_admin_router
 from app.osv.router import router as osv_router
+from app.repo_audit.router import admin_router as repo_audit_admin_router
+from app.repo_audit.router import router as repo_audit_router
 from app.runtimes.router import admin_router as runtimes_admin_router
 from app.runtimes.router import router as runtimes_router
 from app.sla.router import admin_router as sla_admin_router
@@ -154,6 +156,7 @@ app.include_router(runtimes_router)
 app.include_router(sla_router)
 app.include_router(exceptions_router)
 app.include_router(github_alerts_router)
+app.include_router(repo_audit_router)
 app.include_router(kev_admin_router)
 app.include_router(osv_admin_router)
 app.include_router(jvn_admin_router)
@@ -164,6 +167,7 @@ app.include_router(runtimes_admin_router)
 app.include_router(sla_admin_router)
 app.include_router(exceptions_admin_router)
 app.include_router(github_alerts_admin_router)
+app.include_router(repo_audit_admin_router)
 app.include_router(user_crawl_admin_router)
 app.include_router(repo_cleanup_admin_router)
 app.include_router(metrics_router)

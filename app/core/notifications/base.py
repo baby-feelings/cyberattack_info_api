@@ -13,6 +13,7 @@ CRAWLER_LABELS: dict[str, tuple[str, str]] = {
     "CODESCAN": (":mag:", "自アプリコード脆弱性"),
     "RUNTIME": (":arrows_counterclockwise:", "言語・実行環境のバージョン"),
     "GHALERT": (":lock:", "GitHub のセキュリティアラート"),
+    "REPOAUDIT": (":clipboard:", "リポジトリの設定の監査"),
 }
 
 

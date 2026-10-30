@@ -27,6 +27,7 @@
 | `CODESCAN_CRON_HOUR_UTC` / `CODESCAN_CRON_MINUTE_UTC` | - | CODESCAN 実行時刻（時・分・UTC）（デフォルト: `22`時`30`分。DEPSCANの後段） |
 | `RUNTIME_CRON_HOUR_UTC` / `RUNTIME_CRON_MINUTE_UTC` | - | 言語・実行環境のバージョン監視（RUNTIME）の実行時刻（時・分・UTC）（デフォルト: `22`時`45`分。CODESCANの後段） |
 | `SLA_CRITICAL_DAYS` / `SLA_HIGH_DAYS` / `SLA_MEDIUM_DAYS` / `SLA_KEV_DAYS` | - | 脆弱性の対応期限（検知から解決までの日数。Issue #404）（デフォルト: `7`/`30`/`90`、KEV掲載済みは`7`）。LOW・重要度不明は期限なし。1以上 |
+| `REPOAUDIT_CRON_HOUR_UTC` / `REPOAUDIT_CRON_MINUTE_UTC` | - | リポジトリの設定の監査の実行時刻（時・分・UTC）（デフォルト: `22`:`40`）（#398） |
 | `GHALERT_CRON_HOUR_UTC` / `GHALERT_CRON_MINUTE_UTC` | - | GitHubのセキュリティアラート取り込みの実行時刻（時・分・UTC）（デフォルト: `22`:`50`）（#402） |
 | `EXCEPTION_MAX_DAYS` / `EXCEPTION_EXPIRY_NOTICE_DAYS` | - | 検知の例外（受容）の期限の上限（日・デフォルト: `365`）と、期限の何日前に通知するか（デフォルト: `7`）（#403） |
 | `EXCEPTION_CRON_HOUR_UTC` / `EXCEPTION_CRON_MINUTE_UTC` | - | 例外の期限切れ・修正版の公開の確認と通知の実行時刻（時・分・UTC）（デフォルト: `22`:`55`。DEPSCAN・CODESCANの後）（#403） |

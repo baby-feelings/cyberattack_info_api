@@ -27,6 +27,7 @@ from app.kev.crawler import fetch_and_store_kev
 from app.mcp_server.mcp_token_expiry import run_mcp_token_expiry_notices
 from app.mcp_server.oauth.cleanup import run_oauth_cleanup
 from app.osv.crawler import fetch_and_store_osv
+from app.repo_audit.crawler import fetch_and_audit_repos
 from app.runtimes.crawler import fetch_and_scan_runtimes
 from app.sla.digest import run_sla_digest
 
@@ -96,6 +97,11 @@ def build_scheduled_jobs() -> list[ScheduledJob]:
         ScheduledJob(
             "oauth_cleanup", "OAUTH_CLEANUP", run_oauth_cleanup,
             settings.OAUTH_CLEANUP_CRON_HOUR_UTC, settings.OAUTH_CLEANUP_CRON_MINUTE_UTC,
+        ),
+        # リポジトリの設定の監査（Issue #398）
+        ScheduledJob(
+            "repo_audit", "REPOAUDIT", fetch_and_audit_repos,
+            settings.REPOAUDIT_CRON_HOUR_UTC, settings.REPOAUDIT_CRON_MINUTE_UTC,
         ),
         # GitHub のセキュリティアラートの取り込み（Issue #402）
         ScheduledJob(

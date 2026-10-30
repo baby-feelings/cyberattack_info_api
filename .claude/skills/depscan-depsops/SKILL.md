@@ -491,3 +491,18 @@ tarball方式のCODESCANは現在のツリーしか見えないため、GitHub�
 - **トークン**: 現状は`repo`スコープの classic PAT（secret scanning・Dependabot・code scanningの読み取りを含む）。fine-grainedに
   する場合は、Secret scanning alerts・Dependabot alerts・Code scanning alertsの読み取りが要る
 - 認可は他のAPIと同じ（`require_api_key_or_session`・セッション認証時は本人所有のみ）。ダッシュボードの画面は未実装
+
+## リポジトリの設定の監査（Issue #398。`app/repo_audit/`）
+
+- **点検項目**（`checks.py`。重み）: Secret scanning(3)・Push protection(2)・Dependabot alerts(3)・Dependabot security updates(2)・
+  既定ブランチの保護(3。必須レビュー・必須チェック)・フォークの許可(1。非公開のみ)・デプロイキー(2。書き込み権限つき)・Webhook(2。http・SSL検証なし)
+- **状態の区別**: `ok`/`ng`（スコアの分母）と、`unavailable`（取得不可＝権限不足・プランの対象外）・`not_enforceable`（強制できない＝
+  **非公開の無料リポジトリのブランチ保護**は403「Upgrade」）。後者2つは不備と区別し、分母に含めない。スコア＝重み付きの達成率
+- **収集**（`collector.py`）: 403・404は例外にせず`None`（取得不可）。「保護されていない」と「見えない」は404のメッセージで区別。
+  5xx・通信は例外で伝わり、そのリポジトリは飛ばして続ける
+- **変化の検知**: デプロイキー・Webhook・共同編集者の名前を`snapshot`に持ち、前回との追加・削除を`changes`に出す。**初回は変化なし**
+  （全件が追加になり通知が溢れるため）。取得不可の種類は比べない。変化は管理者のSlackへ（乗っ取りの兆候の確認）
+- **保存**: `repo_audits`（リポジトリごとに最新の1行）。クローラー種別`REPOAUDIT`・毎日UTC 22:40（`REPOAUDIT_*`）
+- **トークン**: `repo`スコープのclassic PATで、所有リポジトリの設定を読める。fine-grainedにする場合は、Administration（読み取り）が要る。
+  最小権限化は、この点検で取れる範囲に影響するため、ユーザー判断
+- API: `GET /api/repo-audit`（スコアの低い順・`only_issues`）。認可は他のAPIと同じ。ダッシュボードの画面は未実装
