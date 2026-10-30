@@ -346,3 +346,19 @@ class TestOsvVulnerabilityUrl:
         assert osv_vulnerability_url("GHSA-aaaa-bbbb-cccc") == (
             "https://osv.dev/vulnerability/GHSA-aaaa-bbbb-cccc"
         )
+
+
+class TestIsMaliciousAdvisory:
+    def test_mal_prefix_is_malicious(self):
+        from app.core.osv_client import is_malicious_advisory
+
+        assert is_malicious_advisory("MAL-2026-1234") is True
+
+    def test_other_advisories_are_not(self):
+        from app.core.osv_client import is_malicious_advisory
+
+        assert is_malicious_advisory("GHSA-aaaa-bbbb-cccc") is False
+        assert is_malicious_advisory("CVE-2026-0001") is False
+        assert is_malicious_advisory("PYSEC-2026-1") is False
+        # 接頭辞は先頭のみ有効（途中に含まれるだけでは該当しない）
+        assert is_malicious_advisory("GHSA-MAL-xxxx") is False

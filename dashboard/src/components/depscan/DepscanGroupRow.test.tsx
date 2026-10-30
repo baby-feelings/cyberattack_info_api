@@ -20,6 +20,7 @@ function makeFinding(overrides: Partial<DependencyFindingOut> = {}): DependencyF
     resolved_at: null,
     reachability: null,
     repo_visibility: null,
+    is_malicious: false,
     priority_reasons: [],
     ...overrides,
   }
@@ -150,6 +151,32 @@ describe('DepscanGroupRow', () => {
     const group = makeGroup([makeFinding({ priority_reasons: ['reachable'] })])
     renderRow(group)
     expect(screen.queryByText('KEV')).not.toBeInTheDocument()
+  })
+
+  it('shows a malicious-package badge when any finding in the group is malicious', () => {
+    const group = makeGroup([
+      makeFinding({ osv_id: 'GHSA-a' }),
+      makeFinding({ osv_id: 'MAL-2026-1', is_malicious: true, priority_reasons: ['malicious_package'] }),
+    ])
+    renderRow(group)
+    const badge = screen.getByText('🛑 悪意あり')
+    expect(badge).toBeInTheDocument()
+    // 脆弱性ではなくマルウェアで、対応が「削除」であることをツールチップで示す
+    expect(badge).toHaveAttribute('title', expect.stringContaining('削除'))
+  })
+
+  it('shows no malicious-package badge for ordinary vulnerabilities', () => {
+    renderRow(makeGroup([makeFinding()]))
+    expect(screen.queryByText('🛑 悪意あり')).not.toBeInTheDocument()
+  })
+
+  it('labels the malicious_package reason when expanded', () => {
+    const group = makeGroup([
+      makeFinding({ is_malicious: true, priority_reasons: ['malicious_package'] }),
+    ])
+    renderRow(group)
+    fireEvent.click(screen.getByText('cryptography'))
+    expect(screen.getByText('悪意あるパッケージ')).toBeInTheDocument()
   })
 
   it('shows priority reason badges for each finding when expanded', () => {

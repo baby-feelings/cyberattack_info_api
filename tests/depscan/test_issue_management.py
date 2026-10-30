@@ -157,3 +157,38 @@ class TestCloseResolvedRepoIssues:
             side_effect=httpx.HTTPStatusError("403", request=MagicMock(), response=MagicMock()),
         ):
             close_resolved_repo_issues(db_session, {"baby-feelings/baby_grow"})  # 例外を送出しない
+
+
+class TestMaliciousPackageIssueBody:
+    def _finding(self, **kwargs):
+        base = {
+            "repo_full_name": "baby-feelings/baby_grow",
+            "package_name": "evil-pkg",
+            "installed_version": "1.0.0",
+            "severity": "CRITICAL",
+            "fixed_versions": [],
+            "osv_id": "MAL-2026-1",
+        }
+        base.update(kwargs)
+        return base
+
+    def test_issue_body_puts_malicious_section_with_steps_before_the_list(self):
+        findings = [
+            self._finding(package_name="cryptography", osv_id="GHSA-001", severity="HIGH"),
+            self._finding(),
+        ]
+        with patch(f"{_REPO}.find_open_issue", autospec=True, return_value=None), \
+             patch(f"{_REPO}.create_issue", autospec=True) as mock_create:
+            file_github_issues(findings)
+
+        body = mock_create.call_args[0][2]
+        assert "悪意あるパッケージを検知" in body
+        assert "対応手順" in body
+        assert body.index("対応手順") < body.index("cryptography")
+
+    def test_issue_body_without_malicious_has_no_malicious_section(self):
+        with patch(f"{_REPO}.find_open_issue", autospec=True, return_value=None), \
+             patch(f"{_REPO}.create_issue", autospec=True) as mock_create:
+            file_github_issues([self._finding(osv_id="GHSA-001", severity="HIGH")])
+
+        assert "悪意あるパッケージ" not in mock_create.call_args[0][2]

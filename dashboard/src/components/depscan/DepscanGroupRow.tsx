@@ -50,6 +50,21 @@ const PRIORITY_REASON_LABELS: Record<string, string> = {
   internet_facing_asset: 'ネット公開資産',
   production_asset: '本番資産',
   high_importance_asset: '重要度high',
+  malicious_package: '悪意あるパッケージ',
+}
+
+// 悪意あるパッケージは脆弱性ではなくマルウェアで、対応が「更新」ではなく「削除と認証情報の再発行」に
+// なるため、グループ行の重要度の横で最優先に目立たせる
+function MaliciousBadge({ show }: { show: boolean }) {
+  if (!show) return null
+  return (
+    <span
+      title="脆弱性ではなくマルウェアです。該当バージョンを削除し、認証情報を再発行してください"
+      className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/50 whitespace-nowrap"
+    >
+      🛑 悪意あり
+    </span>
+  )
 }
 
 // KEV掲載は最も緊急度が高いシグナルのため、グループ行に集約表示する際は
@@ -88,6 +103,7 @@ export function DepscanGroupRow({ group, showRepo = true }: { group: FindingGrou
   const fixedVersions = groupFixedVersions(group)
   const reachability = groupReachability(group)
   const hasKevListed = group.findings.some(f => f.priority_reasons.includes('kev_listed'))
+  const hasMalicious = group.findings.some(f => f.is_malicious)
   const latestDate = new Date(groupLatestDetectedAt(group)).toLocaleDateString('ja-JP', {
     year: 'numeric', month: 'short', day: 'numeric',
   })
@@ -103,6 +119,7 @@ export function DepscanGroupRow({ group, showRepo = true }: { group: FindingGrou
           <div className="flex items-center gap-1">
             <SeverityBadge severity={bestSeverity} classMap={SEVERITY_CLS} />
             <KevListedBadge show={hasKevListed} />
+            <MaliciousBadge show={hasMalicious} />
           </div>
           <span className="block text-[10px] text-slate-600 mt-0.5 tabular-nums">
             計{group.findings.length}件

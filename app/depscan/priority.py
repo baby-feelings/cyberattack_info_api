@@ -7,6 +7,7 @@ N+1クエリ回避ヘルパーもここに置く。
 """
 from sqlalchemy.orm import Session
 
+from app.core.osv_client import is_malicious_advisory
 from app.depscan.models import DependencyFinding, RepoAssetContext
 from app.depscan.schemas import RepoAssetContextOut
 from app.kev.models import Vulnerability
@@ -64,6 +65,9 @@ def compute_priority_reasons(
     判断できるようにする。各理由は独立した判定のため、複数該当してもよい。
     """
     reasons: list[str] = []
+
+    if is_malicious_advisory(item.osv_id):
+        reasons.append("malicious_package")
 
     matched_kev = [kev_map[cve_id] for cve_id in item.cve_ids if cve_id in kev_map]
     if matched_kev:

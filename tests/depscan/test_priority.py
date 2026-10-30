@@ -156,3 +156,23 @@ class TestComputePriorityReasons:
             "kev_listed", "epss_high", "reachable", "public_repo",
             "internet_facing_asset", "production_asset", "high_importance_asset",
         }
+
+
+class TestMaliciousPackageReason:
+    def _finding(self, osv_id):
+        return DependencyFinding(
+            repo_full_name="u/r", ecosystem="npm", package_name="evil-pkg",
+            installed_version="1.0.0", osv_id=osv_id, summary="s",
+            fixed_versions=[], cve_ids=[], manifest_path="package-lock.json",
+            detected_at=_NOW,
+        )
+
+    def test_mal_advisory_gets_malicious_package_reason_first(self):
+        reasons = compute_priority_reasons(self._finding("MAL-2026-1"), None, {})
+
+        assert reasons == ["malicious_package"]
+
+    def test_ordinary_advisory_does_not(self):
+        assert "malicious_package" not in compute_priority_reasons(
+            self._finding("GHSA-x"), None, {},
+        )

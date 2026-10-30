@@ -113,11 +113,24 @@ Packagist・Hexは最も精度が低いbest-effort。`get_source_files`が対象
   - `reachable` / `public_repo` / `internet_facing_asset` / `production_asset` /
     `high_importance_asset`: それぞれ`reachability`/`repo_visibility`/`asset_context`
     から導出
+  - `malicious_package`: OSV IDが`MAL-*`（下記「悪意あるパッケージ」）
   - KEV突合は`fetch_kev_map`が一覧取得のたびに該当CVE群をまとめて1回で問い合わせる
 - **書き込み時ではなく読み取り時に計算する**設計（KEV掲載・EPSSスコアはDEPSCANの
   スキャンとは独立して毎日更新されるため、再スキャンなしで常に最新状態を反映できる）
 - ダッシュボード（`DepscanGroupRow.tsx`）では、いずれかのCVEが`kev_listed`の場合に
   赤い「KEV」バッジを行レベルで表示し、それ以外は展開時のCVE単位の内訳でバッジ表示する
+
+## 悪意あるパッケージ（OSV `MAL-*`。Issue #399）
+OpenSSF malicious-packages 由来の勧告は、**脆弱性ではなくマルウェア**で、対応が「更新」ではなく
+「該当バージョンの削除と、実行した環境の認証情報の再発行」になる。通常の脆弱性と区別して扱う。
+- 判定は`is_malicious_advisory(osv_id)`（`app/core/osv_client.py`。`MAL-`始まり）の1か所。
+  DBの列は増やさず、OSV IDから都度導出する（`DependencyFindingOut.is_malicious`は計算フィールド）
+- `FindingBuilder`は`MAL-*`の重要度を**CRITICAL**にする（CVSSが付かないため、そのままだと最上位にならない）
+- 通知: `notify_dependency_findings`が`split_malicious`で分け、悪意ありは**ダイジェストに混ぜず**、対応手順
+  （`MALICIOUS_RESPONSE_STEPS`）つきの専用の緊急通知（`MaliciousPackageNotifier`）を先に1通送る
+- Issue本文も、悪意ありの節（対応手順つき）を脆弱性の一覧より前に置く。文言は`app/core/finding_format.py`に集約
+- ダッシュボードは、グループ行に「🛑 悪意あり」バッジ（`MaliciousBadge`）。E2EはDEP-26
+- 履歴: 検知〜解決は通常の検知と同じく`detected_at`/`resolved_at`で残る
 
 ## DEPSCAN のSBOMエクスポート（Issue #133：CycloneDX/SPDX、app/depscan/sbom.py）
 OWASP Top 10:2025「ソフトウェアサプライチェーンの失敗」対策。**対応範囲はエクスポート
