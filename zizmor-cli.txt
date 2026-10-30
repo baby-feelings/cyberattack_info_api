@@ -1,0 +1,11 @@
+# CODESCAN（自アプリのコード脆弱性診断）の GitHub Actions ワークフロー診断ツール zizmor（Issue #397）。
+# app/codescan/scanners.py の ZizmorScanner が subprocess で `zizmor` CLI を呼ぶだけで、Python から
+# import しないため、アプリの依存（requirements.txt）とは別の venv（/opt/zizmor-venv、Dockerfile 参照）に
+# インストールする。Rust 製の単体バイナリを含む wheel で、依存パッケージは無い。aarch64 向けの
+# manylinux wheel が公式提供されているため、OCI 本番（ARM64）でも動作する。
+#
+# 互換リリース指定（~=1.31 は >=1.31, <2）にしている理由: JSON 出力の形式が変わりうる
+# メジャーバージョンを、自動で取り込まないため（ZizmorScanner.parse は 1.x の形式を前提にする）。
+# なおファイル名を requirements*.txt にしないのは、pip-audit/OSV-Scanner の走査対象を
+# アプリ本体の依存（requirements.txt）に限定するため（semgrep-cli.txt と同じ方針）。
+zizmor~=1.31

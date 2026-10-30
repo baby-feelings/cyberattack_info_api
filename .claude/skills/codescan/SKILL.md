@@ -146,9 +146,31 @@ gitleaks（https://github.com/gitleaks/gitleaks )も同じtarball展開先に対
 （Semgrepの300秒より短い。正規表現ベースのシークレット検知は一般にSemgrepの
 パターンマッチよりも高速なため）。
 
-**Semgrepとgitleaksは独立したtry/exceptで囲む**（`scan_repo`）。1つのtry/except
-で両方を囲むと、片方の障害（タイムアウト・パース失敗等）でもう片方の正常な検知結果
+**Semgrep・gitleaks・zizmorは独立したtry/exceptで囲む**（`scan_repo`）。1つのtry/except
+で全部を囲むと、1つの障害（タイムアウト・パース失敗等）でほかの正常な検知結果
 まで丸ごと失ってしまうため、意図的に分離している。
+**既知の弱点**: 失敗したツールの検知は、そのスキャンの結果に含まれないため、`sync`が
+「検知されなくなった」とみなして解決済みにする（次に成功すると、新規検知として再起票される）。
+
+## zizmorによるGitHub Actionsワークフローの診断（Issue #397、`ZizmorScanner`）
+CIは供給網の一部で、ワークフローの不備はシークレットの窃取・改ざんにつながる（2025年の
+`tj-actions/changed-files`の事例）。同じtarball展開先の`.github/workflows/`等を診断する。
+- **実行**: `zizmor --offline --persona auditor --format json --no-exit-codes --quiet .`を、展開先を
+  `cwd`にして実行（パスをリポジトリ基準の相対にするため）。**オフライン**（トークン不要・APIレート制限なし）の
+  ため、オンライン診断（既知の脆弱なアクション・偽造コミットの参照）は含まない。Dockerfileの専用venv
+  （`zizmor-cli.txt`、`~=1.31`）。出力形式は実物で確認済み（`locations[].symbolic.key.Local.verbatim_path`・
+  行は**0始まり**・`determinations.severity`/`persona`・`ignored`）
+- **ワークフローが無いリポジトリは、終了コード3・標準出力なし**（stderrに`no inputs collected`）。エラーでなく
+  「検知なし」として扱う。**それ以外で出力が無い場合は`OSError`**（0件として扱うと既存の検知を解決済みにするため）
+- **検査レベル**: `auditor`で実行し、`persona`が`Regular`の指摘と、`self-hosted-runner`（auditor分類だが
+  使用の把握が必要）だけを取り込む。他のauditor・pedanticの指摘はノイズのため除く
+- **重要度**: High→ERROR・Medium→WARNING・それ以外→INFO（Semgrepと同じ尺度）。**CVSS・CWEは推定しない**
+  （脆弱性そのものでなく設定の不備のため）。`rule_id`は`zizmor:<指摘名>`、`tool`は`"zizmor"`
+- メッセージに修正方法（`_ZIZMOR_FIX_HINTS`: 未固定アクション・過剰な権限・危険なトリガー・コマンド注入・
+  セルフホストランナー等）と、zizmorの説明URLを添える。`# zizmor: ignore[...]`の指摘（`ignored`）は除く
+- `hardcoded-container-credentials`は、認証情報が書かれうるため**スニペットを保存しない**（gitleaksと同じ方針）
+- ダッシュボードは`CodescanRow.tsx`のツールバッジ（Zizmor）。最初のスキャンでは、既存のワークフローの指摘が
+  まとめて新規検知になり、リポジトリごとのGitHub Issueが起票・追記される
 
 **Upsertキーの衝突回避**: `CodeFinding`のUpsert基準キー`(repo_full_name,
 file_path, rule_id, line_start)`は据え置きだが、gitleaks由来のfindingは

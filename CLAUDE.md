@@ -131,8 +131,8 @@ deploy/       # OCIデプロイ関連（deploy_to_oci.ps1・docker-compose.yml�
 - スキャンしないリポジトリは`SCAN_EXCLUDE_REPOS`（`owner/name`のカンマ区切り。全スキャン共通。起動時に形式検証）。
   データと起票済みIssueは`jobs/repo_cleanup`が片付ける。運用を止めたアプリは`INACTIVE_REPOS`（スキャンは続け、
   一覧API・ダッシュボードで`operating`により分ける）。どちらも`.env.production`に足してデプロイが必要
-- semgrepは`requirements.txt`に入れない（`semgrep-cli.txt`・Dockerfileの専用venv）。依存を狭く
-  固定する外部CLIとアプリの依存解決を分けるため。`Dockerfile`に`COPY`を足したら
+- semgrep・zizmorは`requirements.txt`に入れない（`semgrep-cli.txt`・`zizmor-cli.txt`・Dockerfileの専用
+  venv）。依存を狭く固定する外部CLIとアプリの依存解決を分けるため。`Dockerfile`に`COPY`を足したら
   `deploy/deploy_to_oci.ps1`の転送対象も更新する（`deployment-ops`スキル参照）
 - npmの`package-lock.json`はWindowsで`npm install`/`update`しない（Linux向け依存がロックから欠落し
   CIの`npm ci`が失敗する）。LinuxのDocker（`node:24`）で更新する。手順は`deployment-ops`スキル参照

@@ -78,6 +78,7 @@ cyberattack_info_api/
 ├── requirements.txt     # 本番依存パッケージ
 ├── requirements-dev.txt # 開発・テスト依存パッケージ
 ├── semgrep-cli.txt      # semgrep（CODESCAN用の外部CLI）。Dockerfileの専用venvへ導入しアプリの依存と隔離
+├── zizmor-cli.txt       # zizmor（CODESCANのGitHub Actions診断。外部CLI）。同じく専用venvへ導入
 ├── pyproject.toml       # ruff（S=bandit相当を含む）/ mypy / pytest 設定
 ├── .gitleaks.toml       # gitleaks の除外設定（[allowlist] テーブル書式。CODESCAN と CI で使用）
 ├── security_report.html # セキュリティ脆弱性診断レポート

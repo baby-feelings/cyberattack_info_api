@@ -18,6 +18,7 @@ export interface CodeFindingOut {
   code_snippet: string
   cvss_score: number | null
   cvss_vector: string | null
+  // 検知したツール（semgrep / gitleaks / zizmor）
   tool: string
   detected_at: string
   resolved_at: string | null

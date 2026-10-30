@@ -144,6 +144,28 @@ describe('CodescanPanel', () => {
     await waitFor(() => expect(screen.getByText('Gitleaks')).toBeInTheDocument())
   })
 
+  it('shows a Zizmor badge for GitHub Actions workflow findings', async () => {
+    mockedList.mockResolvedValue({
+      total: 1, page: 1, per_page: 30,
+      data: [item({ tool: 'zizmor', rule_id: 'zizmor:unpinned-uses', file_path: '.github/workflows/ci.yml' })],
+    })
+    mockedStats.mockResolvedValue(EMPTY_STATS)
+
+    render(<CodescanPanel />)
+    await waitFor(() => expect(screen.getByText('Zizmor')).toBeInTheDocument())
+    expect(screen.getByText('zizmor:unpinned-uses')).toBeInTheDocument()
+  })
+
+  it('shows an unknown tool by its name', async () => {
+    mockedList.mockResolvedValue({
+      total: 1, page: 1, per_page: 30, data: [item({ tool: 'newtool', rule_id: 'newtool:rule' })],
+    })
+    mockedStats.mockResolvedValue(EMPTY_STATS)
+
+    render(<CodescanPanel />)
+    await waitFor(() => expect(screen.getByText('newtool')).toBeInTheDocument())
+  })
+
   it('reloads the current filters when the reload button is clicked', async () => {
     mockedList.mockResolvedValue({ total: 1, page: 1, per_page: 30, data: [item()] })
     mockedStats.mockResolvedValue({
