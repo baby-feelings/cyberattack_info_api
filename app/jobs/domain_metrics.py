@@ -6,11 +6,10 @@ core は個別のドメインを知らない方針のため、ドメインを束
 - **クローラーの直近の実行結果**（`crawler_last_run_*`）: `crawler_logs` の、種別ごとの最新の1行。
   以前はクロール完了時にメモリ上の Gauge を更新していたため、API の再起動（デプロイ）のたびに
   消え、次の実行まで Grafana のパネルが空になっていた。DB から求めるので、再起動で消えない
-- **未解決の脆弱性の件数**（`depscan_open_findings`・`codescan_open_findings`）
-- **使っている依存パッケージの数**（`repo_dependencies_total`。SBOM の全量）
-- **使っている言語・実行環境の状態別の数**（`runtime_usage`）
+- **鍵の更新期限までの日数**（`secret_expires_in_days`。設定から求める。DB は使わない）
 
-`operating` ラベル（active=運用中 / inactive=運用停止中）は、`INACTIVE_REPOS` と照合して付ける。
+Grafana は「本アプリが正常に動いているか」の把握に絞る。脆弱性・依存パッケージ・言語の件数は、
+Web ダッシュボード（と API）が担うため、ここでは扱わない（重複させない）。
 
 本番 DB（Neon）はアクセスが無いと休止するため、30秒ごとのスクレイプのたびに問い合わせると
 常時起動になってしまう。更新は1日1回程度のため、結果は `CACHE_TTL_SECONDS` の間キャッシュする。
@@ -19,7 +18,7 @@ import logging
 import threading
 import time
 from collections.abc import Iterable
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 from prometheus_client.core import REGISTRY, GaugeMetricFamily
@@ -27,13 +26,9 @@ from prometheus_client.registry import Collector
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.codescan.models import CodeFinding
 from app.core.database import SessionLocal
-from app.core.operating_status import is_inactive_repo
 from app.crawler_logs.models import CrawlerLog
-from app.depscan.models import DependencyFinding, RepoDependency
-from app.runtimes.browse import list_runtimes
-from app.runtimes.filters import RuntimeFilter
+from app.jobs.secret_expiry import secret_days_left
 
 logger = logging.getLogger(__name__)
 
@@ -46,11 +41,6 @@ RETRY_AFTER_FAILURE_SECONDS = 300
 def _epoch(moment: datetime) -> float:
     """日時を UNIX 時間にする。タイムゾーンが無い日時（SQLite）は UTC として扱う。"""
     return (moment if moment.tzinfo else moment.replace(tzinfo=UTC)).timestamp()
-
-
-def _operating(repo_full_name: str) -> str:
-    """運用状態のラベル値。"""
-    return "inactive" if is_inactive_repo(repo_full_name) else "active"
 
 
 def _crawler_families(db: Session) -> list[GaugeMetricFamily]:
@@ -98,58 +88,13 @@ def _crawler_families(db: Session) -> list[GaugeMetricFamily]:
     ]
 
 
-def _open_findings_family(
-    db: Session, name: str, doc: str, model: type[DependencyFinding] | type[CodeFinding],
-) -> GaugeMetricFamily:
-    """未解決の検知の件数（重要度・運用状態別）。"""
-    rows = (
-        db.query(model.repo_full_name, model.severity, func.count(model.id))
-        .filter(model.resolved_at.is_(None))
-        .group_by(model.repo_full_name, model.severity)
-        .all()
-    )
-    counts: dict[tuple[str, str], int] = {}
-    for repo, severity, count in rows:
-        key = (_operating(repo), severity or "N/A")
-        counts[key] = counts.get(key, 0) + count
-    gauge = GaugeMetricFamily(name, doc, labels=["operating", "severity"])
-    for (operating, severity), count in sorted(counts.items()):
-        gauge.add_metric([operating, severity], count)
-    return gauge
-
-
-def _dependency_family(db: Session) -> GaugeMetricFamily:
-    """使っている依存パッケージの数（運用状態別）。"""
-    rows = db.query(RepoDependency.repo_full_name, func.count(RepoDependency.id)).group_by(
-        RepoDependency.repo_full_name,
-    ).all()
-    counts: dict[str, int] = {}
-    for repo, count in rows:
-        counts[_operating(repo)] = counts.get(_operating(repo), 0) + count
+def _secret_expiry_family(today: date | None = None) -> GaugeMetricFamily:
+    """鍵（API_KEY・GITHUB_TOKEN）の更新期限までの日数（過ぎていれば負）。期限を決めていない鍵は出さない。"""
     gauge = GaugeMetricFamily(
-        "repo_dependencies_total", "使っている依存パッケージの数（SBOM の全量）",
-        labels=["operating"],
+        "secret_expires_in_days", "鍵の更新期限までの日数（過ぎていれば負の値）", labels=["secret"],
     )
-    for operating, count in sorted(counts.items()):
-        gauge.add_metric([operating], count)
-    return gauge
-
-
-def _runtime_family(db: Session) -> GaugeMetricFamily:
-    """使っている言語・実行環境の数（言語・状態・運用状態別）。"""
-    today = datetime.now(UTC).date()
-    counts: dict[tuple[str, str, str], int] = {}
-    for row, status in list_runtimes(db, RuntimeFilter(), today=today):
-        key = (row.runtime, status.state, _operating(row.repo_full_name))
-        counts[key] = counts.get(key, 0) + 1
-    gauge = GaugeMetricFamily(
-        "runtime_usage",
-        "使っている言語・実行環境の数（state: eol / eol_soon / update_available / latest / "
-        "reference / unknown）",
-        labels=["runtime", "state", "operating"],
-    )
-    for (runtime, state, operating), count in sorted(counts.items()):
-        gauge.add_metric([runtime, state, operating], count)
+    for name, days_left in secret_days_left(today).items():
+        gauge.add_metric([name], days_left)
     return gauge
 
 
@@ -158,14 +103,7 @@ def build_metric_families() -> list[GaugeMetricFamily]:
     with SessionLocal() as db:
         return [
             *_crawler_families(db),
-            _open_findings_family(
-                db, "depscan_open_findings", "DEPSCAN の未解決の脆弱性の数", DependencyFinding,
-            ),
-            _open_findings_family(
-                db, "codescan_open_findings", "CODESCAN の未解決の脆弱性の数", CodeFinding,
-            ),
-            _dependency_family(db),
-            _runtime_family(db),
+            _secret_expiry_family(),
         ]
 
 

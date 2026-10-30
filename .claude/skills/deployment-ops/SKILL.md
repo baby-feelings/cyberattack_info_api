@@ -210,9 +210,13 @@ Issue #227でダッシュボードからのユーザー別登録方式（`UserAc
 - **`app/jobs/domain_metrics.py`**: 各ドメインの状態を表す指標を、**DBから求めて**`/metrics`に載せる
   （`prometheus_client`のカスタムコレクタ。coreは個別のドメインを知らない方針のためjobsに置く）。
   `crawler_last_run_success`/`_timestamp_seconds`/`_duration_seconds`/`_inserted`/`_updated`/
-  `_deleted`（`crawler_logs`の種別ごとの最新の1行。`crawler_type`ラベル）、
-  `depscan_open_findings`・`codescan_open_findings`（`operating`・`severity`ラベル）、
-  `repo_dependencies_total`（`operating`）、`runtime_usage`（`runtime`・`state`・`operating`）。
+  `_deleted`（`crawler_logs`の種別ごとの最新の1行。`crawler_type`ラベル。新しいジョブも、実行記録を
+  書けば、ダッシュボードに自動で出る）、`secret_expires_in_days`（`secret`ラベル。鍵の更新期限までの
+  日数。設定から求め、DBは使わない）。
+- **`app/core/http_metrics.py`**（`HttpMetricsMiddleware`）: `http_requests_total`（`status_class`
+  ラベル=2xx〜5xx）・`http_request_duration_seconds`（Histogram）。パスはラベルにしない（種類が増え続ける
+  ため）。`/metrics`自身は数えない。`core/rate_limit.py`は`rate_limit_rejected_total`・`auth_lockouts_total`。
+  いずれもメモリ上のCounterで、再起動で0に戻るが、`rate()`/`increase()`が吸収する
   - メモリ上のGaugeを更新する方式だった頃は、**API再起動（デプロイ）のたびに消え**、次のクロール
     まで「クローラー実行結果」等のパネルが空になっていた。DBから求めるので消えない
   - **結果は`CACHE_TTL_SECONDS`（1時間）キャッシュする**。本番DB（Neon）は、アクセスが無いと
@@ -221,6 +225,19 @@ Issue #227でダッシュボードからのユーザー別登録方式（`UserAc
   - コレクタは`describe()`で何も返す（何も集計しない）。Prometheusは**登録時に`collect()`を
     呼んで指標名を調べる**ため、定義しないと起動直後（DBの準備前）の結果が1時間キャッシュされる
   - 新しい指標を足すときは、ここに`GaugeMetricFamily`を足し、ダッシュボードJSONにパネルを足す
+- **Grafanaダッシュボードの作成ルール**:
+  1. **Grafanaは「本アプリが正常に稼働しているか、異常か」の把握に絞る**（API・エラー率・応答時間・ジョブの
+     成否と鮮度・防御の発動・鍵の期限・サーバーのリソース）。脆弱性・依存・言語・例外・設定の監査などの
+     **業務データの件数は、Webダッシュボード（とAPI・MCP）が担うため、Grafanaに出さない**（内容を重ねない）
+  2. 新しい定期ジョブは、実行記録（`crawler_logs`）を書けば、既存の「クローラー」の行に自動で出る。専用の
+     パネルは足さない。異常の検知は「異常終了したジョブの数」「最終実行からの経過時間」で行う
+  3. 各パネルに、`description`で「何が正常で、何を超えたら異常か」と、異常時に疑う原因を書く。閾値は、
+     緑＝正常・橙＝注意・赤＝異常で、`thresholds`に入れる
+  4. 指標は、ラベルの種類が増え続けないようにする（パス・ユーザー名・リポジトリ名をラベルにしない）。
+     DBから求める指標は、`domain_metrics`のキャッシュ（1時間）に載せる（Neonを常時起動にしない）
+  5. 行は、稼働状態／クローラー／防御と期限／サーバーのリソースの順。パネルを足したら`id`を振り直し、
+     `version`を上げる。手元のGrafana（`grafana/grafana:13.2.4`）に読み込ませ、正規化の差分が
+     `version`のみであることを確認してから、デプロイする
 - **`deploy/docker-compose.yml`**: `prometheus`（30秒間隔でスクレイプ、`127.0.0.1`のみ
   バインド）・`node-exporter`・`grafana`（Caddy経由でHTTPS公開）。**`node-exporter`の
   `/:/host:ro,rslave`マウントはWindows Docker Desktop（WSL2）ではエラーになる**が、

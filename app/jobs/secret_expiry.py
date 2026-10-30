@@ -19,6 +19,17 @@ _SECRETS = (
 )
 
 
+def secret_days_left(today: date | None = None) -> dict[str, int]:
+    """期限を決めている鍵の、更新期限までの日数（名前は設定名から `_EXPIRES_ON` を除く）。"""
+    today = today or date.today()
+    return {
+        setting_name.removesuffix("_EXPIRES_ON"):
+            (date.fromisoformat(getattr(settings, setting_name)) - today).days
+        for setting_name, _label, _how_to in _SECRETS
+        if getattr(settings, setting_name)
+    }
+
+
 def expiring_secrets(today: date | None = None) -> list[ExpiringSecret]:
     """更新期限が `SECRETS_EXPIRY_NOTICE_DAYS` 日以内（過ぎたものを含む）の鍵。
 

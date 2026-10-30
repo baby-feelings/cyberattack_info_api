@@ -21,6 +21,8 @@ from collections import deque
 from collections.abc import Callable, MutableMapping
 from typing import Any
 
+from prometheus_client import Counter
+
 from app.core.config import settings
 
 # 制限の対象（これらの前方一致）。公開の読み取り API・MCP（高頻度）・ヘルスチェックは、対象外
@@ -30,6 +32,14 @@ FAILURE_STATUSES = (401, 403)
 # 状態を持つクライアントの上限（メモリが、際限なく増えないように）
 _MAX_TRACKED_CLIENTS = 10_000
 _WINDOW_SECONDS = 60.0
+
+# 運用監視（Grafana）用。拒否が急に増えたら、総当たりや過剰な呼び出しの兆候
+rate_limit_rejected_total = Counter(
+    "rate_limit_rejected_total", "レート制限・ロックアウトで拒否したリクエストの数",
+)
+auth_lockouts_total = Counter(
+    "auth_lockouts_total", "認証の失敗の連続で、クライアントをロックした回数",
+)
 
 
 class RateLimiter:
@@ -131,6 +141,7 @@ class RateLimitMiddleware:
         client = client_id(scope)
         retry_after = self._limiter.check(client)
         if retry_after is not None:
+            rate_limit_rejected_total.inc()
             body = json.dumps({"detail": "Too many requests. Try again later."}).encode()
             await send({"type": "http.response.start", "status": 429, "headers": [
                 (b"content-type", b"application/json"), (b"retry-after", str(retry_after).encode()),
@@ -141,7 +152,8 @@ class RateLimitMiddleware:
 
         async def send_and_count(message: dict[str, Any]) -> None:
             if message["type"] == "http.response.start" and message["status"] in FAILURE_STATUSES:
-                self._limiter.record_failure(client)
+                if self._limiter.record_failure(client):
+                    auth_lockouts_total.inc()
             await send(message)
 
         await self.app(scope, receive, send_and_count)

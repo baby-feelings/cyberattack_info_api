@@ -22,6 +22,7 @@ from app.codescan.router import router as codescan_router
 from app.commit_watch.router import admin_router as commit_watch_admin_router
 from app.core.config import settings
 from app.core.database import Base, engine, get_db
+from app.core.http_metrics import HttpMetricsMiddleware
 from app.core.metrics import router as metrics_router
 from app.core.rate_limit import RateLimitMiddleware
 from app.core.schemas import HealthResponse
@@ -150,6 +151,8 @@ app.add_middleware(SecurityHeadersMiddleware)
 # 制限で拒否したリクエストも、監査ログに残るよう、レート制限を、監査の内側に置く
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(AuditMiddleware)
+# HTTP の運用監視指標（5xx・処理時間）。最も外側に置き、拒否（429）も含めて数える
+app.add_middleware(HttpMetricsMiddleware)
 
 # ルーター登録
 app.include_router(auth_router)
