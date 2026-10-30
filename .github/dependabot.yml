@@ -4,7 +4,19 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # 公開直後の版を取り込まない（供給網攻撃で差し替えられた版の回避。セキュリティ更新は対象外）
+    cooldown:
+      default-days: 7
   - package-ecosystem: "npm"
     directory: "/dashboard"
     schedule:
       interval: "weekly"
+    # 公開直後の版を取り込まない（供給網攻撃で差し替えられた版の回避。セキュリティ更新は対象外）
+    cooldown:
+      default-days: 7
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
