@@ -17,6 +17,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.auth.router import router as auth_router
 from app.codescan.router import admin_router as codescan_admin_router
 from app.codescan.router import router as codescan_router
+from app.commit_watch.router import admin_router as commit_watch_admin_router
 from app.core.config import settings
 from app.core.database import Base, engine, get_db
 from app.core.metrics import router as metrics_router
@@ -172,6 +173,7 @@ app.include_router(exceptions_admin_router)
 app.include_router(github_alerts_admin_router)
 app.include_router(repo_audit_admin_router)
 app.include_router(site_monitor_admin_router)
+app.include_router(commit_watch_admin_router)
 app.include_router(user_crawl_admin_router)
 app.include_router(repo_cleanup_admin_router)
 app.include_router(metrics_router)

@@ -15,6 +15,7 @@ from typing import Any
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from app.codescan.crawler import fetch_and_scan_code
+from app.commit_watch.crawler import fetch_and_watch_commits
 from app.core.config import settings
 from app.depscan.crawler import fetch_and_scan_dependencies
 from app.depsops.runner import run_dependabot_ops
@@ -98,6 +99,11 @@ def build_scheduled_jobs() -> list[ScheduledJob]:
         ScheduledJob(
             "oauth_cleanup", "OAUTH_CLEANUP", run_oauth_cleanup,
             settings.OAUTH_CLEANUP_CRON_HOUR_UTC, settings.OAUTH_CLEANUP_CRON_MINUTE_UTC,
+        ),
+        # コミットの監視（Issue #405）
+        ScheduledJob(
+            "commit_watch", "COMMITWATCH", fetch_and_watch_commits,
+            settings.COMMITWATCH_CRON_HOUR_UTC, settings.COMMITWATCH_CRON_MINUTE_UTC,
         ),
         # 公開サイトの外形監視（Issue #401）
         ScheduledJob(

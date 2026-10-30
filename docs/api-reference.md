@@ -58,6 +58,7 @@
 | POST | `/admin/osv-crawl` | OSV手動クロール（`?days=N`・`?force=true`対応） |
 | POST | `/admin/jvn-crawl` | JVN手動クロール（`?days=N`・`?force=true`対応） |
 | POST | `/admin/depscan-crawl` | DEPSCAN手動実行（`?force=true`対応） |
+| POST | `/admin/commit-watch-crawl` | コミットの監視（見慣れないコミッター・ワークフローの危険な変更。Issue #405）をいま実行（`?force=true`対応。バックグラウンド。結果はSlack通知） |
 | POST | `/admin/site-monitor-crawl` | 公開サイトの外形監視をいま実行（`?force=true`対応。バックグラウンド） |
 | POST | `/admin/repo-audit-crawl` | リポジトリの設定の監査をいま実行（`?force=true`対応。バックグラウンド） |
 | POST | `/admin/github-alerts-crawl` | GitHubのセキュリティアラートの取り込みをいま実行（`?force=true`対応。バックグラウンド） |
