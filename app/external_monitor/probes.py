@@ -25,6 +25,10 @@ WARNING = "WARNING"
 INFO = "INFO"
 
 _TIMEOUT = 8.0
+# 応答の本文を読む上限（バイト）。悪意あるサイトが、巨大な応答を返しても、メモリを使い切らない
+_MAX_BODY_BYTES = 65_536
+# 1サイトの点検に使う時間の上限（秒）。超えたら、残りの確認は行わない
+_SITE_BUDGET_SECONDS = 40.0
 # 証明書の期限の通知しきい値（日）
 TLS_WARN_DAYS = 30
 TLS_ERROR_DAYS = 7
@@ -181,20 +185,47 @@ def looks_like_exposure(rule: str, content_type: str, body: str) -> bool:
     return False
 
 
-def probe_exposure(client: httpx.Client, base_url: str) -> list[dict[str, str]]:
+def fetch_limited(
+    client: httpx.Client, url: str, *, read_body: bool = True, **params: str | int,
+) -> tuple[int, httpx.Headers, str]:
+    """GET して (ステータス, ヘッダー, 本文) を返す。本文は、`_MAX_BODY_BYTES` までしか読まない。
+
+    `client.get` は、本文をすべてメモリに読み込む。ストリームで受け、上限で打ち切る。
+    `read_body=False` のときは、本文を読まない（ステータスとヘッダーだけで判定できるとき）。
+    """
+    with client.stream("GET", url, params=params or None) as response:
+        if not read_body:
+            return response.status_code, response.headers, ""
+        chunks: list[bytes] = []
+        size = 0
+        for chunk in response.iter_bytes():
+            chunks.append(chunk)
+            size += len(chunk)
+            if size >= _MAX_BODY_BYTES:
+                break
+        text = b"".join(chunks)[:_MAX_BODY_BYTES].decode("utf-8", errors="replace")
+        return response.status_code, response.headers, text
+
+
+def probe_exposure(
+    client: httpx.Client, base_url: str, deadline: float | None = None,
+) -> list[dict[str, str]]:
     """露出してはいけないファイルを、GET で確認する（リダイレクトは辿らない）。"""
     findings: list[dict[str, str]] = []
     reported: set[str] = set()
     for path, rule in _EXPOSURE_PATHS:
         if rule in reported:
             continue
+        if deadline is not None and time.monotonic() > deadline:
+            break
         try:
-            response = client.get(f"{base_url}{path}")
+            # バックアップ（zip）は、種類（Content-Type）だけで判定できるため、本文は読まない
+            status, headers, text = fetch_limited(
+                client, f"{base_url}{path}", read_body=rule != "exposed-backup",
+            )
         except httpx.HTTPError:
             continue
-        if response.status_code == 200 and looks_like_exposure(
-            rule, response.headers.get("content-type", ""), response.text,
-        ):
+        if status == 200 and looks_like_exposure(rule, headers.get("content-type", ""), text):
             reported.add(rule)
             findings.append(_finding(
                 rule, ERROR,
@@ -235,10 +266,10 @@ def probe_firestore(client: httpx.Client, project_id: str) -> list[dict[str, str
         "/databases/(default)/documents"
     )
     try:
-        response = client.get(url, params={"pageSize": 1})
+        status, _, _ = fetch_limited(client, url, read_body=False, pageSize=1)
     except httpx.HTTPError:
         return []
-    if response.status_code == 200:
+    if status == 200:
         return [_finding(
             "firestore-public-read", WARNING,
             f"Firestore（{project_id}）を、認証なしで読めます。意図した公開範囲か確認してください"
@@ -253,6 +284,7 @@ def probe_site(url: str, project_id: str | None = None) -> tuple[int | None, lis
     host = parts.hostname or ""
     base = f"https://{parts.netloc}"
     findings: list[dict[str, str]] = []
+    deadline = time.monotonic() + _SITE_BUDGET_SECONDS
 
     addresses = resolve_host(host)
     days_left: int | None = None
@@ -267,13 +299,12 @@ def probe_site(url: str, project_id: str | None = None) -> tuple[int | None, lis
         with httpx.Client(timeout=_TIMEOUT, follow_redirects=False,
                           headers={"User-Agent": "cyberattack-info-api-monitor/1.0"}) as client:
             try:
-                response = client.get(base + "/")
-                status, body = response.status_code, response.text[:5000]
-                findings += evaluate_headers(response.headers)
+                status, headers, body = fetch_limited(client, base + "/")
+                findings += evaluate_headers(headers)
             except httpx.HTTPError as exc:
                 findings.append(_finding("unreachable", WARNING, f"サイトに接続できません: {exc}"))
             # 露出の判定は、内容を見る（何でも index.html を返す SPA を、誤検知しない）
-            findings += probe_exposure(client, base)
+            findings += probe_exposure(client, base, deadline)
             if project_id:
                 findings += probe_firestore(client, project_id)
     findings += evaluate_takeover(host, addresses, status, body)

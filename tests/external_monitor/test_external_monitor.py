@@ -28,6 +28,50 @@ GOOD_HEADERS = {
 }
 
 
+class _Stream:
+    """`client.stream(...)` の戻り値（コンテキストマネージャー）の偽物。読んだバイト数を数える。"""
+
+    def __init__(self, status, content_type, body, chunk=1000):
+        self.status_code = status
+        self.headers = httpx.Headers({"content-type": content_type})
+        self._body = body.encode() if isinstance(body, str) else body
+        self._chunk = chunk
+        self.bytes_read = 0
+        self.iterated = False
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def iter_bytes(self):
+        self.iterated = True
+        for i in range(0, len(self._body), self._chunk):
+            part = self._body[i:i + self._chunk]
+            self.bytes_read += len(part)
+            yield part
+
+
+def _stream_client(routes):
+    """パスの末尾で応答を返す、偽のクライアント（`stream` だけを持つ。`get` は、使わない契約）。"""
+    streams = []
+
+    def stream(method, url, params=None):
+        for suffix, (status, ctype, body) in routes.items():
+            if url.endswith(suffix):
+                streams.append(_Stream(status, ctype, body))
+                return streams[-1]
+        streams.append(_Stream(404, "", ""))
+        return streams[-1]
+
+    client = MagicMock()
+    client.stream.side_effect = stream
+    client.get.side_effect = AssertionError("client.get は、本文を全部読むため、使わない")
+    client.streams = streams
+    return client
+
+
 def _rules(findings):
     return [f["rule"] for f in findings]
 
@@ -138,16 +182,7 @@ class TestExposure:
         assert probes.looks_like_exposure("unknown-rule", "text/plain", "x") is False
 
     def _client(self, routes):
-        def get(url, **kw):
-            for suffix, (status, ctype, body) in routes.items():
-                if url.endswith(suffix):
-                    resp = MagicMock(status_code=status, text=body)
-                    resp.headers = {"content-type": ctype}
-                    return resp
-            return MagicMock(status_code=404, text="", headers={})
-        client = MagicMock()
-        client.get.side_effect = get
-        return client
+        return _stream_client(routes)
 
     def test_exposed_files_are_errors_and_content_is_never_recorded(self):
         client = self._client({"/.env": (200, "text/plain", "SECRET_KEY=hunter2\n"),
@@ -166,11 +201,47 @@ class TestExposure:
 
     def test_network_errors_are_skipped_and_each_rule_is_reported_once(self):
         client = MagicMock()
-        client.get.side_effect = httpx.ConnectError("x")
+        client.stream.side_effect = httpx.ConnectError("x")
         assert probes.probe_exposure(client, "https://a.example") == []
 
         both = self._client({"/.git/HEAD": (200, "text/plain", "ref: x"), "/.git/config": (200, "text/plain", "[core]")})
         assert _rules(probes.probe_exposure(both, "https://a.example")) == ["exposed-git"]
+
+
+class TestResponseLimits:
+    def test_the_body_is_cut_at_the_limit_and_reading_stops_early(self):
+        client = _stream_client({"/": (200, "text/html", "a" * 1_000_000)})
+
+        status, headers, text = probes.fetch_limited(client, "https://a.example/")
+
+        assert status == 200 and len(text) == probes._MAX_BODY_BYTES
+        # 100万バイトを、すべて読まない（上限に達したら打ち切る）
+        assert client.streams[0].bytes_read < 100_000
+
+    def test_the_body_can_be_skipped_entirely(self):
+        client = _stream_client({"/": (200, "application/zip", "x" * 5000)})
+
+        status, headers, text = probes.fetch_limited(client, "https://a.example/", read_body=False)
+
+        assert (status, text) == (200, "") and headers["content-type"] == "application/zip"
+        assert client.streams[0].iterated is False
+
+    def test_undecodable_bytes_do_not_raise(self):
+        client = _stream_client({"/": (200, "text/plain", b"\xff\xfe ok")})
+        assert "ok" in probes.fetch_limited(client, "https://a.example/")[2]
+
+    def test_a_backup_file_is_judged_by_its_type_without_reading_it(self):
+        client = _stream_client({"/backup.zip": (200, "application/zip", "PK" * 10_000_000)})
+
+        findings = probes.probe_exposure(client, "https://a.example")
+
+        assert _rules(findings) == ["exposed-backup"]
+        assert all(s.iterated is False for s in client.streams if s.headers.get("content-type") == "application/zip")
+
+    def test_the_time_budget_stops_further_probes(self):
+        client = _stream_client({})
+        findings = probes.probe_exposure(client, "https://a.example", deadline=0.0)   # すでに超過
+        assert findings == [] and client.streams == []
 
 
 class TestDnsAndFirestore:
@@ -185,15 +256,16 @@ class TestDnsAndFirestore:
         assert probes.evaluate_takeover("a.example", ["1.2.3.4"], 500, body) == []
 
     def test_firestore_readable_without_authentication_is_flagged(self):
-        client = MagicMock()
-        client.get.return_value = MagicMock(status_code=200)
-        findings = probes.probe_firestore(client, "my-proj")
+        open_client = _stream_client({"/documents": (200, "application/json", "{}")})
+        findings = probes.probe_firestore(open_client, "my-proj")
         assert _rules(findings) == ["firestore-public-read"] and "my-proj" in findings[0]["message"]
+        assert open_client.streams[0].iterated is False     # 本文は、読まない
 
-        client.get.return_value = MagicMock(status_code=403)
-        assert probes.probe_firestore(client, "my-proj") == []
-        client.get.side_effect = httpx.ConnectError("x")
-        assert probes.probe_firestore(client, "my-proj") == []
+        closed = _stream_client({"/documents": (403, "application/json", "{}")})
+        assert probes.probe_firestore(closed, "my-proj") == []
+        broken = MagicMock()
+        broken.stream.side_effect = httpx.ConnectError("x")
+        assert probes.probe_firestore(broken, "my-proj") == []
 
 
 class TestProbeSite:
@@ -201,13 +273,13 @@ class TestProbeSite:
         client = MagicMock()
         client.__enter__.return_value = client
         if error:
-            client.get.side_effect = error
+            client.stream.side_effect = error
         else:
-            client.get.return_value = response
+            client.stream.return_value = response
         return patch("httpx.Client", return_value=client)
 
     def test_combines_tls_headers_and_exposure(self):
-        response = MagicMock(status_code=200, text="<html>", headers={})
+        response = _Stream(200, "text/html", "<html>")
         with patch.object(probes, "resolve_host", return_value=["93.184.216.34"]), \
              patch.object(probes, "check_tls", return_value=(100, [])), \
              patch.object(probes, "probe_exposure", return_value=[probes._finding("exposed-env", "ERROR", "x")]), \
