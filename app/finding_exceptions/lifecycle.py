@@ -16,16 +16,12 @@ from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.notifications.exception_notices import ExceptionNoticeNotifier
 from app.crawler_logs.writer import now_utc
-from app.finding_exceptions.issue_sync import refile_issues
+from app.finding_exceptions.issue_sync import is_admin_repo, refile_issues
 from app.finding_exceptions.matching import findings_for
 from app.finding_exceptions.models import ENDED_FIX_AVAILABLE, KIND_DEPENDENCY, FindingException
 from app.finding_exceptions.repository import FindingExceptionRepository
 
 logger = logging.getLogger(__name__)
-
-
-def _is_admin_repo(exc: FindingException) -> bool:
-    return exc.repo_full_name.lower().startswith(f"{settings.GITHUB_USERNAME.lower()}/")
 
 
 def _label(exc: FindingException) -> str:
@@ -63,12 +59,12 @@ def run_exception_lifecycle(now: datetime | None = None) -> dict[str, int]:
         soon = [e for e in repo.due_soon(now, settings.EXCEPTION_EXPIRY_NOTICE_DAYS)
                 if findings_for(db, e)]
 
-        reopened = [e for e in (*fixed, *expired) if _is_admin_repo(e)]
+        reopened = [e for e in (*fixed, *expired) if is_admin_repo(e.repo_full_name)]
         refile_issues(db, reopened)
         notices = {
-            "fixed": [_notice(e) for e in fixed if _is_admin_repo(e)],
-            "expired": [_notice(e) for e in expired if _is_admin_repo(e)],
-            "soon": [_notice(e) for e in soon if _is_admin_repo(e)],
+            "fixed": [_notice(e) for e in fixed if is_admin_repo(e.repo_full_name)],
+            "expired": [_notice(e) for e in expired if is_admin_repo(e.repo_full_name)],
+            "soon": [_notice(e) for e in soon if is_admin_repo(e.repo_full_name)],
         }
     finally:
         db.close()

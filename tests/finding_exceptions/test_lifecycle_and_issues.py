@@ -11,6 +11,7 @@ from app.core.database import SessionLocal  # noqa: E402
 from app.depscan.issue_management import close_resolved_repo_issues  # noqa: E402
 from app.depscan.models import DependencyFinding  # noqa: E402
 from app.finding_exceptions.issue_sync import (  # noqa: E402
+    is_admin_repo,
     refile_issues,
     sync_issues_after_change,
 )
@@ -149,41 +150,65 @@ class TestLifecycle:
 
 
 class TestIssueSync:
+    """Issue の整合は、管理者のトークンで書き込むため、管理者のリポジトリだけが対象。"""
+
+    ADMIN_REPO = f"{ADMIN}/app"
+
     def _session_patch(self):
         return patch("app.finding_exceptions.issue_sync.SessionLocal", TestSessionLocal)
 
     def test_accepting_closes_the_dependency_issue_when_nothing_actionable_remains(self):
         with self._session_patch(), \
              patch("app.finding_exceptions.issue_sync.close_resolved_repo_issues") as close:
-            sync_issues_after_change("dependency", "u/app", "k", accepted=True)
+            sync_issues_after_change("dependency", self.ADMIN_REPO, "k", accepted=True)
 
-        assert close.call_args.args[1] == {"u/app"}
+        assert close.call_args.args[1] == {self.ADMIN_REPO}
 
     def test_accepting_a_code_finding_does_not_touch_issues(self):
         with self._session_patch(), \
              patch("app.finding_exceptions.issue_sync.close_resolved_repo_issues") as close, \
              patch("app.finding_exceptions.issue_sync.refile_issues") as refile:
-            sync_issues_after_change("code", "u/app", "k", accepted=True)
+            sync_issues_after_change("code", self.ADMIN_REPO, "k", accepted=True)
 
         close.assert_not_called()
         refile.assert_not_called()
 
     def test_revoking_shows_the_finding_in_the_issue_again(self, db_session):
-        db_session.add(_dep(repo="u/app"))
+        db_session.add(_dep(repo=self.ADMIN_REPO))
         db_session.commit()
         with self._session_patch(), \
              patch("app.finding_exceptions.issue_sync.file_dependency_issues") as dep_issue, \
              patch("app.finding_exceptions.issue_sync.file_code_issues") as code_issue:
-            sync_issues_after_change("dependency", "u/app", "npm|lodash|GHSA-1", accepted=False)
+            sync_issues_after_change(
+                "dependency", self.ADMIN_REPO, "npm|lodash|GHSA-1", accepted=False,
+            )
 
         assert dep_issue.call_args.args[0][0]["osv_id"] == "GHSA-1"
         assert code_issue.call_args.args[0] == []
+
+    def test_other_owners_repositories_are_never_written_with_the_admin_token(self):
+        # セキュリティ: 他のユーザーが例外を登録・解除しても、管理者のトークンでは書き込まない
+        with self._session_patch(), \
+             patch("app.finding_exceptions.issue_sync.close_resolved_repo_issues") as close, \
+             patch("app.finding_exceptions.issue_sync.refile_issues") as refile:
+            sync_issues_after_change("dependency", "stranger/app", "k", accepted=True)
+            sync_issues_after_change("dependency", "stranger/app", "k", accepted=False)
+
+        close.assert_not_called()
+        refile.assert_not_called()
+
+    def test_is_admin_repo_ignores_case_and_requires_the_owner_prefix(self):
+        assert is_admin_repo(f"{ADMIN.upper()}/x") is True
+        assert is_admin_repo(f"{ADMIN}-evil/x") is False
+        assert is_admin_repo(f"other/{ADMIN}") is False
 
     def test_failures_are_swallowed(self):
         with self._session_patch(), \
              patch("app.finding_exceptions.issue_sync.close_resolved_repo_issues",
                    side_effect=RuntimeError("boom")):
-            sync_issues_after_change("dependency", "u/app", "k", accepted=True)  # 例外を送出しない
+            sync_issues_after_change(
+                "dependency", self.ADMIN_REPO, "k", accepted=True,
+            )  # 例外を送出しない
 
     def test_refile_swallows_github_errors(self, db_session):
         db_session.add(_dep(repo="u/app"))
