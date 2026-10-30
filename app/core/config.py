@@ -156,6 +156,22 @@ class Settings(BaseSettings):
     REPOAUDIT_CRON_HOUR_UTC: int = 22
     REPOAUDIT_CRON_MINUTE_UTC: int = 40
 
+    # 本アプリ自身の防御（Issue #406）
+    # レート制限: 管理 API・認証系で、1分あたりの上限と、認証失敗の連続によるロックアウト
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_PER_MINUTE: int = 60
+    RATE_LIMIT_LOCKOUT_FAILURES: int = 10
+    RATE_LIMIT_LOCKOUT_MINUTES: int = 15
+    # 監査ログの保持期間（日）
+    AUDIT_RETENTION_DAYS: int = 180
+    # 鍵の更新期限（YYYY-MM-DD。空なら、通知しない）と、何日前から毎日通知するか
+    API_KEY_EXPIRES_ON: str = ""
+    GITHUB_TOKEN_EXPIRES_ON: str = ""
+    SECRETS_EXPIRY_NOTICE_DAYS: int = 14
+    # 鍵の更新期限の通知と、監査ログの掃除: 毎日 UTC 23:40
+    SECRET_EXPIRY_CRON_HOUR_UTC: int = 23
+    SECRET_EXPIRY_CRON_MINUTE_UTC: int = 40
+
     # コミットの監視（Issue #405）: 毎日 UTC 22:20。信頼するコミッター（管理者・dependabot・
     # github-actions 以外に足すユーザー。カンマ区切りの GitHub ログイン名）
     TRUSTED_COMMITTERS: str = ""
@@ -179,6 +195,19 @@ class Settings(BaseSettings):
     # 期限切れ・修正版の公開の確認と通知: 毎日 UTC 22:55（DEPSCAN・CODESCAN・言語監視の後）
     EXCEPTION_CRON_HOUR_UTC: int = 22
     EXCEPTION_CRON_MINUTE_UTC: int = 55
+
+    @field_validator("API_KEY_EXPIRES_ON", "GITHUB_TOKEN_EXPIRES_ON")
+    @classmethod
+    def _validate_expiry_date(cls, value: str) -> str:
+        """鍵の更新期限は、YYYY-MM-DD か空にする（Fail Fast。誤りで、通知が止まらないように）。"""
+        if value:
+            from datetime import date
+
+            try:
+                date.fromisoformat(value)
+            except ValueError:
+                raise ValueError(f"更新期限は YYYY-MM-DD 形式で指定してください: {value}") from None
+        return value
 
     @field_validator("SLA_CRITICAL_DAYS", "SLA_HIGH_DAYS", "SLA_MEDIUM_DAYS", "SLA_KEV_DAYS")
     @classmethod

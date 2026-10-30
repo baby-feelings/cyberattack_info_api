@@ -36,6 +36,7 @@ cyberattack_info_api/
 │   ├── runtimes/                # 言語・実行環境（Python/Node.js/Flutter/Dart）の使用版の検出と、最新版・サポート期限（EOL）の判定
 │   ├── sla/                     # 脆弱性への対応状況（Issue #404）: policy〈重要度・KEVから対応期限〉・report〈期限超過・MTTRの集計〉・
 │   │                           # router〈GET /api/sla・POST /admin/sla-digest〉・digest〈週次まとめのSlack通知ジョブ〉。DBの変更なし
+│   ├── audit/                   # 監査ログ（Issue #406）: models・recorder〈記録関数・ミドルウェア・掃除〉・router〈GET /api/audit-logs〉
 │   ├── commit_watch/            # コミットの監視（Issue #405）: analysis〈危険なパターン・信頼するコミッターの判定。純粋〉・
 │   │                           # crawler〈毎日のジョブ〉・router〈POST /admin/commit-watch-crawl〉
 │   ├── external_monitor/        # 公開サイトの外形監視（Issue #401）: probes〈TLS・ヘッダー・露出・DNS・Firestore。SSRF対策〉・

@@ -14,6 +14,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.audit.recorder import AuditMiddleware
+from app.audit.router import router as audit_router
 from app.auth.router import router as auth_router
 from app.codescan.router import admin_router as codescan_admin_router
 from app.codescan.router import router as codescan_router
@@ -21,6 +23,7 @@ from app.commit_watch.router import admin_router as commit_watch_admin_router
 from app.core.config import settings
 from app.core.database import Base, engine, get_db
 from app.core.metrics import router as metrics_router
+from app.core.rate_limit import RateLimitMiddleware
 from app.core.schemas import HealthResponse
 from app.core.security_headers import SecurityHeadersMiddleware
 from app.crawler_logs.router import router as crawler_logs_router
@@ -143,6 +146,10 @@ app.add_middleware(
 )
 # セキュリティヘッダー（nosniff 等）を全レスポンスへ付与（OWASP ZAP の指摘対応）
 app.add_middleware(SecurityHeadersMiddleware)
+# 監査ログ（管理操作・認証の失敗）→ レート制限の順（あとに足したものが、外側で先に動く）。
+# 制限で拒否したリクエストも、監査ログに残るよう、レート制限を、監査の内側に置く
+app.add_middleware(RateLimitMiddleware)
+app.add_middleware(AuditMiddleware)
 
 # ルーター登録
 app.include_router(auth_router)
@@ -174,6 +181,7 @@ app.include_router(github_alerts_admin_router)
 app.include_router(repo_audit_admin_router)
 app.include_router(site_monitor_admin_router)
 app.include_router(commit_watch_admin_router)
+app.include_router(audit_router)
 app.include_router(user_crawl_admin_router)
 app.include_router(repo_cleanup_admin_router)
 app.include_router(metrics_router)

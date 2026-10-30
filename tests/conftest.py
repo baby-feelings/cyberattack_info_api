@@ -13,6 +13,9 @@ from sqlalchemy.orm import sessionmaker
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
 os.environ.setdefault("API_KEY", "test-api-key-for-pytest")
 os.environ.setdefault("ENVIRONMENT", "development")
+# レート制限は、テストでは無効にする（多数のリクエストで、制限に掛からないように）。
+# 制限そのものは、tests/core/test_rate_limit.py が、専用のアプリで検証する
+os.environ.setdefault("RATE_LIMIT_ENABLED", "false")
 os.environ.setdefault("GITHUB_USERNAME", "test-github-user")
 os.environ.setdefault("SESSION_SECRET_KEY", "test-session-secret-key-for-pytest")
 # UserAccount.github_access_token_encrypted の暗号化に使うFernet鍵（テスト固定値）
@@ -70,6 +73,7 @@ def clean_db():
         conn.execute(text("DELETE FROM repo_audits"))
         conn.execute(text("DELETE FROM site_checks"))
         conn.execute(text("DELETE FROM commit_watch_states"))
+        conn.execute(text("DELETE FROM audit_logs"))
         conn.execute(text("DELETE FROM user_accounts"))
         conn.execute(text("DELETE FROM mcp_tokens"))
         conn.execute(text("DELETE FROM oauth_authorizations"))
