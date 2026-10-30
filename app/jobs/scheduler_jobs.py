@@ -23,6 +23,7 @@ from app.external_monitor.crawler import fetch_and_monitor_sites
 from app.finding_exceptions.lifecycle import run_exception_lifecycle
 from app.github_alerts.crawler import fetch_and_store_github_alerts
 from app.jobs.repo_cleanup import run_repo_cleanup
+from app.jobs.secret_expiry import run_secret_expiry_notice
 from app.jobs.user_crawl_runner import run_user_crawls_for_all_accounts
 from app.jvn.crawler import fetch_and_store_jvn
 from app.kev.crawler import fetch_and_store_kev
@@ -99,6 +100,11 @@ def build_scheduled_jobs() -> list[ScheduledJob]:
         ScheduledJob(
             "oauth_cleanup", "OAUTH_CLEANUP", run_oauth_cleanup,
             settings.OAUTH_CLEANUP_CRON_HOUR_UTC, settings.OAUTH_CLEANUP_CRON_MINUTE_UTC,
+        ),
+        # 本アプリ自身の鍵の更新期限の通知と、監査ログの掃除（Issue #406）
+        ScheduledJob(
+            "secret_expiry", "SECRET_EXPIRY", run_secret_expiry_notice,
+            settings.SECRET_EXPIRY_CRON_HOUR_UTC, settings.SECRET_EXPIRY_CRON_MINUTE_UTC,
         ),
         # コミットの監視（Issue #405）
         ScheduledJob(

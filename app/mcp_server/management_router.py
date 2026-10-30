@@ -16,6 +16,7 @@ from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, st
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.audit.recorder import record_audit
 from app.auth.account_store import get_webhook_for_user
 from app.auth.dependencies import get_current_username
 from app.core.database import get_db
@@ -84,6 +85,8 @@ def issue_mcp_token(
             "使っていないトークンを失効してから発行してください。",
         ) from None
     logger.info("MCP token issued for %s (id=%s, days=%d)", username, row.id, days)
+    # 監査ログ（誰が・いつ・何を）。トークンの値は、記録しない（IDだけ）
+    record_audit(username, f"mcp_token_issued id={row.id}")
     # 本人の Slack（登録済みの場合のみ）へ事後通知する。送信は応答の後に行い、
     # 失敗しても発行は成功のまま
     webhook = get_webhook_for_user(db, username)
@@ -116,6 +119,7 @@ def revoke_mcp_token(
     """
     if not revoke_token(db, username, token_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Token not found.")
+    record_audit(username, f"mcp_token_revoked id={token_id}")
     return {"id": token_id, "revoked": True}
 
 

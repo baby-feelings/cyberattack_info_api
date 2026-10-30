@@ -27,6 +27,10 @@
 | `CODESCAN_CRON_HOUR_UTC` / `CODESCAN_CRON_MINUTE_UTC` | - | CODESCAN 実行時刻（時・分・UTC）（デフォルト: `22`時`30`分。DEPSCANの後段） |
 | `RUNTIME_CRON_HOUR_UTC` / `RUNTIME_CRON_MINUTE_UTC` | - | 言語・実行環境のバージョン監視（RUNTIME）の実行時刻（時・分・UTC）（デフォルト: `22`時`45`分。CODESCANの後段） |
 | `SLA_CRITICAL_DAYS` / `SLA_HIGH_DAYS` / `SLA_MEDIUM_DAYS` / `SLA_KEV_DAYS` | - | 脆弱性の対応期限（検知から解決までの日数。Issue #404）（デフォルト: `7`/`30`/`90`、KEV掲載済みは`7`）。LOW・重要度不明は期限なし。1以上 |
+| `RATE_LIMIT_ENABLED` / `RATE_LIMIT_PER_MINUTE` / `RATE_LIMIT_LOCKOUT_FAILURES` / `RATE_LIMIT_LOCKOUT_MINUTES` | - | 管理 API・認証系のレート制限（1分あたりの上限）と、認証失敗の連続によるロックアウト（デフォルト: 有効・`60`・`10`回・`15`分）（#406） |
+| `AUDIT_RETENTION_DAYS` | - | 監査ログの保持期間（日・デフォルト: `180`）（#406） |
+| `API_KEY_EXPIRES_ON` / `GITHUB_TOKEN_EXPIRES_ON` / `SECRETS_EXPIRY_NOTICE_DAYS` | - | 鍵の更新期限（YYYY-MM-DD。空なら通知しない）と、何日前から毎日通知するか（デフォルト: `14`）。形式の誤りは起動時に失敗（#406） |
+| `SECRET_EXPIRY_CRON_HOUR_UTC` / `SECRET_EXPIRY_CRON_MINUTE_UTC` | - | 鍵の更新期限の通知と、監査ログの掃除の実行時刻（時・分・UTC）（デフォルト: `23`:`40`）（#406） |
 | `TRUSTED_COMMITTERS` | - | コミットの監視で信頼するコミッター（管理者・dependabot・github-actions に足す GitHub ログイン名。カンマ区切り）（#405） |
 | `COMMITWATCH_REQUIRE_SIGNATURE` | - | `true` で、信頼するユーザーでも署名のないコミットを通知（なりすまし対策。デフォルト: `false`）（#405） |
 | `COMMITWATCH_CRON_HOUR_UTC` / `COMMITWATCH_CRON_MINUTE_UTC` | - | コミットの監視の実行時刻（時・分・UTC）（デフォルト: `22`:`20`）（#405） |

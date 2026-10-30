@@ -103,3 +103,18 @@ tarball方式のCODESCANは現在のツリーしか見えないため、GitHub�
 - **対象外**（理由）: OAuthアプリ/GitHub Appsの追加は、GitHubの監査ログ（Enterprise等）が要り、通常のPATでは取得できない。
   既定ブランチ以外へのpushも見ない
 - 毎日UTC 22:20（`COMMITWATCH_*`）。手動は`POST /admin/commit-watch-crawl`
+
+## 本アプリ自身の防御（Issue #406。`app/core/rate_limit.py`・`app/audit/`・`docs/security-hardening.md`）
+
+各項目の**対応状況（実施・未実施・不要の理由）は`docs/security-hardening.md`に記録**している。変更したら、その表も更新する。
+
+- **レート制限・ロックアウト**（`core/rate_limit.py`）: `/admin/`・`/auth/`・`/oauth/`・`/token`・`/register`・`/authorize`が対象
+  （公開の読み取りAPI・`/mcp`・`/health`は対象外）。1分あたりの上限（429・`Retry-After`）と、認証失敗（401・403）の連続によるロック。
+  状態はメモリ（1コンテナ前提）。**クライアントの識別は`X-Forwarded-For`の最後の値**（先頭はクライアントが偽れる）。
+  テストでは`RATE_LIMIT_ENABLED=false`（conftest）。制限の検証は、専用の小さなアプリで行う（`tests/core/test_rate_limit.py`）
+- **監査ログ**（`audit/`）: `AuditMiddleware`が、`/admin/`・`/auth/`の変更系（POST・PUT・PATCH・DELETE）と、認証の失敗・429を記録。
+  **記録するのはパス・操作・誰（api-key/session/anonymous）・結果だけ**（IP・ヘッダーの値・クエリ・本文は記録しない）。MCPトークンの発行・失効は
+  `record_audit`でユーザー名つきに記録し、ミドルウェアでは二重に記録しない（`_EXPLICIT_PREFIXES`）。記録の失敗は、本来の処理を止めない
+- **ミドルウェアの順序**（`main.py`）: 監査（外側）→レート制限（内側）。制限で拒否した要求（429）も、監査に残る
+- **鍵の更新期限**（`jobs/secret_expiry.py`）: `API_KEY_EXPIRES_ON`・`GITHUB_TOKEN_EXPIRES_ON`を設定すると、期限の`SECRETS_EXPIRY_NOTICE_DAYS`日前から毎日、
+  管理者のSlackへ（鍵の値は扱わない）。毎日UTC 23:40に、保持期間を過ぎた監査ログの掃除も行う
