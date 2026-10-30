@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+# 最小権限（リポジトリの読み取りのみ。zizmor: excessive-permissions）
+permissions:
+  contents: read
+
 jobs:
   # 変更されたファイルから、バックエンド・ダッシュボードのテストが必要かを判定する。
   # ドキュメント（*.md・docs/・.claude/）だけの変更では、どちらも動かさない。
@@ -19,8 +23,9 @@ jobs:
       dashboard: ${{ steps.detect.outputs.dashboard }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           # 比較元（PR の base・push の直前のコミット）を取得するため全履歴を使う
           fetch-depth: 0
 
@@ -69,10 +74,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up Python 3.13
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.13"
           cache: "pip"
@@ -99,14 +106,14 @@ jobs:
 
       # ── カバレッジレポート ──────────────────────────────────
       - name: Upload coverage HTML report as artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: coverage-html-report
           path: htmlcov/
           retention-days: 30
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4
         with:
           files: coverage.xml
           fail_ci_if_error: false
@@ -119,10 +126,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "24"
           cache: "npm"
@@ -143,7 +152,7 @@ jobs:
         run: npm run test:coverage
 
       - name: Upload coverage HTML report as artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: dashboard-coverage-html-report
           path: dashboard/coverage/
@@ -162,10 +171,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "24"
           cache: "npm"
@@ -190,7 +201,7 @@ jobs:
 
       # HTMLレポート（playwright-report/index.html と scenario-coverage.html）。失敗時も保存する
       - name: Upload Playwright HTML report as artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: ${{ !cancelled() }}
         with:
           name: dashboard-e2e-html-report

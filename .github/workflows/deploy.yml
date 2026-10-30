@@ -11,6 +11,10 @@ on:
   # 手動トリガーも可能
   workflow_dispatch:
 
+# 最小権限（リポジトリの読み取りのみ。zizmor: excessive-permissions）
+permissions:
+  contents: read
+
 jobs:
   # ── バックエンド (FastAPI) は OCI 上で手動デプロイ運用 ─────────────
   # Render からOCIへ移行済み（deploy/deploy_to_oci.ps1 を都度手動実行する方式。
@@ -31,17 +35,19 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '24'
           cache: 'npm'
           cache-dependency-path: dashboard/package-lock.json
 
       - name: Install Vercel CLI
-        run: npm install -g vercel@latest
+        run: npm install -g vercel@65.8.0
 
       - name: Deploy to Vercel (Production)
         # Vercelのネイティブ本番自動デプロイは無効化済み（dashboard/vercel.json参照）のため、

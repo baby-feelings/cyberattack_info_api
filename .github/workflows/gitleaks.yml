@@ -24,8 +24,9 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           # PR のコミット範囲（base..head）を検査するため全履歴を取得する
           fetch-depth: 0
 
@@ -42,14 +43,20 @@ jobs:
           ./gitleaks version
 
       # --redact: ログに秘密の値そのものを出さない
+      # github.* の値はシェルに直接埋め込まず環境変数経由で渡す（コマンド注入対策。zizmor: template-injection）
       - name: Scan pull request commits
         if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: >
           ./gitleaks git --redact --no-banner --verbose
-          --log-opts="origin/${{ github.base_ref }}..HEAD" .
+          --log-opts="origin/${BASE_REF}..HEAD" .
 
       - name: Scan pushed commits
         if: github.event_name == 'push'
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
         run: >
           ./gitleaks git --redact --no-banner --verbose
-          --log-opts="${{ github.event.before }}..${{ github.sha }}" .
+          --log-opts="${BEFORE_SHA}..${HEAD_SHA}" .
