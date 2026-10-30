@@ -24,6 +24,7 @@ def upgrade() -> None:
         'commit_watch_states',
         sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
         sa.Column('repo_full_name', sa.String(length=255), nullable=False),
+        sa.Column('last_sha', sa.String(length=40), nullable=False),
         sa.Column('checked_at', sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('repo_full_name'),

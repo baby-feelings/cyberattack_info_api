@@ -78,10 +78,25 @@ def is_verified(commit: dict[str, Any]) -> bool:
     return bool(((commit.get("commit") or {}).get("verification") or {}).get("verified"))
 
 
-def is_trusted(commit: dict[str, Any], trusted: set[str]) -> bool:
-    """信頼するコミッターの変更か。アカウントに紐づかない（作者が不明の）コミットは、信頼しない。"""
+def is_trusted(
+    commit: dict[str, Any], trusted: set[str], *, require_signature: bool = False,
+) -> bool:
+    """信頼するコミッターの変更か。アカウントに紐づかない（作者が不明の）コミットは、信頼しない。
+
+    【限界】作者・コミッターの名前は、コミットのメール欄から決まるため、他人のメールを名乗れば、
+    なりすませる（GitHub は、そのアカウントのコミットとして表示する）。確実に防げるのは、署名だけ。
+    `require_signature=True` にすると、信頼するユーザーでも、署名がないコミットは信頼しない
+    （自分のコミットを、すべて署名している場合に使う。既定は、通知が増えすぎないよう、False）。
+    """
     login = author_login(commit)
-    return login is not None and login.lower() in trusted
+    if login is None or login.lower() not in trusted:
+        return False
+    return is_verified(commit) or not require_signature
+
+
+def touches_workflow(files: Iterable[dict[str, Any]]) -> bool:
+    """コミットの変更ファイルに、ワークフローが含まれるか。"""
+    return any(str(f.get("filename", "")).startswith(WORKFLOW_PREFIX) for f in files)
 
 
 def commit_title(commit: dict[str, Any]) -> str:

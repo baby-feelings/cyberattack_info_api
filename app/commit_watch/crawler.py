@@ -1,11 +1,17 @@
 """コミットの監視（COMMITWATCH）のジョブの組み立て（Issue #405）。
 
-リポジトリごとに、前回の確認以降のコミットを調べ、見慣れないコミッター・ワークフローの危険な変更だけを、
-管理者に Slack で知らせる。初回（基準が無い）は、基準の時刻を記録するだけで、通知しない
-（過去のコミットが、すべて「新しい」ことになるため）。毎日 APScheduler から呼ばれる。
+リポジトリごとに、既定ブランチの先頭（HEAD）の SHA を記録し、次回、前回の SHA から今の HEAD までの
+コミットを `compare` で調べる。見慣れないコミッター・ワークフローの危険な変更だけを、管理者に
+Slack で知らせる。初回（基準が無い）は、SHA を記録するだけで、通知しない。
+毎日 APScheduler から呼ばれる。
+
+【なぜ時刻ではなく SHA か】コミットの日時は、作者が自由に決められる（過去の日付で push すれば、
+「前回の確認以降」の絞り込みをすり抜ける）。SHA の範囲なら、日時を偽っても、見逃さない。
+さらに、前回の SHA が今の履歴の祖先でなければ、履歴が書き換えられた（force push）と判断できる。
+確認の上限を超えたときも、黙って進めず、「未確認のコミットがある」と知らせる。
+対象は、既定ブランチ（他のブランチの push は、見ない）。
 """
 import logging
-from datetime import datetime
 from typing import Any
 
 import httpx
@@ -22,56 +28,83 @@ from app.crawler_logs.writer import now_utc
 
 logger = logging.getLogger(__name__)
 
-_PER_PAGE = 100
-# 1リポジトリ・1回で調べるコミット数の上限（過剰な API 呼び出しを防ぐ安全弁）
+# 通知の種類
+KIND_COMMIT = "commit"                    # 見慣れないコミッター・危険な変更
+KIND_REWRITTEN = "history_rewritten"      # 履歴の書き換え（force push の兆候）
+KIND_TRUNCATED = "truncated"              # 確認の上限を超え、一部のコミットは未確認
+
+# 1リポジトリ・1回で内容を調べるコミット数の上限（過剰な API 呼び出しを防ぐ安全弁）
 _MAX_COMMITS = 100
 
 
-def _list_commits(
-    repo: GitHubRepo, since: datetime, path: str | None = None,
-) -> list[dict[str, Any]]:
-    params: dict[str, Any] = {"since": since.isoformat(), "per_page": _PER_PAGE}
-    if path:
-        params["path"] = path
+def _head_sha(repo: GitHubRepo, branch: str) -> str | None:
+    """既定ブランチの先頭の SHA（空のリポジトリ・ブランチが無いときは None）。"""
     with repo.api() as api:
-        response = api.get(repo.path("/commits"), params=params)
-    if response.status_code == 409:      # 空のリポジトリ
-        return []
+        response = api.get(repo.path(f"/commits/{branch}"))
+    if response.status_code in (404, 409):
+        return None
     response.raise_for_status()
-    return list(response.json())[:_MAX_COMMITS]
+    return str(response.json()["sha"])
 
 
-def _commit_detail(repo: GitHubRepo, sha: str) -> dict[str, Any]:
+def _compare(repo: GitHubRepo, base: str, head: str) -> dict[str, Any] | None:
+    """前回の SHA から今の HEAD までの比較。前回の SHA が存在しない（履歴が消えた）ときは None。"""
     with repo.api() as api:
-        response = api.get(repo.path(f"/commits/{sha}"))
+        response = api.get(
+            repo.path(f"/compare/{base}...{head}"), params={"per_page": _MAX_COMMITS},
+        )
+    if response.status_code == 404:
+        return None
     response.raise_for_status()
     return dict(response.json())
 
 
-def inspect_repo(repo: GitHubRepo, since: datetime, trusted: set[str]) -> list[dict[str, Any]]:
-    """前回の確認以降のコミットから、通知すべきもの（見慣れないコミッター・危険な変更）を集める。"""
-    commits = _list_commits(repo, since)
-    workflow_path = analysis.WORKFLOW_PREFIX.rstrip("/")
-    workflow_shas = {c["sha"] for c in _list_commits(repo, since, workflow_path)}
+def _commit_files(repo: GitHubRepo, sha: str) -> list[dict[str, Any]]:
+    """コミットの変更ファイル（差分つき）。"""
+    with repo.api() as api:
+        response = api.get(repo.path(f"/commits/{sha}"))
+    response.raise_for_status()
+    return list(response.json().get("files") or [])
+
+
+def inspect_repo(
+    repo: GitHubRepo, base: str, head: str, trusted: set[str], *, require_signature: bool = False,
+) -> list[dict[str, Any]]:
+    """前回の SHA（`base`）から `head` までのコミットから、通知すべきものを集める。"""
+    comparison = _compare(repo, base, head)
+    # 前回の SHA が消えた・祖先でない（behind・diverged）＝履歴が書き換えられた
+    if comparison is None or comparison.get("status") not in ("ahead", "identical"):
+        return [{
+            "kind": KIND_REWRITTEN, "repo_full_name": repo.full_name, "sha": head[:7],
+            "title": f"前回の確認（{base[:7]}）が、今の履歴に含まれていません",
+        }]
+
     alerts: list[dict[str, Any]] = []
+    commits = list(comparison.get("commits") or [])[:_MAX_COMMITS]
     for commit in commits:
-        sha = commit["sha"]
-        trusted_author = analysis.is_trusted(commit, trusted)
-        risky = (
-            analysis.find_risky_changes(_commit_detail(repo, sha).get("files") or [])
-            if sha in workflow_shas else []
-        )
+        files = _commit_files(repo, commit["sha"])
+        risky = analysis.find_risky_changes(files)
+        trusted_author = analysis.is_trusted(commit, trusted, require_signature=require_signature)
         # 自分のふつうの変更（危険な内容を含まない）では、通知しない
         if trusted_author and not risky:
             continue
         alerts.append({
-            "repo_full_name": repo.full_name, "sha": sha[:7], "url": commit.get("html_url", ""),
+            "kind": KIND_COMMIT, "repo_full_name": repo.full_name, "sha": commit["sha"][:7],
+            "url": commit.get("html_url", ""),
             "author": analysis.author_login(commit) or "（アカウントに紐づかない）",
             "title": analysis.commit_title(commit), "verified": analysis.is_verified(commit),
-            "untrusted": not trusted_author, "touches_workflow": sha in workflow_shas,
+            "untrusted": not trusted_author,
+            "touches_workflow": analysis.touches_workflow(files),
             "risky": [
                 {"file": r.file, "description": r.description, "excerpt": r.excerpt} for r in risky
             ],
+        })
+    # 確認の上限を超えたときは、黙って進めず、知らせる
+    total = int(comparison.get("total_commits") or 0)
+    if total > len(commits):
+        alerts.append({
+            "kind": KIND_TRUNCATED, "repo_full_name": repo.full_name, "sha": head[:7],
+            "title": f"コミットが{total}件あり、先頭の{len(commits)}件だけを確認しました",
         })
     return alerts
 
@@ -89,22 +122,30 @@ class _CommitWatchJob(CrawlJob):
 
     def execute(self, db: Session, counters: CrawlCounters) -> None:
         trusted = analysis.trusted_logins(settings.GITHUB_USERNAME, settings.TRUSTED_COMMITTERS)
-        started = now_utc()
         for repo_info in list_target_repos(settings.GITHUB_TOKEN):
             full_name = repo_info["full_name"]
+            repo = GitHubRepo.from_full_name(full_name, settings.GITHUB_TOKEN)
             state = db.query(CommitWatchState).filter_by(repo_full_name=full_name).first()
-            if state is not None:
-                # 1リポジトリの失敗では、そのリポジトリを飛ばして続ける（基準の時刻は、進めない）
-                try:
-                    repo = GitHubRepo.from_full_name(full_name, settings.GITHUB_TOKEN)
-                    self.alerts.extend(inspect_repo(repo, state.checked_at, trusted))
-                except httpx.HTTPError as exc:
-                    logger.warning("COMMITWATCH: %s failed: %s", full_name, exc)
+            # 1リポジトリの失敗では、そのリポジトリを飛ばして続ける（基準の SHA は、進めない）
+            try:
+                head = _head_sha(repo, repo_info.get("default_branch") or "main")
+                if head is None:
                     continue
-                state.checked_at = started
+                if state is not None and state.last_sha != head:
+                    self.alerts.extend(inspect_repo(
+                        repo, state.last_sha, head, trusted,
+                        require_signature=settings.COMMITWATCH_REQUIRE_SIGNATURE,
+                    ))
+            except httpx.HTTPError as exc:
+                logger.warning("COMMITWATCH: %s failed: %s", full_name, exc)
+                continue
+            if state is None:
+                # 初回は、基準の SHA だけを記録する（過去のコミットは、通知しない）
+                db.add(CommitWatchState(
+                    repo_full_name=full_name, last_sha=head, checked_at=now_utc(),
+                ))
             else:
-                # 初回は、基準の時刻だけを記録する（過去のコミットは、通知しない）
-                db.add(CommitWatchState(repo_full_name=full_name, checked_at=started))
+                state.last_sha, state.checked_at = head, now_utc()
             db.commit()
             counters.inserted += 1
         counters.deleted = len(self.alerts)

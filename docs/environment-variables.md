@@ -28,6 +28,7 @@
 | `RUNTIME_CRON_HOUR_UTC` / `RUNTIME_CRON_MINUTE_UTC` | - | 言語・実行環境のバージョン監視（RUNTIME）の実行時刻（時・分・UTC）（デフォルト: `22`時`45`分。CODESCANの後段） |
 | `SLA_CRITICAL_DAYS` / `SLA_HIGH_DAYS` / `SLA_MEDIUM_DAYS` / `SLA_KEV_DAYS` | - | 脆弱性の対応期限（検知から解決までの日数。Issue #404）（デフォルト: `7`/`30`/`90`、KEV掲載済みは`7`）。LOW・重要度不明は期限なし。1以上 |
 | `TRUSTED_COMMITTERS` | - | コミットの監視で信頼するコミッター（管理者・dependabot・github-actions に足す GitHub ログイン名。カンマ区切り）（#405） |
+| `COMMITWATCH_REQUIRE_SIGNATURE` | - | `true` で、信頼するユーザーでも署名のないコミットを通知（なりすまし対策。デフォルト: `false`）（#405） |
 | `COMMITWATCH_CRON_HOUR_UTC` / `COMMITWATCH_CRON_MINUTE_UTC` | - | コミットの監視の実行時刻（時・分・UTC）（デフォルト: `22`:`20`）（#405） |
 | `EXTERNAL_MONITOR_URLS` | - | 外形監視の対象に追加する公開サイトのURL（https・カンマ区切り。自分の所有するドメインのみ）。リポジトリのHomepage・Firebase・GitHub Pagesは自動検出（#401） |
 | `EXTMON_CRON_HOUR_UTC` / `EXTMON_CRON_MINUTE_UTC` | - | 公開サイトの外形監視の実行時刻（時・分・UTC）（デフォルト: `22`:`35`）（#401） |

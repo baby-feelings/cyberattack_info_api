@@ -14,6 +14,12 @@ from app.core.notifications.slack import DASHBOARD_URL, escape_mrkdwn, truncate_
 # Slack に出す最大件数（残りは件数だけ示す）
 _MAX_ITEMS = 10
 
+# 種類ごとの見出し（コミット単位ではない通知）
+_NOTES = {
+    "history_rewritten": ":rotating_light: **履歴が書き換えられました**（force push の兆候）",
+    "truncated": ":information_source: 未確認のコミットがあります",
+}
+
 _PROCEDURE = (
     "*確認の手順*: ①コミットの作者に、心当たりがあるか確認する　②心当たりがなければ、"
     "**デプロイキー・トークンを失効し、再発行**する（GitHub のパスワード・2要素認証も見直す）　"
@@ -25,9 +31,10 @@ class CommitWatchNotifier(Notifier):
     """コミットの監視の通知。
 
     Args:
-        alerts: 通知する変更。各要素は {"repo_full_name", "sha", "url", "author", "title",
+        alerts: 通知する変更。各要素は {"kind"（commit・history_rewritten・truncated）,
+            "repo_full_name", "sha", "title"} と、commit のとき、さらに {"url", "author",
             "verified", "untrusted", "touches_workflow",
-            "risky": [{"file", "description", "excerpt"}]}
+            "risky": [{"file", "description", "excerpt"}]}（commit 以外は、title だけを使う）
     """
 
     def __init__(self, alerts: list[dict[str, Any]], recipients: list[str] | None = None) -> None:
@@ -41,13 +48,21 @@ class CommitWatchNotifier(Notifier):
         return recipient_resolver.resolve_admin_recipient()
 
     def build_message(self) -> str:
-        # 危険な内容を含むものを先に出す
-        ordered = sorted(self._alerts, key=lambda a: not a["risky"])
+        # 履歴の書き換え・危険な内容を含むものを先に出す
+        ordered = sorted(
+            self._alerts, key=lambda a: a.get("kind") == "commit" and not a["risky"],
+        )
         lines = [
             f":detective: *リポジトリのコミットに、通常と違う変更があります（{len(ordered)}件）*",
             "",
         ]
         for alert in ordered[:_MAX_ITEMS]:
+            if alert.get("kind") in _NOTES:
+                lines.append(
+                    f"• `{escape_mrkdwn(alert['repo_full_name'])}` {_NOTES[alert['kind']]}"
+                    f"（{escape_mrkdwn(alert['title'])}）",
+                )
+                continue
             reasons = []
             if alert["untrusted"]:
                 reasons.append("見慣れないコミッター")
