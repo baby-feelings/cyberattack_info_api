@@ -1,5 +1,5 @@
 # ── 本番依存パッケージ ──────────────────────────────────────────
-fastapi>=0.141.1
+fastapi>=0.162.0
 uvicorn[standard]>=0.54.0
 # SQLAlchemy 2.1.0でmypyプラグイン（sqlalchemy.ext.mypy.plugin、pyproject.tomlで
 # 使用中）が削除され、mypyが起動時エラーになる（CI: Python 3.13ジョブのみ2.1.0を
