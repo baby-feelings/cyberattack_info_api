@@ -34,8 +34,11 @@ logger = logging.getLogger(__name__)
 
 _INSTRUCTIONS = (
     "米 CISA KEV・OSV・JVN の脆弱性情報と、自分のリポジトリの依存ライブラリ脆弱性（DEPSCAN）・"
-    "コード脆弱性（CODESCAN）を参照する読み取り専用ツール群。"
-    "DEPSCAN / CODESCAN は GitHub ログインで発行した MCP トークンが必要で、"
+    "コード・設定の問題（CODESCAN）・言語のサポート期限・対応状況（SLA）・検知の例外（VEX）・"
+    "GitHub のセキュリティアラート・設定の監査・公開サイトの外形監視を"
+    "参照する読み取り専用ツール群。"
+    "DEPSCAN / CODESCAN と、自分のリポジトリのセキュリティ態勢は、"
+    "GitHub ログインで発行した MCP トークンが必要で、"
     "トークンの持ち主が所有するリポジトリのみ参照できる。"
 )
 

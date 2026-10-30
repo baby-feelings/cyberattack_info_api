@@ -56,6 +56,14 @@ claude mcp add --transport http cyberattack-info https://<API のドメイン>/m
 | `search_dependencies` | どのリポジトリが、どのパッケージのどの版を使っているか（影響範囲の確認） | user / admin |
 | `list_codescan_findings` | コードの脆弱性（CODESCAN） | user / admin |
 | `get_codescan_stats` | CODESCAN の件数 | user / admin |
+| `list_runtimes` | 使っている言語・実行環境（Python・Node.js・Flutter・Dart）の版と、サポート期限の状態 | user / admin |
+| `get_sla_report` | 対応期限（SLA）を超えた検知と、平均対応日数（MTTR） | user / admin |
+| `list_finding_exceptions` | 検知の例外（受容・誤検知・影響なし。理由・期限・承認者つき） | user / admin |
+| `export_vex` | 有効な例外を VEX（OpenVEX・CycloneDX）で出力 | user / admin |
+| `list_github_alerts` | GitHub のセキュリティアラート（secret scanning・Dependabot・code scanning） | user / admin |
+| `compare_dependabot_and_depscan` | Dependabot alerts と DEPSCAN の検知の突き合わせ（片方だけの差分） | user / admin |
+| `get_repo_audit` | リポジトリのセキュリティ設定の監査（スコア・各項目・変化） | user / admin |
+| `get_site_monitor` | 公開サイトの外形監視（TLS 期限・ヘッダー・露出ファイル・DNS・Firestore） | user / admin |
 | `whoami` | 現在の権限と見える範囲（接続確認用） | 全員 |
 
 1回の取得は最大 50 件（エージェントのコンテキストを圧迫しないため）。
