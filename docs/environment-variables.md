@@ -30,6 +30,8 @@
 | `RATE_LIMIT_ENABLED` / `RATE_LIMIT_PER_MINUTE` / `RATE_LIMIT_LOCKOUT_FAILURES` / `RATE_LIMIT_LOCKOUT_MINUTES` | - | 管理 API・認証系のレート制限（1分あたりの上限）と、認証失敗の連続によるロックアウト（デフォルト: 有効・`60`・`10`回・`15`分）（#406） |
 | `AUDIT_RETENTION_DAYS` | - | 監査ログの保持期間（日・デフォルト: `180`）（#406） |
 | `API_KEY_EXPIRES_ON` / `GITHUB_TOKEN_EXPIRES_ON` / `SECRETS_EXPIRY_NOTICE_DAYS` | - | 鍵の更新期限（YYYY-MM-DD。空なら通知しない）と、何日前から毎日通知するか（デフォルト: `14`）。形式の誤りは起動時に失敗（#406） |
+| `MCP_EXPIRY_NOTICE_CRON_HOUR_UTC` / `MCP_EXPIRY_NOTICE_CRON_MINUTE_UTC` | - | MCPトークンの期限切れ間近の通知の実行時刻（時・分・UTC）（デフォルト: `23`:`45`） |
+| `OAUTH_CLEANUP_CRON_HOUR_UTC` / `OAUTH_CLEANUP_CRON_MINUTE_UTC` | - | 期限切れのOAuthコード・トークンの掃除の実行時刻（時・分・UTC）（デフォルト: `23`:`50`） |
 | `SECRET_EXPIRY_CRON_HOUR_UTC` / `SECRET_EXPIRY_CRON_MINUTE_UTC` | - | 鍵の更新期限の通知と、監査ログの掃除の実行時刻（時・分・UTC）（デフォルト: `23`:`40`）（#406） |
 | `TRUSTED_COMMITTERS` | - | コミットの監視で信頼するコミッター（管理者・dependabot・github-actions に足す GitHub ログイン名。カンマ区切り）（#405） |
 | `COMMITWATCH_REQUIRE_SIGNATURE` | - | `true` で、信頼するユーザーでも署名のないコミットを通知（なりすまし対策。デフォルト: `false`）（#405） |

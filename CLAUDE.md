@@ -21,11 +21,11 @@ code-review-graph watch
 | 項目 | 内容 |
 |------|------|
 | **言語** | Python 3.13 |
-| **フレームワーク** | FastAPI 0.141.x |
+| **フレームワーク** | FastAPI 0.162.x |
 | **ORM** | SQLAlchemy 2.x（`Mapped` / `mapped_column` スタイル） |
 | **スケジューラ** | APScheduler 3.x + GitHub Actions cron（補完） |
 | **開発 DB** | SQLite／**本番 DB** | PostgreSQL（Neon） |
-| **バリデーション** | Pydantic 2.13.x + pydantic-settings 2.15.x |
+| **バリデーション** | Pydantic 2.14.x + pydantic-settings 2.16.x |
 | **HTTP クライアント** | httpx／**XML パーサー** | defusedxml |
 | **デプロイ先** | OCI（Compute VM、Docker Compose） |
 | **AI連携** | リモートMCPサーバー（`/mcp`、`mcp` SDK。`docs/mcp-server.md`） |
@@ -116,9 +116,9 @@ deploy/       # OCIデプロイ関連（deploy_to_oci.ps1・docker-compose.yml�
 | `depscan-depsops` | DEPSCAN/DEPSOPSの検知・優先度推薦・悪意あるパッケージ・対応状況（SLA/MTTR）・SBOM・自動マージ判定・GitHub OAuth・ユーザー別Slack通知登録 |
 | `runtimes` | 言語・実行環境のバージョン監視（RUNTIME）: 設定ファイルからの検出・最新版/EOLの取得元・状態判定 |
 | `security-posture` | 検知の例外（受容・VEX）・GitHubセキュリティアラートの取り込み・リポジトリ設定の監査（スコア） |
-| `codescan` | CODESCAN（Semgrep静的解析+gitleaks）の設計判断・tarball取得方式・CVSSベストエフォート推定・ログイン必須と本人所有リポジトリのみの絞り込み |
+| `codescan` | CODESCAN（Semgrep+gitleaks+zizmor+インフラ設定）の設計判断・tarball取得方式・CVSSベストエフォート推定・ログイン必須と本人所有リポジトリのみの絞り込み |
 | `dashboard-frontend` | Reactダッシュボードのコンポーネント構成・集約ロジック・E2E（Playwright）の設計 |
-| `deployment-ops` | CI/CD（ESLint・gitleaks・ZAP含む）・OCIデプロイ手順・環境変数・Prometheus/Grafana監視 |
+| `deployment-ops` | CI/CD（ESLint・gitleaks・ZAP含む）・OCIデプロイ手順・環境変数・Prometheus/Grafana監視（Grafanaの作成ルール） |
 
 ---
 
