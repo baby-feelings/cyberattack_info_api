@@ -26,6 +26,7 @@ from app.mcp_server.mcp_token_expiry import run_mcp_token_expiry_notices
 from app.mcp_server.oauth.cleanup import run_oauth_cleanup
 from app.osv.crawler import fetch_and_store_osv
 from app.runtimes.crawler import fetch_and_scan_runtimes
+from app.sla.digest import run_sla_digest
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,8 @@ class ScheduledJob:
     func: Callable[..., Any]
     hour: int
     minute: int = 0
+    # 曜日（"mon" など）。None なら毎日。週次ジョブだけ指定する
+    day_of_week: str | None = None
 
 
 def build_scheduled_jobs() -> list[ScheduledJob]:
@@ -92,6 +95,13 @@ def build_scheduled_jobs() -> list[ScheduledJob]:
             "oauth_cleanup", "OAUTH_CLEANUP", run_oauth_cleanup,
             settings.OAUTH_CLEANUP_CRON_HOUR_UTC, settings.OAUTH_CLEANUP_CRON_MINUTE_UTC,
         ),
+        # 脆弱性への対応状況（期限超過・MTTR）の週次のまとめ（Issue #404）: 毎週月曜。
+        # 前日までの DEPSCAN の結果を集計するため、毎日のジョブとは別の時刻に置く
+        ScheduledJob(
+            "sla_digest", "SLA_DIGEST", run_sla_digest,
+            settings.SLA_DIGEST_CRON_HOUR_UTC, settings.SLA_DIGEST_CRON_MINUTE_UTC,
+            day_of_week=settings.SLA_DIGEST_DAY_OF_WEEK,
+        ),
     ]
 
 
@@ -103,11 +113,16 @@ def register_jobs(job_scheduler: BackgroundScheduler, jobs: list[ScheduledJob]) 
             trigger="cron",
             hour=job.hour,
             minute=job.minute,
+            day_of_week=job.day_of_week,
             id=job.job_id,
             replace_existing=True,
         )
     job_scheduler.start()
     logger.info(
         "Scheduler started: %s",
-        " / ".join(f"{job.label} UTC {job.hour:02d}:{job.minute:02d}" for job in jobs),
+        " / ".join(
+            f"{job.label} UTC {job.hour:02d}:{job.minute:02d}"
+            + (f" ({job.day_of_week})" if job.day_of_week else "")
+            for job in jobs
+        ),
     )

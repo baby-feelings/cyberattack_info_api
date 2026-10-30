@@ -17,7 +17,7 @@ Claude Code や CI/CD ツールから「今まさに悪用されているサイ�
 |------|------|
 | **KEV / OSV / JVN 自動クローラー** | 毎日 JST 04:05 に KEV → OSV → JVN → DEPSCAN → CODESCAN → DEPSOPS を順次実行（各フィード取得・Upsert） |
 | **言語・実行環境のバージョン監視（RUNTIME）** | 各リポジトリが使っている Python・Node.js・Flutter・Dart の版を設定ファイル（Dockerfile・CI・firebase.json 等）から検出し、最新版・サポート期限（endoflife.date・Flutter 公式）と突き合わせる。期限切れ・期限間近・新しい系列ありを、`GET /api/runtimes` とダッシュボードの「言語・実行環境」画面で見られ、変化があったとき（新しい系列の公開・サポート終了が近い・終了）は管理者の Slack に通知する（Issue #373） |
-| **依存ライブラリ脆弱性スキャン（DEPSCAN）** | GitHub 上の自作アプリ全リポジトリのロックファイルを OSV API とリアルタイム照合。新規検知はリポジトリへ GitHub Issue も自動起票し、解消を確認すると自動クローズ |
+| **依存ライブラリ脆弱性スキャン（DEPSCAN）** | GitHub 上の自作アプリ全リポジトリのロックファイルを OSV API とリアルタイム照合。新規検知はリポジトリへ GitHub Issue も自動起票し、解消を確認すると自動クローズ。悪意あるパッケージ（OSV `MAL-*`）は対応手順つきの緊急通知で区別する。重要度別の対応期限（CRITICAL 7日・HIGH 30日・KEV掲載7日）を超えた検知と平均対応日数（MTTR）を `GET /api/sla` とダッシュボードの「対応状況」で見られ、毎週月曜にSlackへまとめを送る |
 | **自アプリコード脆弱性診断（CODESCAN）** | GitHub 上の自作アプリ全リポジトリのソースコードを Semgrep + gitleaks で静的解析。CVSSはベストエフォート推定 |
 | **Dependabot PR 自動運用（DEPSOPS）** | 安全性の高い Dependabot PR（マイナー/パッチ・CIあり・コンフリクトなし）のみ自動マージ、それ以外はSlack通知 |
 | **DEPSCAN/CODESCAN ダッシュボードの GitHub ログイン** | 任意の GitHub アカウントでログインし、本人が所有するリポジトリの検知結果のみ閲覧可能（DEPSCAN・CODESCAN とも。他の人には見えない） |
@@ -81,7 +81,7 @@ deploy/zap/run_zap_scan.ps1           # OWASP ZAP の動的診断（Docker Deskt
 ```
 
 **テスト結果（最新）:** バックエンド 1466 テスト / カバレッジ 99%（Windows は、POSIXパス前提の1件をスキップ）、ダッシュボード 520 テスト
-（Vitest）/ カバレッジ 98%、E2E 105 シナリオ
+（Vitest）/ カバレッジ 98%、E2E 106 シナリオ
 
 ダッシュボードのE2Eテスト（Playwright、API全モック）は `dashboard/` で `npm run e2e`。
 HTMLレポートは `npm run e2e:report`、画面・機能のシナリオ網羅率（90%未満で失敗）は

@@ -33,6 +33,9 @@ cyberattack_info_api/
 │   ├── depsops/                # Dependabot PR 自動運用（DEPSOPS）ドメイン（models・schemas・router
 │   │                           # 〈router + admin_router〉。crawler.py 相当は runner.py〈走査の組み立て〉・pr_judge.py〈PR判定〉・pr_log_repository.py〈履歴DB操作〉。
 │   │                           # 登録済み他ユーザー向けのper-user実行はuser_scan.py）
+│   ├── runtimes/                # 言語・実行環境（Python/Node.js/Flutter/Dart）の使用版の検出と、最新版・サポート期限（EOL）の判定
+│   ├── sla/                     # 脆弱性への対応状況（Issue #404）: policy〈重要度・KEVから対応期限〉・report〈期限超過・MTTRの集計〉・
+│   │                           # router〈GET /api/sla・POST /admin/sla-digest〉・digest〈週次まとめのSlack通知ジョブ〉。DBの変更なし
 │   ├── codescan/                # 自アプリコード脆弱性診断（CODESCAN）ドメイン（Semgrep静的解析 + gitleaks
 │   │                           # シークレット検知。issue_management・cvss_mapping含む）
 │   ├── mcp_server/             # AIエージェント向けリモートMCPサーバー（/mcp、Streamable HTTP。server〈組み立て〉・
@@ -42,7 +45,7 @@ cyberattack_info_api/
 ├── tests/                      # app/ と同じドメイン構成
 │   ├── conftest.py             # テスト用フィクスチャ (SQLite テスト DB、全サブフォルダに自動継承)
 │   ├── test_main.py            # app.main（health/root）テスト
-│   ├── core/ auth/ kev/ osv/ jvn/ depscan/ depsops/ codescan/ mcp_server/ zapscan/ crawler_logs/
+│   ├── core/ auth/ kev/ osv/ jvn/ depscan/ depsops/ runtimes/ sla/ codescan/ mcp_server/ zapscan/ crawler_logs/
 ├── dashboard/               # Vercel デプロイの React ダッシュボード（App.tsx は組み立てのみ。タブ定義と
 │                           # TabBar/TabPanel/HeaderMenu は components/layout/、ページ送りは shared/TableControls）（KEV・OSV（Pub 含む 10 エコシステム）・JVN・
 │                           # DEPSCAN〈GitHub ログイン必須。Dependabot運用状況＝DEPSOPS の判定履歴も統合〉・

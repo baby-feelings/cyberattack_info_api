@@ -43,6 +43,8 @@ from app.osv.router import admin_router as osv_admin_router
 from app.osv.router import router as osv_router
 from app.runtimes.router import admin_router as runtimes_admin_router
 from app.runtimes.router import router as runtimes_router
+from app.sla.router import admin_router as sla_admin_router
+from app.sla.router import router as sla_router
 from app.taxii.router import taxii_router
 
 # ──────────────────────────────────────────────
@@ -145,6 +147,7 @@ app.include_router(depscan_inventory_router)
 app.include_router(depsops_router)
 app.include_router(codescan_router)
 app.include_router(runtimes_router)
+app.include_router(sla_router)
 app.include_router(kev_admin_router)
 app.include_router(osv_admin_router)
 app.include_router(jvn_admin_router)
@@ -152,6 +155,7 @@ app.include_router(depscan_admin_router)
 app.include_router(depsops_admin_router)
 app.include_router(codescan_admin_router)
 app.include_router(runtimes_admin_router)
+app.include_router(sla_admin_router)
 app.include_router(user_crawl_admin_router)
 app.include_router(repo_cleanup_admin_router)
 app.include_router(metrics_router)

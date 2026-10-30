@@ -135,6 +135,30 @@ class Settings(BaseSettings):
     OAUTH_CLEANUP_CRON_HOUR_UTC: int = 23
     OAUTH_CLEANUP_CRON_MINUTE_UTC: int = 50
 
+    # 脆弱性への対応期限（SLA。Issue #404）。検知日から、この日数以内に解決することを目標にする。
+    # LOW・重要度不明は期限なし。KEV 掲載済みは SLA_KEV_DAYS に短縮する（重要度が低くても）
+    SLA_CRITICAL_DAYS: int = 7
+    SLA_HIGH_DAYS: int = 30
+    SLA_MEDIUM_DAYS: int = 90
+    SLA_KEV_DAYS: int = 7
+    # 期限の計算から外す OSV ID（カンマ区切り）。修正版が無い等で「受容」した検知を手動で除外する
+    # （受容の管理機能 #403 が入るまでの暫定）
+    SLA_EXCLUDE_OSV_IDS: str = ""
+    # MTTR（平均対応日数）を集計する、解決済みの期間（日）。解決済みの保持期間（180日）以内にする
+    SLA_MTTR_WINDOW_DAYS: int = 90
+    # 週次の対応状況まとめ（Slack）: 毎週月曜 UTC 0:00（JST 月曜 9:00）
+    SLA_DIGEST_DAY_OF_WEEK: str = "mon"
+    SLA_DIGEST_CRON_HOUR_UTC: int = 0
+    SLA_DIGEST_CRON_MINUTE_UTC: int = 0
+
+    @field_validator("SLA_CRITICAL_DAYS", "SLA_HIGH_DAYS", "SLA_MEDIUM_DAYS", "SLA_KEV_DAYS")
+    @classmethod
+    def _validate_sla_days(cls, value: int) -> int:
+        """対応期限は 1 日以上にする（0 や負数だと、検知した瞬間に全件が期限超過になる）。"""
+        if value < 1:
+            raise ValueError(f"SLA の対応期限は 1 日以上で指定してください: {value}")
+        return value
+
     @field_validator("SCAN_EXCLUDE_REPOS", "INACTIVE_REPOS")
     @classmethod
     def _validate_repo_list(cls, value: str) -> str:

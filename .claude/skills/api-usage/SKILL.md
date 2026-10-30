@@ -82,6 +82,7 @@ curlの代わりに、リモートMCPサーバー（`https://168.138.213.240.nip
 10. DEPSCAN 統計情報を取得する — `GET /api/depscan/stats`
 11. DEPSCAN検知結果をSBOM形式でエクスポートする — `GET /api/depscan/export`
 12. リポジトリの資産コンテキストを設定・確認する — `PUT/GET /api/depscan/assets`
+12.5. 脆弱性への対応状況（期限超過・平均対応日数）を確認する — `GET /api/sla`（`operating`・`repo`・`owner`・`window_days`。詳細は docs/api-reference.md）
 
 **DEPSOPS/CODESCAN/運用系**（`reference/endpoints-ops.md`）:
 

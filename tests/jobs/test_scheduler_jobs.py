@@ -18,6 +18,7 @@ from app.mcp_server.mcp_token_expiry import run_mcp_token_expiry_notices
 from app.mcp_server.oauth.cleanup import run_oauth_cleanup
 from app.osv.crawler import fetch_and_store_osv
 from app.runtimes.crawler import fetch_and_scan_runtimes
+from app.sla.digest import run_sla_digest
 
 
 class TestBuildScheduledJobs:
@@ -27,7 +28,7 @@ class TestBuildScheduledJobs:
         assert set(jobs) == {
             "cisa_kev_crawler", "osv_crawler", "jvn_crawler", "depscan_crawler",
             "codescan_crawler", "dependabot_ops", "repo_cleanup", "user_crawl",
-            "mcp_token_expiry_notice", "oauth_cleanup", "runtime_crawler",
+            "mcp_token_expiry_notice", "oauth_cleanup", "runtime_crawler", "sla_digest",
         }
         expected = {
             "cisa_kev_crawler": (fetch_and_store_kev, settings.CRON_HOUR_UTC,
@@ -49,10 +50,19 @@ class TestBuildScheduledJobs:
                                         settings.MCP_EXPIRY_NOTICE_CRON_MINUTE_UTC),
             "oauth_cleanup": (run_oauth_cleanup, settings.OAUTH_CLEANUP_CRON_HOUR_UTC,
                               settings.OAUTH_CLEANUP_CRON_MINUTE_UTC),
+            "sla_digest": (run_sla_digest, settings.SLA_DIGEST_CRON_HOUR_UTC,
+                           settings.SLA_DIGEST_CRON_MINUTE_UTC),
         }
         for job_id, (func, hour, minute) in expected.items():
             job = jobs[job_id]
             assert (job.func, job.hour, job.minute) == (func, hour, minute), job_id
+
+    def test_only_the_sla_digest_is_weekly(self):
+        # 週次のまとめだけ曜日を持つ。他は毎日（曜日なし）
+        days = {j.job_id: j.day_of_week for j in build_scheduled_jobs()}
+
+        assert days.pop("sla_digest") == settings.SLA_DIGEST_DAY_OF_WEEK
+        assert all(day is None for day in days.values())
 
     def test_job_ids_are_unique(self):
         ids = [j.job_id for j in build_scheduled_jobs()]
@@ -71,10 +81,20 @@ class TestRegisterJobs:
         assert [c.kwargs["id"] for c in calls] == ["a", "b"]
         assert calls[0].args == (func,)
         assert calls[0].kwargs == {
-            "trigger": "cron", "hour": 3, "minute": 15, "id": "a", "replace_existing": True,
+            "trigger": "cron", "hour": 3, "minute": 15, "day_of_week": None,
+            "id": "a", "replace_existing": True,
         }
         assert calls[1].kwargs["minute"] == 0  # 分の既定値は 0
         scheduler.start.assert_called_once()
+
+    def test_weekly_job_is_registered_with_its_day_of_week(self):
+        scheduler = MagicMock()
+        func = MagicMock()
+
+        register_jobs(scheduler, [ScheduledJob("w", "W", func, 0, 0, day_of_week="mon")])
+
+        kwargs = scheduler.add_job.call_args.kwargs
+        assert (kwargs["day_of_week"], kwargs["hour"], kwargs["minute"]) == ("mon", 0, 0)
 
     def test_starts_scheduler_after_all_jobs_are_registered(self):
         scheduler = MagicMock()

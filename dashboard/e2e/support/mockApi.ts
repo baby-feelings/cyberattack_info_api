@@ -2,7 +2,7 @@ import type { Page, Route } from '@playwright/test'
 import {
   codescanItems, codescanStats, depscanFindings, depscanStats, depsopsItems,
   jvnItems, jvnStats, kevItems, kevStats, osvItems, osvStats, repoDependencies, repoRuntimes,
-  runtimeReleases,
+  runtimeReleases, slaOverdue, slaPolicy, slaRepos,
 } from './mockData'
 
 // バックエンドAPIのモック。全リクエストは `/__api` 配下（playwright.config.ts の
@@ -204,6 +204,34 @@ function defaultResponse(req: RecordedRequest, state: MockState): MockResponse {
         && (!repo || d.repo_full_name === repo)
         && (!vulnerable || d.open_vulnerabilities > 0))
       return { body: paginate(items, query, 50) }
+    }
+
+    // ── SLA（脆弱性への対応状況。期限超過・平均対応日数）──
+    case 'GET /api/sla': {
+      const keep = operatingKeep(query, state)
+      const overdue = slaOverdue.filter((i) => keep(i.repo_full_name))
+      const repos = slaRepos.filter((r) => keep(r.repo_full_name))
+      const resolved = repos.reduce((n, r) => n + r.resolved, 0)
+      return {
+        body: {
+          generated_at: '2026-10-10T00:00:00+00:00',
+          mttr_window_days: 90,
+          policy: slaPolicy,
+          summary: {
+            open_with_deadline: repos.reduce((n, r) => n + r.open, 0),
+            overdue: overdue.length,
+            resolved,
+            mttr_days: resolved > 0 ? 7.2 : null,
+          },
+          by_severity: [
+            { severity: 'CRITICAL', deadline_days: 7, open: 1, overdue: 1, resolved: 0, mttr_days: null },
+            { severity: 'HIGH', deadline_days: 30, open: 2, overdue: 1, resolved: 4, mttr_days: 7.2 },
+            { severity: 'LOW', deadline_days: null, open: 1, overdue: 0, resolved: 0, mttr_days: null },
+          ],
+          by_repo: repos,
+          overdue,
+        },
+      }
     }
 
     // ── RUNTIME（言語・実行環境のバージョン監視）──

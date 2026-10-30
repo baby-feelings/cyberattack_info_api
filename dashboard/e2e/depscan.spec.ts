@@ -645,3 +645,43 @@ scenario('DEP-26', '悪意あるパッケージ（MAL-*）は「悪意あり」�
   await table.getByText('evil-pkg').click()
   await expect(table.getByText('悪意あるパッケージ', { exact: true })).toBeVisible()
 })
+
+scenario('DEP-27', '対応状況のモーダルで、期限超過の検知と平均対応日数を見られ、運用中／運用停止中で分かれる', async ({ page, api }) => {
+  api.state.inactiveRepos = ['other-owner/tool']
+  await openDepscan(page)
+  await page.getByRole('button', { name: '対応状況' }).click()
+
+  const dialog = page.getByRole('dialog', { name: '対応状況' })
+  await expect(dialog).toBeVisible()
+  // Bearer トークンで、運用中のアプリだけを取得する
+  const tiles = dialog.getByLabel('対応状況の概要')
+  await expect(tiles).toBeVisible()
+  expect(api.lastQuery('/api/sla')?.get('operating')).toBe('active')
+  expect(api.requestsTo('/api/sla')[0].headers.authorization).toMatch(/^Bearer /)
+
+  // 概要: 運用中は app-one の期限超過 1 件と、平均対応日数
+  await expect(tiles).toContainText('期限超過')
+  await expect(tiles).toContainText('1 件')
+  await expect(tiles).toContainText('7.2 日')
+  await expect(dialog.getByLabel('対応期限')).toContainText('CRITICAL 7日 / HIGH 30日 / MEDIUM 90日 / KEV掲載 7日')
+
+  // 期限超過の一覧: 超過日数と、KEV 掲載の印
+  const table = dialog.getByRole('table', { name: '期限超過の検知一覧' })
+  await expect(table.getByRole('row')).toHaveCount(2)
+  await expect(table).toContainText('lodash')
+  await expect(table).toContainText('25 日超過')
+  await expect(table).toContainText('KEV')
+  await expect(table).not.toContainText('express')
+  await expect(dialog.getByRole('table', { name: '重要度別の対応状況' })).toContainText('CRITICAL')
+  await expect(dialog.getByRole('table', { name: 'リポジトリ別の対応状況' })).toContainText('baby-feelings/app-one')
+
+  // 運用停止中に切り替えると、停止中のアプリだけになる
+  await dialog.getByRole('group', { name: '運用状態フィルター' }).getByRole('button', { name: '運用停止中' }).click()
+  await expect(table).toContainText('express')
+  await expect(table).not.toContainText('lodash')
+  expect(api.lastQuery('/api/sla')?.get('operating')).toBe('inactive')
+
+  // Escape で閉じる
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeHidden()
+})
