@@ -47,7 +47,7 @@ describe('TabPanel', () => {
     expect(panel).toHaveAttribute('id', 'tabpanel-depscan')
     expect(panel).toHaveAttribute('aria-labelledby', 'tab-depscan')
     expect(screen.getByRole('heading', { name: /DEPSCAN/ })).toBeInTheDocument()
-    expect(screen.getByText(/OSV API とリアルタイム照合/)).toBeInTheDocument()
+    expect(screen.getByText(/OSV と照合し、悪意あるパッケージ/)).toBeInTheDocument()
     expect(screen.getByText('depscan-gate')).toBeInTheDocument()
   })
 })

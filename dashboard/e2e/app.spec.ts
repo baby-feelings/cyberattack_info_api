@@ -7,7 +7,7 @@ scenario('APP-01', '初期表示でヘッダー・KEVタブ・フッターが表
   await expect(page.getByRole('tab', { name: 'KEV', exact: true })).toHaveAttribute('aria-selected', 'true')
   await expect(page.getByRole('tabpanel', { name: 'KEV' })).toBeVisible()
   await expect(page.getByRole('heading', { name: /CISA KEV/ })).toBeVisible()
-  await expect(page.getByText('JST 04:05 一括自動更新')).toBeVisible()
+  await expect(page.getByText('毎日 JST 04:00〜07:45 に自動更新')).toBeVisible()
 })
 
 scenario('APP-02', '5つのタブが切り替わり対応するタブパネルが表示される', async ({ page }) => {

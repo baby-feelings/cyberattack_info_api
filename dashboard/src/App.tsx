@@ -57,8 +57,8 @@ export default function App() {
       {/* フッター（下部固定タブバーに隠れないよう下部余白を確保） */}
       <footer className="w-full border-t border-slate-800/60 pb-20">
         <div className="max-w-screen-xl mx-auto px-4 sm:px-8 lg:px-12 py-5 flex flex-col sm:flex-row items-center justify-between gap-1 text-xs text-slate-600">
-          <span>データソース: CISA KEV / Open Source Vulnerabilities (OSV) / JVN (JVNDB) / DEPSCAN / CODESCAN</span>
-          <span>KEV → OSV → JVN → DEPSCAN → CODESCAN: JST 04:05 一括自動更新</span>
+          <span>データソース: CISA KEV / Open Source Vulnerabilities (OSV) / JVN (JVNDB) / DEPSCAN / CODESCAN / 言語・実行環境（endoflife.date・Flutter 公式）</span>
+          <span>毎日 JST 04:00〜07:45 に自動更新</span>
         </div>
       </footer>
 

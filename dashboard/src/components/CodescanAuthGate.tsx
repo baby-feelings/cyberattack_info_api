@@ -22,7 +22,7 @@ export function CodescanAuthGate() {
         <div>
           <p className="text-sm font-semibold text-white">GitHubアカウントでログインしてください</p>
           <p className="text-xs text-slate-500 mt-1">
-            ログインすると、自アプリのコード脆弱性診断結果を閲覧できます
+            ログインすると、自アプリのコード・ワークフローの診断結果を閲覧できます
           </p>
         </div>
         <a
