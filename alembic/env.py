@@ -8,6 +8,7 @@ from alembic import context
 # （autogenerate がテーブル定義を検出できるようにするため）
 from app.auth import models as _auth_models  # noqa: F401
 from app.codescan import models as _codescan_models  # noqa: F401
+from app.commit_watch import models as _commit_watch_models  # noqa: F401
 from app.core.config import settings
 from app.core.database import Base
 from app.crawler_logs import models as _crawler_logs_models  # noqa: F401

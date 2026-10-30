@@ -156,6 +156,12 @@ class Settings(BaseSettings):
     REPOAUDIT_CRON_HOUR_UTC: int = 22
     REPOAUDIT_CRON_MINUTE_UTC: int = 40
 
+    # コミットの監視（Issue #405）: 毎日 UTC 22:20。信頼するコミッター（管理者・dependabot・
+    # github-actions 以外に足すユーザー。カンマ区切りの GitHub ログイン名）
+    TRUSTED_COMMITTERS: str = ""
+    COMMITWATCH_CRON_HOUR_UTC: int = 22
+    COMMITWATCH_CRON_MINUTE_UTC: int = 20
+
     # 公開サイトの外形監視（Issue #401）: 毎日 UTC 22:35。リポジトリの情報から自動検出するほかに、
     # 足りない URL（https）をカンマ区切りで追加できる（自分の所有するドメインのみ）
     EXTERNAL_MONITOR_URLS: str = ""

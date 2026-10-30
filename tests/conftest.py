@@ -69,6 +69,7 @@ def clean_db():
         conn.execute(text("DELETE FROM github_alert_sources"))
         conn.execute(text("DELETE FROM repo_audits"))
         conn.execute(text("DELETE FROM site_checks"))
+        conn.execute(text("DELETE FROM commit_watch_states"))
         conn.execute(text("DELETE FROM user_accounts"))
         conn.execute(text("DELETE FROM mcp_tokens"))
         conn.execute(text("DELETE FROM oauth_authorizations"))

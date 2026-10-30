@@ -6,6 +6,7 @@
 from unittest.mock import MagicMock
 
 from app.codescan.crawler import fetch_and_scan_code
+from app.commit_watch.crawler import fetch_and_watch_commits
 from app.core.config import settings
 from app.depscan.crawler import fetch_and_scan_dependencies
 from app.depsops.runner import run_dependabot_ops
@@ -34,7 +35,7 @@ class TestBuildScheduledJobs:
             "codescan_crawler", "dependabot_ops", "repo_cleanup", "user_crawl",
             "mcp_token_expiry_notice", "oauth_cleanup", "runtime_crawler", "sla_digest",
             "exception_lifecycle", "github_alerts", "repo_audit",
-            "site_monitor",
+            "site_monitor", "commit_watch",
         }
         expected = {
             "cisa_kev_crawler": (fetch_and_store_kev, settings.CRON_HOUR_UTC,
@@ -58,6 +59,8 @@ class TestBuildScheduledJobs:
                               settings.OAUTH_CLEANUP_CRON_MINUTE_UTC),
             "sla_digest": (run_sla_digest, settings.SLA_DIGEST_CRON_HOUR_UTC,
                            settings.SLA_DIGEST_CRON_MINUTE_UTC),
+            "commit_watch": (fetch_and_watch_commits, settings.COMMITWATCH_CRON_HOUR_UTC,
+                             settings.COMMITWATCH_CRON_MINUTE_UTC),
             "site_monitor": (fetch_and_monitor_sites, settings.EXTMON_CRON_HOUR_UTC,
                              settings.EXTMON_CRON_MINUTE_UTC),
             "repo_audit": (fetch_and_audit_repos, settings.REPOAUDIT_CRON_HOUR_UTC,

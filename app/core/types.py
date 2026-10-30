@@ -6,4 +6,5 @@ from typing import Literal
 CrawlerType = Literal[
     "KEV", "OSV", "JVN", "DEPSCAN", "DEPSOPS", "CODESCAN", "CLEANUP", "RUNTIME", "GHALERT",
     "REPOAUDIT", "EXTMON",
+    "COMMITWATCH",
 ]

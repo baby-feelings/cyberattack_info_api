@@ -15,6 +15,7 @@ CRAWLER_LABELS: dict[str, tuple[str, str]] = {
     "GHALERT": (":lock:", "GitHub のセキュリティアラート"),
     "REPOAUDIT": (":clipboard:", "リポジトリの設定の監査"),
     "EXTMON": (":globe_with_meridians:", "公開サイトの外形監視"),
+    "COMMITWATCH": (":detective:", "コミットの監視"),
 }
 
 

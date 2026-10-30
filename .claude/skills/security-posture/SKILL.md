@@ -81,3 +81,20 @@ tarball方式のCODESCANは現在のツリーしか見えないため、GitHub�
   （既存の問題が溢れるため）。外部由来の文字列は`escape_mrkdwn`で無害化
 - API: `GET /api/site-monitor`（問題の重いサイトが先・`only_issues`）。セッション認証時は本人所有のリポジトリに紐づくサイトのみ
   （設定で足したサイトは管理者のみ）。ダッシュボードの画面は未実装
+
+## コミットの監視（Issue #405。`app/commit_watch/`）
+
+アカウント・リポジトリが侵害されたときの足場（ワークフローの書き換え・見慣れないコミッター）を、毎日、早期に検知する。
+
+- **役割分担**: デプロイキー・Webhook・共同編集者の追加・削除は`repo_audit`（#398）。ここは**コミット**を見る
+- **検知**（`analysis.py`の純粋な判定）: ①信頼するユーザー（管理者・`TRUSTED_COMMITTERS`・`dependabot[bot]`・`github-actions[bot]`）以外の
+  コミッター（署名の有無も示す。**アカウントに紐づかない作者も信頼しない**）、②ワークフロー（`.github/workflows/`）の**追加行**に含まれる危険な内容
+  （`secrets.*`の参照・`curl`/`wget`の外部URL・`pull_request_target`・`write-all`・`base64 -d`）。**自分のふつうの変更では通知しない**
+  （信頼するユーザーでも、危険な内容を追加したら通知）
+- **仕組み**: リポジトリごとに前回の確認時刻（`commit_watch_states`）以降のコミットを一覧し（全体と、ワークフローに触れたものの2回）、
+  ワークフローに触れたコミットだけ詳細（差分）を取る。**初回は基準の時刻を記録するだけで通知しない**。失敗したリポジトリは基準を進めない
+- **通知**（`core/notifications/commit_watch.py`）: 管理者のSlackへ。作者・署名・危険な行の短い抜粋（シークレットは**名前の参照**であり値ではない）と、
+  確認の手順（失効・再発行・履歴の確認）つき。外部由来の文字列は`escape_mrkdwn`で無害化。通知した内容はDBに溜めない
+- **対象外**（理由）: force pushの検知・OAuthアプリ/GitHub Appsの追加は、GitHubの監査ログ（Enterprise等）が要る。通常のPATでは取得できない。
+  Eventsの`forced`も確実でないため、実装しない。必要になったらプラン変更とあわせて検討
+- 毎日UTC 22:20（`COMMITWATCH_*`）。手動は`POST /admin/commit-watch-crawl`
