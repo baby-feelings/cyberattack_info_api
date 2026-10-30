@@ -36,6 +36,8 @@ cyberattack_info_api/
 │   ├── runtimes/                # 言語・実行環境（Python/Node.js/Flutter/Dart）の使用版の検出と、最新版・サポート期限（EOL）の判定
 │   ├── sla/                     # 脆弱性への対応状況（Issue #404）: policy〈重要度・KEVから対応期限〉・report〈期限超過・MTTRの集計〉・
 │   │                           # router〈GET /api/sla・POST /admin/sla-digest〉・digest〈週次まとめのSlack通知ジョブ〉。DBの変更なし
+│   ├── github_alerts/           # GitHubのセキュリティアラート（Issue #402）: client〈取得・正規化。シークレットの値は参照しない〉・
+│   │                           # repository〈保存・DEPSCANとの突き合わせ〉・crawler〈毎日のジョブ〉・router〈/api/github-alerts〉
 │   ├── finding_exceptions/      # 検知の例外（Issue #403）: models〈finding_exceptions。検知とは別テーブル〉・matching〈同一性キー・除外・照合〉・
 │   │                           # repository・router〈/api/exceptions・VEX〉・lifecycle〈期限切れ・修正版の公開の毎日の確認〉・issue_sync〈Issueの整合〉・vex
 │   ├── codescan/                # 自アプリコード脆弱性診断（CODESCAN）ドメイン（Semgrep・インフラ設定〈iac_rules〉・Semgrep静的解析 + gitleaks

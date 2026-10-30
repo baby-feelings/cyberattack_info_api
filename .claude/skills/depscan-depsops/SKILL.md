@@ -473,3 +473,21 @@ Vite の `VITE_` 接頭辞の環境変数はビルド時にJSバンドルへ平�
   3行を直接書き換え、LinuxのDocker（`node:24`）で`npm ci --dry-run`して整合を確認する。Windowsで
   `npm install`するとwasm系optional依存がロックから消える。
 - 他リポジトリの修正は、作業中のローカルを避けて`gh repo clone --depth 1`の新規クローンで行う。
+
+## GitHubのセキュリティアラートの取り込み（Issue #402。`app/github_alerts/`）
+
+tarball方式のCODESCANは現在のツリーしか見えないため、GitHub自身のアラートで補う。
+
+- **取得**: `client.fetch_alerts`が、secret scanning・Dependabot alerts・code scanningの未解決（open）を、リポジトリごと・種類ごとに取得
+  （ページング・最大10ページ）。**403・404は「取得不可」**（機能が無効・権限不足）として`None`で返し、0件と区別する
+  （0件と見なすと既存のアラートを解決済みにしてしまう）。取得不可は`github_alert_sources`に理由つきで記録し、APIの`unavailable`に出す
+- **シークレットの値は保存・通知しない**: secret scanningの応答には値（`secret`）が含まれるが、`normalize_secret`は参照しない
+  （種類・有効性・公開状況だけ）。有効（`validity=active`）はCRITICAL・それ以外はHIGH
+- **保存**: `github_alerts`（kind・repo・numberで一意）。今回の結果に無い未解決は解決済み（GitHub側で修正・却下）。取得不可のときは触らない
+- **DEPSCANとの突き合わせ**: `repository.dependabot_vs_depscan`が(リポジトリ・エコシステム・パッケージ・勧告ID)で、`both`（重複は1件）・
+  `only_github`・`only_depscan`に分ける。`GET /api/github-alerts/compare`
+- **通知**: 新規のsecret scanningだけ、管理者のWebhookへ（`core/notifications/github_alerts.py`。有効なものが先・無効化と再発行・
+  履歴の書き換えの手順つき）。毎日UTC 22:50（`GHALERT_*`）。クローラー種別は`GHALERT`
+- **トークン**: 現状は`repo`スコープの classic PAT（secret scanning・Dependabot・code scanningの読み取りを含む）。fine-grainedに
+  する場合は、Secret scanning alerts・Dependabot alerts・Code scanning alertsの読み取りが要る
+- 認可は他のAPIと同じ（`require_api_key_or_session`・セッション認証時は本人所有のみ）。ダッシュボードの画面は未実装

@@ -65,6 +65,8 @@ def clean_db():
         conn.execute(text("DELETE FROM dependabot_pr_logs"))
         conn.execute(text("DELETE FROM code_findings"))
         conn.execute(text("DELETE FROM finding_exceptions"))
+        conn.execute(text("DELETE FROM github_alerts"))
+        conn.execute(text("DELETE FROM github_alert_sources"))
         conn.execute(text("DELETE FROM user_accounts"))
         conn.execute(text("DELETE FROM mcp_tokens"))
         conn.execute(text("DELETE FROM oauth_authorizations"))
