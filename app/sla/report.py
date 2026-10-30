@@ -9,6 +9,8 @@ from app.core.osv_client import is_malicious_advisory
 from app.depscan.filters import DepscanListFilter
 from app.depscan.models import DependencyFinding
 from app.depscan.priority import fetch_kev_map
+from app.finding_exceptions.matching import exception_map, key_of_finding
+from app.finding_exceptions.models import KIND_DEPENDENCY
 from app.sla.policy import SlaPolicy
 from app.sla.schemas import (
     SlaOverdueItem,
@@ -76,12 +78,18 @@ def _mttr(items: list[SlaItem]) -> float | None:
 
 def _to_items(
     rows: list[DependencyFinding], policy: SlaPolicy,
-    kev_cve_ids: set[str],
+    kev_cve_ids: set[str], excepted: set[tuple[str, str]],
 ) -> list[SlaItem]:
-    """ORM の検知を、期限つきの `SlaItem` にする。除外した検知（受容）は含めない。"""
+    """ORM の検知を、期限つきの `SlaItem` にする。
+
+    例外（受容など。`excepted` は (リポジトリ, 同一性キー)）にした未解決の検知は含めない
+    （対応が要らないため、期限超過に数えない。解決済みは、対応にかかった日数として残す）。
+    """
     items = []
     for row in rows:
-        if policy.is_excluded(row.osv_id):
+        if row.resolved_at is None and (
+            row.repo_full_name, key_of_finding(KIND_DEPENDENCY, row),
+        ) in excepted:
             continue
         is_kev = any(cve in kev_cve_ids for cve in row.cve_ids)
         items.append(SlaItem(
@@ -161,6 +169,16 @@ def _overdue_items(items: list[SlaItem], now: datetime) -> list[SlaOverdueItem]:
     ]
 
 
+def _excepted_osv_ids(
+    open_rows: list[DependencyFinding], excepted: set[tuple[str, str]],
+) -> set[str]:
+    """期限の計算から外している（例外にした未解決の）検知の OSV ID。"""
+    return {
+        row.osv_id for row in open_rows
+        if (row.repo_full_name, key_of_finding(KIND_DEPENDENCY, row)) in excepted
+    }
+
+
 def build_report(
     db: Session,
     flt: DepscanListFilter,
@@ -185,7 +203,8 @@ def build_report(
     rows = [*open_rows, *resolved_rows]
 
     kev_cve_ids = set(fetch_kev_map(db, rows))
-    items = _to_items(rows, policy, kev_cve_ids)
+    excepted = set(exception_map(db, KIND_DEPENDENCY, {r.repo_full_name for r in rows}))
+    items = _to_items(rows, policy, kev_cve_ids, excepted)
 
     summary = SlaSummary(
         open_with_deadline=sum(
@@ -203,7 +222,7 @@ def build_report(
             high_days=policy.high_days,
             medium_days=policy.medium_days,
             kev_days=policy.kev_days,
-            excluded_osv_ids=sorted(policy.excluded_osv_ids),
+            excluded_osv_ids=sorted(_excepted_osv_ids(open_rows, excepted)),
         ),
         summary=summary,
         by_severity=_severity_stats(items, policy, now),

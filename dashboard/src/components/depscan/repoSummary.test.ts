@@ -28,4 +28,14 @@ describe('summarizeRepos', () => {
   it('returns an empty list for no findings', () => {
     expect(summarizeRepos([])).toEqual([])
   })
+
+  it('does not count a finding with an exception (acceptance etc.) as needing action', () => {
+    const accepted = {
+      ...f('o/a', 'CRITICAL'),
+      exception: { id: 1, status: 'accepted', reason: 'r', expires_at: null, approver: 'u' },
+    } as DependencyFindingOut
+    const [s] = summarizeRepos([accepted, f('o/a', 'HIGH')])
+    // 一覧には残る（total）が、「対応が必要」には数えない
+    expect(s).toEqual({ repo: 'o/a', crit: 0, high: 1, total: 2 })
+  })
 })

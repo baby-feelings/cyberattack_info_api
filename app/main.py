@@ -28,6 +28,8 @@ from app.depscan.router import admin_router as depscan_admin_router
 from app.depscan.router import router as depscan_router
 from app.depsops.router import admin_router as depsops_admin_router
 from app.depsops.router import router as depsops_router
+from app.finding_exceptions.router import admin_router as exceptions_admin_router
+from app.finding_exceptions.router import router as exceptions_router
 from app.jobs.domain_metrics import register_domain_metrics
 from app.jobs.repo_cleanup_router import admin_router as repo_cleanup_admin_router
 from app.jobs.scheduler_jobs import build_scheduled_jobs, register_jobs
@@ -148,6 +150,7 @@ app.include_router(depsops_router)
 app.include_router(codescan_router)
 app.include_router(runtimes_router)
 app.include_router(sla_router)
+app.include_router(exceptions_router)
 app.include_router(kev_admin_router)
 app.include_router(osv_admin_router)
 app.include_router(jvn_admin_router)
@@ -156,6 +159,7 @@ app.include_router(depsops_admin_router)
 app.include_router(codescan_admin_router)
 app.include_router(runtimes_admin_router)
 app.include_router(sla_admin_router)
+app.include_router(exceptions_admin_router)
 app.include_router(user_crawl_admin_router)
 app.include_router(repo_cleanup_admin_router)
 app.include_router(metrics_router)

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { type CodeFindingOut } from '../../api/client'
 import { SeverityBadge } from '../shared/VulnPanelParts'
+import { ExceptionControl, ExceptionTag } from '../shared/ExceptionControl'
 
 // 重要度バッジのスタイル（Semgrep の ERROR/WARNING/INFO 用）
 const SEVERITY_CLS: Record<string, string> = {
@@ -57,7 +58,17 @@ function CvssBadge({ score }: { score: number | null }) {
 }
 
 // showRepo=false のときはリポジトリ列を隠す（左の一覧でアプリを選んでいて、リポジトリが自明なため）
-export function CodescanRow({ item, showRepo = true }: { item: CodeFindingOut; showRepo?: boolean }) {
+// authToken: ログイン中のセッショントークン（例外の登録・解除に使う）。onExceptionChanged: 一覧を読み直す
+interface CodescanRowProps {
+  item: CodeFindingOut
+  showRepo?: boolean
+  authToken?: string
+  onExceptionChanged?: () => void
+}
+
+export function CodescanRow({
+  item, showRepo = true, authToken, onExceptionChanged,
+}: CodescanRowProps) {
   const [open, setOpen] = useState(false)
   const detectedDate = new Date(item.detected_at).toLocaleDateString('ja-JP', {
     year: 'numeric', month: 'short', day: 'numeric',
@@ -71,7 +82,10 @@ export function CodescanRow({ item, showRepo = true }: { item: CodeFindingOut; s
         onClick={() => setOpen(o => !o)}
       >
         <td className="py-2.5 pr-3">
-          <SeverityBadge severity={item.severity} classMap={SEVERITY_CLS} labels={SEVERITY_LABELS} />
+          <div className="flex items-center gap-1">
+            <SeverityBadge severity={item.severity} classMap={SEVERITY_CLS} labels={SEVERITY_LABELS} />
+            {item.exception && <ExceptionTag exception={item.exception} />}
+          </div>
         </td>
         <td className="py-2.5 pr-3">
           <CvssBadge score={item.cvss_score} />
@@ -131,6 +145,16 @@ export function CodescanRow({ item, showRepo = true }: { item: CodeFindingOut; s
             )}
             {item.cvss_vector && (
               <p className="text-[10px] font-mono text-slate-600">{item.cvss_vector}</p>
+            )}
+            {item.exception_key && (
+              <ExceptionControl
+                kind="code"
+                repo={item.repo_full_name}
+                findingKey={item.exception_key}
+                exception={item.exception}
+                authToken={authToken}
+                onChanged={() => onExceptionChanged?.()}
+              />
             )}
           </td>
         </tr>

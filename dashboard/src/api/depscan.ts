@@ -1,5 +1,6 @@
 // DEPSCAN（自作アプリの依存ライブラリ脆弱性）関連の API クライアント。
 
+import type { FindingExceptionSummary } from './exceptions'
 import { DEFAULT_PER_PAGE, apiFetch, withOperating, type OperatingStatus } from './shared'
 
 export interface DependencyFindingOut {
@@ -24,6 +25,9 @@ export interface DependencyFindingOut {
   priority_reasons: string[]
   detected_at: string
   resolved_at: string | null
+  // 例外（受容・誤検知・影響なし。Issue #403）。有効な例外があれば、通知・要対応の件数から外れている
+  exception_key?: string | null
+  exception?: FindingExceptionSummary | null
 }
 
 export interface DepscanRepoStat {

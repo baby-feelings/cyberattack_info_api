@@ -198,4 +198,60 @@ describe('DepscanGroupRow', () => {
     // stopPropagation on the link's onClick means the row's own toggle handler never fires
     expect(screen.queryByText(/ロックファイル/)).not.toBeInTheDocument()
   })
+
+  describe('exceptions (Issue #403)', () => {
+    const EXCEPTION = {
+      id: 3, status: 'accepted' as const, reason: '修正版が無い',
+      expires_at: '2026-12-31T00:00:00Z', approver: 'alice',
+    }
+
+    it('tags a group whose every finding has an exception', () => {
+      renderRow(makeGroup([
+        makeFinding({ osv_id: 'GHSA-1', exception: EXCEPTION }),
+        makeFinding({ osv_id: 'GHSA-2', exception: EXCEPTION }),
+      ]))
+      expect(screen.getByText('受容')).toBeInTheDocument()
+    })
+
+    it('does not tag a group with a finding that still needs action', () => {
+      renderRow(makeGroup([
+        makeFinding({ osv_id: 'GHSA-1', exception: EXCEPTION }),
+        makeFinding({ osv_id: 'GHSA-2' }),
+      ]))
+      expect(screen.queryByText('受容')).not.toBeInTheDocument()
+    })
+
+    it('offers to register an exception per finding when logged in', () => {
+      render(
+        <table><tbody>
+          <DepscanGroupRow
+            group={makeGroup([makeFinding({ exception_key: 'PyPI|cryptography|GHSA-test-0001' })])}
+            authToken="tok"
+          />
+        </tbody></table>,
+      )
+      fireEvent.click(screen.getByText('cryptography'))
+      expect(screen.getByRole('button', { name: '例外にする' })).toBeInTheDocument()
+    })
+
+    it('shows the exception details when expanded', () => {
+      render(
+        <table><tbody>
+          <DepscanGroupRow
+            group={makeGroup([makeFinding({ exception_key: 'k', exception: EXCEPTION })])}
+            authToken="tok"
+          />
+        </tbody></table>,
+      )
+      fireEvent.click(screen.getByText('cryptography'))
+      expect(screen.getByText('理由: 修正版が無い')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '解除' })).toBeInTheDocument()
+    })
+
+    it('has no exception controls for a finding without a key', () => {
+      renderRow(makeGroup([makeFinding()]))
+      fireEvent.click(screen.getByText('cryptography'))
+      expect(screen.queryByRole('button', { name: '例外にする' })).not.toBeInTheDocument()
+    })
+  })
 })

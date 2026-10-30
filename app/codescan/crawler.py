@@ -33,6 +33,8 @@ from app.core.config import settings
 from app.core.crawler_runner import CrawlCounters, run_crawler
 from app.core.github.accounts import list_target_repos
 from app.core.github.repo import GitHubRepo
+from app.finding_exceptions.matching import drop_excepted
+from app.finding_exceptions.models import KIND_CODE
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +102,8 @@ def _run_codescan_body(db: Session, counters: CrawlCounters) -> None:
         result = repository.sync(full_name, records)
         counters.inserted += result.inserted
         counters.deleted += result.resolved
-        all_new_snapshots.extend(result.new_snapshots)
+        # 例外（受容など）のある検知は、再発しても、通知・Issue 起票の対象にしない（Issue #403）
+        all_new_snapshots.extend(drop_excepted(db, KIND_CODE, result.new_snapshots))
 
     # 保持期間超過の削除失敗はクロール全体を失敗させない（DEPSCAN/KEV/OSV/JVNと同様の方針）
     try:

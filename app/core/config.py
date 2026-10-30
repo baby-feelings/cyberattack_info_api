@@ -141,15 +141,21 @@ class Settings(BaseSettings):
     SLA_HIGH_DAYS: int = 30
     SLA_MEDIUM_DAYS: int = 90
     SLA_KEV_DAYS: int = 7
-    # 期限の計算から外す OSV ID（カンマ区切り）。修正版が無い等で「受容」した検知を手動で除外する
-    # （受容の管理機能 #403 が入るまでの暫定）
-    SLA_EXCLUDE_OSV_IDS: str = ""
     # MTTR（平均対応日数）を集計する、解決済みの期間（日）。解決済みの保持期間（180日）以内にする
     SLA_MTTR_WINDOW_DAYS: int = 90
     # 週次の対応状況まとめ（Slack）: 毎週月曜 UTC 0:00（JST 月曜 9:00）
     SLA_DIGEST_DAY_OF_WEEK: str = "mon"
     SLA_DIGEST_CRON_HOUR_UTC: int = 0
     SLA_DIGEST_CRON_MINUTE_UTC: int = 0
+
+    # 検知の例外（受容・誤検知・影響なし。Issue #403）
+    # 受容の期限の上限（日）。期限なしの受容は認めない（放置を防ぐ）
+    EXCEPTION_MAX_DAYS: int = 365
+    # 期限の何日前に再通知するか
+    EXCEPTION_EXPIRY_NOTICE_DAYS: int = 7
+    # 期限切れ・修正版の公開の確認と通知: 毎日 UTC 22:55（DEPSCAN・CODESCAN・言語監視の後）
+    EXCEPTION_CRON_HOUR_UTC: int = 22
+    EXCEPTION_CRON_MINUTE_UTC: int = 55
 
     @field_validator("SLA_CRITICAL_DAYS", "SLA_HIGH_DAYS", "SLA_MEDIUM_DAYS", "SLA_KEV_DAYS")
     @classmethod

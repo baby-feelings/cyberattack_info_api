@@ -18,6 +18,8 @@ from app.core.issue_filing import file_or_update_repo_issues
 from app.core.notifications.slack import DASHBOARD_URL
 from app.crawler_logs.writer import now_utc
 from app.depscan.models import DependencyFinding
+from app.finding_exceptions.matching import not_excepted
+from app.finding_exceptions.models import KIND_DEPENDENCY
 
 logger = logging.getLogger(__name__)
 
@@ -76,14 +78,14 @@ def close_resolved_repo_issues(db: Session, candidate_repos: set[str]) -> None:
     timestamp = now_utc().strftime("%Y-%m-%d %H:%M UTC")
 
     for full_name in candidate_repos:
-        remaining = (
-            db.query(DependencyFinding)
-            .filter(
+        # 例外（受容など）にした検知は、対応が要らないため、残りに数えない（Issue #403）
+        remaining = not_excepted(
+            db.query(DependencyFinding).filter(
                 DependencyFinding.repo_full_name == full_name,
                 DependencyFinding.resolved_at.is_(None),
-            )
-            .count()
-        )
+            ),
+            KIND_DEPENDENCY,
+        ).count()
         if remaining > 0:
             continue
 
@@ -94,7 +96,7 @@ def close_resolved_repo_issues(db: Session, candidate_repos: set[str]) -> None:
                 continue
             repo.add_issue_comment(
                 issue_number,
-                f"未解決の依存ライブラリ脆弱性が0件になったため自動的にクローズします"
+                f"対応が必要な依存ライブラリ脆弱性（受容などの例外を除く）が0件になったため自動的にクローズします"
                 f"（{timestamp}）。",
             )
             repo.close_issue(issue_number)

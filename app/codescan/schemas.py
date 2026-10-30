@@ -2,6 +2,7 @@
 from pydantic import BaseModel, Field
 
 from app.core.schemas import OrmDatetimeModel, SeverityStat
+from app.finding_exceptions.schemas import FindingExceptionSummary
 
 
 class CodeFindingOut(OrmDatetimeModel):
@@ -30,6 +31,14 @@ class CodeFindingOut(OrmDatetimeModel):
     )
     cvss_vector: str | None = Field(None, description="CVSS 3.1 ベクター文字列（同上）")
     tool: str = Field(description="検知したツール（semgrep / gitleaks / zizmor）")
+    # 例外（受容・誤検知・影響なし。Issue #403）。list_codescan が model_copy で付与する
+    # 計算フィールド
+    exception_key: str | None = Field(
+        default=None, description="例外の登録に使う、検知の同一性キー（file_path|rule_id）",
+    )
+    exception: FindingExceptionSummary | None = Field(
+        default=None, description="有効な例外（受容・誤検知・影響なし）。無ければ null",
+    )
     detected_at: str = Field(description="初回検知日時（ISO 8601）")
     resolved_at: str | None = Field(None, description="解決日時（未解決なら null）")
 

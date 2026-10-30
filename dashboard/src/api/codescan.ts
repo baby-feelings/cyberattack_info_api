@@ -1,5 +1,6 @@
 // CODESCAN（自アプリのコード脆弱性診断）関連の API クライアント。
 
+import type { FindingExceptionSummary } from './exceptions'
 import { apiFetch, withOperating, type OperatingStatus } from './shared'
 
 // CODESCAN の一覧は、1行が大きい（コードの断片を含む）ため、既定の件数を少なくしている
@@ -22,6 +23,9 @@ export interface CodeFindingOut {
   tool: string
   detected_at: string
   resolved_at: string | null
+  // 例外（受容・誤検知・影響なし。Issue #403）
+  exception_key?: string | null
+  exception?: FindingExceptionSummary | null
 }
 
 export interface CodescanRepoStat {

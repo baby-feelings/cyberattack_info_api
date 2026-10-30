@@ -242,6 +242,8 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
                         key={`${group.repo_full_name}-${group.package_name}-${group.installed_version}-${i}`}
                         group={group}
                         showRepo={!activeRepo}
+                        authToken={authToken}
+                        onExceptionChanged={() => load(owner, severity, showResolved, operating)}
                       />
                     ))}
                   </tbody>

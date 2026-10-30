@@ -27,6 +27,10 @@
 | GET | `/api/runtimes/repos` | リポジトリごとの検出数と、対応が必要な数 |
 | GET | `/api/runtimes/releases` | 最新版とサポート期限（系列ごと。`recommended`が推奨の系列） |
 | GET | `/api/sla` | 脆弱性への対応状況（Issue #404）。DEPSCANの検知の、重要度別の対応期限（CRITICAL 7日・HIGH 30日・MEDIUM 90日・KEV掲載7日。`SLA_*`で変更）を超えた検知と、重要度別・リポジトリ別の件数、平均対応日数（MTTR）。`operating`・`repo`・`owner`・`window_days`（MTTRの集計期間。既定90・最大180）。セッション認証時は本人所有のみ |
+| GET | `/api/exceptions` | 検知の例外（受容・誤検知・影響なし。Issue #403）の一覧。`kind`・`repo`・`owner`・`include_ended`。セッション認証時は本人所有のみ |
+| POST | `/api/exceptions` | 例外を理由つきで登録（受容は期限必須・`EXCEPTION_MAX_DAYS`日以内。同じ検知に有効な例外があれば更新）。登録後、有効な検知が0件になったリポジトリのDEPSCAN Issueを閉じる |
+| DELETE | `/api/exceptions/{id}` | 例外を解除（検知は「対応中」に戻り、Issueに再び示される） |
+| GET | `/api/exceptions/vex` | 有効な例外（依存ライブラリ）をVEXで出力（`repo`必須・`format=openvex`〈既定〉/`cyclonedx`） |
 | GET | `/api/depscan/assets` | リポジトリ資産コンテキスト一覧（Issue #131） |
 | GET | `/api/depscan/export` | DEPSCAN検知結果をCycloneDX/SPDX形式でエクスポート（`repo`必須、Issue #133。`content=inventory`で使っている依存の全量） |
 | GET | `/api/codescan` | CODESCAN検知結果一覧（Semgrep静的解析 + gitleaksシークレット検知。`cvss_score`はベストエフォート推定〈Issue #203〉。GitHubログイン必須〈`X-API-KEY`またはセッションJWT、Issue #219〉） |
@@ -50,6 +54,7 @@
 | POST | `/admin/osv-crawl` | OSV手動クロール（`?days=N`・`?force=true`対応） |
 | POST | `/admin/jvn-crawl` | JVN手動クロール（`?days=N`・`?force=true`対応） |
 | POST | `/admin/depscan-crawl` | DEPSCAN手動実行（`?force=true`対応） |
+| POST | `/admin/exception-lifecycle` | 例外の期限切れ・修正版の公開の確認と通知をいま実行（バックグラウンド） |
 | POST | `/admin/sla-digest` | 対応状況の週次まとめ（Slack）をいま送る（バックグラウンド） |
 | POST | `/admin/runtime-crawl` | 言語・実行環境のバージョン監視の手動実行（`?force=true`対応） |
 | PUT | `/admin/depscan/assets/{owner}/{repo}` | リポジトリ資産コンテキスト設定（Upsert、Issue #131） |

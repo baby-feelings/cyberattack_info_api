@@ -140,14 +140,37 @@ OpenSSF malicious-packages 由来の勧告は、**脆弱性ではなくマルウ
   **KEV掲載済みは重要度によらず7日に短縮**（`min`を取る。LOWでもKEVなら期限がつく）。悪意あるパッケージはCRITICALなので7日
 - `report.py`の`build_report`: 未解決すべてと、直近`window_days`（既定90・最大180＝解決済みの保持期間）に解決した検知が対象。
   期限超過・重要度別・リポジトリ別・MTTR（解決済みの平均日数）を返す。日時はSQLiteがtzを持たないため`_as_utc`でそろえる
-- **受容した検知の除外**: `SLA_EXCLUDE_OSV_IDS`（OSV IDのカンマ区切り）の検知は、すべての集計から外す
-  （受容の管理機能#403が入るまでの暫定。除外中の件数はレスポンスの`policy`と画面に出る）
+- **受容した検知の除外**: 有効な例外（次節。#403）のある未解決の検知は、期限の計算から外す（解決済みは、MTTRのため残す）。
+  除外中のOSV IDはレスポンスの`policy.excluded_osv_ids`と画面に出る（旧`SLA_EXCLUDE_OSV_IDS`は廃止）
 - API: `GET /api/sla`（`DepscanListFilter`を再利用。セッション認証時は`restrict_to_owner`で本人所有のみ）。
   手動送信は`POST /admin/sla-digest`
 - 週次まとめ: `app/sla/digest.py`の`run_sla_digest`を、`ScheduledJob`の`day_of_week`（毎週月曜 UTC 0:00）で実行。
   **管理者（`GITHUB_USERNAME`）自身の運用中リポジトリだけ**を集計し、管理者のWebhookにだけ送る
   （`SlaDigestNotifier`。期限超過が0件でも送る）。登録済み他ユーザー向けは対象外
 - ダッシュボードは、DEPSCANタブの「対応状況」ボタン（`SlaModal`）。E2EはDEP-27
+
+## 検知の例外（受容・誤検知・影響なし。Issue #403。`app/finding_exceptions/`）
+
+修正版が無い・到達できない検知を、理由・期限・承認者つきで「例外」にし、通知・「要対応」の件数・SLAから外す（一覧では確認できる）。
+DEPSCAN（`dependency`）とCODESCAN（`code`）の両方が対象。
+
+- **別テーブル`finding_exceptions`**: 検知の行は、スキャンのたびに更新・解決済み化・削除されるため、例外は同一性キーで結び付ける。
+  キー: dependency=`ecosystem|package|osv_id`（版を含めない）/ code=`file_path|rule_id`（**行番号を含めない**＝行がずれても外れない。
+  同じファイル・ルールの全行がまとめて例外になる）。キーは`matching.py`（`key_of_finding`）に1か所
+- **有効の条件**: `ended_at IS NULL`かつ（期限なし or 期限が未来）。期限切れは、定期ジョブが終了にする前でも、クエリ上で有効に数えない
+- **状態**: `accepted`（受容。期限必須・`EXCEPTION_MAX_DAYS`以内）/`false_positive`/`not_affected`（期限は任意）。解除は行を消さず
+  `ended_at`・`ended_reason`（`expired`/`fix_available`/`revoked`）を記録する。同じ検知の有効な例外は1件（再登録は更新）
+- **反映先**: 一覧API（`exception_key`・`exception`を付与。検知は消さない）/ 統計（`not_excepted`のNOT EXISTS）/ SLA（`exception_map`）/
+  新規検知の通知・Issue起票（クローラーで`drop_excepted`）/ DEPSCAN Issueのクローズ判定（有効な検知＝未解決−例外が0件で閉じる。
+  IssueはリポジトリごとなのでIssue単位でなくこの判定に乗せた。CODESCANはもともと閉じない）/ CycloneDX SBOMの`analysis`
+- **毎日の`lifecycle.py`**（UTC 22:55）: 修正版が公開された受容（`fixed_versions`あり）を自動解除・期限切れを終了・期限の
+  `EXCEPTION_EXPIRY_NOTICE_DAYS`日前に1度だけ通知（`expiry_notified_at`）。解除・期限切れの検知は`issue_sync.refile_issues`でIssueに
+  再び示す。通知・Issueは**管理者（`GITHUB_USERNAME`）のリポジトリのみ**（他ユーザー分は状態の更新だけ）
+- **VEX**: `vex.py`。受容=affected（`action_statement`に理由と期限）・誤検知/影響なし=not_affected（`impact_statement`）。
+  OpenVEX 0.2.0とCycloneDX 1.5（`analysis.state`: 受容=exploitable＋`will_not_fix`）。依存ライブラリのみ
+- **認可**: `require_api_key_or_session`。セッション認証時は本人所有のリポジトリのみ（他人の例外IDは404）。承認者＝ログインユーザー
+  （APIキーは`GITHUB_USERNAME`）。ダッシュボードは検知の展開部の`ExceptionControl`（登録後は一覧を読み直すため行が閉じる）。
+  E2EはDEP-28・COD-14
 
 ## DEPSCAN のSBOMエクスポート（Issue #133：CycloneDX/SPDX、app/depscan/sbom.py）
 OWASP Top 10:2025「ソフトウェアサプライチェーンの失敗」対策。**対応範囲はエクスポート

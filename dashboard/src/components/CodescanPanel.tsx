@@ -162,6 +162,8 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
                         key={`${item.repo_full_name}-${item.file_path}-${item.rule_id}-${item.line_start}-${i}`}
                         item={item}
                         showRepo={!selectedRepo}
+                        authToken={authToken}
+                        onExceptionChanged={() => load(severity, resolved, page, operating, selectedRepo)}
                       />
                     ))}
                   </tbody>

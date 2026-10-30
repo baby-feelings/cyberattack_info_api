@@ -6,7 +6,7 @@ from app.core.config import settings
 
 @dataclass(frozen=True)
 class SlaPolicy:
-    """重要度ごとの対応期限（日）と、期限の計算から外す検知。
+    """重要度ごとの対応期限（日）。
 
     - 期限があるのは CRITICAL・HIGH・MEDIUM。LOW・重要度不明は期限なし
     - CISA KEV に掲載済み（実際に悪用が確認された）検知は、重要度によらず `kev_days` に短縮する
@@ -17,7 +17,6 @@ class SlaPolicy:
     high_days: int
     medium_days: int
     kev_days: int
-    excluded_osv_ids: frozenset[str] = frozenset()
 
     @classmethod
     def from_settings(cls) -> "SlaPolicy":
@@ -27,11 +26,6 @@ class SlaPolicy:
             high_days=settings.SLA_HIGH_DAYS,
             medium_days=settings.SLA_MEDIUM_DAYS,
             kev_days=settings.SLA_KEV_DAYS,
-            excluded_osv_ids=frozenset(
-                osv_id.strip()
-                for osv_id in settings.SLA_EXCLUDE_OSV_IDS.split(",")
-                if osv_id.strip()
-            ),
         )
 
     def days_for_severity(self, severity: str | None) -> int | None:
@@ -51,7 +45,3 @@ class SlaPolicy:
         if not is_kev:
             return by_severity
         return self.kev_days if by_severity is None else min(by_severity, self.kev_days)
-
-    def is_excluded(self, osv_id: str) -> bool:
-        """期限の計算から外す検知か（受容した検知の手動除外）。"""
-        return osv_id in self.excluded_osv_ids

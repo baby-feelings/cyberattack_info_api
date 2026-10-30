@@ -9,6 +9,7 @@ from app.codescan.crawler import fetch_and_scan_code
 from app.core.config import settings
 from app.depscan.crawler import fetch_and_scan_dependencies
 from app.depsops.runner import run_dependabot_ops
+from app.finding_exceptions.lifecycle import run_exception_lifecycle
 from app.jobs.repo_cleanup import run_repo_cleanup
 from app.jobs.scheduler_jobs import ScheduledJob, build_scheduled_jobs, register_jobs
 from app.jobs.user_crawl_runner import run_user_crawls_for_all_accounts
@@ -29,6 +30,7 @@ class TestBuildScheduledJobs:
             "cisa_kev_crawler", "osv_crawler", "jvn_crawler", "depscan_crawler",
             "codescan_crawler", "dependabot_ops", "repo_cleanup", "user_crawl",
             "mcp_token_expiry_notice", "oauth_cleanup", "runtime_crawler", "sla_digest",
+            "exception_lifecycle",
         }
         expected = {
             "cisa_kev_crawler": (fetch_and_store_kev, settings.CRON_HOUR_UTC,
@@ -52,6 +54,8 @@ class TestBuildScheduledJobs:
                               settings.OAUTH_CLEANUP_CRON_MINUTE_UTC),
             "sla_digest": (run_sla_digest, settings.SLA_DIGEST_CRON_HOUR_UTC,
                            settings.SLA_DIGEST_CRON_MINUTE_UTC),
+            "exception_lifecycle": (run_exception_lifecycle, settings.EXCEPTION_CRON_HOUR_UTC,
+                                    settings.EXCEPTION_CRON_MINUTE_UTC),
         }
         for job_id, (func, hour, minute) in expected.items():
             job = jobs[job_id]
