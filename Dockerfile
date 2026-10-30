@@ -38,6 +38,16 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY semgrep-cli.txt .
 RUN python -m venv /opt/semgrep-venv     && /opt/semgrep-venv/bin/pip install --no-cache-dir -r semgrep-cli.txt     && /opt/semgrep-venv/bin/pip install --no-cache-dir "PyJWT>=2.15.1"     && ln -s /opt/semgrep-venv/bin/semgrep /usr/local/bin/semgrep     && semgrep --version
 
+# zizmor（CODESCAN の GitHub Actions ワークフロー診断、Issue #397）: semgrep と同じく subprocess で
+# 呼ぶ外部 CLI のため、アプリの依存とは別の専用 venv に導入して PATH 上へ symlink する。
+# 依存パッケージが無い単体バイナリの wheel（aarch64 の manylinux 版あり）。ネットワークには
+# 接続せず（--offline）、GitHub のトークンも渡さない
+COPY zizmor-cli.txt .
+RUN python -m venv /opt/zizmor-venv \
+    && /opt/zizmor-venv/bin/pip install --no-cache-dir -r zizmor-cli.txt \
+    && ln -s /opt/zizmor-venv/bin/zizmor /usr/local/bin/zizmor \
+    && zizmor --version
+
 # アプリケーション本体
 COPY app/ ./app/
 

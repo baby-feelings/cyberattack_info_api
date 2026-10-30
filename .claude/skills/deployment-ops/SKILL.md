@@ -115,10 +115,12 @@ CODESCANはUpsertのため二重実行の実害は薄いが、DEPSOPSは実行�
    crontab/systemdタイマーは意図的に設置せず、手動デプロイのたびに掃除する方式に統一）
 
 **Dockerfileの外部CLI**: gitleaks（GitHub Releasesのバイナリ）とsemgrep（専用venv
-`/opt/semgrep-venv`、`semgrep-cli.txt`）はアプリの`requirements.txt`とは別に導入する。
+`/opt/semgrep-venv`、`semgrep-cli.txt`）・zizmor（専用venv`/opt/zizmor-venv`、`zizmor-cli.txt`。
+`~=1.31`でJSON形式が変わるメジャー版を自動で取り込まない）はアプリの`requirements.txt`とは別に導入する。
 依存をアプリ本体と分けることで、PyJWT等を脆弱性修正版へ自由に上げられる（詳細は`codescan`スキル）。
 **`Dockerfile`に`COPY`するファイルを増やしたら、`deploy/deploy_to_oci.ps1`のscp転送対象にも
-追加すること**（`semgrep-cli.txt`の追加時に転送漏れでOCI上のビルドが失敗するところだった。
+追加すること**（`semgrep-cli.txt`・`zizmor-cli.txt`の追加時は、転送漏れでOCI上のビルドが失敗しうる。
+CIの変更検知（`ci.yml`の`backend_re`）にもファイル名を足す。
 スクリプトは`Dockerfile`/`requirements.txt`/`app/`/`alembic/`等を個別に転送する方式）。
 
 DBマイグレーションは`Dockerfile`の`CMD`（`python -m app.core.migrate && uvicorn ...`）で

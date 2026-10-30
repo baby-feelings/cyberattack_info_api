@@ -47,7 +47,7 @@ jobs:
           echo "変更されたファイル:"; echo "$files"
 
           # バックエンド: アプリ・テスト・マイグレーション・依存・設定・Docker・ZAP 用ファイル
-          backend_re='^(app|tests|alembic|deploy/zap)/|^(requirements[^/]*\.txt|pyproject\.toml|alembic\.ini|Dockerfile|semgrep-cli\.txt|\.python-version)$'
+          backend_re='^(app|tests|alembic|deploy/zap)/|^(requirements[^/]*\.txt|pyproject\.toml|alembic\.ini|Dockerfile|semgrep-cli\.txt|zizmor-cli\.txt|\.python-version)$'
           # ダッシュボード: dashboard/ 配下
           dashboard_re='^dashboard/'
           # このワークフロー自体を変えたときは、確認のためどちらも実行する

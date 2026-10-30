@@ -232,8 +232,8 @@ class TestParseGitleaksResults:
 
 
 class TestScannerStrategy:
-    def test_default_scanners_are_semgrep_and_gitleaks(self):
-        assert [s.name for s in default_scanners()] == ["semgrep", "gitleaks"]
+    def test_default_scanners_are_semgrep_gitleaks_and_zizmor(self):
+        assert [s.name for s in default_scanners()] == ["semgrep", "gitleaks", "zizmor"]
         assert all(isinstance(s, Scanner) for s in default_scanners())
 
     def test_scan_runs_then_parses(self):

@@ -17,23 +17,22 @@ const SEVERITY_LABELS: Record<string, string> = {
   INFO: '情報',
 }
 
-// 検知ツール種別を示す小さなバッジ（Semgrep / Gitleaks、Issue #219）
-const TOOL_LABEL: Record<string, string> = {
-  semgrep: 'Semgrep',
-  gitleaks: 'Gitleaks',
+// 検知ツール種別を示す小さなバッジ（Semgrep / Gitleaks〈Issue #219〉/ Zizmor〈Issue #397。
+// GitHub Actions のワークフロー診断〉）。ツールごとに色を変える。未知のツールは名前のまま、地味な色で出す
+const TOOL_BADGE: Record<string, { label: string; cls: string }> = {
+  semgrep: { label: 'Semgrep', cls: 'bg-slate-700/40 text-slate-400 border-slate-600/50' },
+  gitleaks: { label: 'Gitleaks', cls: 'bg-orange-500/15 text-orange-300 border-orange-500/30' },
+  zizmor: { label: 'Zizmor', cls: 'bg-sky-500/15 text-sky-300 border-sky-500/30' },
 }
+const UNKNOWN_TOOL_CLS = 'bg-slate-700/40 text-slate-400 border-slate-600/50'
 
 function ToolBadge({ tool }: { tool: string }) {
-  const isGitleaks = tool === 'gitleaks'
+  const badge = TOOL_BADGE[tool]
   return (
     <span
-      className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium border ${
-        isGitleaks
-          ? 'bg-orange-500/15 text-orange-300 border-orange-500/30'
-          : 'bg-slate-700/40 text-slate-400 border-slate-600/50'
-      }`}
+      className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium border ${badge?.cls ?? UNKNOWN_TOOL_CLS}`}
     >
-      {TOOL_LABEL[tool] ?? tool}
+      {badge?.label ?? tool}
     </span>
   )
 }
