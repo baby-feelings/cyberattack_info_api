@@ -26,7 +26,7 @@ Claude Code や CI/CD ツールから「今まさに悪用されているサイ�
 | **運用中／運用停止中の切り替え** | DEPSCAN・DEPSOPS・CODESCAN を、運用中のアプリと運用を止めたアプリ（`INACTIVE_REPOS`）に分けて表示（初期表示は運用中）。DEPSCAN・CODESCAN は「いま対応が必要な件数（CRITICAL・HIGH／重大）」を最上部に出し、左のアプリ一覧から絞り込める |
 | **削除済みリポジトリ・古いデータの自動削除** | GitHub上で削除確認できたリポジトリのデータ、保持期間超過レコードを自動削除。`SCAN_EXCLUDE_REPOS` で指定したリポジトリはスキャン対象外（データと起票済みIssueも片付ける） |
 | **品質・セキュリティ検査** | ruff（bandit 相当含む）・mypy・ESLint・pytest/Vitest/Playwright、gitleaks・OSV-Scanner・pip-audit、OWASP ZAP による動的診断を CI で実行 |
-| **運用監視** | Prometheus + Grafana によるクローラー実行結果・ホストリソースの可視化（OCI上、任意） |
+| **運用監視** | Prometheus + Grafana による稼働状態（API・エラー率・応答時間・ジョブの成否・防御・鍵の期限・ホストリソース）の可視化（OCI上、任意） |
 | **一覧・統計・実行ログ API** | ページネーション・検索・フィルタリング対応（詳細: [docs/api-reference.md](docs/api-reference.md)） |
 | **React ダッシュボード** | KEV・OSV・JVN・DEPSCAN・CODESCANを画面下部固定タブで切り替え表示（Vercel デプロイ）。KEV・OSV・JVN は期間（初期は直近30日）と、使っている製品名のキーワード別の該当件数で、新しい脆弱性を先に確認できる |
 
@@ -80,7 +80,7 @@ cd dashboard && npm run lint          # ESLint（警告数の上限あり）
 deploy/zap/run_zap_scan.ps1           # OWASP ZAP の動的診断（Docker Desktop。docs/zap-scan.md）
 ```
 
-**テスト結果（最新）:** バックエンド 1916 テスト / カバレッジ 99%（Windows は、POSIXパス前提の1件をスキップ）、ダッシュボード 567 テスト
+**テスト結果（最新）:** バックエンド 1921 テスト / カバレッジ 99%（Windows は、POSIXパス前提の1件をスキップ）、ダッシュボード 567 テスト
 （Vitest）/ カバレッジ 98%、E2E 108 シナリオ
 
 ダッシュボードのE2Eテスト（Playwright、API全モック）は `dashboard/` で `npm run e2e`。

@@ -7,12 +7,9 @@ os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
 os.environ.setdefault("API_KEY", "test-api-key-for-pytest")
 os.environ.setdefault("ENVIRONMENT", "development")
 
-from app.codescan.models import CodeFinding  # noqa: E402
 from app.crawler_logs.models import CrawlerLog  # noqa: E402
-from app.depscan.models import RepoDependency  # noqa: E402
 from app.jobs import domain_metrics  # noqa: E402
 from app.jobs.domain_metrics import DomainMetricsCollector  # noqa: E402
-from app.runtimes.models import RepoRuntime, RuntimeRelease  # noqa: E402
 from tests.depscan.support import make_finding  # noqa: E402
 
 _T0 = datetime(2026, 6, 15, 19, 0, 0, tzinfo=UTC)
@@ -26,6 +23,10 @@ def _samples(collector: DomainMetricsCollector) -> dict[str, dict[tuple, float]]
         for sample in family.samples:
             result.setdefault(sample.name, {})[tuple(sample.labels.values())] = sample.value
     return result
+
+
+def _all_samples(collector: DomainMetricsCollector):
+    return [sample for family in collector.collect() for sample in family.samples]
 
 
 def _log(db, crawler_type, status="success", *, inserted=0, finished=_T1, duration=90.0):
@@ -55,76 +56,32 @@ class TestCrawlerMetrics:
         assert "crawler_last_run_success" not in samples
 
 
-class TestFindingMetrics:
-    def test_counts_only_unresolved_by_operating_and_severity(self, db_session):
-        make_finding(db_session, repo_full_name="alice/web", severity="HIGH", osv_id="G-1")
-        make_finding(db_session, repo_full_name="alice/web", severity="HIGH", osv_id="G-2")
-        make_finding(db_session, repo_full_name="alice/old", severity="CRITICAL", osv_id="G-3")
-        make_finding(
-            db_session, repo_full_name="alice/web", severity="LOW", osv_id="G-4",
-            resolved_at=_T1,
-        )
-        make_finding(db_session, repo_full_name="alice/web", severity=None, osv_id="G-5")
+class TestSecretExpiryMetrics:
+    def test_days_until_each_configured_expiry(self):
+        with (
+            patch("app.jobs.secret_expiry.settings.API_KEY_EXPIRES_ON", "2026-07-01"),
+            patch("app.jobs.secret_expiry.settings.GITHUB_TOKEN_EXPIRES_ON", "2026-06-10"),
+        ):
+            family = domain_metrics._secret_expiry_family(today=date(2026, 6, 15))
+        values = {sample.labels["secret"]: sample.value for sample in family.samples}
+        # 過ぎた期限は負の値になる
+        assert values == {"API_KEY": 16, "GITHUB_TOKEN": -5}
 
-        with patch("app.core.operating_status.settings.INACTIVE_REPOS", "alice/old"):
-            samples = _samples(DomainMetricsCollector())
-
-        assert samples["depscan_open_findings"] == {
-            ("active", "HIGH"): 2,
-            ("active", "N/A"): 1,
-            ("inactive", "CRITICAL"): 1,
-        }
-
-    def test_codescan_findings(self, db_session):
-        db_session.add(CodeFinding(
-            repo_full_name="alice/web", file_path="a.py", line_start=1, line_end=1,
-            rule_id="r", message="m", severity="ERROR", cwe_ids=[], owasp_categories=[],
-            code_snippet="x", cvss_score=None, cvss_vector=None, detected_at=_T0,
-        ))
-        db_session.commit()
-
-        samples = _samples(DomainMetricsCollector())
-
-        assert samples["codescan_open_findings"] == {("active", "ERROR"): 1}
+    def test_secret_without_an_expiry_is_not_exposed(self):
+        with (
+            patch("app.jobs.secret_expiry.settings.API_KEY_EXPIRES_ON", ""),
+            patch("app.jobs.secret_expiry.settings.GITHUB_TOKEN_EXPIRES_ON", ""),
+        ):
+            family = domain_metrics._secret_expiry_family(today=date(2026, 6, 15))
+        assert family.samples == []
 
 
-class TestDependencyAndRuntimeMetrics:
-    def test_counts_dependencies_by_operating(self, db_session):
-        for repo, name in (("alice/web", "a"), ("alice/web", "b"), ("alice/old", "c")):
-            db_session.add(RepoDependency(
-                repo_full_name=repo, ecosystem="npm", package_name=name, version="1.0.0",
-                manifest_path="package-lock.json",
-            ))
-        db_session.commit()
-
-        with patch("app.core.operating_status.settings.INACTIVE_REPOS", "alice/old"):
-            samples = _samples(DomainMetricsCollector())
-
-        assert samples["repo_dependencies_total"] == {("active",): 2, ("inactive",): 1}
-
-    def test_counts_runtimes_by_state(self, db_session):
-        db_session.add_all([
-            RuntimeRelease(
-                runtime="python", cycle="3.10", latest_version="3.10.20",
-                eol_date=date(2026, 10, 1), is_eol=True, is_lts=False,
-            ),
-            RuntimeRelease(
-                runtime="python", cycle="3.13", latest_version="3.13.17",
-                eol_date=date(2029, 10, 31), is_eol=False, is_lts=False,
-            ),
-            RepoRuntime(repo_full_name="alice/web", runtime="python", cycle="3.10",
-                        source_path="Dockerfile", pinned=True),
-            RepoRuntime(repo_full_name="alice/web", runtime="python", cycle="3.13",
-                        source_path="ci.yml", pinned=True),
-        ])
-        db_session.commit()
-
-        samples = _samples(DomainMetricsCollector())
-
-        assert samples["runtime_usage"] == {
-            ("python", "eol", "active"): 1,
-            ("python", "latest", "active"): 1,
-        }
+class TestRemovedDomainMetrics:
+    def test_vulnerability_and_runtime_counts_are_left_to_the_web_dashboard(self, db_session):
+        make_finding(db_session)
+        names = {sample.name for sample in _all_samples(DomainMetricsCollector())}
+        assert not names & {"depscan_open_findings", "codescan_open_findings",
+                            "repo_dependencies_total", "runtime_usage"}
 
 
 class TestCaching:
