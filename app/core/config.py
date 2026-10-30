@@ -148,6 +148,10 @@ class Settings(BaseSettings):
     SLA_DIGEST_CRON_HOUR_UTC: int = 0
     SLA_DIGEST_CRON_MINUTE_UTC: int = 0
 
+    # GitHub のセキュリティアラートの取り込み（Issue #402）: 毎日 UTC 22:50（言語監視の後）
+    GHALERT_CRON_HOUR_UTC: int = 22
+    GHALERT_CRON_MINUTE_UTC: int = 50
+
     # 検知の例外（受容・誤検知・影響なし。Issue #403）
     # 受容の期限の上限（日）。期限なしの受容は認めない（放置を防ぐ）
     EXCEPTION_MAX_DAYS: int = 365

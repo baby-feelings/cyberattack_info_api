@@ -19,6 +19,7 @@ from app.core.config import settings
 from app.depscan.crawler import fetch_and_scan_dependencies
 from app.depsops.runner import run_dependabot_ops
 from app.finding_exceptions.lifecycle import run_exception_lifecycle
+from app.github_alerts.crawler import fetch_and_store_github_alerts
 from app.jobs.repo_cleanup import run_repo_cleanup
 from app.jobs.user_crawl_runner import run_user_crawls_for_all_accounts
 from app.jvn.crawler import fetch_and_store_jvn
@@ -95,6 +96,11 @@ def build_scheduled_jobs() -> list[ScheduledJob]:
         ScheduledJob(
             "oauth_cleanup", "OAUTH_CLEANUP", run_oauth_cleanup,
             settings.OAUTH_CLEANUP_CRON_HOUR_UTC, settings.OAUTH_CLEANUP_CRON_MINUTE_UTC,
+        ),
+        # GitHub のセキュリティアラートの取り込み（Issue #402）
+        ScheduledJob(
+            "github_alerts", "GHALERT", fetch_and_store_github_alerts,
+            settings.GHALERT_CRON_HOUR_UTC, settings.GHALERT_CRON_MINUTE_UTC,
         ),
         # 例外（受容など）の期限切れ・修正版の公開の確認と通知（Issue #403）: DEPSCAN・CODESCAN の後
         ScheduledJob(

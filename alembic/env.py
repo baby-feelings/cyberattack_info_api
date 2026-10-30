@@ -14,6 +14,7 @@ from app.crawler_logs import models as _crawler_logs_models  # noqa: F401
 from app.depscan import models as _depscan_models  # noqa: F401
 from app.depsops import models as _depsops_models  # noqa: F401
 from app.finding_exceptions import models as _finding_exceptions_models  # noqa: F401
+from app.github_alerts import models as _github_alerts_models  # noqa: F401
 from app.jvn import models as _jvn_models  # noqa: F401
 from app.kev import models as _kev_models  # noqa: F401
 from app.mcp_server import models as _mcp_models  # noqa: F401
