@@ -132,6 +132,23 @@ OpenSSF malicious-packages 由来の勧告は、**脆弱性ではなくマルウ
 - ダッシュボードは、グループ行に「🛑 悪意あり」バッジ（`MaliciousBadge`）。E2EはDEP-26
 - 履歴: 検知〜解決は通常の検知と同じく`detected_at`/`resolved_at`で残る
 
+## 対応状況（SLA・MTTR。Issue #404、`app/sla/`）
+検知から解決までの日数を測り、重要度ごとの**対応期限**を超えた検知と、平均対応日数（MTTR）を示す。
+`detected_at`/`resolved_at`だけで計算するため、**DBの変更は無い**（読み取り時に計算）。対象はDEPSCANのみ
+（CODESCANの重要度〈ERROR/WARNING/INFO〉には、期限との対応の根拠が無いため）。
+- 期限（`SlaPolicy`。`SLA_*`で変更）: CRITICAL 7日・HIGH 30日・MEDIUM 90日。**LOW・重要度不明は期限なし**。
+  **KEV掲載済みは重要度によらず7日に短縮**（`min`を取る。LOWでもKEVなら期限がつく）。悪意あるパッケージはCRITICALなので7日
+- `report.py`の`build_report`: 未解決すべてと、直近`window_days`（既定90・最大180＝解決済みの保持期間）に解決した検知が対象。
+  期限超過・重要度別・リポジトリ別・MTTR（解決済みの平均日数）を返す。日時はSQLiteがtzを持たないため`_as_utc`でそろえる
+- **受容した検知の除外**: `SLA_EXCLUDE_OSV_IDS`（OSV IDのカンマ区切り）の検知は、すべての集計から外す
+  （受容の管理機能#403が入るまでの暫定。除外中の件数はレスポンスの`policy`と画面に出る）
+- API: `GET /api/sla`（`DepscanListFilter`を再利用。セッション認証時は`restrict_to_owner`で本人所有のみ）。
+  手動送信は`POST /admin/sla-digest`
+- 週次まとめ: `app/sla/digest.py`の`run_sla_digest`を、`ScheduledJob`の`day_of_week`（毎週月曜 UTC 0:00）で実行。
+  **管理者（`GITHUB_USERNAME`）自身の運用中リポジトリだけ**を集計し、管理者のWebhookにだけ送る
+  （`SlaDigestNotifier`。期限超過が0件でも送る）。登録済み他ユーザー向けは対象外
+- ダッシュボードは、DEPSCANタブの「対応状況」ボタン（`SlaModal`）。E2EはDEP-27
+
 ## DEPSCAN のSBOMエクスポート（Issue #133：CycloneDX/SPDX、app/depscan/sbom.py）
 OWASP Top 10:2025「ソフトウェアサプライチェーンの失敗」対策。**対応範囲はエクスポート
 （読み取り専用）のみ**で、外部SBOMの入力受け付け・VEX拡張はスコープ外。

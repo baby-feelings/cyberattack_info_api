@@ -85,12 +85,12 @@ app/
 │                 #   user_crawl_runner（登録済み他ユーザー向け）/各管理API
 ├── taxii/        # STIX/TAXII 2.1 配信（KEV/OSV/JVN。router.py）
 ├── kev/          # CISA KEV（models/schemas/crawler/stix/router）
-├── osv/          # OSV（10エコシステム対応、+packages.py）
-├── jvn/          # JVN（MyJVN API / RDF-RSS）
+├── osv/ jvn/     # OSV（10エコシステム対応、+packages.py）/ JVN（MyJVN API / RDF-RSS）
 ├── depscan/      # 依存ライブラリ脆弱性スキャン（crawler=ジョブ組み立て+manifests/inventory/〈依存の全量の保存・検索・API〉/finding_builder/
 │                 #   reachability_scan/repository+issue_management/priority/sbom/user_scan/source_files/parsers/）
 ├── depsops/      # Dependabot PR 自動運用（runner/pr_judge/pr_log_repository/classify/github_client〈PR操作〉/user_scan）
 ├── runtimes/     # 言語・実行環境（Python/Node.js/Flutter/Dart）の使用版の検出と、最新版・サポート期限（EOL）の判定
+├── sla/          # 脆弱性への対応状況（期限超過・MTTR。policy/report/router/digest。週次まとめをSlackへ。DB変更なし）
 ├── codescan/     # 自アプリのコード脆弱性診断（Semgrep静的解析+gitleaksシークレット検知。GitHubログイン
 │                 #   必須〈DEPSCANとセッション共有〉。+scanners〈Strategy〉/archive/repository/issue_management/cvss_mapping/cvss）
 ├── mcp_server/   # AIエージェント向けリモートMCPサーバー（/mcp、Streamable HTTP。組み立て=server.py・ツール=tools/・
@@ -114,7 +114,7 @@ deploy/       # OCIデプロイ関連（deploy_to_oci.ps1・docker-compose.yml�
 |--------|------|
 | `api-usage` | 本番APIの使い方（curl例・MCPサーバー）・フィールド定義・エラーレスポンス |
 | `crawler-internals` | KEV/OSV/JVN共通基盤（retry/notifications/pagination等）・STIX/TAXII・Alembic |
-| `depscan-depsops` | DEPSCAN/DEPSOPSの検知・優先度推薦・SBOM・自動マージ判定・GitHub OAuth・ユーザー別Slack通知登録 |
+| `depscan-depsops` | DEPSCAN/DEPSOPSの検知・優先度推薦・悪意あるパッケージ・対応状況（SLA/MTTR）・SBOM・自動マージ判定・GitHub OAuth・ユーザー別Slack通知登録 |
 | `runtimes` | 言語・実行環境のバージョン監視（RUNTIME）: 設定ファイルからの検出・最新版/EOLの取得元・状態判定 |
 | `codescan` | CODESCAN（Semgrep静的解析+gitleaks）の設計判断・tarball取得方式・CVSSベストエフォート推定・ログイン必須と本人所有リポジトリのみの絞り込み |
 | `dashboard-frontend` | Reactダッシュボードのコンポーネント構成・集約ロジック・E2E（Playwright）の設計 |

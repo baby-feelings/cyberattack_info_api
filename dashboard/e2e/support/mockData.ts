@@ -313,3 +313,25 @@ export function codescanStats(keep: (repo: string) => boolean = () => true) {
     severities: [...sev].map(([severity, count]) => ({ severity, count })),
   }
 }
+
+// 脆弱性への対応状況（GET /api/sla）用。期限超過の検知と、リポジトリ別の件数
+export const slaOverdue = [
+  { repo_full_name: 'baby-feelings/app-one', package_name: 'lodash', installed_version: '4.17.15',
+    osv_id: 'GHSA-lodash-1', severity: 'CRITICAL', is_kev: true, is_malicious: false,
+    detected_at: '2026-09-15T00:00:00+00:00', deadline_days: 7,
+    due_at: '2026-09-22T00:00:00+00:00', overdue_days: 25 },
+  { repo_full_name: 'other-owner/tool', package_name: 'express', installed_version: '4.16.0',
+    osv_id: 'GHSA-express-1', severity: 'HIGH', is_kev: false, is_malicious: false,
+    detected_at: '2026-08-20T00:00:00+00:00', deadline_days: 30,
+    due_at: '2026-09-19T00:00:00+00:00', overdue_days: 12 },
+]
+
+export const slaRepos = [
+  { repo_full_name: 'baby-feelings/app-one', open: 2, overdue: 1, resolved: 3, mttr_days: 8.5 },
+  { repo_full_name: 'other-owner/tool', open: 1, overdue: 1, resolved: 0, mttr_days: null },
+  { repo_full_name: 'baby-feelings/app-two', open: 1, overdue: 0, resolved: 1, mttr_days: 4 },
+]
+
+export const slaPolicy = {
+  critical_days: 7, high_days: 30, medium_days: 90, kev_days: 7, excluded_osv_ids: [] as string[],
+}

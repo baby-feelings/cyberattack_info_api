@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import {
-  Bug, RefreshCw, CheckCircle2, Sparkles, GitPullRequest, Package, Cpu,
+  Bug, RefreshCw, CheckCircle2, Sparkles, GitPullRequest, Package, Cpu, Timer,
 } from 'lucide-react'
 import {
   SeverityPieChart,
@@ -12,6 +12,7 @@ import { RepoBarChart } from './depscan/RepoBarChart'
 import { DependabotOpsModal } from './depscan/DependabotOpsModal'
 import { DependenciesModal } from './depscan/DependenciesModal'
 import { RuntimesModal } from './depscan/RuntimesModal'
+import { SlaModal } from './depscan/SlaModal'
 import { SEVERITY_CLS, SEVERITY_COLORS } from './depscan/grouping'
 import { useDepscanData } from './depscan/useDepscanData'
 import { OperatingFilter } from './shared/OperatingFilter'
@@ -46,6 +47,7 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
   const [depsOpsOpen, setDepsOpsOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [runtimesOpen, setRuntimesOpen] = useState(false)
+  const [slaOpen, setSlaOpen] = useState(false)
 
   const {
     owner, severity, showResolved, operating, page, setPage,
@@ -110,6 +112,13 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
           >
             <Cpu size={13} />
             言語・実行環境
+          </button>
+          <button
+            onClick={() => setSlaOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
+          >
+            <Timer size={13} />
+            対応状況
           </button>
           <button
             onClick={() => setDepsOpsOpen(true)}
@@ -252,6 +261,7 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
       {/* 使っている依存パッケージの閲覧・検索（アプリごとの一覧／新しい脆弱性の影響範囲の確認）。同じく全画面モーダル */}
       <DependenciesModal open={searchOpen} onClose={() => setSearchOpen(false)} authToken={authToken} />
       <RuntimesModal open={runtimesOpen} onClose={() => setRuntimesOpen(false)} authToken={authToken} />
+      <SlaModal open={slaOpen} onClose={() => setSlaOpen(false)} authToken={authToken} />
     </div>
   )
 }
