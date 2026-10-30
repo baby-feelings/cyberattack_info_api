@@ -13,6 +13,15 @@ _CHANGE_LABELS = {"added": "追加", "removed": "削除"}
 _MAX_ITEMS = 15
 
 
+def _escape(text: str) -> str:
+    """Slack の mrkdwn に、外部の文字列（キーの名前・リポジトリ名）を、そのまま埋め込まない。
+
+    `<...>` のリンク・メンション、`&`、バッククォート（書式の終了）、改行（行の偽装）を無害にする。
+    """
+    cleaned = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return " ".join(cleaned.replace("`", "'").split())
+
+
 class RepoAuditChangeNotifier(Notifier):
     """設定の変化の通知。
 
@@ -46,8 +55,9 @@ class RepoAuditChangeNotifier(Notifier):
                     break
                 shown += 1
                 lines.append(
-                    f"• `{repo}` {_KIND_LABELS.get(item['kind'], item['kind'])}を"
-                    f"{_CHANGE_LABELS.get(item['change'], item['change'])}: `{item['name']}`",
+                    f"• `{_escape(repo)}` {_KIND_LABELS.get(item['kind'], item['kind'])}を"
+                    f"{_CHANGE_LABELS.get(item['change'], item['change'])}: "
+                    f"`{_escape(item['name'])}`",
                 )
         if total > shown:
             lines.append(f"…ほか {total - shown}件")

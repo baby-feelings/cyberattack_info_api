@@ -4,10 +4,12 @@
 権限不足・機能が使えないプランは、403・404 になる。それ以外の失敗（5xx・通信）は、例外で伝える。
 """
 import logging
+from collections.abc import Callable
 from typing import Any
 
 from app.core.github.api import GitHubApi
 from app.core.github.repo import GitHubRepo
+from app.repo_audit.checks import hook_url, sanitize_url
 
 logger = logging.getLogger(__name__)
 
@@ -71,13 +73,29 @@ def collect(repo: GitHubRepo, default_branch: str) -> dict[str, Any]:
 
 
 def snapshot_of(raw: dict[str, Any]) -> dict[str, list[str] | None]:
-    """デプロイキー・Webhook・共同編集者の、名前の一覧（変化の検知用。取得不可は None）。"""
+    """デプロイキー・Webhook・共同編集者の、識別子の一覧（変化の検知用。取得不可は None）。
 
-    def names(items: list[dict[str, Any]] | None, field: str) -> list[str] | None:
-        return None if items is None else sorted(str(i.get(field)) for i in items)
+    名前（タイトル）だけでは、同名のキーの差し替えや、権限の変更（読み取り→書き込み）を見逃すため、
+    一意な ID と権限を含める。Webhook の URL は、認証情報・クエリを除いて持つ。
+    """
+
+    def identities(
+        items: list[dict[str, Any]] | None, make: Callable[[dict[str, Any]], str],
+    ) -> list[str] | None:
+        return None if items is None else sorted(make(i) for i in items)
 
     return {
-        "keys": names(raw.get("keys"), "title"),
-        "hooks": names(raw.get("hooks"), "url"),
-        "collaborators": names(raw.get("collaborators"), "login"),
+        "keys": identities(
+            raw.get("keys"),
+            lambda k: (
+                f"{k.get('id')}:{k.get('title')}:{'ro' if k.get('read_only', True) else 'rw'}"
+            ),
+        ),
+        "hooks": identities(
+            raw.get("hooks"), lambda h: f"{h.get('id')}:{sanitize_url(hook_url(h))}",
+        ),
+        "collaborators": identities(
+            raw.get("collaborators"),
+            lambda c: f"{c.get('login')}:{c.get('role_name') or 'unknown'}",
+        ),
     }

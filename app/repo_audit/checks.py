@@ -9,6 +9,7 @@
 """
 from dataclasses import asdict, dataclass
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 OK = "ok"
 NG = "ng"
@@ -108,13 +109,33 @@ def _deploy_keys(keys: list[dict[str, Any]] | None) -> Check:
     return Check("deploy_keys", "デプロイキー", OK, 2, f"{len(keys)}件（すべて読み取り専用）")
 
 
+def sanitize_url(url: str) -> str:
+    """URL から、認証情報（`user:pass@`）・クエリ・フラグメントを除く（表示・保存・通知用）。
+
+    Webhook の送信先の URL には、トークンがクエリや認証情報として含まれることがある。
+    """
+    parts = urlsplit(url)
+    host = parts.hostname or ""
+    netloc = f"{host}:{parts.port}" if parts.port else host
+    return urlunsplit((parts.scheme, netloc, parts.path, "", ""))
+
+
+def hook_url(hook: dict[str, Any]) -> str:
+    """Webhook の送信先。GitHub の応答では `config.url`（互換のため、直下の `url` も見る）。"""
+    return str((hook.get("config") or {}).get("url") or hook.get("url") or "")
+
+
+def _is_insecure_hook(hook: dict[str, Any]) -> bool:
+    """暗号化されていない送信先（http）、または SSL 検証を無効にした Webhook か。"""
+    config = hook.get("config") or {}
+    insecure_ssl = config.get("insecure_ssl", hook.get("insecure_ssl"))
+    return hook_url(hook).lower().startswith("http://") or str(insecure_ssl) == "1"
+
+
 def _webhooks(hooks: list[dict[str, Any]] | None) -> Check:
     if hooks is None:
         return Check("webhooks", "Webhook", UNAVAILABLE, 2, "取得できません（権限不足）")
-    insecure = [
-        str(h.get("url")) for h in hooks
-        if str(h.get("url", "")).startswith("http://") or str(h.get("insecure_ssl")) == "1"
-    ]
+    insecure = [sanitize_url(hook_url(h)) for h in hooks if _is_insecure_hook(h)]
     if insecure:
         return Check(
             "webhooks", "Webhook", NG, 2,
@@ -168,6 +189,16 @@ def score(checks: list[Check]) -> int | None:
 
 def to_dicts(checks: list[Check]) -> list[dict[str, Any]]:
     return [asdict(c) for c in checks]
+
+
+def merge_snapshots(old: dict[str, Any] | None, new: dict[str, Any]) -> dict[str, Any]:
+    """今回の取得で取れなかった種類（None）は、前回の内容を残す。
+
+    None で上書きすると、次に取得できたとき、「前回が無い」ことになり、その間の変化
+    （追加された共同編集者など）を見逃してしまう。
+    """
+    old = old or {}
+    return {kind: (value if value is not None else old.get(kind)) for kind, value in new.items()}
 
 
 def diff_snapshot(old: dict[str, Any] | None, new: dict[str, Any]) -> list[dict[str, str]]:

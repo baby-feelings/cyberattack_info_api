@@ -34,9 +34,9 @@ SECURE = {
         "required_pull_request_reviews": {"required_approving_review_count": 1},
         "required_status_checks": {"strict": True},
     },
-    "keys": [{"title": "deploy", "read_only": True}],
-    "hooks": [{"url": "https://hooks.example/x", "insecure_ssl": "0"}],
-    "collaborators": [{"login": "alice"}],
+    "keys": [{"id": 1, "title": "deploy", "read_only": True}],
+    "hooks": [{"id": 5, "config": {"url": "https://hooks.example/x", "insecure_ssl": "0"}}],
+    "collaborators": [{"login": "alice", "role_name": "admin"}],
 }
 
 
@@ -95,11 +95,16 @@ class TestEvaluate:
         checks = _by_key({
             **SECURE,
             "keys": [{"title": "ci", "read_only": False}],
-            "hooks": [{"url": "http://plain.example/x"}, {"url": "https://x", "insecure_ssl": "1"}],
+            "hooks": [
+                {"id": 1, "config": {"url": "http://plain.example/x?token=SECRET"}},
+                {"id": 2, "config": {"url": "https://user:pw@x.example/p", "insecure_ssl": "1"}},
+            ],
         })
 
         assert checks["deploy_keys"].status == c.NG and "ci" in checks["deploy_keys"].detail
         assert checks["webhooks"].status == c.NG and "http://plain.example/x" in checks["webhooks"].detail
+        # 認証情報・クエリ（トークン）は、表示に残さない
+        assert "SECRET" not in checks["webhooks"].detail and "pw" not in checks["webhooks"].detail
 
     def test_score_is_weighted(self):
         # secret_scanning(3) が ng・他の点検できた項目は ok → 重みの比で計算する
@@ -114,6 +119,49 @@ class TestEvaluate:
 
     def test_to_dicts(self):
         assert c.to_dicts(c.evaluate(SECURE))[0]["key"] == "secret_scanning"
+
+
+class TestSecurityHardening:
+    def test_webhook_urls_are_read_from_config_and_sanitized(self):
+        hook = {"id": 3, "config": {"url": "https://u:p@h.example:8443/a/b?token=T#frag"}}
+
+        assert c.hook_url(hook).startswith("https://u:p@")
+        assert c.sanitize_url(c.hook_url(hook)) == "https://h.example:8443/a/b"
+        assert c.hook_url({"url": "http://legacy"}) == "http://legacy"   # 互換
+        assert c.hook_url({}) == ""
+
+    def test_the_snapshot_identity_changes_when_a_key_becomes_writable_or_is_replaced(self):
+        before = collector.snapshot_of({"keys": [{"id": 1, "title": "ci", "read_only": True}]})
+        writable = collector.snapshot_of({"keys": [{"id": 1, "title": "ci", "read_only": False}]})
+        replaced = collector.snapshot_of({"keys": [{"id": 2, "title": "ci", "read_only": True}]})
+
+        # 同じ名前でも、権限の変更・差し替えを、変化として検知できる
+        assert len(c.diff_snapshot(before, writable)) == 2
+        assert len(c.diff_snapshot(before, replaced)) == 2
+
+    def test_the_snapshot_never_holds_credentials_from_webhook_urls(self):
+        snap = collector.snapshot_of({"hooks": [{"id": 1, "config": {"url": "https://a:b@h.example/p?k=SECRET"}}]})
+        assert snap["hooks"] == ["1:https://h.example/p"]
+
+    def test_a_kind_that_could_not_be_fetched_keeps_the_previous_snapshot(self):
+        old = {"keys": ["1:a:ro"], "hooks": ["h"], "collaborators": ["alice:admin"]}
+        merged = c.merge_snapshots(old, {"keys": None, "hooks": ["h"], "collaborators": ["alice:admin", "m:write"]})
+
+        assert merged == {"keys": ["1:a:ro"], "hooks": ["h"], "collaborators": ["alice:admin", "m:write"]}
+        assert c.merge_snapshots(None, {"keys": None}) == {"keys": None}
+
+    def test_a_change_made_while_the_fetch_failed_is_found_on_the_next_success(self, db_session):
+        with patch("app.repo_audit.crawler.collect", return_value=SECURE):
+            audit_repo(db_session, {"full_name": "u/app"})
+        blind = {**SECURE, "collaborators": None}                       # 取得できなかった回
+        with patch("app.repo_audit.crawler.collect", return_value=blind):
+            audit_repo(db_session, {"full_name": "u/app"})
+        added = {**SECURE, "collaborators": [
+            {"login": "alice", "role_name": "admin"}, {"login": "mallory", "role_name": "write"}]}
+        with patch("app.repo_audit.crawler.collect", return_value=added):
+            changes = audit_repo(db_session, {"full_name": "u/app"})
+
+        assert changes == [{"kind": "collaborators", "change": "added", "name": "mallory:write"}]
 
 
 class TestDiffSnapshot:
@@ -164,7 +212,7 @@ class TestCollector:
             "/repos/u/app": _resp(body={"private": True}),
             "/vulnerability-alerts": _resp(204, content=b""),
             "/branches/main/protection": _resp(404, {"message": "Branch not protected"}),
-            "/keys": _resp(body=[{"title": "k", "read_only": True}]),
+            "/keys": _resp(body=[{"id": 9, "title": "k", "read_only": True}]),
             "/hooks": _resp(403),
             "/collaborators?affiliation=direct": _resp(body=[{"login": "alice"}]),
         })
@@ -175,7 +223,9 @@ class TestCollector:
         assert raw["vulnerability_alerts"] is True
         assert raw["branch_protection"] is False          # 「保護されていない」
         assert raw["hooks"] is None                       # 取得不可（空ではない）
-        assert collector.snapshot_of(raw) == {"keys": ["k"], "hooks": None, "collaborators": ["alice"]}
+        assert collector.snapshot_of(raw) == {
+            "keys": ["9:k:ro"], "hooks": None, "collaborators": ["alice:unknown"],
+        }
 
     def test_dependabot_alerts_disabled_and_forbidden(self):
         disabled = collector.collect(_repo({"/repos/u/app": _resp(body={})}), "main")
@@ -220,15 +270,17 @@ class TestCrawler:
 
         row = db_session.query(RepoAudit).one()
         assert changes == [] and row.score == 100
-        assert row.snapshot["collaborators"] == ["alice"]
+        assert row.snapshot["collaborators"] == ["alice:admin"]
 
     def test_second_audit_detects_a_new_collaborator_and_updates_the_row(self, db_session):
         self._audit(db_session, SECURE)
-        changed = {**SECURE, "collaborators": [{"login": "alice"}, {"login": "mallory"}]}
+        changed = {**SECURE, "collaborators": [
+            {"login": "alice", "role_name": "admin"}, {"login": "mallory", "role_name": "write"},
+        ]}
 
         changes = self._audit(db_session, changed)
 
-        assert changes == [{"kind": "collaborators", "change": "added", "name": "mallory"}]
+        assert changes == [{"kind": "collaborators", "change": "added", "name": "mallory:write"}]
         assert db_session.query(RepoAudit).count() == 1
         assert db_session.query(RepoAudit).one().changes == changes
 
@@ -319,6 +371,17 @@ class TestNotifier:
 
         assert "デプロイキーを追加: `new-key`" in message and "共同編集者を削除: `bob`" in message
         assert "乗っ取りの兆候" in message
+
+    def test_external_names_cannot_inject_slack_markup(self):
+        evil = {"u/a`b": [{"kind": "keys", "change": "added",
+                            "name": "x` <!channel> <https://evil|click> &\nfake line"}]}
+
+        message = RepoAuditChangeNotifier(evil, recipients=["h"]).build_message()
+
+        assert "<!channel>" not in message and "<https://evil" not in message
+        assert "&lt;!channel&gt;" in message and "&amp;" in message
+        assert "x' &lt;" in message           # バッククォートは、書式を終わらせない
+        assert "fake line" in message and "&amp; fake line" in message   # 改行は、1行にまとめる
 
     def test_long_lists_are_cut(self):
         many = {"u/app": [{"kind": "hooks", "change": "added", "name": f"h{i}"} for i in range(20)]}

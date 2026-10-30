@@ -28,10 +28,11 @@ def audit_repo(db: Session, repo_info: dict[str, Any]) -> list[dict[str, str]]:
     repo = GitHubRepo.from_full_name(full_name, settings.GITHUB_TOKEN)
     raw = collect(repo, repo_info.get("default_branch") or "main")
     results = audit_checks.evaluate(raw)
-    snapshot = snapshot_of(raw)
-
     row = db.query(RepoAudit).filter_by(repo_full_name=full_name).first()
-    changes = audit_checks.diff_snapshot(row.snapshot if row else None, snapshot)
+    previous = row.snapshot if row else None
+    # 今回取れなかった種類は、前回の内容を残す（None で上書きすると、次回、その間の変化を見逃す）
+    snapshot = audit_checks.merge_snapshots(previous, snapshot_of(raw))
+    changes = audit_checks.diff_snapshot(previous, snapshot)
     if row is None:
         row = RepoAudit(repo_full_name=full_name)
         db.add(row)
