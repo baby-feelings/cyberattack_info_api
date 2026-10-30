@@ -152,6 +152,10 @@ class Settings(BaseSettings):
     GHALERT_CRON_HOUR_UTC: int = 22
     GHALERT_CRON_MINUTE_UTC: int = 50
 
+    # リポジトリの設定の監査（Issue #398）: 毎日 UTC 22:40（言語監視の前）
+    REPOAUDIT_CRON_HOUR_UTC: int = 22
+    REPOAUDIT_CRON_MINUTE_UTC: int = 40
+
     # 検知の例外（受容・誤検知・影響なし。Issue #403）
     # 受容の期限の上限（日）。期限なしの受容は認めない（放置を防ぐ）
     EXCEPTION_MAX_DAYS: int = 365

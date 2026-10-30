@@ -5,4 +5,5 @@ from typing import Literal
 # クローラー実行結果を扱う箇所で共通利用する（タイプミスを mypy で検知するため）。
 CrawlerType = Literal[
     "KEV", "OSV", "JVN", "DEPSCAN", "DEPSOPS", "CODESCAN", "CLEANUP", "RUNTIME", "GHALERT",
+    "REPOAUDIT",
 ]

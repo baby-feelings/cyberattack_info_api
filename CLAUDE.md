@@ -90,7 +90,7 @@ app/
 │                 #   reachability_scan/repository+issue_management/priority/sbom/user_scan/source_files/parsers/）
 ├── depsops/      # Dependabot PR 自動運用（runner/pr_judge/pr_log_repository/classify/github_client〈PR操作〉/user_scan）
 ├── runtimes/     # 言語・実行環境（Python/Node.js/Flutter/Dart）の使用版の検出と、最新版・サポート期限（EOL）の判定
-├── sla/ finding_exceptions/ github_alerts/  # 対応状況（期限超過・MTTR）/ 検知の例外（受容等・VEX）/ GitHubのセキュリティアラート取り込み
+├── sla/ finding_exceptions/ github_alerts/ repo_audit/  # 対応状況 / 検知の例外（VEX）/ GitHubアラート取り込み / リポジトリ設定の監査
 ├── codescan/     # 自アプリのコード脆弱性診断（Semgrep+gitleaks+zizmor+インフラ設定〈Firebase・Docker〉。GitHubログイン
 │                 #   必須〈DEPSCANとセッション共有〉。+scanners〈Strategy〉/archive/repository/issue_management/cvss_mapping/cvss）
 ├── mcp_server/   # AIエージェント向けリモートMCPサーバー（/mcp、Streamable HTTP。組み立て=server.py・ツール=tools/・
@@ -101,8 +101,7 @@ app/
 
 tests/        # app/ と同じドメイン構成でミラーリング
 dashboard/    # Vercel デプロイの React ダッシュボード（KEV/OSV/JVN/DEPSCAN/CODESCAN の5タブ切替。e2e/にPlaywright）
-alembic/      # DBスキーマのマイグレーション（env.py に新規モデルimportが必須）
-docs/         # README.mdから分離した詳細ドキュメント（API一覧・環境変数・デプロイ手順等）
+alembic/ docs/  # DBマイグレーション（env.py に新規モデルimportが必須）/ 詳細ドキュメント（API一覧・環境変数・デプロイ手順等）
 .github/workflows/  # ci.yml / deploy.yml / daily-crawl.yml / osv-scanner-*.yml / pip-audit.yml / zap-scan.yml / gitleaks.yml / semgrep.yml / migration-check.yml
 deploy/       # OCIデプロイ関連（deploy_to_oci.ps1・docker-compose.yml・Caddyfile・grafana/）
 ```
@@ -116,6 +115,7 @@ deploy/       # OCIデプロイ関連（deploy_to_oci.ps1・docker-compose.yml�
 | `crawler-internals` | KEV/OSV/JVN共通基盤（retry/notifications/pagination等）・STIX/TAXII・Alembic |
 | `depscan-depsops` | DEPSCAN/DEPSOPSの検知・優先度推薦・悪意あるパッケージ・対応状況（SLA/MTTR）・SBOM・自動マージ判定・GitHub OAuth・ユーザー別Slack通知登録 |
 | `runtimes` | 言語・実行環境のバージョン監視（RUNTIME）: 設定ファイルからの検出・最新版/EOLの取得元・状態判定 |
+| `security-posture` | 検知の例外（受容・VEX）・GitHubセキュリティアラートの取り込み・リポジトリ設定の監査（スコア） |
 | `codescan` | CODESCAN（Semgrep静的解析+gitleaks）の設計判断・tarball取得方式・CVSSベストエフォート推定・ログイン必須と本人所有リポジトリのみの絞り込み |
 | `dashboard-frontend` | Reactダッシュボードのコンポーネント構成・集約ロジック・E2E（Playwright）の設計 |
 | `deployment-ops` | CI/CD（ESLint・gitleaks・ZAP含む）・OCIデプロイ手順・環境変数・Prometheus/Grafana監視 |

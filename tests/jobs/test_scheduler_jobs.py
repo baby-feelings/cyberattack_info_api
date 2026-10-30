@@ -19,6 +19,7 @@ from app.kev.crawler import fetch_and_store_kev
 from app.mcp_server.mcp_token_expiry import run_mcp_token_expiry_notices
 from app.mcp_server.oauth.cleanup import run_oauth_cleanup
 from app.osv.crawler import fetch_and_store_osv
+from app.repo_audit.crawler import fetch_and_audit_repos
 from app.runtimes.crawler import fetch_and_scan_runtimes
 from app.sla.digest import run_sla_digest
 
@@ -31,7 +32,7 @@ class TestBuildScheduledJobs:
             "cisa_kev_crawler", "osv_crawler", "jvn_crawler", "depscan_crawler",
             "codescan_crawler", "dependabot_ops", "repo_cleanup", "user_crawl",
             "mcp_token_expiry_notice", "oauth_cleanup", "runtime_crawler", "sla_digest",
-            "exception_lifecycle", "github_alerts",
+            "exception_lifecycle", "github_alerts", "repo_audit",
         }
         expected = {
             "cisa_kev_crawler": (fetch_and_store_kev, settings.CRON_HOUR_UTC,
@@ -55,6 +56,8 @@ class TestBuildScheduledJobs:
                               settings.OAUTH_CLEANUP_CRON_MINUTE_UTC),
             "sla_digest": (run_sla_digest, settings.SLA_DIGEST_CRON_HOUR_UTC,
                            settings.SLA_DIGEST_CRON_MINUTE_UTC),
+            "repo_audit": (fetch_and_audit_repos, settings.REPOAUDIT_CRON_HOUR_UTC,
+                           settings.REPOAUDIT_CRON_MINUTE_UTC),
             "github_alerts": (fetch_and_store_github_alerts, settings.GHALERT_CRON_HOUR_UTC,
                               settings.GHALERT_CRON_MINUTE_UTC),
             "exception_lifecycle": (run_exception_lifecycle, settings.EXCEPTION_CRON_HOUR_UTC,
