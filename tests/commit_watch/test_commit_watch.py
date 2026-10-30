@@ -80,6 +80,34 @@ class TestAnalysis:
         assert analysis.commit_title({}) == ""
 
 
+class TestIncompleteAndSignerChecks:
+    def test_padding_with_many_files_or_a_missing_patch_is_incomplete(self):
+        many = [{"filename": f"f{i}.txt", "patch": "+x"} for i in range(analysis.COMMIT_FILES_CAP)]
+        assert analysis.is_incomplete(many) is True
+        assert analysis.is_incomplete(many[:-1]) is False
+        assert analysis.is_incomplete([{"filename": ".github/workflows/ci.yml"}]) is True     # 差分が返らない
+        assert analysis.is_incomplete([{"filename": "src/big.bin"}]) is False                # ワークフロー以外は、気にしない
+
+    def test_with_required_signatures_the_committer_must_be_trusted_or_the_github_web_ui(self):
+        def signed(committer):
+            commit = _commit(login="me", verified=True)
+            commit["committer"] = {"login": committer} if committer else None
+            return commit
+
+        assert analysis.is_trusted(signed("me"), TRUSTED, require_signature=True) is True
+        assert analysis.is_trusted(signed("web-flow"), TRUSTED, require_signature=True) is True
+        # 作者だけを偽った、他人の署名つきコミットは、信頼しない
+        assert analysis.is_trusted(signed("mallory"), TRUSTED, require_signature=True) is False
+        assert analysis.is_trusted(signed(None), TRUSTED, require_signature=True) is False
+        # 署名を必須にしないときは、従来どおり、名前で信頼する
+        assert analysis.is_trusted(signed("mallory"), TRUSTED) is True
+
+    def test_committer_login(self):
+        assert analysis.committer_login({"committer": {"login": "Me"}}) == "me"
+        assert analysis.committer_login({"committer": None}) is None
+        assert analysis.committer_login({}) is None
+
+
 class TestSpoofResistance:
     def test_a_trusted_name_alone_is_trusted_by_default_but_not_when_a_signature_is_required(self):
         unsigned = _commit(login="me", verified=False)
@@ -87,6 +115,7 @@ class TestSpoofResistance:
 
         assert analysis.is_trusted(unsigned, TRUSTED) is True
         assert analysis.is_trusted(unsigned, TRUSTED, require_signature=True) is False
+        signed["committer"] = {"login": "me"}
         assert analysis.is_trusted(signed, TRUSTED, require_signature=True) is True
         assert analysis.is_trusted(_commit(login="mallory", verified=True), TRUSTED, require_signature=True) is False
 
@@ -158,6 +187,22 @@ class TestInspectRepo:
         repo = self._repo([_commit(sha="7" * 40, login="me", verified=False)])
         [alert] = self._inspect(repo, require_signature=True)
         assert alert["untrusted"] is True
+
+    def test_a_trusted_commit_hiding_a_workflow_change_among_many_files_is_reported(self):
+        sha = "9" * 40
+        padded = [{"filename": f"f{i}.txt", "patch": "+x"} for i in range(analysis.COMMIT_FILES_CAP)]
+        repo = self._repo([_commit(sha=sha, login="me")], {sha: {"files": padded}})
+
+        [alert] = self._inspect(repo)
+
+        assert alert["incomplete"] is True and alert["untrusted"] is False
+
+    def test_a_workflow_change_without_a_patch_is_reported_even_for_a_trusted_author(self):
+        sha = "a" * 40
+        repo = self._repo([_commit(sha=sha, login="me")],
+                          {sha: {"files": [{"filename": ".github/workflows/ci.yml"}]}})
+        [alert] = self._inspect(repo)
+        assert alert["incomplete"] is True and alert["touches_workflow"] is True
 
     def test_a_rewritten_history_is_reported_as_a_force_push(self):
         for kwargs in ({"status": "diverged"}, {"status": "behind"}, {"compare_404": True}):
@@ -268,7 +313,7 @@ class TestHeadSha:
 class TestNotifier:
     ALERTS = [
         {"kind": "commit", "repo_full_name": "u/a", "sha": "1111111", "url": "u", "author": "mallory", "title": "update ci",
-         "verified": False, "untrusted": True, "touches_workflow": False, "risky": []},
+         "verified": False, "untrusted": True, "touches_workflow": False, "incomplete": False, "risky": []},
         {"kind": "commit", "repo_full_name": "u/b", "sha": "2222222", "url": "u", "author": "me", "title": "ci",
          "verified": True, "untrusted": False, "touches_workflow": True,
          "risky": [{"file": ".github/workflows/ci.yml", "description": "外部 URL への送信（`curl`・`wget`）を追加", "excerpt": "curl https://x.example"}]},

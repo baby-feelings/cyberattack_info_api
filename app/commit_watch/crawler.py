@@ -84,16 +84,17 @@ def inspect_repo(
     for commit in commits:
         files = _commit_files(repo, commit["sha"])
         risky = analysis.find_risky_changes(files)
+        incomplete = analysis.is_incomplete(files)
         trusted_author = analysis.is_trusted(commit, trusted, require_signature=require_signature)
-        # 自分のふつうの変更（危険な内容を含まない）では、通知しない
-        if trusted_author and not risky:
+        # 自分のふつうの変更（危険な内容を含まず、差分を確認しきれている）では、通知しない
+        if trusted_author and not risky and not incomplete:
             continue
         alerts.append({
             "kind": KIND_COMMIT, "repo_full_name": repo.full_name, "sha": commit["sha"][:7],
             "url": commit.get("html_url", ""),
             "author": analysis.author_login(commit) or "（アカウントに紐づかない）",
             "title": analysis.commit_title(commit), "verified": analysis.is_verified(commit),
-            "untrusted": not trusted_author,
+            "untrusted": not trusted_author, "incomplete": incomplete,
             "touches_workflow": analysis.touches_workflow(files),
             "risky": [
                 {"file": r.file, "description": r.description, "excerpt": r.excerpt} for r in risky

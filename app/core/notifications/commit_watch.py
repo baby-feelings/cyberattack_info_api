@@ -33,7 +33,7 @@ class CommitWatchNotifier(Notifier):
     Args:
         alerts: 通知する変更。各要素は {"kind"（commit・history_rewritten・truncated）,
             "repo_full_name", "sha", "title"} と、commit のとき、さらに {"url", "author",
-            "verified", "untrusted", "touches_workflow",
+            "verified", "untrusted", "incomplete", "touches_workflow",
             "risky": [{"file", "description", "excerpt"}]}（commit 以外は、title だけを使う）
     """
 
@@ -69,6 +69,8 @@ class CommitWatchNotifier(Notifier):
                 reasons.append("署名あり" if alert["verified"] else "署名なし")
             if alert["touches_workflow"]:
                 reasons.append("ワークフローを変更")
+            if alert.get("incomplete"):
+                reasons.append("差分を確認しきれません（変更ファイルが多い、または差分なし）")
             lines.append(
                 f"• `{escape_mrkdwn(alert['repo_full_name'])}` {escape_mrkdwn(alert['sha'])}"
                 f" 作者: `{escape_mrkdwn(alert['author'])}`（{'・'.join(reasons)}）"

@@ -91,7 +91,42 @@ def is_trusted(
     login = author_login(commit)
     if login is None or login.lower() not in trusted:
         return False
-    return is_verified(commit) or not require_signature
+    if not require_signature:
+        return True
+    # 署名を必須にするときは、署名が有効で、コミッターも信頼するユーザー
+    # （または、GitHub の画面操作の署名者 `web-flow`）であること。
+    # 作者だけを偽った、他人の署名つきコミットを、信頼しない
+    return is_verified(commit) and committer_login(commit) in (trusted | {WEB_FLOW})
+
+
+# GitHub の画面（Web UI）での操作は、GitHub 自身（`web-flow`）が、コミッターとして署名する。
+# 作者は、操作した本人になる（作者を偽れない）
+WEB_FLOW = "web-flow"
+
+# GitHub のコミット詳細が返す変更ファイルの上限。これに達したら、残りは見えていない
+COMMIT_FILES_CAP = 300
+
+
+def committer_login(commit: dict[str, Any]) -> str | None:
+    """コミッターの GitHub ログイン名（小文字。アカウントに紐づかなければ None）。"""
+    committer = commit.get("committer")
+    login = committer.get("login") if committer else None
+    return str(login).lower() if login else None
+
+
+def is_incomplete(files: list[dict[str, Any]]) -> bool:
+    """変更ファイルの一覧が、不完全（確認しきれない）か。
+
+    ファイル数が上限に達した（残りが見えない）、またはワークフローの差分（`patch`）が
+    返らなかった（巨大・バイナリ）とき。無関係なファイルを大量に混ぜて、ワークフローの変更を
+    隠す手口を、見逃さないため。
+    """
+    if len(files) >= COMMIT_FILES_CAP:
+        return True
+    return any(
+        str(f.get("filename", "")).startswith(WORKFLOW_PREFIX) and not f.get("patch")
+        for f in files
+    )
 
 
 def touches_workflow(files: Iterable[dict[str, Any]]) -> bool:
