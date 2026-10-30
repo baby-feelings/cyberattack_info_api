@@ -19,11 +19,12 @@ const SEVERITY_LABELS: Record<string, string> = {
 }
 
 // 検知ツール種別を示す小さなバッジ（Semgrep / Gitleaks〈Issue #219〉/ Zizmor〈Issue #397。
-// GitHub Actions のワークフロー診断〉）。ツールごとに色を変える。未知のツールは名前のまま、地味な色で出す
+// GitHub Actions のワークフロー診断〉/ iac〈Issue #400。Firebase・Docker 等のインフラ設定の診断〉）。ツールごとに色を変える。未知のツールは名前のまま、地味な色で出す
 const TOOL_BADGE: Record<string, { label: string; cls: string }> = {
   semgrep: { label: 'Semgrep', cls: 'bg-slate-700/40 text-slate-400 border-slate-600/50' },
   gitleaks: { label: 'Gitleaks', cls: 'bg-orange-500/15 text-orange-300 border-orange-500/30' },
   zizmor: { label: 'Zizmor', cls: 'bg-sky-500/15 text-sky-300 border-sky-500/30' },
+  iac: { label: 'インフラ設定', cls: 'bg-teal-500/15 text-teal-300 border-teal-500/30' },
 }
 const UNKNOWN_TOOL_CLS = 'bg-slate-700/40 text-slate-400 border-slate-600/50'
 

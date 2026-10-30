@@ -68,7 +68,7 @@ export const TAB_DEFINITIONS: TabDefinition[] = [
     label: 'CODESCAN',
     icon: (size) => <ScanSearch size={size} className="text-cyan-400" />,
     title: 'CODESCAN — 自アプリのコード脆弱性診断',
-    subtitle: 'GitHub上の自作リポジトリのソースコードを静的解析し、GitHub Actionsの設定も診断',
+    subtitle: 'GitHub上の自作リポジトリのソースコードを静的解析し、GitHub Actions・Firebase・Dockerの設定も診断',
     borderColor: 'border-cyan-800/40',
     // GitHub ログイン後、CODESCAN パネル（サマリー・一覧を内包）を表示
     panel: <CodescanAuthGate />,

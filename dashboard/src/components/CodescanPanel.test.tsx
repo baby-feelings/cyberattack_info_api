@@ -156,6 +156,18 @@ describe('CodescanPanel', () => {
     expect(screen.getByText('zizmor:unpinned-uses')).toBeInTheDocument()
   })
 
+  it('shows an infrastructure-config badge for Firebase and Docker findings', async () => {
+    mockedList.mockResolvedValue({
+      total: 1, page: 1, per_page: 30,
+      data: [item({ tool: 'iac', rule_id: 'iac:firebase-open-write', file_path: 'firestore.rules' })],
+    })
+    mockedStats.mockResolvedValue(EMPTY_STATS)
+
+    render(<CodescanPanel />)
+    await waitFor(() => expect(screen.getByText('インフラ設定')).toBeInTheDocument())
+    expect(screen.getByText('iac:firebase-open-write')).toBeInTheDocument()
+  })
+
   it('shows an unknown tool by its name', async () => {
     mockedList.mockResolvedValue({
       total: 1, page: 1, per_page: 30, data: [item({ tool: 'newtool', rule_id: 'newtool:rule' })],

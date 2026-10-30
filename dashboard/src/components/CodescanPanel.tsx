@@ -45,7 +45,7 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
           <div className="flex items-center gap-2">
             <ScanSearch size={16} className="text-slate-400" />
             <span className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
-              CODESCAN（Semgrep + Gitleaks + Zizmor）
+              CODESCAN（Semgrep + Gitleaks + Zizmor + インフラ設定）
             </span>
           </div>
           <button
@@ -63,9 +63,10 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
       <p className="text-[11px] text-slate-600 leading-relaxed">
         Semgrep（コードパターン診断）・Gitleaks（ハードコードされたシークレット検知）・
         Zizmor（GitHub Actionsのワークフロー設定の診断。未固定のアクション・過剰な権限など）の
-        3つのツールで検知します。CVSSスコアは検知結果（重要度・CWE）からの
-        ベストエフォート推定値であり、正式なCVSS評価に代わるものではありません
-        （Zizmorの検知にはCVSSが付きません）。7.0以上は赤バッジで強調表示します。
+        インフラ設定（FirebaseのルールやDockerfile・docker-composeの不備）の4つで検知します。
+        CVSSスコアは検知結果（重要度・CWE）からのベストエフォート推定値であり、正式なCVSS評価に
+        代わるものではありません（Zizmor・インフラ設定の検知にはCVSSが付きません）。
+        7.0以上は赤バッジで強調表示します。
       </p>
 
       {/* グラフ。最初は表示し、見出しを押すと閉じられる */}
