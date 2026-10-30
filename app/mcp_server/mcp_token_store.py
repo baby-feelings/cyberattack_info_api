@@ -12,6 +12,7 @@ from typing import Final
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
+from app.core.db_utils import as_utc  # noqa: F401  既存の import 元（oauth 等）向けに再公開
 from app.mcp_server.mcp_token import McpClaims, create_mcp_token
 from app.mcp_server.models import McpToken
 
@@ -40,11 +41,6 @@ class TooManyTokensError(Exception):
 
 def _now() -> datetime:
     return datetime.now(UTC)
-
-
-def as_utc(dt: datetime) -> datetime:
-    """SQLite は tz 情報を落とすため、UTC として解釈して aware にそろえる。"""
-    return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
 
 
 def token_status(token: McpToken, now: datetime | None = None) -> str:

@@ -1,9 +1,10 @@
 """`FindingException` の永続化（登録・解除・一覧・期限の判定）。"""
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.core.db_utils import as_utc
 from app.crawler_logs.writer import now_utc
 from app.finding_exceptions.matching import active_exceptions
 from app.finding_exceptions.models import (
@@ -12,11 +13,6 @@ from app.finding_exceptions.models import (
     STATUS_ACCEPTED,
     FindingException,
 )
-
-
-def _as_utc(value: datetime) -> datetime:
-    """タイムゾーンの無い日時（SQLite）は UTC として扱う。"""
-    return value if value.tzinfo else value.replace(tzinfo=UTC)
 
 
 class FindingExceptionRepository:
@@ -86,7 +82,7 @@ class FindingExceptionRepository:
             row for row in self._db.query(FindingException)
             .filter(FindingException.ended_at.is_(None), FindingException.expires_at.is_not(None))
             .all()
-            if row.expires_at is not None and _as_utc(row.expires_at) <= now
+            if row.expires_at is not None and as_utc(row.expires_at) <= now
         ]
         for row in due:
             row.ended_at = now
@@ -106,7 +102,7 @@ class FindingExceptionRepository:
                 FindingException.expiry_notified_at.is_(None),
             )
             .all()
-            if row.expires_at is not None and now < _as_utc(row.expires_at) <= limit
+            if row.expires_at is not None and now < as_utc(row.expires_at) <= limit
         ]
         for row in soon:
             row.expiry_notified_at = now

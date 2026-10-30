@@ -5,6 +5,7 @@ from statistics import fmean
 
 from sqlalchemy.orm import Session
 
+from app.core.db_utils import as_utc
 from app.core.osv_client import is_malicious_advisory
 from app.depscan.filters import DepscanListFilter
 from app.depscan.models import DependencyFinding
@@ -24,11 +25,6 @@ from app.sla.schemas import (
 # 重要度の並び順（深刻な順）。ここに無い値（不明）は最後にまとめる
 _SEVERITY_ORDER = ("CRITICAL", "HIGH", "MEDIUM", "LOW")
 _UNKNOWN_SEVERITY = "N/A"
-
-
-def _as_utc(value: datetime) -> datetime:
-    """DB から読んだ日時を UTC の aware にそろえる（SQLite は tz を保持しない）。"""
-    return value if value.tzinfo else value.replace(tzinfo=UTC)
 
 
 @dataclass(frozen=True)
@@ -99,8 +95,8 @@ def _to_items(
             osv_id=row.osv_id,
             severity=(row.severity or _UNKNOWN_SEVERITY).upper(),
             is_kev=is_kev,
-            detected_at=_as_utc(row.detected_at),
-            resolved_at=_as_utc(row.resolved_at) if row.resolved_at else None,
+            detected_at=as_utc(row.detected_at),
+            resolved_at=as_utc(row.resolved_at) if row.resolved_at else None,
             deadline_days=policy.deadline_days(row.severity, is_kev=is_kev),
         ))
     return items
