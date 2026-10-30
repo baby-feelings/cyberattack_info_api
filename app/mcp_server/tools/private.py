@@ -26,6 +26,10 @@ def register(mcp: FastMCP) -> None:
         """自分のリポジトリで検知された、依存ライブラリの脆弱性（DEPSCAN）を返す。
 
         repo は "owner/repo"。resolved=False は未解決のみ。MCP トークンが必要。
+        各検知の is_malicious=true は、悪意あるパッケージ（OSV の MAL-*）。
+        脆弱性ではなくマルウェアで、対応は更新ではなく削除と認証情報の再発行。
+        exception は、有効な例外（受容・誤検知・
+        影響なし。理由・期限つき）。例外にした検知は、get_depscan_stats の件数から外れている。
         """
         return await RestGateway(ctx).get("/api/depscan", {
             "repo": repo, "severity": severity, "ecosystem": ecosystem,
@@ -70,10 +74,13 @@ def register(mcp: FastMCP) -> None:
         page: int = 1,
         per_page: int = 20,
     ) -> dict[str, Any]:
-        """自分のリポジトリで検知された、コードの脆弱性（CODESCAN）を返す。
+        """自分のリポジトリで検知された、コード・設定の問題（CODESCAN）を返す。
 
-        repo は "owner/repo"、resolved=False は未解決のみ、min_cvss は CVSS の下限。
-        MCP トークンが必要。
+        各検知の tool は、semgrep（コードのパターン）・gitleaks（シークレット）・
+        zizmor（GitHub Actions のワークフローの設定）・
+        iac（Firebase のルール・Dockerfile・docker-compose の設定）。
+        repo は "owner/repo"、resolved=False は未解決のみ、min_cvss は CVSS の下限（zizmor・iac には
+        CVSS が付かない）。exception は、有効な例外。MCP トークンが必要。
         """
         return await RestGateway(ctx).get("/api/codescan", {
             "repo": repo, "severity": severity, "min_cvss": min_cvss,

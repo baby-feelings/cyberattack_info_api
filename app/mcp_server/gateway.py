@@ -23,6 +23,14 @@ from app.mcp_server.auth import Principal
 
 logger = logging.getLogger(__name__)
 
+# user の応答で、リポジトリ名（`repo_full_name`）を持つ行が入っている項目名。
+# すべて本人所有か検証する
+# （一覧の `data`・件数の `repos`・対応状況の `overdue`/`by_repo`・取得不可の `unavailable`・
+# Dependabot と DEPSCAN の突き合わせの `both`/`only_github`/`only_depscan`）
+OWNED_ROW_KEYS = (
+    "data", "repos", "overdue", "by_repo", "unavailable", "both", "only_github", "only_depscan",
+)
+
 # AI エージェントのコンテキストを圧迫しないよう、1回の取得件数に上限を設ける
 MAX_PER_PAGE = 50
 
@@ -57,7 +65,7 @@ def enforce_owner(principal: Principal, payload: dict[str, Any]) -> None:
     if principal.kind != "user":
         return
     prefix = f"{principal.username}/"
-    rows = [*payload.get("data", []), *payload.get("repos", [])]
+    rows = [row for key in OWNED_ROW_KEYS for row in payload.get(key, [])]
     if any(not str(row.get("repo_full_name", "")).startswith(prefix) for row in rows):
         logger.error("MCP owner isolation violated for user=%s", principal.username)
         raise ToolError("アクセス権のないデータが含まれていたため、応答を返せません。")

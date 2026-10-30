@@ -84,6 +84,11 @@ curlの代わりに、リモートMCPサーバー（`https://168.138.213.240.nip
 12. リポジトリの資産コンテキストを設定・確認する — `PUT/GET /api/depscan/assets`
 12.5. 脆弱性への対応状況（期限超過・平均対応日数）を確認する — `GET /api/sla`（`operating`・`repo`・`owner`・`window_days`。詳細は docs/api-reference.md）
 
+12.6. セキュリティ態勢を確認する（すべて、セッション認証時は本人所有のみ。MCP のツールもある。`docs/mcp-server.md`）:
+    検知の例外・VEX `GET /api/exceptions`・`/api/exceptions/vex` ／ GitHubのセキュリティアラート `GET /api/github-alerts`・`/compare` ／
+    リポジトリ設定の監査 `GET /api/repo-audit` ／ 公開サイトの外形監視 `GET /api/site-monitor` ／
+    言語・実行環境 `GET /api/runtimes`（詳細は docs/api-reference.md）。例外の登録・解除（POST/DELETE）と監査ログ（`/api/audit-logs`）は、MCPにしない
+
 **DEPSOPS/CODESCAN/運用系**（`reference/endpoints-ops.md`）:
 
 13. Dependabot PR 自動運用（DEPSOPS）の判定履歴を確認する — `GET /api/depsops`

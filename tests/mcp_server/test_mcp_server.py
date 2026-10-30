@@ -28,6 +28,9 @@ from app.core.database import get_db  # noqa: E402
 from app.depscan.inventory.router import router as depscan_inventory_router  # noqa: E402
 from app.depscan.models import DependencyFinding  # noqa: E402
 from app.depscan.router import router as depscan_router  # noqa: E402
+from app.external_monitor.router import router as site_monitor_router  # noqa: E402
+from app.finding_exceptions.router import router as exceptions_router  # noqa: E402
+from app.github_alerts.router import router as github_alerts_router  # noqa: E402
 from app.jvn.router import router as jvn_router  # noqa: E402
 from app.kev.models import Vulnerability  # noqa: E402
 from app.kev.router import router as kev_router  # noqa: E402
@@ -36,6 +39,9 @@ from app.mcp_server.mcp_token import create_mcp_token  # noqa: E402
 from app.mcp_server.mcp_token_store import issue_token, revoke_token  # noqa: E402
 from app.mcp_server.server import McpServer  # noqa: E402
 from app.osv.router import router as osv_router  # noqa: E402
+from app.repo_audit.router import router as repo_audit_router  # noqa: E402
+from app.runtimes.router import router as runtimes_router  # noqa: E402
+from app.sla.router import router as sla_router  # noqa: E402
 from tests.conftest import TestSessionLocal  # noqa: E402
 
 _NOW = datetime(2026, 10, 1, tzinfo=UTC)
@@ -83,7 +89,8 @@ def mcp_client(db_session):
     test_app = FastAPI(lifespan=lifespan)
     routers = (
         kev_router, osv_router, jvn_router, depscan_router, depscan_inventory_router,
-        codescan_router,
+        codescan_router, runtimes_router, sla_router, exceptions_router, github_alerts_router,
+        repo_audit_router, site_monitor_router,
     )
     for r in routers:
         test_app.include_router(r)
