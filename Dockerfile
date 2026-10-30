@@ -58,6 +58,13 @@ COPY alembic/ ./alembic/
 ENV ENVIRONMENT=production
 ENV PYTHONUNBUFFERED=1
 
+# 一般ユーザーで動かす（侵入されたときの被害を小さくする。CODESCAN の iac:dockerfile-root-user）。
+# ホーム（/home/app）は、semgrep のキャッシュ・設定の書き込み先として必要。/app は、実行時の
+# 書き込み（.pyc 等）のため、このユーザーの所有にする。8000 番は 1024 より大きく、特権は要らない
+RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin app \
+    && chown -R app:app /app
+USER app
+
 EXPOSE 8000
 
 # Render の Start Command と同じ順序（migrate → uvicorn）
