@@ -58,7 +58,7 @@ export const TAB_DEFINITIONS: TabDefinition[] = [
     label: 'DEPSCAN',
     icon: (size) => <Bug size={size} className="text-rose-400" />,
     title: 'DEPSCAN — 自作アプリの依存ライブラリ脆弱性',
-    subtitle: 'GitHub上の自作リポジトリの依存関係を OSV API とリアルタイム照合',
+    subtitle: 'GitHub上の自作リポジトリの依存関係を OSV と照合し、悪意あるパッケージ・言語のサポート期限・対応状況も監視',
     borderColor: 'border-rose-800/40',
     // GitHub ログイン後、本人所有リポジトリの DEPSCAN パネルを表示
     panel: <DepscanAuthGate />,
@@ -68,7 +68,7 @@ export const TAB_DEFINITIONS: TabDefinition[] = [
     label: 'CODESCAN',
     icon: (size) => <ScanSearch size={size} className="text-cyan-400" />,
     title: 'CODESCAN — 自アプリのコード脆弱性診断',
-    subtitle: 'GitHub上の自作リポジトリのソースコードを Semgrep + Gitleaks で静的解析',
+    subtitle: 'GitHub上の自作リポジトリのソースコードを静的解析し、GitHub Actionsの設定も診断',
     borderColor: 'border-cyan-800/40',
     // GitHub ログイン後、CODESCAN パネル（サマリー・一覧を内包）を表示
     panel: <CodescanAuthGate />,

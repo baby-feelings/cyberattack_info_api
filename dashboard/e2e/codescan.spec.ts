@@ -21,7 +21,7 @@ scenario('COD-01', '未ログイン時はGitHubログイン案内が表示され
   await openTab(page, 'CODESCAN')
 
   await expect(page.getByText('GitHubアカウントでログインしてください')).toBeVisible()
-  await expect(page.getByText('ログインすると、自アプリのコード脆弱性診断結果を閲覧できます')).toBeVisible()
+  await expect(page.getByText('ログインすると、自アプリのコード・ワークフローの診断結果を閲覧できます')).toBeVisible()
   await expect(page.getByRole('link', { name: 'GitHubでログイン' }))
     .toHaveAttribute('href', `${new URL(page.url()).origin}${API_PREFIX}/auth/github/login`)
   expect(api.requestsTo('/api/codescan')).toHaveLength(0)
