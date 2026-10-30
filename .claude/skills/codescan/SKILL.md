@@ -1,6 +1,6 @@
 ---
 name: codescan
-description: CODESCAN（自アプリのコード自体の脆弱性診断、Semgrep静的解析）の内部設計。tarball取得方式・per-repoタイムアウト・CVSS 3.1のベストエフォート推定ロジック・GitHub Issue自動起票・保持期間削除を扱う。app/codescan/・app/codescan/cvss.py配下の変更時に読む。
+description: CODESCAN（自アプリのコード自体の脆弱性診断。Semgrep静的解析・gitleaks・zizmor〈Actionsの設定〉・インフラ設定〈Firebase・Docker〉）の内部設計。tarball取得方式・per-repoタイムアウト・CVSS 3.1のベストエフォート推定ロジック・GitHub Issue自動起票・保持期間削除を扱う。app/codescan/・app/codescan/cvss.py配下の変更時に読む。
 ---
 
 # CODESCAN 内部実装リファレンス
