@@ -156,6 +156,12 @@ class Settings(BaseSettings):
     REPOAUDIT_CRON_HOUR_UTC: int = 22
     REPOAUDIT_CRON_MINUTE_UTC: int = 40
 
+    # 公開サイトの外形監視（Issue #401）: 毎日 UTC 22:35。リポジトリの情報から自動検出するほかに、
+    # 足りない URL（https）をカンマ区切りで追加できる（自分の所有するドメインのみ）
+    EXTERNAL_MONITOR_URLS: str = ""
+    EXTMON_CRON_HOUR_UTC: int = 22
+    EXTMON_CRON_MINUTE_UTC: int = 35
+
     # 検知の例外（受容・誤検知・影響なし。Issue #403）
     # 受容の期限の上限（日）。期限なしの受容は認めない（放置を防ぐ）
     EXCEPTION_MAX_DAYS: int = 365

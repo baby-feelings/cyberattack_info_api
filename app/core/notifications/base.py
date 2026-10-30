@@ -14,6 +14,7 @@ CRAWLER_LABELS: dict[str, tuple[str, str]] = {
     "RUNTIME": (":arrows_counterclockwise:", "言語・実行環境のバージョン"),
     "GHALERT": (":lock:", "GitHub のセキュリティアラート"),
     "REPOAUDIT": (":clipboard:", "リポジトリの設定の監査"),
+    "EXTMON": (":globe_with_meridians:", "公開サイトの外形監視"),
 }
 
 

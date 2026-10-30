@@ -25,6 +25,15 @@ SLACK_WEBHOOK_URL_PREFIX = "https://hooks.slack.com/"
 _MAX_SLACK_MESSAGE_LEN = 39000
 
 
+def escape_mrkdwn(text: str) -> str:
+    """Slack の mrkdwn に、外部の文字列（名前・URL・メッセージ）を、そのまま埋め込まない。
+
+    `<...>` のリンク・メンション、`&`、バッククォート（書式の終了）、改行（行の偽装）を無害にする。
+    """
+    cleaned = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return " ".join(cleaned.replace("`", "'").split())
+
+
 def truncate_for_slack(message: str) -> str:
     """Slack の text フィールド上限を超える場合、行の途中で切らずに省略する。"""
     if len(message) <= _MAX_SLACK_MESSAGE_LEN:

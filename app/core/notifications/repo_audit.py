@@ -5,21 +5,13 @@
 """
 from app.core.notifications import recipients as recipient_resolver
 from app.core.notifications.base import Notifier
-from app.core.notifications.slack import DASHBOARD_URL, truncate_for_slack
+from app.core.notifications.slack import DASHBOARD_URL, escape_mrkdwn, truncate_for_slack
 
 _KIND_LABELS = {"keys": "デプロイキー", "hooks": "Webhook", "collaborators": "共同編集者"}
 _CHANGE_LABELS = {"added": "追加", "removed": "削除"}
 # Slack に出す最大件数（残りは件数だけ示す）
 _MAX_ITEMS = 15
 
-
-def _escape(text: str) -> str:
-    """Slack の mrkdwn に、外部の文字列（キーの名前・リポジトリ名）を、そのまま埋め込まない。
-
-    `<...>` のリンク・メンション、`&`、バッククォート（書式の終了）、改行（行の偽装）を無害にする。
-    """
-    cleaned = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    return " ".join(cleaned.replace("`", "'").split())
 
 
 class RepoAuditChangeNotifier(Notifier):
@@ -55,9 +47,9 @@ class RepoAuditChangeNotifier(Notifier):
                     break
                 shown += 1
                 lines.append(
-                    f"• `{_escape(repo)}` {_KIND_LABELS.get(item['kind'], item['kind'])}を"
+                    f"• `{escape_mrkdwn(repo)}` {_KIND_LABELS.get(item['kind'], item['kind'])}を"
                     f"{_CHANGE_LABELS.get(item['change'], item['change'])}: "
-                    f"`{_escape(item['name'])}`",
+                    f"`{escape_mrkdwn(item['name'])}`",
                 )
         if total > shown:
             lines.append(f"…ほか {total - shown}件")
