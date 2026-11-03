@@ -30,7 +30,10 @@ export interface CodeFindingOut {
 
 export interface CodescanRepoStat {
   repo_full_name: string
+  // 対応が必要な件数（例外にした検知を除く）
   count: number
+  // 例外（受容・影響なしなど）にした未解決の件数
+  excepted_count: number
 }
 
 export interface CodescanSeverityStat {
@@ -39,7 +42,10 @@ export interface CodescanSeverityStat {
 }
 
 export interface CodescanStatsResponse {
+  // 対応が必要な未解決の総件数（例外を除く）
   total: number
+  // 例外にした未解決の総件数
+  excepted_total: number
   repos: CodescanRepoStat[]
   severities: CodescanSeverityStat[]
 }

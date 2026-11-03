@@ -12,7 +12,7 @@ GitHub ログインセッション JWT のいずれかを要求する共通認�
 自分のリポジトリの検知結果を閲覧できてはならないため（API キー認証時は絞り込まない）。
 """
 import logging
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Security
 from sqlalchemy import func
@@ -108,6 +108,16 @@ def list_codescan(
     return CodeFindingListResponse(total=total, page=page, per_page=per_page, data=data)
 
 
+def _count_by_repo(query: Any) -> dict[str, int]:
+    """検知のクエリを、リポジトリ名ごとの件数に集計する。"""
+    rows = (
+        query.with_entities(CodeFinding.repo_full_name, func.count(CodeFinding.id))
+        .group_by(CodeFinding.repo_full_name)
+        .all()
+    )
+    return {row[0]: row[1] for row in rows}
+
+
 @router.get(
     "/stats",
     response_model=CodeFindingStatsResponse,
@@ -129,20 +139,26 @@ def get_codescan_stats(
     if forced_owner is not None:
         base = base.filter(CodeFinding.repo_full_name.like(f"{forced_owner}/%"))
     base = apply_operating_status(base, CodeFinding.repo_full_name, operating)
-    # 例外（受容など）にした検知は、「要対応」の集計から外す（一覧では確認できる）
+    # 例外（受容など）にした検知は、「要対応」の件数・重要度別から外す。
+    # ただし一覧には出るため、リポジトリ別では、例外の件数も別に数える（画面の食い違いを防ぐ）
+    all_counts = _count_by_repo(base)
     base = not_excepted(base, KIND_CODE)
     total = base.count()
 
-    repo_rows = (
-        base.with_entities(
-            CodeFinding.repo_full_name,
-            func.count(CodeFinding.id).label("cnt"),
-        )
-        .group_by(CodeFinding.repo_full_name)
-        .order_by(func.count(CodeFinding.id).desc())
-        .all()
+    action_counts = _count_by_repo(base)
+    repos = sorted(
+        (
+            RepoStat(
+                repo_full_name=repo,
+                count=action_counts.get(repo, 0),
+                excepted_count=all_count - action_counts.get(repo, 0),
+            )
+            for repo, all_count in all_counts.items()
+        ),
+        # 対応が必要な件数の多い順。同数なら、例外を含む総数の多い順、さらにリポジトリ名順
+        key=lambda r: (-r.count, -(r.count + r.excepted_count), r.repo_full_name),
     )
-    repos = [RepoStat(repo_full_name=r[0], count=r[1]) for r in repo_rows]
+    excepted_total = sum(r.excepted_count for r in repos)
 
     sev_rows = (
         base.with_entities(
@@ -155,5 +171,9 @@ def get_codescan_stats(
     )
     severities = [SeverityStat(severity=r[0] or "N/A", count=r[1]) for r in sev_rows]
 
-    logger.info("get_codescan_stats: total=%d, repos=%d", total, len(repos))
-    return CodeFindingStatsResponse(total=total, repos=repos, severities=severities)
+    logger.info(
+        "get_codescan_stats: total=%d, excepted=%d, repos=%d", total, excepted_total, len(repos),
+    )
+    return CodeFindingStatsResponse(
+        total=total, excepted_total=excepted_total, repos=repos, severities=severities,
+    )

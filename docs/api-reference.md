@@ -39,7 +39,7 @@
 | GET | `/api/depscan/assets` | リポジトリ資産コンテキスト一覧（Issue #131） |
 | GET | `/api/depscan/export` | DEPSCAN検知結果をCycloneDX/SPDX形式でエクスポート（`repo`必須、Issue #133。`content=inventory`で使っている依存の全量） |
 | GET | `/api/codescan` | CODESCAN検知結果一覧（Semgrep静的解析 + gitleaksシークレット検知。`cvss_score`はベストエフォート推定〈Issue #203〉。GitHubログイン必須〈`X-API-KEY`またはセッションJWT、Issue #219〉） |
-| GET | `/api/codescan/stats` | CODESCAN統計（リポジトリ別・重要度別） |
+| GET | `/api/codescan/stats` | CODESCAN統計（リポジトリ別・重要度別。`total`・`count`は例外を除く対応が必要な件数で、例外の件数は`excepted_total`・`excepted_count`） |
 | GET | `/api/depsops` | DEPSOPS判定履歴（`is_security_update`・`compatibility_badge_url`含む） |
 | GET | `/api/depsops/stats` | DEPSOPSのリポジトリ別未解決PR件数（`(repo, pr_number)`ごとの最新状態のみ集計） |
 | GET | `/api/crawler-logs` | クローラー実行ログ |

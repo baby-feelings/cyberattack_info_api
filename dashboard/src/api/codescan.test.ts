@@ -70,7 +70,7 @@ describe('api/codescan', () => {
   describe('fetchCodescanStats', () => {
     it('calls the stats endpoint', async () => {
       fetchMock.mockResolvedValueOnce({
-        ok: true, json: () => Promise.resolve({ total: 0, repos: [], severities: [] }),
+        ok: true, json: () => Promise.resolve({ total: 0, excepted_total: 0, repos: [], severities: [] }),
       })
       await fetchCodescanStats()
       const [url] = fetchMock.mock.calls[0]
@@ -79,7 +79,7 @@ describe('api/codescan', () => {
 
     it('sends the session token as Authorization when authToken is given (Issue #219)', async () => {
       fetchMock.mockResolvedValueOnce({
-        ok: true, json: () => Promise.resolve({ total: 0, repos: [], severities: [] }),
+        ok: true, json: () => Promise.resolve({ total: 0, excepted_total: 0, repos: [], severities: [] }),
       })
       await fetchCodescanStats('session-token-abc')
       const [, opts] = fetchMock.mock.calls[0]
@@ -101,7 +101,7 @@ describe('api/codescan', () => {
     })
 
     it('sends operating on the stats request', async () => {
-      fetchMock.mockResolvedValue(jsonResponse({ total: 0, repos: [], severities: [] }))
+      fetchMock.mockResolvedValue(jsonResponse({ total: 0, excepted_total: 0, repos: [], severities: [] }))
       await fetchCodescanStats(undefined, 'inactive')
       expect(fetchMock.mock.calls[0][0]).toContain('/api/codescan/stats?operating=inactive')
     })

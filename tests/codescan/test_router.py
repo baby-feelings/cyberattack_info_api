@@ -144,6 +144,38 @@ class TestCodescanStats:
         assert body["repos"][0]["repo_full_name"] == "baby-feelings/baby_grow"
         assert body["severities"][0]["severity"] == "ERROR"
 
+    def test_excepted_findings_are_counted_separately_per_repo(self, client, db_session):
+        """例外の検知は「対応が必要」の件数に含めず、リポジトリ別に別の件数で返す。
+        例外だけのリポジトリも一覧に残す（画面の一覧と食い違わないようにするため）。"""
+        from datetime import timedelta
+
+        from app.finding_exceptions.models import FindingException
+
+        # baby_grow: 対応が必要1件＋例外1件／other: 例外のみ1件
+        _make_finding(db_session, file_path="a.py", rule_id="rule.a")
+        _make_finding(db_session, file_path="b.py", rule_id="rule.b")
+        _make_finding(
+            db_session, repo_full_name="baby-feelings/other", file_path="c.py", rule_id="rule.c",
+        )
+        for repo, key in (
+            ("baby-feelings/baby_grow", "b.py|rule.b"),
+            ("baby-feelings/other", "c.py|rule.c"),
+        ):
+            db_session.add(FindingException(
+                kind="code", repo_full_name=repo, finding_key=key, status="not_affected",
+                reason="意図的", approver="owner", expires_at=_NOW + timedelta(days=5),
+            ))
+        db_session.commit()
+
+        body = client.get("/api/codescan/stats", headers=HEADERS).json()
+
+        assert body["total"] == 1
+        assert body["excepted_total"] == 2
+        repos = {r["repo_full_name"]: (r["count"], r["excepted_count"]) for r in body["repos"]}
+        assert repos == {"baby-feelings/baby_grow": (1, 1), "baby-feelings/other": (0, 1)}
+        # 対応が必要な件数の多いリポジトリが先頭に並ぶ
+        assert body["repos"][0]["repo_full_name"] == "baby-feelings/baby_grow"
+
     def test_session_token_counts_only_own_repos(self, client, db_session):
         _make_finding(db_session, repo_full_name="octocat/mine", resolved_at=None)
         _make_finding(

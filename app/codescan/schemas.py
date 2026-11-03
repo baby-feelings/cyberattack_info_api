@@ -58,14 +58,16 @@ class RepoStat(BaseModel):
     """リポジトリ別件数（CODESCAN）。"""
 
     repo_full_name: str
-    count: int
+    count: int = Field(description="対応が必要な件数（例外にした検知を除く）")
+    excepted_count: int = Field(0, description="例外（受容・影響なしなど）にした未解決の件数")
 
 
 class CodeFindingStatsResponse(BaseModel):
     """CODESCAN 統計エンドポイントのレスポンス。"""
 
-    total: int = Field(description="未解決の総件数")
-    repos: list[RepoStat] = Field(description="リポジトリ別件数")
+    total: int = Field(description="対応が必要な未解決の総件数（例外にした検知を除く）")
+    excepted_total: int = Field(0, description="例外（受容・影響なしなど）にした未解決の総件数")
+    repos: list[RepoStat] = Field(description="リポジトリ別件数（例外のみのリポジトリも含む）")
     severities: list[SeverityStat] = Field(description="重要度別件数")
 
 
