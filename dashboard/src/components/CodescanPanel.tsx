@@ -36,6 +36,13 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
     selectedRepo, handleRepo, totalPages, errorCount,
   } = useCodescanData(authToken)
 
+  // 一覧の総数と集計の総数の差＝例外として集計から外れている件数。
+  // 重要度・アプリで絞ると両者の対象がずれて差が不正確になるため、絞り込みなしの未解決のみ算出する
+  const excludedCount =
+    resolved === false && severity === null && selectedRepo === null && result && stats
+      ? Math.max(result.total - stats.total, 0)
+      : 0
+
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg flex flex-col gap-5">
 
@@ -114,6 +121,15 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
         total={stats?.total ?? null}
         loading={statsLoading && !stats}
       />
+
+      {/* 一覧は例外（受容・影響なしなど）も表示するが、件数・グラフ・左の一覧には含めない。
+          食い違いに見えないよう、絞り込みなしの未解決表示のときだけ差分を明記する */}
+      {excludedCount > 0 && (
+        <p className="text-xs text-slate-500" data-testid="excepted-note">
+          一覧には、例外（受容・影響なし など）に登録した {excludedCount} 件も表示しています。
+          件数・グラフ・左のアプリ一覧には含めていません（合計 {result?.total ?? 0} 件）。
+        </p>
+      )}
 
       {/* 左: アプリ一覧／右: 選んだアプリの脆弱性 */}
       <div className="flex flex-col md:flex-row gap-4">

@@ -75,6 +75,34 @@ describe('CodescanPanel', () => {
     expect(screen.getByText('Hardcoded password detected')).toBeInTheDocument()
   })
 
+  it('notes how many excepted findings are listed but excluded from the counts', async () => {
+    // 一覧3件（うち2件は例外）／集計1件 → 差分の2件を注記する
+    mockedList.mockResolvedValue({ total: 3, page: 1, per_page: 30, data: [item()] })
+    mockedStats.mockResolvedValue({
+      total: 1,
+      repos: [{ repo_full_name: 'baby-feelings/baby_grow', count: 1 }],
+      severities: [{ severity: 'ERROR', count: 1 }],
+    })
+
+    render(<CodescanPanel />)
+    const note = await screen.findByTestId('excepted-note')
+    expect(note).toHaveTextContent('2 件')
+    expect(note).toHaveTextContent('合計 3 件')
+  })
+
+  it('shows no exception note when the list and the counts match', async () => {
+    mockedList.mockResolvedValue({ total: 1, page: 1, per_page: 30, data: [item()] })
+    mockedStats.mockResolvedValue({
+      total: 1,
+      repos: [{ repo_full_name: 'baby-feelings/baby_grow', count: 1 }],
+      severities: [{ severity: 'ERROR', count: 1 }],
+    })
+
+    render(<CodescanPanel />)
+    await waitFor(() => expect(screen.getByText('app/main.py:10')).toBeInTheDocument())
+    expect(screen.queryByTestId('excepted-note')).not.toBeInTheDocument()
+  })
+
   it('highlights CVSS scores of 7.0 or higher', async () => {
     mockedList.mockResolvedValue({ total: 1, page: 1, per_page: 30, data: [item({ cvss_score: 9.1 })] })
     mockedStats.mockResolvedValue(EMPTY_STATS)
