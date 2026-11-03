@@ -6,13 +6,16 @@
 """
 import logging
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Final
 
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
-from app.core.db_utils import as_utc  # noqa: F401  既存の import 元（oauth 等）向けに再公開
+from app.core.db_utils import (
+    as_utc,  # noqa: F401  既存の import 元（oauth 等）向けに再公開
+    now_utc,
+)
 from app.mcp_server.mcp_token import McpClaims, create_mcp_token
 from app.mcp_server.models import McpToken
 
@@ -39,15 +42,12 @@ class TooManyTokensError(Exception):
     """有効なトークンの上限（MAX_ACTIVE_TOKENS）に達している。"""
 
 
-def _now() -> datetime:
-    return datetime.now(UTC)
-
 
 def token_status(token: McpToken, now: datetime | None = None) -> str:
     """トークンの状態: revoked（失効）> expired（期限切れ）> active（有効）。"""
     if token.revoked_at is not None:
         return "revoked"
-    if as_utc(token.expires_at) <= (now or _now()):
+    if as_utc(token.expires_at) <= (now or now_utc()):
         return "expired"
     return "active"
 
@@ -61,7 +61,7 @@ def issue_token(db: Session, username: str, days: int = DEFAULT_DAYS) -> tuple[s
     """
     if days not in ALLOWED_DAYS:
         raise ValueError(f"days must be one of {ALLOWED_DAYS}")
-    now = _now()
+    now = now_utc()
 
     # 古い行（失効・期限切れから一定期間を過ぎたもの）を掃除してから数える
     _purge_stale(db, username, now)
@@ -94,7 +94,7 @@ def issue_oauth_token(
     手動発行の上限（MAX_ACTIVE_TOKENS）の対象外。台帳に記録するため、個別の失効・
     `/mcp` での有効性確認は手動発行のトークンと同じ仕組みで効く。
     """
-    now = _now()
+    now = now_utc()
     _purge_stale(db, username, now)
     row = McpToken(
         id=str(uuid.uuid4()), username=username, oauth_client_id=client_id,
@@ -138,7 +138,7 @@ def revoke_token(db: Session, username: str, token_id: str) -> bool:
     if row is None:
         return False
     if row.revoked_at is None:
-        row.revoked_at = _now()
+        row.revoked_at = now_utc()
         db.commit()
         logger.info("MCP token revoked: user=%s id=%s", username, token_id)
     return True
@@ -153,7 +153,7 @@ def is_usable(db: Session, claims: McpClaims) -> bool:
     row = db.get(McpToken, claims.token_id)
     if row is None or row.username != claims.username or row.revoked_at is not None:
         return False
-    now = _now()
+    now = now_utc()
     if row.last_used_at is None or now - as_utc(row.last_used_at) >= _TOUCH_INTERVAL:
         row.last_used_at = now
         db.commit()
@@ -166,7 +166,7 @@ def revoke_oauth_tokens(db: Session, username: str, client_id: str) -> int:
     接続解除（ダッシュボード）・`/revoke` で使う。手動発行のトークン
     （oauth_client_id が null）には触れない。
     """
-    now = _now()
+    now = now_utc()
     rows = (
         db.query(McpToken)
         .filter(

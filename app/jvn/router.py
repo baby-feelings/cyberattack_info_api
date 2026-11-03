@@ -6,7 +6,7 @@ GET /api/jvn/{jvndb_id}   – JVNDB ID 個別取得（Issue #134：`format=stix`
 """
 import json
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, Security
@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.auth.api_key import require_api_key, require_public_api_key
 from app.core.background import run_in_background
 from app.core.database import get_db
-from app.core.db_utils import year_month_expr
+from app.core.db_utils import now_utc, year_month_expr
 from app.core.pagination import paginate
 from app.core.schemas import MonthlyStat
 from app.jvn.crawler import fetch_and_store_jvn
@@ -104,7 +104,7 @@ def get_jvn_stats(
     days: int = Query(30, ge=1, le=365, description="集計対象の日数"),
 ) -> JvnStatsResponse:
     """重要度別件数・月別トレンドを集計して返す。"""
-    cutoff = datetime.now(UTC) - timedelta(days=days)
+    cutoff = now_utc() - timedelta(days=days)
     base = db.query(JvnVulnerability).filter(
         JvnVulnerability.date_last_modified >= cutoff
     )

@@ -9,7 +9,7 @@ DEPSCAN と同じく、`X-API-KEY` または GitHub ログインのセッショ�
 見せないため）。
 """
 import logging
-from datetime import UTC, date, datetime
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Security
@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.auth.api_key import require_api_key, require_api_key_or_session
 from app.core.background import run_in_background
 from app.core.database import get_db
+from app.core.db_utils import now_utc
 from app.core.operating_status import OperatingQuery
 from app.runtimes.browse import list_runtimes, summarize_repos
 from app.runtimes.crawler import fetch_and_scan_runtimes
@@ -45,7 +46,7 @@ admin_router = APIRouter(tags=["admin"])
 
 def _today() -> date:
     """判定の基準にする今日（UTC）。"""
-    return datetime.now(UTC).date()
+    return now_utc().date()
 
 
 def _iso(value: date | None) -> str | None:

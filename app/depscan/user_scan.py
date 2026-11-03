@@ -19,8 +19,8 @@ from sqlalchemy.orm import Session
 
 from app.auth.account_store import get_webhook_for_user
 from app.core.database import SessionLocal
+from app.core.db_utils import now_utc
 from app.core.notifications.dependency_findings import notify_dependency_findings
-from app.crawler_logs.writer import now_utc
 from app.depscan.finding_builder import build_findings
 from app.depscan.inventory import RepoDependencyRepository
 from app.depscan.issue_management import file_github_issues

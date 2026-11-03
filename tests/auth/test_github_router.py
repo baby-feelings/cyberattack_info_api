@@ -54,7 +54,7 @@ class TestGithubCallback:
              patch("app.auth.github_router.settings.GITHUB_OAUTH_CLIENT_SECRET", "secret"), \
              patch("app.auth.github_router.settings.SESSION_SECRET_KEY", "test-secret"), \
              patch(
-                 "app.auth.github_router.settings.FRONTEND_URL", "https://dashboard.example.com",
+                 "app.auth.github_router.settings.DASHBOARD_URL", "https://dashboard.example.com",
              ), \
              patch(
                  "app.auth.github_router.exchange_code_for_token", return_value="gho_abc",
@@ -95,7 +95,7 @@ class TestGithubCallback:
              patch("app.auth.github_router.settings.GITHUB_OAUTH_CLIENT_SECRET", "secret"), \
              patch("app.auth.github_router.settings.SESSION_SECRET_KEY", "test-secret"), \
              patch(
-                 "app.auth.github_router.settings.FRONTEND_URL", "https://dashboard.example.com",
+                 "app.auth.github_router.settings.DASHBOARD_URL", "https://dashboard.example.com",
              ), \
              patch(
                  "app.auth.github_router.exchange_code_for_token", return_value="gho_abc",
@@ -118,7 +118,7 @@ class TestGithubCallback:
              patch("app.auth.github_router.settings.GITHUB_OAUTH_CLIENT_SECRET", "secret"), \
              patch("app.auth.github_router.settings.SESSION_SECRET_KEY", "test-secret"), \
              patch(
-                 "app.auth.github_router.settings.FRONTEND_URL", "https://dashboard.example.com",
+                 "app.auth.github_router.settings.DASHBOARD_URL", "https://dashboard.example.com",
              ), \
              patch(
                  "app.auth.github_router.exchange_code_for_token", return_value="gho_abc",

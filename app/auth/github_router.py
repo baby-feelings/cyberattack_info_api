@@ -158,7 +158,7 @@ def github_callback(
     # 渡さない。代わりに数十秒で失効する使い捨ての交換コードのみをURLに載せ、
     # フロントエンドは POST /auth/exchange でこれをJWTと交換する
     exchange_code = _store_exchange_code(session_token)
-    redirect_url = f"{settings.FRONTEND_URL.rstrip('/')}/?depscan_code={exchange_code}"
+    redirect_url = f"{settings.DASHBOARD_URL.rstrip('/')}/?depscan_code={exchange_code}"
     resp = RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
     resp.delete_cookie(_STATE_COOKIE)
     return resp

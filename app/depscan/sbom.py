@@ -10,10 +10,10 @@ SBOM/SCAツールとの相互運用性を高める。
 """
 import urllib.parse
 from collections.abc import Mapping, Sequence
-from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
+from app.core.db_utils import now_utc
 from app.core.osv_client import osv_vulnerability_url
 from app.depscan.models import DependencyFinding, RepoDependency
 
@@ -142,7 +142,7 @@ def build_cyclonedx_sbom(
         "serialNumber": f"urn:uuid:{uuid4()}",
         "version": 1,
         "metadata": {
-            "timestamp": datetime.now(UTC).isoformat(),
+            "timestamp": now_utc().isoformat(),
             "component": {"type": "application", "name": repo_full_name},
         },
         "components": list(components.values()),
@@ -187,7 +187,7 @@ def build_spdx_sbom(
             }],
         })
 
-    now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    now = now_utc().strftime("%Y-%m-%dT%H:%M:%SZ")
     return {
         "spdxVersion": "SPDX-2.3",
         "dataLicense": "CC0-1.0",

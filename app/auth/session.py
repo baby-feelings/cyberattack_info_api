@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 import jwt
 
 from app.core.config import settings
+from app.core.db_utils import now_utc
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ def create_session_token(username: str, login_at: datetime | None = None) -> str
 
     `login_at` は GitHub 認証した時刻。更新時は元の値を引き継ぎ、絶対上限の判定に使う。
     """
-    now = datetime.now(UTC)
+    now = now_utc()
     payload = {
         "sub": username,
         "exp": now + timedelta(days=_EXPIRES_DAYS),
@@ -72,7 +73,7 @@ def refresh_session_token(token: str) -> str | None:
     if isinstance(login_at_ts, int):
         login_at = datetime.fromtimestamp(login_at_ts, UTC)
     else:
-        login_at = datetime.now(UTC)
-    if datetime.now(UTC) - login_at > timedelta(days=_MAX_SESSION_DAYS):
+        login_at = now_utc()
+    if now_utc() - login_at > timedelta(days=_MAX_SESSION_DAYS):
         return None
     return create_session_token(username, login_at)

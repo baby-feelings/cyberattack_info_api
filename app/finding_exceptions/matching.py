@@ -14,7 +14,7 @@ from sqlalchemy import and_, exists, or_
 from sqlalchemy.orm import Query, Session
 
 from app.codescan.models import CodeFinding
-from app.crawler_logs.writer import now_utc
+from app.core.db_utils import now_utc
 from app.depscan.models import DependencyFinding
 from app.finding_exceptions.models import (
     KIND_CODE,

@@ -9,7 +9,7 @@ XML の <item> 要素からのフィールド抽出（パース処理）は app.
 import logging
 import time
 import xml.etree.ElementTree as stdlib_ET  # nosemgrep
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
 import defusedxml.ElementTree as defused_ET  # XXE / billion-laughs 攻撃防止
 import httpx
@@ -18,8 +18,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.crawler_runner import CrawlCounters, run_crawler
+from app.core.db_utils import now_utc
 from app.core.retry import request_with_retry
-from app.crawler_logs.writer import now_utc
 from app.jvn.models import JvnVulnerability
 from app.jvn.parser import NS as _NS
 from app.jvn.parser import parse_item as _parse_item
@@ -195,7 +195,7 @@ def _delete_old_jvn_records(db: Session) -> int:
     Returns:
         削除件数
     """
-    cutoff = datetime.now(UTC) - timedelta(days=settings.JVN_RETENTION_DAYS)
+    cutoff = now_utc() - timedelta(days=settings.JVN_RETENTION_DAYS)
     deleted = (
         db.query(JvnVulnerability)
         .filter(JvnVulnerability.date_last_modified < cutoff)
@@ -219,7 +219,7 @@ def fetch_and_store_jvn(days: int | None = None, *, force: bool = False) -> tupl
     effective_days = days if days is not None else settings.JVN_DAYS
     logger.info("JVN crawler started (days=%d)", effective_days)
 
-    cutoff = datetime.now(UTC) - timedelta(days=effective_days)
+    cutoff = now_utc() - timedelta(days=effective_days)
     cutoff_date = cutoff.strftime("%Y-%m-%d")
 
     def _body(db: Session, counters: CrawlCounters) -> None:

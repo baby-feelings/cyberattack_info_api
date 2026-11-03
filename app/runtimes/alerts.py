@@ -16,12 +16,13 @@
 import logging
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, timedelta
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
+from app.core.db_utils import now_utc
 from app.core.notifications.runtime_alerts import notify_runtime_alerts
 from app.runtimes.browse import list_runtimes
 from app.runtimes.detector import RUNTIME_LABELS
@@ -129,7 +130,7 @@ def send_runtime_alerts(today: date | None = None) -> int:
     - 最初の実行は、既存の状況を記録するだけで、通知しない（0 を返す）
     - 送信に失敗したものは、記録しない（翌日の実行で、もう一度送る）
     """
-    today = today or datetime.now(UTC).date()
+    today = today or now_utc().date()
     with SessionLocal() as db:
         alerts = find_alerts(db, today)
         sent = _sent_keys(db)

@@ -7,13 +7,12 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
-from app.core.github.api import GitHubApi
+from app.core.github.api import MAX_PER_PAGE, GitHubApi
 from app.core.github.repo import GitHubRepo
 from app.repo_audit.checks import hook_url, sanitize_url, url_fingerprint
 
 logger = logging.getLogger(__name__)
 
-_PER_PAGE = 100
 # 非公開の無料リポジトリで、ブランチ保護の取得が 403 になるときの、応答の文言
 _UPGRADE_HINT = "upgrade"
 
@@ -32,7 +31,7 @@ def _optional_get(api: GitHubApi, path: str, **params: Any) -> tuple[int, Any]:
 
 
 def _list_or_none(api: GitHubApi, path: str) -> list[dict[str, Any]] | None:
-    status, body = _optional_get(api, path, per_page=_PER_PAGE)
+    status, body = _optional_get(api, path, per_page=MAX_PER_PAGE)
     return None if status in (403, 404) else list(body or [])
 
 

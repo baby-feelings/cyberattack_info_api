@@ -11,11 +11,12 @@ MCP クライアント（Claude Code 等）は `/mcp` で認証するたびに�
 """
 import logging
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
+from app.core.db_utils import now_utc
 from app.mcp_server.models import OAuthRefreshToken
 from app.mcp_server.oauth import clients as oauth_clients
 from app.mcp_server.oauth import connections as oauth_connections
@@ -28,7 +29,7 @@ UNUSED_CONNECTION_TTL = timedelta(days=7)
 
 def disconnect_unused_connections(db: Session, now: datetime | None = None) -> int:
     """一度も使われないまま `UNUSED_CONNECTION_TTL` を過ぎた接続を解除し、その件数を返す。"""
-    now = now or datetime.now(UTC)
+    now = now or now_utc()
     cutoff = now - UNUSED_CONNECTION_TTL
     usernames = [
         row[0]

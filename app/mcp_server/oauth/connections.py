@@ -8,12 +8,13 @@
   発行済みの OAuth アクセストークン。`/revoke` でリフレッシュトークンを失効したのと同じ）
 """
 import json
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core.db_utils import now_utc
 from app.mcp_server.mcp_token_store import as_utc, revoke_oauth_tokens
 from app.mcp_server.models import McpToken, OAuthClient, OAuthRefreshToken
 from app.mcp_server.oauth import refresh as oauth_refresh
@@ -44,7 +45,7 @@ def list_connections(
     db: Session, username: str, now: datetime | None = None,
 ) -> list[dict[str, Any]]:
     """本人が OAuth で接続中のクライアントを、最近更新された順に返す。"""
-    now = now or datetime.now(UTC)
+    now = now or now_utc()
     heads = (
         db.query(OAuthRefreshToken)
         .filter(

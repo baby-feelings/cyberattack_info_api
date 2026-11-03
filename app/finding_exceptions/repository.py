@@ -4,8 +4,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.core.db_utils import as_utc
-from app.crawler_logs.writer import now_utc
+from app.core.db_utils import as_utc, now_utc
 from app.finding_exceptions.matching import active_exceptions
 from app.finding_exceptions.models import (
     ENDED_EXPIRED,

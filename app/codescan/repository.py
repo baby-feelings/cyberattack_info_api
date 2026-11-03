@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.codescan.models import CodeFinding
 from app.core.config import settings
-from app.crawler_logs.writer import now_utc
+from app.core.db_utils import now_utc
 
 logger = logging.getLogger(__name__)
 

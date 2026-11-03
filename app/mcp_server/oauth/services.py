@@ -10,7 +10,6 @@
 - `AccessTokenService`: OAuth で発行されたアクセストークンの取得と、1つだけの失効
 """
 from dataclasses import dataclass
-from datetime import UTC, datetime
 
 from mcp.server.auth.provider import (
     AccessToken,
@@ -23,6 +22,7 @@ from mcp.server.auth.provider import (
 from mcp.shared.auth import OAuthClientInformationFull
 from sqlalchemy.orm import Session
 
+from app.core.db_utils import now_utc
 from app.mcp_server.mcp_token import verify_mcp_token
 from app.mcp_server.mcp_token_store import as_utc, issue_oauth_token, revoke_oauth_tokens
 from app.mcp_server.models import McpToken
@@ -191,5 +191,5 @@ class AccessTokenService:
         claims = verify_mcp_token(token)
         row = db.get(McpToken, claims.token_id) if claims else None
         if row is not None and row.username == username and row.revoked_at is None:
-            row.revoked_at = datetime.now(UTC)
+            row.revoked_at = now_utc()
             db.commit()

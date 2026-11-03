@@ -1,11 +1,11 @@
 """検知（DEPSCAN）から、対応状況（期限超過・MTTR）のレポートを組み立てる。"""
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from statistics import fmean
 
 from sqlalchemy.orm import Session
 
-from app.core.db_utils import as_utc
+from app.core.db_utils import as_utc, now_utc
 from app.core.osv_client import is_malicious_advisory
 from app.depscan.filters import DepscanListFilter
 from app.depscan.models import DependencyFinding
@@ -190,7 +190,7 @@ def build_report(
     `flt` はオーナー・運用状態・リポジトリの絞り込みで、セッション認証時は本人所有に絞った
     ものを渡す。`resolved` の指定は、このレポート自身が決めるため使わない。
     """
-    now = now or datetime.now(UTC)
+    now = now or now_utc()
     cutoff = now - timedelta(days=window_days)
 
     base = flt.apply(db.query(DependencyFinding))

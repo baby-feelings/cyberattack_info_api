@@ -3,7 +3,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.crawler_logs.writer import now_utc
+from app.core.db_utils import now_utc
 from app.depscan.models import DependencyFinding
 from app.github_alerts.models import (
     KIND_DEPENDABOT,

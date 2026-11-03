@@ -8,8 +8,8 @@ from starlette.concurrency import run_in_threadpool
 from app.audit.models import AuditLog
 from app.core.config import settings
 from app.core.database import SessionLocal
+from app.core.db_utils import now_utc
 from app.core.rate_limit import is_limited_path
-from app.crawler_logs.writer import now_utc
 
 logger = logging.getLogger(__name__)
 

@@ -16,10 +16,10 @@ from sqlalchemy.orm import Session
 
 from app.codescan.models import CodeFinding
 from app.core.config import settings
+from app.core.db_utils import now_utc
 from app.core.github.repo import GitHubRepo
 from app.core.issue_filing import file_or_update_repo_issues
 from app.core.notifications.slack import DASHBOARD_URL
-from app.crawler_logs.writer import now_utc
 from app.finding_exceptions.matching import not_excepted
 from app.finding_exceptions.models import KIND_CODE
 

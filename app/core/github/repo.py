@@ -16,14 +16,12 @@ from typing import Any
 
 import httpx
 
-from app.core.github.api import GitHubApi
+from app.core.github.api import DEFAULT_TIMEOUT, MAX_PER_PAGE, GitHubApi
 
 logger = logging.getLogger(__name__)
 
-_TIMEOUT = 30.0
 # tarball はリポジトリ全体のダウンロードのため、他の呼び出しより長めに確保する
 _TARBALL_TIMEOUT = 60.0
-_PER_PAGE = 100
 
 
 @dataclass(frozen=True)
@@ -49,7 +47,7 @@ class GitHubRepo:
 
     # ── ドメイン固有の操作を組み立てるための部品 ──
 
-    def api(self, *, timeout: float = _TIMEOUT, follow_redirects: bool = False) -> GitHubApi:
+    def api(self, *, timeout: float = DEFAULT_TIMEOUT, follow_redirects: bool = False) -> GitHubApi:
         """このリポジトリのトークンで認証された API クライアント（`with` で使う）。"""
         return GitHubApi(self.token, timeout=timeout, follow_redirects=follow_redirects)
 
@@ -119,7 +117,7 @@ class GitHubRepo:
     def find_open_issue(self, title: str) -> int | None:
         """指定タイトルと完全一致する Open な Issue の番号を返す（Pull Request は除外）。"""
         with self.api() as api:
-            resp = api.get(self.path("/issues"), params={"state": "open", "per_page": _PER_PAGE})
+            resp = api.get(self.path("/issues"), params={"state": "open", "per_page": MAX_PER_PAGE})
         for issue in resp.json():
             if issue.get("title") == title and "pull_request" not in issue:
                 return int(issue["number"])
