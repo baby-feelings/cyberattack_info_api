@@ -13,8 +13,8 @@ from mcp.server.fastmcp import Context, FastMCP
 from app.mcp_server.gateway import RestGateway
 
 
-def register(mcp: FastMCP) -> None:
-    """セキュリティ態勢のツールを登録する（読み取り専用の GET のみ）。"""
+def _register_runtime_and_sla_tools(mcp: FastMCP) -> None:
+    """言語・実行環境と、対応状況（SLA）のツール。"""
 
     @mcp.tool()
     async def list_runtimes(
@@ -49,6 +49,10 @@ def register(mcp: FastMCP) -> None:
             "/api/sla", {"repo": repo, "window_days": window_days}, private=True,
         )
 
+
+def _register_exception_tools(mcp: FastMCP) -> None:
+    """検知の例外と、VEX のツール。"""
+
     @mcp.tool()
     async def list_finding_exceptions(
         ctx: Context,
@@ -79,6 +83,10 @@ def register(mcp: FastMCP) -> None:
             "/api/exceptions/vex", {"repo": repo, "format": format}, private=True,
         )
 
+
+def _register_alert_tools(mcp: FastMCP) -> None:
+    """GitHub のセキュリティアラートと、DEPSCAN との比較のツール。"""
+
     @mcp.tool()
     async def list_github_alerts(
         ctx: Context,
@@ -103,6 +111,10 @@ def register(mcp: FastMCP) -> None:
         片方だけが検知したものは、検知の抜けか、データ源の違いの手がかり。MCP トークンが必要。
         """
         return await RestGateway(ctx).get("/api/github-alerts/compare", private=True)
+
+
+def _register_audit_and_monitor_tools(mcp: FastMCP) -> None:
+    """リポジトリ設定の監査と、公開サイトの外形監視のツール。"""
 
     @mcp.tool()
     async def get_repo_audit(ctx: Context, only_issues: bool = False) -> dict[str, Any]:
@@ -130,3 +142,11 @@ def register(mcp: FastMCP) -> None:
         return await RestGateway(ctx).get(
             "/api/site-monitor", {"only_issues": only_issues}, private=True,
         )
+
+
+def register(mcp: FastMCP) -> None:
+    """セキュリティ態勢のツールを登録する（読み取り専用の GET のみ）。"""
+    _register_runtime_and_sla_tools(mcp)
+    _register_exception_tools(mcp)
+    _register_alert_tools(mcp)
+    _register_audit_and_monitor_tools(mcp)
