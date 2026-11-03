@@ -1,5 +1,6 @@
+import { FullScreenModal } from '../shared/FullScreenModal'
 import { useEffect, useState } from 'react'
-import { X, Cpu, AlertTriangle } from 'lucide-react'
+import { Cpu, AlertTriangle } from 'lucide-react'
 import {
   fetchRuntimes, fetchRuntimeRepos, fetchRuntimeReleases,
   type OperatingStatus, type RepoRuntimeOut, type RepoRuntimeRepoStat,
@@ -113,14 +114,6 @@ function RuntimesDialog({ onClose, authToken }: { onClose: () => void; authToken
   const [repoList, setRepoList] = useState<{ operating: OperatingStatus; repos: RepoRuntimeRepoStat[] } | null>(null)
   const [releases, setReleases] = useState<RuntimeReleaseOut[]>([])
 
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [onClose])
-
   // 一覧。条件が変わるたびに取り直す。状態の更新は取得の完了時だけ行う
   // （効果の中で同期的に更新しない。条件の変更で古い取得が遅れて届いても、結果を捨てる）
   useEffect(() => {
@@ -173,142 +166,122 @@ function RuntimesDialog({ onClose, authToken }: { onClose: () => void; authToken
   const repos = repoList?.operating === filters.operating ? repoList.repos : []
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-slate-950 flex flex-col"
-      role="dialog"
-      aria-modal="true"
-      aria-label="言語・実行環境"
+    <FullScreenModal
+      label="言語・実行環境"
+      icon={Cpu} onClose={onClose}
     >
-      <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 shrink-0">
-        <span className="flex items-center gap-2 text-sm font-semibold text-slate-300 uppercase tracking-wider">
-          <Cpu size={16} className="text-slate-400" />
-          言語・実行環境
-        </span>
-        <button
-          onClick={onClose}
-          aria-label="閉じる"
-          className="text-slate-500 hover:text-slate-300 transition-colors p-1 rounded"
-        >
-          <X size={18} />
-        </button>
+      <p className="text-xs text-slate-500">
+        各アプリが使っている Python・Node.js・Flutter・Dart の版と、サポート期限です。
+        サポートが終わった版には、セキュリティ修正が提供されません。左でアプリを選ぶと、そのアプリの設定を見られます。
+      </p>
+
+      <RecommendedStrip releases={releases} />
+
+      <div className="flex flex-wrap items-center gap-3">
+        <OperatingFilter value={filters.operating} onChange={handleOperating} />
       </div>
 
-      <div className="flex-1 overflow-y-auto px-6 py-5">
-        <div className="max-w-6xl mx-auto flex flex-col gap-5">
-          <p className="text-xs text-slate-500">
-            各アプリが使っている Python・Node.js・Flutter・Dart の版と、サポート期限です。
-            サポートが終わった版には、セキュリティ修正が提供されません。左でアプリを選ぶと、そのアプリの設定を見られます。
-          </p>
+      <div className="flex flex-col md:flex-row gap-4">
+        <RepoRail
+          selected={filters.repo}
+          onSelect={repo => update({ repo })}
+          allBadge={
+            <span className="text-slate-500 tabular-nums">
+              {repos.reduce((n, r) => n + r.total, 0)}
+            </span>
+          }
+          items={repos.map(r => ({
+            key: r.repo_full_name,
+            label: repoShortName(r.repo_full_name),
+            muted: r.needs_action === 0,
+            badge: <RepoBadge stat={r} />,
+          }))}
+        />
 
-          <RecommendedStrip releases={releases} />
-
-          <div className="flex flex-wrap items-center gap-3">
-            <OperatingFilter value={filters.operating} onChange={handleOperating} />
+        <div className="flex-1 min-w-0 flex flex-col gap-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1 text-xs text-slate-400">
+              言語
+              <select
+                value={filters.runtime ?? ''}
+                onChange={e => update({ runtime: e.target.value || null })}
+                className={`${INPUT_CLS} w-32`}
+              >
+                <option value="">すべて</option>
+                {RUNTIME_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={() => update({ needsActionOnly: !filters.needsActionOnly })}
+              aria-pressed={filters.needsActionOnly}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap border transition-colors ${
+                filters.needsActionOnly
+                  ? 'bg-orange-500/15 text-orange-400 border-orange-500/30'
+                  : 'bg-slate-800/60 text-slate-500 border-slate-700 hover:text-slate-300'
+              }`}
+            >
+              <AlertTriangle size={12} />
+              更新が必要なものだけ
+            </button>
           </div>
 
-          <div className="flex flex-col md:flex-row gap-4">
-            <RepoRail
-              selected={filters.repo}
-              onSelect={repo => update({ repo })}
-              allBadge={
-                <span className="text-slate-500 tabular-nums">
-                  {repos.reduce((n, r) => n + r.total, 0)}
-                </span>
-              }
-              items={repos.map(r => ({
-                key: r.repo_full_name,
-                label: repoShortName(r.repo_full_name),
-                muted: r.needs_action === 0,
-                badge: <RepoBadge stat={r} />,
-              }))}
+          {loading ? (
+            <TableLoadingSkeleton columnWidths={['w-40', 'w-24', 'w-24', 'w-32', 'flex-1']} />
+          ) : list.failed ? (
+            <EmptyState icon={<Cpu size={24} />} message="取得に失敗しました。時間をおいて再度お試しください" />
+          ) : list.items.length === 0 ? (
+            <EmptyState
+              icon={<Cpu size={24} />}
+              message={filters.needsActionOnly
+                ? '更新が必要な言語・実行環境はありません'
+                : '該当する言語・実行環境はありません'}
             />
-
-            <div className="flex-1 min-w-0 flex flex-col gap-4">
-              <div className="flex flex-wrap items-end gap-3">
-                <label className="flex flex-col gap-1 text-xs text-slate-400">
-                  言語
-                  <select
-                    value={filters.runtime ?? ''}
-                    onChange={e => update({ runtime: e.target.value || null })}
-                    className={`${INPUT_CLS} w-32`}
-                  >
-                    <option value="">すべて</option>
-                    {RUNTIME_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => update({ needsActionOnly: !filters.needsActionOnly })}
-                  aria-pressed={filters.needsActionOnly}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap border transition-colors ${
-                    filters.needsActionOnly
-                      ? 'bg-orange-500/15 text-orange-400 border-orange-500/30'
-                      : 'bg-slate-800/60 text-slate-500 border-slate-700 hover:text-slate-300'
-                  }`}
-                >
-                  <AlertTriangle size={12} />
-                  更新が必要なものだけ
-                </button>
-              </div>
-
-              {loading ? (
-                <TableLoadingSkeleton columnWidths={['w-40', 'w-24', 'w-24', 'w-32', 'flex-1']} />
-              ) : list.failed ? (
-                <EmptyState icon={<Cpu size={24} />} message="取得に失敗しました。時間をおいて再度お試しください" />
-              ) : list.items.length === 0 ? (
-                <EmptyState
-                  icon={<Cpu size={24} />}
-                  message={filters.needsActionOnly
-                    ? '更新が必要な言語・実行環境はありません'
-                    : '該当する言語・実行環境はありません'}
-                />
-              ) : (
-                <div className="overflow-x-auto -mx-1 px-1">
-                  <table aria-label="言語・実行環境一覧" className="w-full text-sm min-w-[760px]">
-                    <thead>
-                      <tr className="border-b border-slate-800">
-                        {!filters.repo && <th className={`${TH} w-48`}>アプリ</th>}
-                        <th className={`${TH} w-24`}>言語</th>
-                        <th className={`${TH} w-28`}>使っている版</th>
-                        <th className={`${TH} w-36`}>状態</th>
-                        <th className={`${TH} w-28`}>推奨の版</th>
-                        <th className={`${TH} w-44`}>サポート終了</th>
-                        <th className={TH}>設定ファイル</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/60">
-                      {list.items.map(item => (
-                        <tr key={`${item.repo_full_name}-${item.runtime}-${item.cycle}-${item.source_path}`}>
-                          {!filters.repo && (
-                            <td className="py-2.5 pr-3">
-                              <p className="text-slate-300 text-xs truncate max-w-[200px]">{item.repo_full_name}</p>
-                            </td>
-                          )}
-                          <td className="py-2.5 pr-3 text-xs text-slate-200">{item.runtime_label}</td>
-                          <td className="py-2.5 pr-3 text-xs text-slate-300 tabular-nums">
-                            {item.cycle}
-                            {!item.pinned && <span className="text-slate-600">{' 以上'}</span>}
-                            {item.latest_version && (
-                              <p className="text-[10px] text-slate-500">最新 {item.latest_version}</p>
-                            )}
-                          </td>
-                          <td className="py-2.5 pr-3"><StateBadge state={item.state} /></td>
-                          <td className="py-2.5 pr-3 text-xs text-slate-300 tabular-nums">
-                            {item.recommended_cycle ?? <span className="text-slate-600">—</span>}
-                          </td>
-                          <td className="py-2.5 pr-3 text-xs text-slate-400"><EolCell item={item} /></td>
-                          <td className="py-2.5 text-xs text-slate-500 break-all">{item.source_path}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+          ) : (
+            <div className="overflow-x-auto -mx-1 px-1">
+              <table aria-label="言語・実行環境一覧" className="w-full text-sm min-w-[760px]">
+                <thead>
+                  <tr className="border-b border-slate-800">
+                    {!filters.repo && <th className={`${TH} w-48`}>アプリ</th>}
+                    <th className={`${TH} w-24`}>言語</th>
+                    <th className={`${TH} w-28`}>使っている版</th>
+                    <th className={`${TH} w-36`}>状態</th>
+                    <th className={`${TH} w-28`}>推奨の版</th>
+                    <th className={`${TH} w-44`}>サポート終了</th>
+                    <th className={TH}>設定ファイル</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {list.items.map(item => (
+                    <tr key={`${item.repo_full_name}-${item.runtime}-${item.cycle}-${item.source_path}`}>
+                      {!filters.repo && (
+                        <td className="py-2.5 pr-3">
+                          <p className="text-slate-300 text-xs truncate max-w-[200px]">{item.repo_full_name}</p>
+                        </td>
+                      )}
+                      <td className="py-2.5 pr-3 text-xs text-slate-200">{item.runtime_label}</td>
+                      <td className="py-2.5 pr-3 text-xs text-slate-300 tabular-nums">
+                        {item.cycle}
+                        {!item.pinned && <span className="text-slate-600">{' 以上'}</span>}
+                        {item.latest_version && (
+                          <p className="text-[10px] text-slate-500">最新 {item.latest_version}</p>
+                        )}
+                      </td>
+                      <td className="py-2.5 pr-3"><StateBadge state={item.state} /></td>
+                      <td className="py-2.5 pr-3 text-xs text-slate-300 tabular-nums">
+                        {item.recommended_cycle ?? <span className="text-slate-600">—</span>}
+                      </td>
+                      <td className="py-2.5 pr-3 text-xs text-slate-400"><EolCell item={item} /></td>
+                      <td className="py-2.5 text-xs text-slate-500 break-all">{item.source_path}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </div>
+          )}
         </div>
       </div>
-    </div>
+    </FullScreenModal>
   )
 }
 

@@ -1,5 +1,6 @@
+import { FullScreenModal } from '../shared/FullScreenModal'
 import { useCallback, useEffect, useState } from 'react'
-import { X, GitPullRequest, ExternalLink } from 'lucide-react'
+import { GitPullRequest, ExternalLink } from 'lucide-react'
 import {
   fetchDepsOpsList, fetchDepsOpsStats, type DependabotPrLogOut, type DepsOpsRepoStat,
   type OperatingStatus,
@@ -119,15 +120,6 @@ export function DependabotOpsModal({ open, onClose }: { open: boolean; onClose: 
     }
   }, [open, loadStats, operating])
 
-  useEffect(() => {
-    if (!open) return
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [open, onClose])
-
   function handleOperating(op: OperatingStatus) {
     setOperating(op)
     setPage(1)
@@ -143,116 +135,96 @@ export function DependabotOpsModal({ open, onClose }: { open: boolean; onClose: 
   const totalPages = Math.ceil(total / PER_PAGE)
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-slate-950 flex flex-col"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Dependabot 運用状況"
+    <FullScreenModal
+      label="Dependabot 運用状況" title="Dependabot 運用状況（DEPSOPS）"
+      icon={GitPullRequest} maxWidth="max-w-5xl" onClose={onClose}
     >
-      <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 shrink-0">
-        <span className="flex items-center gap-2 text-sm font-semibold text-slate-300 uppercase tracking-wider">
-          <GitPullRequest size={16} className="text-slate-400" />
-          Dependabot 運用状況（DEPSOPS）
-        </span>
-        <button
-          onClick={onClose}
-          aria-label="閉じる"
-          className="text-slate-500 hover:text-slate-300 transition-colors p-1 rounded"
-        >
-          <X size={18} />
-        </button>
+      <DepsOpsRepoBarChart stats={repoStats} loading={statsLoading} />
+
+      <div className="flex flex-wrap items-center gap-3">
+        <OperatingFilter value={operating} onChange={handleOperating} />
       </div>
 
-      <div className="flex-1 overflow-y-auto px-6 py-5">
-        <div className="max-w-5xl mx-auto flex flex-col gap-5">
-          <DepsOpsRepoBarChart stats={repoStats} loading={statsLoading} />
-
-          <div className="flex flex-wrap items-center gap-3">
-            <OperatingFilter value={operating} onChange={handleOperating} />
-          </div>
-
-          <div role="group" aria-label="判定フィルター" className="flex flex-wrap gap-1.5">
-            {ACTIONS.map(a => (
-              <button
-                key={a.key}
-                onClick={() => handleAction(a.key)}
-                aria-pressed={action === a.key}
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                  action === a.key
-                    ? 'bg-violet-600 text-white shadow'
-                    : 'bg-slate-800 text-slate-400 hover:text-slate-300 hover:bg-slate-700'
-                }`}
-              >
-                {a.label}
-              </button>
-            ))}
-          </div>
-
-          {loading ? (
-            <TableLoadingSkeleton columnWidths={['w-40', 'w-24', 'w-16', 'flex-1', 'w-24']} />
-          ) : items.length === 0 ? (
-            <EmptyState icon={<GitPullRequest size={24} />} message="該当する PR はありません" />
-          ) : (
-            <>
-              <Pagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} position="top" />
-
-              <div className="overflow-x-auto -mx-1 px-1">
-                <table aria-label="Dependabot PR 判定履歴" className="w-full text-sm min-w-[860px]">
-                  <thead>
-                    <tr className="border-b border-slate-800">
-                      <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-48">リポジトリ</th>
-                      <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-40">互換性スコア</th>
-                      <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3">PR</th>
-                      <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-28">判定</th>
-                      <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-28">種別</th>
-                      <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-24">日時</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/60">
-                    {items.map(item => (
-                      <tr key={`${item.repo_full_name}-${item.pr_number}-${item.processed_at}`}>
-                        <td className="py-2.5 pr-3">
-                          <p className="text-slate-300 text-xs truncate max-w-[220px]">{item.repo_full_name}</p>
-                        </td>
-                        <td className="py-2.5 pr-3">
-                          <CompatibilityScoreBadge badgeUrl={item.compatibility_badge_url} />
-                        </td>
-                        <td className="py-2.5 pr-3">
-                          <a
-                            href={githubPullUrl(item.repo_full_name, item.pr_number)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-violet-400 hover:text-violet-300 text-xs transition-colors"
-                          >
-                            #{item.pr_number} {item.title}
-                            <ExternalLink size={9} />
-                          </a>
-                          {item.reason && (
-                            <p className="text-[10px] text-slate-500 mt-0.5">{item.reason}</p>
-                          )}
-                        </td>
-                        <td className="py-2.5 pr-3">
-                          <ActionBadge action={item.action} />
-                        </td>
-                        <td className="py-2.5 pr-3">
-                          <SecurityUpdateBadge isSecurityUpdate={item.is_security_update} />
-                        </td>
-                        <td className="py-2.5 text-xs text-slate-600 tabular-nums whitespace-nowrap">
-                          {new Date(item.processed_at).toLocaleDateString('ja-JP', {
-                            year: 'numeric', month: 'short', day: 'numeric',
-                          })}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <Pagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} />
-            </>
-          )}
-        </div>
+      <div role="group" aria-label="判定フィルター" className="flex flex-wrap gap-1.5">
+        {ACTIONS.map(a => (
+          <button
+            key={a.key}
+            onClick={() => handleAction(a.key)}
+            aria-pressed={action === a.key}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+              action === a.key
+                ? 'bg-violet-600 text-white shadow'
+                : 'bg-slate-800 text-slate-400 hover:text-slate-300 hover:bg-slate-700'
+            }`}
+          >
+            {a.label}
+          </button>
+        ))}
       </div>
-    </div>
+
+      {loading ? (
+        <TableLoadingSkeleton columnWidths={['w-40', 'w-24', 'w-16', 'flex-1', 'w-24']} />
+      ) : items.length === 0 ? (
+        <EmptyState icon={<GitPullRequest size={24} />} message="該当する PR はありません" />
+      ) : (
+        <>
+          <Pagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} position="top" />
+
+          <div className="overflow-x-auto -mx-1 px-1">
+            <table aria-label="Dependabot PR 判定履歴" className="w-full text-sm min-w-[860px]">
+              <thead>
+                <tr className="border-b border-slate-800">
+                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-48">リポジトリ</th>
+                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-40">互換性スコア</th>
+                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3">PR</th>
+                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-28">判定</th>
+                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-28">種別</th>
+                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-24">日時</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60">
+                {items.map(item => (
+                  <tr key={`${item.repo_full_name}-${item.pr_number}-${item.processed_at}`}>
+                    <td className="py-2.5 pr-3">
+                      <p className="text-slate-300 text-xs truncate max-w-[220px]">{item.repo_full_name}</p>
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <CompatibilityScoreBadge badgeUrl={item.compatibility_badge_url} />
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <a
+                        href={githubPullUrl(item.repo_full_name, item.pr_number)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-violet-400 hover:text-violet-300 text-xs transition-colors"
+                      >
+                        #{item.pr_number} {item.title}
+                        <ExternalLink size={9} />
+                      </a>
+                      {item.reason && (
+                        <p className="text-[10px] text-slate-500 mt-0.5">{item.reason}</p>
+                      )}
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <ActionBadge action={item.action} />
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <SecurityUpdateBadge isSecurityUpdate={item.is_security_update} />
+                    </td>
+                    <td className="py-2.5 text-xs text-slate-600 tabular-nums whitespace-nowrap">
+                      {new Date(item.processed_at).toLocaleDateString('ja-JP', {
+                        year: 'numeric', month: 'short', day: 'numeric',
+                      })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <Pagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} />
+        </>
+      )}
+    </FullScreenModal>
   )
 }

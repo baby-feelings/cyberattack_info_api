@@ -123,6 +123,7 @@ CODESCAN追加後もキー名はあえて変更せず両ドメインで共有す
 表示する（トークン本体はサーバーに保存されない）。下段に発行済みトークンの一覧（状態・期限・最終使用日）と
 有効なものへの「失効」ボタン（`window.confirm`で確認。表示中のコマンドのトークンを失効したらコマンドも消す）を出す。
 上限（有効10個）超過の409だけはサーバーの説明文をそのまま表示し、他のエラーは固定文言（詳細を漏らさない）。
+画面全体のモーダル（依存パッケージ・言語・対応状況・Dependabot運用状況）は、`shared/FullScreenModal`（dialog・ヘッダー・閉じるボタン・Escで閉じる）を使う。
 DEPSCAN・CODESCANの一覧は、初期表示で例外（受容・影響なし・誤検知）を隠し（`include_excepted=false`で取得）、`shared/ExceptedToggle`（「例外を含む」）で表示する。
 件数・グラフ・左のアプリ一覧は従来どおり例外を除き、CODESCANは灰色の「+N」で例外を併記する。
 コピーは`navigator.clipboard`。DEPSCAN・DEPSOPS（モーダル）・CODESCANは、`shared/OperatingFilter`で運用中／運用停止中／すべてを切り替える（初期表示は運用中。
