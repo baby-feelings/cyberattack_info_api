@@ -26,7 +26,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.codescan.archive import RepoArchive
-from app.codescan.issue_management import file_github_issues
+from app.codescan.issue_management import close_resolved_repo_issues, file_github_issues
 from app.codescan.repository import CodeFindingRepository
 from app.codescan.scanners import Scanner, default_scanners
 from app.core.config import settings
@@ -45,9 +45,25 @@ SCAN_ERRORS: tuple[type[BaseException], ...] = (
 )
 
 
+class ScanRecords(list[dict[str, Any]]):
+    """1リポジトリの検査結果（レコードのリスト）。失敗したツールの名前（`failed_tools`）も持つ。
+
+    失敗したツールの検知は、「検知されなくなった」のではなく「検査できなかった」ため、解決済みにも、
+    Issue のクローズの判断にも使ってはならない。リストのまま渡せるので、受け取る側は、
+    `getattr(records, "failed_tools", frozenset())` で読む（テスト等の素のリストでも動く）。
+    """
+
+    failed_tools: frozenset[str] = frozenset()
+
+
+def failed_tools_of(records: Sequence[dict[str, Any]]) -> frozenset[str]:
+    """検査結果から、失敗したツールを取り出す（素のリストなら、無し）。"""
+    return getattr(records, "failed_tools", frozenset())
+
+
 def scan_repo(
     full_name: str, branch: str, token: str, scanners: Sequence[Scanner] | None = None,
-) -> list[dict[str, Any]]:
+) -> ScanRecords:
     """1リポジトリを tarball 取得 → 展開 → 各スキャナーで検査 → レコード化する。
 
     一時ディレクトリは検査完了後（例外発生時を含む）に確実に削除される。スキャナーは互いに独立して
@@ -58,16 +74,19 @@ def scan_repo(
     scanners = default_scanners() if scanners is None else scanners
     tarball_bytes = GitHubRepo.from_full_name(full_name, token).tarball(branch)
 
-    records: list[dict[str, Any]] = []
+    records = ScanRecords()
+    failed: set[str] = set()
     with RepoArchive(tarball_bytes) as repo_root:
         for scanner in scanners:
             try:
                 records.extend(scanner.scan(full_name, repo_root))
             except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError) as exc:
+                failed.add(scanner.name)
                 logger.warning(
                     "CODESCAN: %s failed for %s, skipping %s results: %s",
                     scanner.name, full_name, scanner.name, exc,
                 )
+    records.failed_tools = frozenset(failed)
     return records
 
 
@@ -87,6 +106,8 @@ def _run_codescan_body(db: Session, counters: CrawlCounters) -> None:
 
     repository = CodeFindingRepository(db)
     all_new_snapshots: list[dict[str, Any]] = []
+    # 全ツールの検査に成功したリポジトリ（Issue のクローズの判定の対象）
+    fully_scanned: set[str] = set()
 
     for i, repo_info in enumerate(repos, start=1):
         full_name = repo_info["full_name"]
@@ -99,7 +120,10 @@ def _run_codescan_body(db: Session, counters: CrawlCounters) -> None:
             logger.warning("CODESCAN: failed to scan %s, skipping: %s", full_name, exc)
             continue
 
-        result = repository.sync(full_name, records)
+        failed_tools = failed_tools_of(records)
+        result = repository.sync(full_name, records, failed_tools)
+        if not failed_tools:
+            fully_scanned.add(full_name)
         counters.inserted += result.inserted
         counters.deleted += result.resolved
         # 例外（受容など）のある検知は、再発しても、通知・Issue 起票の対象にしない（Issue #403）
@@ -116,6 +140,12 @@ def _run_codescan_body(db: Session, counters: CrawlCounters) -> None:
         file_github_issues(all_new_snapshots)
     except Exception as exc:
         logger.error("CODESCAN: failed to file GitHub issues: %s", exc, exc_info=True)
+
+    # 対応が必要な検知が0件になったリポジトリの Issue をクローズする（起票のあとに判定する）
+    try:
+        close_resolved_repo_issues(db, fully_scanned)
+    except Exception as exc:
+        logger.error("CODESCAN: failed to close resolved GitHub issues: %s", exc, exc_info=True)
 
 
 def fetch_and_scan_code(*, force: bool = False) -> tuple[int, int, int]:

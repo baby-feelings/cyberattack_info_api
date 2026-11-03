@@ -164,13 +164,16 @@ class TestIssueSync:
 
         assert close.call_args.args[1] == {self.ADMIN_REPO}
 
-    def test_accepting_a_code_finding_does_not_touch_issues(self):
+    def test_accepting_a_code_finding_closes_the_code_issue_when_nothing_actionable_remains(self):
         with self._session_patch(), \
-             patch("app.finding_exceptions.issue_sync.close_resolved_repo_issues") as close, \
+             patch("app.finding_exceptions.issue_sync.close_resolved_repo_issues") as close_dep, \
+             patch("app.finding_exceptions.issue_sync.close_code_issues") as close_code, \
              patch("app.finding_exceptions.issue_sync.refile_issues") as refile:
             sync_issues_after_change("code", self.ADMIN_REPO, "k", accepted=True)
 
-        close.assert_not_called()
+        # コードの検知は、CODESCAN の Issue だけを閉じる（DEPSCAN の Issue には触れない）
+        assert close_code.call_args.args[1] == {self.ADMIN_REPO}
+        close_dep.assert_not_called()
         refile.assert_not_called()
 
     def test_revoking_shows_the_finding_in_the_issue_again(self, db_session):

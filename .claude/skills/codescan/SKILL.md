@@ -107,10 +107,17 @@ DEPSCANは詳細なSlackダイジェスト（`notify_dependency_findings`）・I
 本文整形関数`_format_finding_lines`（severity降順→ファイルパス順）を渡すだけの
 薄い実装になっている。本文整形をDEPSCANの`app.core.finding_format.format_package_lines`
 と共有しないのは、検知の粒度（パッケージ単位 vs ファイル:行単位）が異なるため。
-現バージョンでは新規起票・追記のみを実装し、自動クローズ（DEPSCANの
-`close_resolved_repo_issues`相当）は将来の拡張とした（`run_crawler`ベースの
-オーケストレーションでは、DEPSCANが行う「全体再スキャン検証後」というクローズ
-タイミングの前提が成立しないため）。
+**自動クローズ**（`close_resolved_repo_issues`）: スキャンのたびに、**全ツールの検査に成功した**
+リポジトリで、「未解決で、例外（受容・誤検知・影響なし）でない検知が0件」なら、Open なIssueへコメント
+を追記してクローズする（DEPSCANと同じ判定。CODESCANはリポジトリ単位で全体を検査し直すため、検査に
+成功すれば、その結果が「今の状態」になる）。登録済み他ユーザー（`user_scan`）は本人のトークンで閉じ、
+例外の登録（`finding_exceptions/issue_sync`）でも、同じ判定で閉じる。
+- **ツールが一部失敗したスキャンは、閉じない／解決済みにもしない**: `scan_repo`はスキャナーごとに
+  失敗を握りつぶして他の結果を活かす（`ScanRecords.failed_tools`）。失敗したツールの検知は、
+  「検知されなくなった」のではなく「検査できなかった」ため、`resolve_stale`の対象外にし、そのリポジトリは
+  クローズの判定にも入れない（入れると、誤って解決→クローズ→次回に再起票を繰り返す）
+- Open なIssueが無いリポジトリは何もしない。GitHub書き込みの失敗はリポジトリ単位で握りつぶす
+- テストは`tests/codescan/conftest.py`が`find_open_issue`を既定で差し替え、実GitHubに出ない
 
 ## API認証: ログイン必須かつ本人所有リポジトリのみ（Issue #219でログイン必須化、#289で絞り込み追加）
 ダッシュボードのDEPSCAN/CODESCANタブ間でセッションを共有し、CODESCANも読み取りにGitHubログインを
