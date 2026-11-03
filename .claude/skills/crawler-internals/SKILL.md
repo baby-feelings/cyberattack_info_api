@@ -48,8 +48,10 @@ GET・PUT（`merge_pull_request`）・PATCH（`close_issue`）等の冪等な操
 
 ## 通知の構成（`app/core/notifications/` パッケージ）
 `slack`（送信`send_slack`・Webhook URL検証・`truncate_for_slack`）・`recipients`（送信先の解決）・
-`base`（`Notifier`と`CRAWLER_LABELS`）・用途別の`crawler`/`dependency_findings`/`dependabot_ops`/
-`mcp_token`/`webhook_test`に分かれる。テストは`patch("app.core.notifications.slack.send_slack")`の1か所で
+`base`（`Notifier`と`CRAWLER_LABELS`）・全クローラー共通の`crawler`/`webhook_test`だけが`core`に残る。
+**ドメイン固有の通知は各ドメインの`notifier.py`**（`depscan`=依存の検知・`depsops`=Dependabot運用・
+`mcp_server`=トークンの期限前通知、ほか`sla`/`runtimes`/`finding_exceptions`/`github_alerts`/`repo_audit`/
+`external_monitor`/`commit_watch`）に置く（`core`は個別のドメインを知らない方針）。テストは`patch("app.core.notifications.slack.send_slack")`の1か所で
 全通知の送信を差し替えられる（各Notifierは`slack.send_slack`をモジュール属性として呼ぶ）。
 
 ### 通知関数の共通化

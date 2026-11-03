@@ -6,7 +6,7 @@ IPA のチェックリスト（11 の脆弱性）を、本アプリの実装と�
 | # | 脆弱性 | 本アプリの対策 | 場所 |
 |---|--------|----------------|------|
 | 1 | SQL インジェクション | SQLAlchemy の ORM・バインドのみ（生の SQL 連結なし）。エラー詳細は画面に出さない | `app/**/repository`・`models.py` |
-| 2 | OS コマンド・インジェクション | `subprocess.run` は引数をリストで渡し `shell=True` なし。対象は一時ディレクトリ（外部入力を引数にしない） | `app/codescan/scanners.py` |
+| 2 | OS コマンド・インジェクション | `subprocess.run` は引数をリストで渡し `shell=True` なし。対象は一時ディレクトリ（外部入力を引数にしない） | `app/codescan/scanners/` |
 | 3 | パス名パラメータの未チェック | tarball は `extractall(filter="data")` で展開（`../` は拒否。フォールバックなし）。テストあり | `app/codescan/archive.py` |
 | 4 | セッション管理の不備 | セッションは Bearer の JWT（URL に載せない。ログイン後に新規発行）。7 日・利用で延長、ログインから 30 日で再認証 | `app/auth/session.py` |
 | 5 | XSS | React の自動エスケープ。外部データの URL は `http(s)` のみリンク化（`safeHttpUrl`）。ダッシュボードに CSP | `dashboard/src/components/shared/safeUrl.ts`・`dashboard/vercel.json` |

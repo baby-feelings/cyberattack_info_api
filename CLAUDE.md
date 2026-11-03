@@ -77,7 +77,7 @@ app/
 ├── auth/         # GitHubログイン・ユーザーアカウント（UserAccount/account_store。router.pyは
 │                 #   github_router/account_routerを束ね、認証の依存関数はdependencies.py。mcp_serverを知らない）
 ├── core/         # 横断的インフラ（個別のドメインを知らない）: config/database/background/crawler_runner/
-│                 #   crypto/db_utils/notifications/〈slack・recipients・base＋用途別〉/osv_client/pagination/
+│                 #   crypto/db_utils/notifications/〈slack・recipients・base・共通crawler。固有の通知は各ドメインのnotifier.py〉/osv_client/pagination/
 │                 #   schemas/github/（`GitHubApi`・`GitHubRepo`〈1リポジトリへの共通操作〉・`list_target_repos`）/
 │                 #   issue_filing（Issue起票共通化）/list_filters（一覧の絞り込み基底）/stix/security_headers。
 │                 #   crawler_runner=`CrawlJob`・notifications=`Notifier`（いずれもTemplate Method）

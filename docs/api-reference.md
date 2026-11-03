@@ -65,6 +65,7 @@
 | POST | `/admin/repo-audit-crawl` | リポジトリの設定の監査をいま実行（`?force=true`対応。バックグラウンド） |
 | POST | `/admin/github-alerts-crawl` | GitHubのセキュリティアラートの取り込みをいま実行（`?force=true`対応。バックグラウンド） |
 | POST | `/admin/exception-lifecycle` | 例外の期限切れ・修正版の公開の確認と通知をいま実行（バックグラウンド） |
+| POST | `/admin/project-sync-crawl` | Issue・PR を GitHub Projects へいま追加（PROJSYNC。`?force=true`対応。バックグラウンド。`PROJSYNC_NUMBER` が 0 だと無効） |
 | POST | `/admin/sla-digest` | 対応状況の週次まとめ（Slack）をいま送る（バックグラウンド） |
 | POST | `/admin/runtime-crawl` | 言語・実行環境のバージョン監視の手動実行（`?force=true`対応） |
 | PUT | `/admin/depscan/assets/{owner}/{repo}` | リポジトリ資産コンテキスト設定（Upsert、Issue #131） |

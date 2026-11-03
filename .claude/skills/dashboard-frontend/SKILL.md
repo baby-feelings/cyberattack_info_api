@@ -123,6 +123,11 @@ CODESCAN追加後もキー名はあえて変更せず両ドメインで共有す
 表示する（トークン本体はサーバーに保存されない）。下段に発行済みトークンの一覧（状態・期限・最終使用日）と
 有効なものへの「失効」ボタン（`window.confirm`で確認。表示中のコマンドのトークンを失効したらコマンドも消す）を出す。
 上限（有効10個）超過の409だけはサーバーの説明文をそのまま表示し、他のエラーは固定文言（詳細を漏らさない）。
+一覧の日付ごとの区切り行は、全一覧で共通の`shared/DateDividerRow`（行の`aria-label`は「〜の区切り」、`data-divider`付き）と、
+日を比べる`shared/dateDay`（`isNewDay`。行に表示する日付と同じ`toLocaleDateString('ja-JP')`基準）を使う。区切りを出す条件:
+KEV=追加日順（常時）・OSV/JVN=**更新日順のときだけ**（CVSS順は日付が混ざるため出さない）・CODESCAN=検知日の新しい順（API側の並び。常時）・
+DEPSCAN=並び順を「検知日」にしたときだけ（`depscan/DepscanSortSelector`。既定は重要度順で、対応が必要なものが上）。
+E2Eで行数・位置を見るときは、区切りを除く`dataRows(table)`（`e2e/support/test.ts`）を使う（OSV-13・JVN-12・DEP-30・COD-16・KEV-13）。
 画面全体のモーダル（依存パッケージ・言語・対応状況・Dependabot運用状況）は、`shared/FullScreenModal`（dialog・ヘッダー・閉じるボタン・Escで閉じる）を使う。
 DEPSCAN・CODESCANの一覧は、初期表示で例外（受容・影響なし・誤検知）を隠し（`include_excepted=false`で取得）、`shared/ExceptedToggle`（「例外を含む」）で表示する。
 件数・グラフ・左のアプリ一覧は従来どおり例外を除き、CODESCANは灰色の「+N」で例外を併記する。
