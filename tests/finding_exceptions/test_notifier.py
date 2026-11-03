@@ -1,7 +1,7 @@
-"""app.core.notifications.exception_notices（受容の期限・解除の通知）のテスト。"""
+"""app.finding_exceptions.notifier（受容の期限・解除の通知）のテスト。"""
 from unittest.mock import patch
 
-from app.core.notifications.exception_notices import ExceptionNoticeNotifier
+from app.finding_exceptions.notifier import ExceptionNoticeNotifier
 
 WEBHOOK = ["https://hooks.slack.test/x"]
 

@@ -17,10 +17,10 @@ from app.core.config import settings
 from app.core.crawler_runner import CrawlCounters, CrawlJob
 from app.core.github.accounts import list_target_repos
 from app.core.github.repo import GitHubRepo
-from app.core.notifications.github_alerts import GithubAlertNotifier
 from app.finding_exceptions.matching import snapshot_of
 from app.github_alerts.client import fetch_alerts
 from app.github_alerts.models import KIND_SECRET, KINDS, GithubAlert
+from app.github_alerts.notifier import GithubAlertNotifier
 from app.github_alerts.repository import GithubAlertRepository
 
 logger = logging.getLogger(__name__)

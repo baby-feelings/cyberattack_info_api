@@ -13,9 +13,9 @@ from app.core.config import settings
 from app.core.crawler_runner import CrawlCounters, CrawlJob
 from app.core.db_utils import now_utc
 from app.core.github.accounts import list_target_repos
-from app.core.notifications.site_alerts import SiteAlertNotifier
 from app.external_monitor import probes
 from app.external_monitor.models import SiteCheck
+from app.external_monitor.notifier import SiteAlertNotifier
 from app.external_monitor.targets import Target, discover_targets
 
 logger = logging.getLogger(__name__)

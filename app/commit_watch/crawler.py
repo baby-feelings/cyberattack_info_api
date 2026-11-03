@@ -19,12 +19,12 @@ from sqlalchemy.orm import Session
 
 from app.commit_watch import analysis
 from app.commit_watch.models import CommitWatchState
+from app.commit_watch.notifier import CommitWatchNotifier
 from app.core.config import settings
 from app.core.crawler_runner import CrawlCounters, CrawlJob
 from app.core.db_utils import now_utc
 from app.core.github.accounts import list_target_repos
 from app.core.github.repo import GitHubRepo
-from app.core.notifications.commit_watch import CommitWatchNotifier
 
 logger = logging.getLogger(__name__)
 

@@ -15,8 +15,8 @@ from app.audit import recorder  # noqa: E402
 from app.audit.models import AuditLog  # noqa: E402
 from app.auth.session import create_session_token  # noqa: E402
 from app.core.config import Settings  # noqa: E402
-from app.core.notifications.secret_expiry import ExpiringSecret, SecretExpiryNotifier  # noqa: E402
 from app.jobs import secret_expiry  # noqa: E402
+from app.jobs.secret_expiry_notifier import ExpiringSecret, SecretExpiryNotifier  # noqa: E402
 
 HEADERS = {"X-API-KEY": "test-api-key-for-pytest"}
 

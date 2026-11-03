@@ -1,7 +1,7 @@
-"""app.core.notifications.sla_digest（対応状況の週次まとめの Slack 通知）のテスト。"""
+"""app.sla.notifier（対応状況の週次まとめの Slack 通知）のテスト。"""
 from unittest.mock import patch
 
-from app.core.notifications.sla_digest import SlaDigestNotifier
+from app.sla.notifier import SlaDigestNotifier
 
 WEBHOOK = ["https://hooks.slack.com/x"]
 

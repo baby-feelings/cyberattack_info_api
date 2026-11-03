@@ -14,10 +14,10 @@ from app.core.crawler_runner import CrawlCounters, CrawlJob
 from app.core.db_utils import now_utc
 from app.core.github.accounts import list_target_repos
 from app.core.github.repo import GitHubRepo
-from app.core.notifications.repo_audit import RepoAuditChangeNotifier
 from app.repo_audit import checks as audit_checks
 from app.repo_audit.collector import collect, snapshot_of
 from app.repo_audit.models import RepoAudit
+from app.repo_audit.notifier import RepoAuditChangeNotifier
 
 logger = logging.getLogger(__name__)
 

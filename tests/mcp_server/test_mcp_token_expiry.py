@@ -14,13 +14,13 @@ import pytest  # noqa: E402
 
 from app.auth.account_store import set_slack_webhook, upsert_user_token  # noqa: E402
 from app.auth.models import UserAccount  # noqa: E402
-from app.core.notifications.mcp_token import notify_mcp_token_expiry  # noqa: E402
 from app.mcp_server.mcp_token_expiry import (  # noqa: E402
     find_expiring_tokens,
     run_mcp_token_expiry_notices,
     send_expiry_notices,
 )
 from app.mcp_server.models import McpToken  # noqa: E402
+from app.mcp_server.notifier import notify_mcp_token_expiry  # noqa: E402
 from tests.conftest import TestSessionLocal  # noqa: E402
 
 _NOW = datetime(2026, 10, 12, 0, 0, tzinfo=UTC)

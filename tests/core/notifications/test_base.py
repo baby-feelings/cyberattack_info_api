@@ -72,8 +72,8 @@ class TestNotifierTemplate:
         from unittest.mock import patch
 
         from app.core.notifications.crawler import CrawlerErrorNotifier, CrawlerSuccessNotifier
-        from app.core.notifications.dependabot_ops import DependabotOpsNotifier
-        from app.core.notifications.dependency_findings import DependencyFindingsNotifier
+        from app.depscan.notifier import DependencyFindingsNotifier
+        from app.depsops.notifier import DependabotOpsNotifier
 
         with patch(f"{_RECIPIENTS}.resolve_recipients", return_value=["u"]) as r, \
              patch(f"{_RECIPIENTS}.resolve_admin_recipient", return_value=["admin"]) as a:

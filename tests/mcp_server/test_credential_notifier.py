@@ -1,7 +1,7 @@
 """MCP 接続の認証情報が発行されたときの事後通知（本人の Webhook にだけ送る）のテスト。"""
 from unittest.mock import patch
 
-from app.core.notifications.mcp_token import (
+from app.mcp_server.notifier import (
     notify_mcp_token_issued,
     notify_oauth_connection_granted,
 )

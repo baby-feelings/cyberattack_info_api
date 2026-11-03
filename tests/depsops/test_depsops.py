@@ -16,7 +16,6 @@ import httpx  # noqa: E402
 import pytest  # noqa: E402
 
 from app.core.github.repo import GitHubRepo  # noqa: E402
-from app.core.notifications.dependabot_ops import notify_dependabot_ops  # noqa: E402
 from app.crawler_logs.models import CrawlerLog  # noqa: E402
 from app.depsops.classify import classify_bump  # noqa: E402
 from app.depsops.github_client import (  # noqa: E402
@@ -28,6 +27,7 @@ from app.depsops.github_client import (  # noqa: E402
     request_rebase,
 )
 from app.depsops.models import DependabotPrLog  # noqa: E402
+from app.depsops.notifier import notify_dependabot_ops  # noqa: E402
 from app.depsops.pr_judge import (  # noqa: E402
     PrJudge,
     extract_compatibility_badge_url,

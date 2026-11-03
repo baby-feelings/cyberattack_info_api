@@ -3,8 +3,8 @@ import logging
 
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.core.notifications.sla_digest import SlaDigestNotifier
 from app.depscan.filters import DepscanListFilter
+from app.sla.notifier import SlaDigestNotifier
 from app.sla.policy import SlaPolicy
 from app.sla.report import build_report
 

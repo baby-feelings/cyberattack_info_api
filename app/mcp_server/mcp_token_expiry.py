@@ -19,9 +19,9 @@ from sqlalchemy.orm import Session
 from app.auth.account_store import get_webhook_for_user
 from app.core.database import SessionLocal
 from app.core.db_utils import now_utc
-from app.core.notifications.mcp_token import notify_mcp_token_expiry
 from app.mcp_server.mcp_token_store import as_utc
 from app.mcp_server.models import McpToken
+from app.mcp_server.notifier import notify_mcp_token_expiry
 
 logger = logging.getLogger(__name__)
 

@@ -14,7 +14,7 @@ from app.commit_watch import analysis  # noqa: E402
 from app.commit_watch.crawler import _CommitWatchJob, inspect_repo  # noqa: E402
 from app.commit_watch.crawler import _head_sha as head_sha  # noqa: E402
 from app.commit_watch.models import CommitWatchState  # noqa: E402
-from app.core.notifications.commit_watch import CommitWatchNotifier  # noqa: E402
+from app.commit_watch.notifier import CommitWatchNotifier  # noqa: E402
 
 HEADERS = {"X-API-KEY": "test-api-key-for-pytest"}
 SINCE = datetime(2026, 10, 30, tzinfo=UTC)

@@ -13,10 +13,10 @@ os.environ.setdefault("API_KEY", "test-api-key-for-pytest")
 os.environ.setdefault("ENVIRONMENT", "development")
 
 from app.auth.session import create_session_token  # noqa: E402
-from app.core.notifications.site_alerts import SiteAlertNotifier  # noqa: E402
 from app.external_monitor import probes, targets  # noqa: E402
 from app.external_monitor.crawler import _SiteMonitorJob, check_target  # noqa: E402
 from app.external_monitor.models import SiteCheck  # noqa: E402
+from app.external_monitor.notifier import SiteAlertNotifier  # noqa: E402
 from app.external_monitor.targets import Target  # noqa: E402
 
 HEADERS = {"X-API-KEY": "test-api-key-for-pytest"}
