@@ -66,6 +66,8 @@ export async function fetchCodescanList(params: {
   resolved?: boolean | null
   minCvss?: number | null
   operating?: OperatingStatus
+  // false なら、例外（受容・影響なし・誤検知）にした検知を除く。省略時は含める（従来どおり）
+  includeExcepted?: boolean
   authToken?: string
 }): Promise<CodescanListResponse> {
   const p = new URLSearchParams()
@@ -75,6 +77,7 @@ export async function fetchCodescanList(params: {
   if (params.owner) p.set('owner', params.owner)
   if (params.operating && params.operating !== 'all') p.set('operating', params.operating)
   if (params.severity) p.set('severity', params.severity)
+  if (params.includeExcepted === false) p.set('include_excepted', 'false')
   if (params.resolved !== null && params.resolved !== undefined) {
     p.set('resolved', String(params.resolved))
   }

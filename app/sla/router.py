@@ -72,7 +72,7 @@ def get_sla_report(
     """対応状況のレポートを返す。"""
     flt = DepscanListFilter(
         repo=repo, owner=owner, ecosystem=None, severity=None, resolved=None,
-        operating=operating,
+        operating=operating, include_excepted=True,
     )
     flt.restrict_to_owner(forced_owner)
     return build_report(db, flt, SlaPolicy.from_settings(), window_days=window_days)

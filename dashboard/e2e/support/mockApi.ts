@@ -206,7 +206,9 @@ function defaultResponse(req: RecordedRequest, state: MockState): MockResponse {
       const data = items.map((f) => withException(
         state, 'dependency', f, `${f.ecosystem}|${f.package_name}|${f.osv_id}`,
       ))
-      return { body: paginate(data, query, 50) }
+      // include_excepted=false なら、実 API と同じく、有効な例外のある検知を除く
+      const shown = query.get('include_excepted') === 'false' ? data.filter((f) => !f.exception) : data
+      return { body: paginate(shown, query, 50) }
     }
 
     case 'POST /api/exceptions': {
@@ -350,7 +352,9 @@ function defaultResponse(req: RecordedRequest, state: MockState): MockResponse {
       const data = items.map((f) => withException(
         state, 'code', f, `${f.file_path}|${f.rule_id}`,
       ))
-      return { body: paginate(data, query, 30) }
+      // include_excepted=false なら、実 API と同じく、有効な例外のある検知を除く
+      const shown = query.get('include_excepted') === 'false' ? data.filter((f) => !f.exception) : data
+      return { body: paginate(shown, query, 30) }
     }
 
     // ── 認証・設定 ──

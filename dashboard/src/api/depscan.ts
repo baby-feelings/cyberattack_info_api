@@ -60,6 +60,8 @@ export async function fetchDepscanList(params: {
   severity?: string | null
   resolved?: boolean | null
   operating?: OperatingStatus
+  // false なら、例外（受容・影響なし・誤検知）にした検知を除く。省略時は含める（従来どおり）
+  includeExcepted?: boolean
   authToken?: string
 }): Promise<DepscanListResponse> {
   const p = new URLSearchParams()
@@ -68,6 +70,7 @@ export async function fetchDepscanList(params: {
   if (params.owner) p.set('owner', params.owner)
   if (params.operating && params.operating !== 'all') p.set('operating', params.operating)
   if (params.severity) p.set('severity', params.severity)
+  if (params.includeExcepted === false) p.set('include_excepted', 'false')
   if (params.resolved !== null && params.resolved !== undefined) {
     p.set('resolved', String(params.resolved))
   }
@@ -157,6 +160,7 @@ export async function fetchAllDepscanFindings(params: {
   severity?: string | null
   resolved?: boolean | null
   operating?: OperatingStatus
+  includeExcepted?: boolean
   authToken?: string
 }): Promise<DependencyFindingOut[]> {
   const first = await fetchDepscanList({ ...params, page: 1, perPage: MAX_PER_PAGE })

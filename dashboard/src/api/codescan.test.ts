@@ -87,6 +87,18 @@ describe('api/codescan', () => {
     })
   })
 
+  describe('excepted findings filter', () => {
+    it('sends include_excepted=false only when excepted findings are excluded', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ total: 0, page: 1, per_page: 30, data: [] }))
+      await fetchCodescanList({ includeExcepted: false })
+      expect(fetchMock.mock.calls[0][0]).toContain('include_excepted=false')
+      await fetchCodescanList({ includeExcepted: true })
+      expect(fetchMock.mock.calls[1][0]).not.toContain('include_excepted')
+      await fetchCodescanList({})
+      expect(fetchMock.mock.calls[2][0]).not.toContain('include_excepted')
+    })
+  })
+
   describe('operating status filter', () => {
     it('sends operating on the list request only for active / inactive', async () => {
       fetchMock.mockResolvedValue(jsonResponse({ total: 0, page: 1, per_page: 30, data: [] }))

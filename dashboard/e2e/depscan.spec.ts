@@ -686,7 +686,7 @@ scenario('DEP-27', '対応状況のモーダルで、期限超過の検知と平
   await expect(dialog).toBeHidden()
 })
 
-scenario('DEP-28', '検知を受容（理由・期限つき）にすると一覧でタグが付き、解除すると元に戻る', async ({ page, api }) => {
+scenario('DEP-28', '検知を受容（理由・期限つき）にすると一覧から外れ、「例外を含む」でタグつきで見られ、解除すると元に戻る', async ({ page, api }) => {
   const table = await openDepscan(page)
 
   // 展開して、検知ごとの「例外にする」から、受容を登録する
@@ -713,8 +713,11 @@ scenario('DEP-28', '検知を受容（理由・期限つき）にすると一覧
   })
   expect((posted.body as { expires_at: string }).expires_at).toMatch(/T23:59:59Z$/)
 
-  // 登録後に一覧と件数が読み直され（行は閉じる）、再び展開すると、受容の内容（理由・承認者）が出る
+  // 登録後に一覧と件数が読み直される（例外にした検知は、初期表示では隠れる）。
+  // 「例外を含む」で取り直して展開すると、受容の内容（理由・承認者）が出る
   await expect.poll(() => api.requestsTo('/api/depscan').length).toBeGreaterThan(1)
+  await page.getByRole('button', { name: /例外を含む/ }).click()
+  await expect.poll(() => api.lastQuery('/api/depscan')?.get('include_excepted')).toBeNull()
   await table.getByText('lodash').click()
   const group = page.getByRole('group', { name: '例外' })
   await expect(group).toContainText('受容')
@@ -724,8 +727,32 @@ scenario('DEP-28', '検知を受容（理由・期限つき）にすると一覧
   // 解除すると、DELETE して、元の「例外にする」に戻る
   await group.getByRole('button', { name: '解除' }).click()
   await expect.poll(() => api.requestsTo('/api/exceptions/1', 'DELETE')).toHaveLength(1)
-  await expect.poll(() => api.requestsTo('/api/depscan').length).toBeGreaterThan(2)
+  await expect.poll(() => api.requestsTo('/api/depscan').length).toBeGreaterThan(3)
   await table.getByText('lodash').click()
   await expect(page.getByRole('group', { name: '例外' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: '例外にする' }).first()).toBeVisible()
+})
+
+scenario('DEP-29', '例外の検知は初期表示では隠れ、「例外を含む」で表示できる', async ({ page, api }) => {
+  // lodash の検知の 1 件（GHSA-lodash-1）を、あらかじめ「受容」にしておく
+  api.state.exceptions.push({
+    id: 1, kind: 'dependency', repo_full_name: 'baby-feelings/app-one',
+    finding_key: 'npm|lodash|GHSA-lodash-1', status: 'accepted',
+    reason: '到達しないため受容', expires_at: '2099-12-31T23:59:59Z', approver: 'octocat',
+  })
+  const table = await openDepscan(page)
+
+  // 初期表示は、例外を除いて取得する。展開しても、例外のタグは出ない
+  await expect.poll(() => api.lastQuery('/api/depscan')?.get('include_excepted')).toBe('false')
+  await table.getByText('lodash').click()
+  await expect(page.getByRole('group', { name: '例外' })).toHaveCount(0)
+
+  // 「例外を含む」で取り直すと、受容の検知も出る
+  const toggle = page.getByRole('button', { name: /例外を含む/ })
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+  await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+  await expect.poll(() => api.lastQuery('/api/depscan')?.get('include_excepted')).toBeNull()
+  await table.getByText('lodash').click()
+  await expect(page.getByRole('group', { name: '例外' })).toContainText('到達しないため受容')
 })

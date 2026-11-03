@@ -28,6 +28,8 @@ DEPSCAN（`dependency`）とCODESCAN（`code`）の両方が対象。
   OpenVEX 0.2.0とCycloneDX 1.5（`analysis.state`: 受容=exploitable＋`will_not_fix`）。依存ライブラリのみ
 - **認可**: `require_api_key_or_session`。セッション認証時は本人所有のリポジトリのみ（他人の例外IDは404）。承認者＝ログインユーザー
   （APIキーは`GITHUB_USERNAME`）。ダッシュボードは検知の展開部の`ExceptionControl`（登録後は一覧を読み直すため行が閉じる）。
+  一覧API（DEPSCAN・CODESCAN）は`include_excepted=false`で例外を除ける（既定は含める＝MCP等の従来の利用を変えない）。
+  ダッシュボードは初期表示で例外を隠し、`shared/ExceptedToggle`（「例外を含む」）で表示する。件数・グラフは従来どおり例外を除く
   E2EはDEP-28・COD-14
 
 ## GitHubのセキュリティアラートの取り込み（Issue #402。`app/github_alerts/`）

@@ -22,6 +22,8 @@ export function useDepscanData(authToken?: string) {
   const [owner, setOwner] = useState<string | null>(null)
   const [severity, setSeverity] = useState<string | null>(null)
   const [showResolved, setShowResolved] = useState(false)
+  // 例外（受容・影響なし・誤検知）にした検知を含めるか。初期は含めない（対応が必要なものだけを見せる）
+  const [showExcepted, setShowExcepted] = useState(false)
   // 初期表示は運用中のみ（運用停止中のアプリの脆弱性に埋もれず、運用中のものを見やすくするため）
   const [operating, setOperating] = useState<OperatingStatus>('active')
   // 左のアプリ一覧で選んでいるリポジトリ（null = すべてのアプリ）。絞り込みは取得済みの結果に対して行う
@@ -47,12 +49,14 @@ export function useDepscanData(authToken?: string) {
 
   const load = useCallback(async (
     own: string | null, sev: string | null, resolved: boolean, op: OperatingStatus,
+    withExcepted: boolean,
   ) => {
     setLoading(true)
     try {
       const [all, st] = await Promise.all([
         fetchAllDepscanFindings({
-          owner: own, severity: sev, resolved: resolved ? null : false, operating: op, authToken,
+          owner: own, severity: sev, resolved: resolved ? null : false, operating: op,
+          includeExcepted: withExcepted, authToken,
         }),
         fetchDepscanStats(authToken, op),
       ])
@@ -69,8 +73,8 @@ export function useDepscanData(authToken?: string) {
   }, [authToken, fetchLatestLogId])
 
   useEffect(() => {
-    load(owner, severity, showResolved, operating)
-  }, [load, owner, severity, showResolved, operating])
+    load(owner, severity, showResolved, operating, showExcepted)
+  }, [load, owner, severity, showResolved, operating, showExcepted])
 
   // 定期的に新しい DEPSCAN クロールが完了していないか確認し、あればバナーで通知する
   // （バックグラウンドで自動更新はせず、ユーザーが更新ボタンを押すまで表示は変えない）
@@ -140,6 +144,11 @@ export function useDepscanData(authToken?: string) {
     setPage(1)
   }
 
+  function toggleShowExcepted() {
+    setShowExcepted(v => !v)
+    setPage(1)
+  }
+
   const totalPages = Math.ceil(groups.length / PER_PAGE)
   const pageGroups = groups.slice((page - 1) * PER_PAGE, page * PER_PAGE)
 
@@ -147,9 +156,9 @@ export function useDepscanData(authToken?: string) {
   const highCount = stats?.severities.find(s => s.severity === 'HIGH')?.count ?? 0
 
   return {
-    owner, severity, showResolved, operating, page, setPage,
+    owner, severity, showResolved, showExcepted, operating, page, setPage,
     findings, stats, loading, newDataAvailable,
-    load, handleOwner, handleSev, handleOperating, toggleShowResolved,
+    load, handleOwner, handleSev, handleOperating, toggleShowResolved, toggleShowExcepted,
     owners, groups, totalPages, pageGroups, critCount, highCount,
     repos, activeRepo, handleRepo,
   }
