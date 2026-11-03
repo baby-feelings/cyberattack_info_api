@@ -1,4 +1,5 @@
 """DEPSOPS（Dependabot PR 自動運用）の実行結果の通知。"""
+from collections import Counter
 from typing import Any
 
 from app.core.notifications import recipients as recipient_resolver
@@ -9,8 +10,9 @@ from app.core.notifications.slack import truncate_for_slack
 class DependabotOpsNotifier(Notifier):
     """DEPSOPS の実行結果（自動マージ・要確認）の通知。
 
-    自動マージした PR・人の確認が必要な PR の両方を毎回通知する（監査性重視。
-    merged/flagged が両方空の場合のみ送信をスキップする）。
+    自動マージした PR・人の確認が必要な PR の両方を、件数の概要で毎回通知する
+    （merged/flagged が両方空の場合のみ送信をスキップする）。PR 個別の内容は
+    ダッシュボード（判定履歴）で確認する。
     """
 
     def __init__(
@@ -33,19 +35,19 @@ class DependabotOpsNotifier(Notifier):
         emoji, label = CRAWLER_LABELS["DEPSOPS"]
         lines = [f"{emoji} *{label}*", ""]
 
+        # 行数が膨らまないよう、PR 単位ではなくリポジトリ単位の件数だけの概要にする
         if self._merged:
-            lines.append(f"✅ *自動マージ（{len(self._merged)}件）*")
-            for item in self._merged:
-                lines.append(f"• `{item['repo_full_name']}` #{item['pr_number']} {item['title']}")
+            by_repo = Counter(item["repo_full_name"] for item in self._merged)
+            lines.append(f"✅ *自動マージ（{len(self._merged)}件・{len(by_repo)}リポジトリ）*")
+            lines.extend(f"• `{repo}` {count}件" for repo, count in sorted(by_repo.items()))
             lines.append("")
 
         if self._flagged:
-            lines.append(f"⚠️ *要確認（{len(self._flagged)}件）*")
-            for item in self._flagged:
-                lines.append(
-                    f"• `{item['repo_full_name']}` #{item['pr_number']} {item['title']}"
-                    f"（{item['reason']}）"
-                )
+            by_repo = Counter(item["repo_full_name"] for item in self._flagged)
+            by_reason = Counter(item["reason"] for item in self._flagged)
+            lines.append(f"⚠️ *要確認（{len(self._flagged)}件・{len(by_repo)}リポジトリ）*")
+            lines.extend(f"• {reason} {count}件" for reason, count in by_reason.most_common())
+            lines.append("詳細はダッシュボードの「Dependabot運用状況」を確認してください。")
         return truncate_for_slack("\n".join(lines).rstrip())
 
 
