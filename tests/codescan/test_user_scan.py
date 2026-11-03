@@ -75,7 +75,7 @@ class TestRunCodescanForUser:
         with patch("app.codescan.user_scan.list_target_repos", return_value=repos), \
              patch("app.codescan.user_scan.scan_repo", return_value=[_finding()]), \
              patch("app.codescan.user_scan.SessionLocal", return_value=db_session), \
-             patch("app.codescan.user_scan.notify_success") as mock_notify, \
+             patch("app.codescan.user_scan.notify_code_findings") as mock_notify, \
              patch("app.codescan.user_scan.file_github_issues") as mock_file_issues:
             run_codescan_for_user("octocat", "gho_token")
 
@@ -91,7 +91,7 @@ class TestRunCodescanForUser:
         with patch("app.codescan.user_scan.list_target_repos", return_value=repos), \
              patch("app.codescan.user_scan.scan_repo", return_value=[_finding()]), \
              patch("app.codescan.user_scan.SessionLocal", return_value=db_session), \
-             patch("app.codescan.user_scan.notify_success") as mock_notify, \
+             patch("app.codescan.user_scan.notify_code_findings") as mock_notify, \
              patch("app.codescan.user_scan.file_github_issues") as mock_file_issues:
             run_codescan_for_user("octocat", "gho_token")
 

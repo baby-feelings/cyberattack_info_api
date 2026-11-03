@@ -32,8 +32,8 @@
 | 毎日（`GHALERT_*`。管理者のみ。#402）で、GitHubが**新規に検知したシークレットの漏えい** | `:rotating_light: GitHub が、リポジトリにシークレットの漏えいを検知しました`（有効なものを先に。無効化・再発行と履歴の書き換えの手順つき） |
 | 毎日（`EXCEPTION_*`。管理者のみ。#403）で、受容の期限の7日前・期限切れ・修正版の公開による自動解除 | `:white_check_mark:`/`:rotating_light:`/`:hourglass_flowing_sand: 受容の…`（種類ごとの見出し。リポジトリ・検知・理由・期限） |
 | 毎週月曜（`SLA_DIGEST_*`。管理者のみ。#404） | `:warning:`/`:white_check_mark: 脆弱性への対応状況（週次）`（未解決・期限超過・MTTR・対応期限・期限超過の上位10件）。期限超過が0件でも送る。手動送信は`POST /admin/sla-digest` |
-| CODESCAN（毎日クロール・登録済み他ユーザー向け実行）で新規追加・更新・削除あり | `:mag: 自アプリコード脆弱性更新通知`（新規・更新・削除件数。汎用フォーマット） |
-| DEPSOPS実行完了（自動マージ・要確認いずれかが1件以上） | `:robot_face: Dependabot PR 自動運用`（自動マージ済みPR一覧・要確認PR一覧と理由） |
+| CODESCAN（毎日クロール・登録済み他ユーザー向け実行）で新規検知あり | `:mag: 自アプリコード脆弱性を◯件検知（Nリポジトリ）`（リポジトリごとに、重要度別・ツール別の件数だけの概要。個別の内容はダッシュボードとIssueで確認。新規検知がなければ送らない） |
+| DEPSOPS実行完了（自動マージ・要確認いずれかが1件以上） | `:robot_face: Dependabot PR 自動運用`（リポジトリごとの自動マージ件数・要確認の理由別の件数だけの概要。PRの個別の内容は載せない） |
 
 > **Note:** Webhook未登録のユーザーがダッシュボードにログインしただけでは、従来通り一切通知・GitHub Issue起票を行わない（Principle of Least Astonishment）。登録済み他ユーザー（`GITHUB_USERNAME`以外）向けのDEPSCAN/CODESCAN/DEPSOPSは、Webhook登録をopt-inのゲートとして使い、`USER_CRAWL_CRON_HOUR_UTC`で毎日定期実行される（本人のGitHubトークンでスキャン・Issue起票・Dependabot PRマージを行う）。
 

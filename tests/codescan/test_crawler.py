@@ -137,7 +137,19 @@ class TestRunCodescanBody:
 
 class TestFetchAndScanCode:
     def test_returns_counters_tuple(self, db_session):
-        with patch("app.codescan.crawler.run_crawler", return_value=(1, 2, 3)) as mock_run:
-            result = fetch_and_scan_code()
+        with patch("app.codescan.crawler._CodescanJob.run", return_value=(1, 2, 3)) as mock_run:
+            result = fetch_and_scan_code(force=True)
         assert result == (1, 2, 3)
-        assert mock_run.call_args[0][0] == "CODESCAN"
+        mock_run.assert_called_once_with(force=True)
+
+    def test_job_notifies_digest_instead_of_counts(self):
+        from app.codescan.crawler import _CodescanJob
+        job = _CodescanJob()
+        job.new_snapshots.append({"repo_full_name": "u/r", "severity": "ERROR"})
+        with (
+            patch("app.codescan.crawler.notify_code_findings") as mock_notify,
+            patch("app.core.crawler_runner.notify_success") as mock_counts,
+        ):
+            job.after_success(CrawlCounters())
+        mock_notify.assert_called_once_with(job.new_snapshots)
+        mock_counts.assert_not_called()

@@ -199,7 +199,7 @@ class TestUserScanClosesIssues:
              patch("app.codescan.user_scan.SessionLocal", return_value=db_session), \
              patch("app.codescan.user_scan.get_webhook_for_user",
                    return_value="https://hooks.slack.com/x"), \
-             patch("app.codescan.user_scan.notify_success"), \
+             patch("app.codescan.user_scan.notify_code_findings"), \
              patch("app.codescan.user_scan.file_github_issues"), \
              patch("app.codescan.user_scan.close_resolved_repo_issues",
                    side_effect=close_side_effect) as close:
