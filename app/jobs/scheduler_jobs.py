@@ -51,9 +51,8 @@ class ScheduledJob:
     day_of_week: str | None = None
 
 
-def build_scheduled_jobs() -> list[ScheduledJob]:
-    """登録するジョブの一覧（実行順の目安: KEV/OSV/JVN → DEPSCAN → CODESCAN → DEPSOPS →
-    削除済みリポジトリの掃除 → 登録ユーザー向け）。"""
+def _collection_jobs() -> list[ScheduledJob]:
+    """脆弱性・依存・言語の情報を集めるジョブ（KEV/OSV/JVN → DEPSCAN → CODESCAN → …）。"""
     return [
         # CISA KEV クローラー: 毎日 UTC 19:00（JST 翌日 4:00）
         ScheduledJob(
@@ -81,6 +80,48 @@ def build_scheduled_jobs() -> list[ScheduledJob]:
         ScheduledJob(
             "dependabot_ops", "DEPSOPS", run_dependabot_ops, settings.DEPSOPS_CRON_HOUR_UTC,
         ),
+    ]
+
+
+def _posture_jobs() -> list[ScheduledJob]:
+    """各アプリのセキュリティ態勢を調べるジョブ（アラート・設定・外形・コミット・Project・例外）。"""
+    return [
+        # GitHub のセキュリティアラートの取り込み（Issue #402）
+        ScheduledJob(
+            "github_alerts", "GHALERT", fetch_and_store_github_alerts,
+            settings.GHALERT_CRON_HOUR_UTC, settings.GHALERT_CRON_MINUTE_UTC,
+        ),
+        # リポジトリの設定の監査（Issue #398）
+        ScheduledJob(
+            "repo_audit", "REPOAUDIT", fetch_and_audit_repos,
+            settings.REPOAUDIT_CRON_HOUR_UTC, settings.REPOAUDIT_CRON_MINUTE_UTC,
+        ),
+        # 公開サイトの外形監視（Issue #401）
+        ScheduledJob(
+            "site_monitor", "EXTMON", fetch_and_monitor_sites,
+            settings.EXTMON_CRON_HOUR_UTC, settings.EXTMON_CRON_MINUTE_UTC,
+        ),
+        # コミットの監視（Issue #405）
+        ScheduledJob(
+            "commit_watch", "COMMITWATCH", fetch_and_watch_commits,
+            settings.COMMITWATCH_CRON_HOUR_UTC, settings.COMMITWATCH_CRON_MINUTE_UTC,
+        ),
+        # GitHub Projects への Issue・PR の自動追加（PROJSYNC）
+        ScheduledJob(
+            "project_sync", "PROJSYNC", sync_project_items,
+            settings.PROJSYNC_CRON_HOUR_UTC, settings.PROJSYNC_CRON_MINUTE_UTC,
+        ),
+        # 例外（受容など）の期限切れ・修正版の公開の確認と通知（Issue #403）: DEPSCAN・CODESCAN の後
+        ScheduledJob(
+            "exception_lifecycle", "EXCEPTION_LIFECYCLE", run_exception_lifecycle,
+            settings.EXCEPTION_CRON_HOUR_UTC, settings.EXCEPTION_CRON_MINUTE_UTC,
+        ),
+    ]
+
+
+def _housekeeping_jobs() -> list[ScheduledJob]:
+    """掃除・登録ユーザー向けの実行・期限の通知・週次のまとめ。"""
+    return [
         # 削除済みリポジトリのDEPSCAN/CODESCAN/DEPSOPSデータ削除（Issue #228）: DEPSOPSの後段
         ScheduledJob(
             "repo_cleanup", "REPO_CLEANUP", run_repo_cleanup,
@@ -107,36 +148,6 @@ def build_scheduled_jobs() -> list[ScheduledJob]:
             "secret_expiry", "SECRET_EXPIRY", run_secret_expiry_notice,
             settings.SECRET_EXPIRY_CRON_HOUR_UTC, settings.SECRET_EXPIRY_CRON_MINUTE_UTC,
         ),
-        # コミットの監視（Issue #405）
-        ScheduledJob(
-            "commit_watch", "COMMITWATCH", fetch_and_watch_commits,
-            settings.COMMITWATCH_CRON_HOUR_UTC, settings.COMMITWATCH_CRON_MINUTE_UTC,
-        ),
-        # 公開サイトの外形監視（Issue #401）
-        ScheduledJob(
-            "site_monitor", "EXTMON", fetch_and_monitor_sites,
-            settings.EXTMON_CRON_HOUR_UTC, settings.EXTMON_CRON_MINUTE_UTC,
-        ),
-        # リポジトリの設定の監査（Issue #398）
-        ScheduledJob(
-            "repo_audit", "REPOAUDIT", fetch_and_audit_repos,
-            settings.REPOAUDIT_CRON_HOUR_UTC, settings.REPOAUDIT_CRON_MINUTE_UTC,
-        ),
-        # GitHub のセキュリティアラートの取り込み（Issue #402）
-        ScheduledJob(
-            "github_alerts", "GHALERT", fetch_and_store_github_alerts,
-            settings.GHALERT_CRON_HOUR_UTC, settings.GHALERT_CRON_MINUTE_UTC,
-        ),
-        # GitHub Projects への Issue・PR の自動追加（PROJSYNC）
-        ScheduledJob(
-            "project_sync", "PROJSYNC", sync_project_items,
-            settings.PROJSYNC_CRON_HOUR_UTC, settings.PROJSYNC_CRON_MINUTE_UTC,
-        ),
-        # 例外（受容など）の期限切れ・修正版の公開の確認と通知（Issue #403）: DEPSCAN・CODESCAN の後
-        ScheduledJob(
-            "exception_lifecycle", "EXCEPTION_LIFECYCLE", run_exception_lifecycle,
-            settings.EXCEPTION_CRON_HOUR_UTC, settings.EXCEPTION_CRON_MINUTE_UTC,
-        ),
         # 脆弱性への対応状況（期限超過・MTTR）の週次のまとめ（Issue #404）: 毎週月曜。
         # 前日までの DEPSCAN の結果を集計するため、毎日のジョブとは別の時刻に置く
         ScheduledJob(
@@ -145,6 +156,12 @@ def build_scheduled_jobs() -> list[ScheduledJob]:
             day_of_week=settings.SLA_DIGEST_DAY_OF_WEEK,
         ),
     ]
+
+
+def build_scheduled_jobs() -> list[ScheduledJob]:
+    """登録するジョブの一覧（実行順の目安: KEV/OSV/JVN → DEPSCAN → CODESCAN → DEPSOPS →
+    削除済みリポジトリの掃除 → 登録ユーザー向け）。"""
+    return [*_collection_jobs(), *_posture_jobs(), *_housekeeping_jobs()]
 
 
 def register_jobs(job_scheduler: BackgroundScheduler, jobs: list[ScheduledJob]) -> None:
