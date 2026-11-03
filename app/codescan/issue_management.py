@@ -2,18 +2,28 @@
 
 DEPSCAN の `app.depscan.issue_management` と同じ「1リポジトリにつき常に1つの
 Open Issue に集約する」設計を踏襲するが、CODESCAN 専用の固定タイトル文字列を
-使うことで DEPSCAN の Issue と混同しないようにする。CODESCAN は
-`app.core.crawler_runner.run_crawler` を使う関係で Issue クローズ判定の
-トリガーが DEPSCAN（再スキャン検証後）と同じタイミングでは持てないため、
-本バージョンでは新規起票・追記のみを実装する（クローズは Issue 側で手動運用、
-または将来の拡張で対応する）。
+使うことで DEPSCAN の Issue と混同しないようにする。
+
+クローズ（`close_resolved_repo_issues`）は、スキャンのたびに、全ツールの検査に成功したリポジトリで、
+「対応が必要な検知（受容などの例外を除く）が0件か」で判定する。ツールが一部でも失敗した
+リポジトリは、検知が減ったのではなく検査できなかっただけのため、判定の対象にしない。
 """
+import logging
 from typing import Any
 
+import httpx
+from sqlalchemy.orm import Session
+
+from app.codescan.models import CodeFinding
 from app.core.config import settings
+from app.core.github.repo import GitHubRepo
 from app.core.issue_filing import file_or_update_repo_issues
 from app.core.notifications.slack import DASHBOARD_URL
 from app.crawler_logs.writer import now_utc
+from app.finding_exceptions.matching import not_excepted
+from app.finding_exceptions.models import KIND_CODE
+
+logger = logging.getLogger(__name__)
 
 # GitHub Issue自動起票時のタイトル（Open Issue検索の一致キーも兼ねる）。
 # DEPSCANのIssueタイトル（"依存ライブラリの脆弱性が検出されました (DEPSCAN)"）と
@@ -76,3 +86,52 @@ def file_github_issues(new_snapshots: list[dict[str, Any]], token: str | None = 
         )
 
     file_or_update_repo_issues(new_snapshots, ISSUE_TITLE, format_body, token, "CODESCAN")
+
+
+def close_resolved_repo_issues(
+    db: Session, candidate_repos: set[str], token: str | None = None,
+) -> None:
+    """対応が必要な検知が0件のリポジトリの、Open な CODESCAN Issue をクローズする。
+
+    判定は、Issue 本文の個々の検知ではなく、「そのリポジトリに、未解決で、例外（受容・誤検知・
+    影響なし）でない検知が残っているか」で行う（DEPSCAN と同じ）。`candidate_repos` は、
+    全ツールの検査に成功したリポジトリ（失敗したツールがあると、検知が減ったのか検査できなかったのか
+    区別できないため、呼び出し側で除く）。Open な Issue が無いリポジトリは、何もしない。
+    GitHub への書き込みの失敗は、リポジトリ単位で握りつぶし、スキャン全体を失敗させない。
+
+    Args:
+        token: 省略時は `settings.GITHUB_TOKEN`（管理者のリポジトリ用）。登録済み他ユーザーの
+            リポジトリでは、そのユーザー自身のトークンを渡す。
+    """
+    if not candidate_repos:
+        return
+
+    token = token if token is not None else settings.GITHUB_TOKEN
+    timestamp = now_utc().strftime("%Y-%m-%d %H:%M UTC")
+
+    for full_name in sorted(candidate_repos):
+        remaining = not_excepted(
+            db.query(CodeFinding).filter(
+                CodeFinding.repo_full_name == full_name, CodeFinding.resolved_at.is_(None),
+            ),
+            KIND_CODE,
+        ).count()
+        if remaining > 0:
+            continue
+
+        repo = GitHubRepo.from_full_name(full_name, token)
+        try:
+            issue_number = repo.find_open_issue(ISSUE_TITLE)
+            if issue_number is None:
+                continue
+            repo.add_issue_comment(
+                issue_number,
+                f"対応が必要なコードの指摘（受容などの例外を除く）が0件になったため自動的にクローズします"
+                f"（{timestamp}）。",
+            )
+            repo.close_issue(issue_number)
+            logger.info(
+                "CODESCAN: closed issue #%d in %s (0 unresolved findings)", issue_number, full_name,
+            )
+        except httpx.HTTPError as exc:
+            logger.warning("CODESCAN: failed to close GitHub issue for %s: %s", full_name, exc)

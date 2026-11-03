@@ -20,7 +20,7 @@ DEPSCAN（`dependency`）とCODESCAN（`code`）の両方が対象。
   `ended_at`・`ended_reason`（`expired`/`fix_available`/`revoked`）を記録する。同じ検知の有効な例外は1件（再登録は更新）
 - **反映先**: 一覧API（`exception_key`・`exception`を付与。検知は消さない）/ 統計（`not_excepted`のNOT EXISTS）/ SLA（`exception_map`）/
   新規検知の通知・Issue起票（クローラーで`drop_excepted`）/ DEPSCAN Issueのクローズ判定（有効な検知＝未解決−例外が0件で閉じる。
-  IssueはリポジトリごとなのでIssue単位でなくこの判定に乗せた。CODESCANはもともと閉じない）/ CycloneDX SBOMの`analysis`
+  IssueはリポジトリごとなのでIssue単位でなくこの判定に乗せた。CODESCANも同じ判定で閉じる）/ CycloneDX SBOMの`analysis`
 - **毎日の`lifecycle.py`**（UTC 22:55）: 修正版が公開された受容（`fixed_versions`あり）を自動解除・期限切れを終了・期限の
   `EXCEPTION_EXPIRY_NOTICE_DAYS`日前に1度だけ通知（`expiry_notified_at`）。解除・期限切れの検知は`issue_sync.refile_issues`でIssueに
   再び示す。通知・Issueは**管理者（`GITHUB_USERNAME`）のリポジトリのみ**（他ユーザー分は状態の更新だけ）

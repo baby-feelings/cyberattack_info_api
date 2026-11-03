@@ -2,12 +2,13 @@
 
 DEPSCAN の Issue は、リポジトリごとに1つ。有効な検知（未解決から例外を除いたもの）が0件に
 なったら閉じ、例外が終わって有効な検知が戻ったら、コメントの追記（無ければ新規起票）で再び示す。
-CODESCAN の Issue は、もともと閉じる処理が無い（新規検知の起票のみ）ため、
-解除のときの再通知だけを行う。
+CODESCAN の Issue も、DEPSCAN と同じく、有効な検知が0件になったら閉じる（登録）。解除のときは、
+再通知（コメントの追記・新規起票）を行う。
 GitHub への書き込みの失敗は、握りつぶす（例外の登録・解除そのものを失敗させない）。
 """
 import logging
 
+from app.codescan.issue_management import close_resolved_repo_issues as close_code_issues
 from app.codescan.issue_management import file_github_issues as file_code_issues
 from app.core.config import settings
 from app.core.database import SessionLocal
@@ -56,6 +57,8 @@ def sync_issues_after_change(
         if accepted:
             if kind == KIND_DEPENDENCY:
                 close_resolved_repo_issues(db, {repo_full_name})
+            else:
+                close_code_issues(db, {repo_full_name})
         else:
             refile_issues(
                 db, [FindingException(kind=kind, repo_full_name=repo_full_name,

@@ -14,8 +14,8 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.auth.account_store import get_webhook_for_user
-from app.codescan.crawler import SCAN_ERRORS, scan_repo
-from app.codescan.issue_management import file_github_issues
+from app.codescan.crawler import SCAN_ERRORS, failed_tools_of, scan_repo
+from app.codescan.issue_management import close_resolved_repo_issues, file_github_issues
 from app.codescan.repository import CodeFindingRepository
 from app.core.database import SessionLocal
 from app.core.github.accounts import list_target_repos
@@ -34,6 +34,8 @@ def run_codescan_for_user(username: str, token: str) -> None:
     repository = CodeFindingRepository(db)
     new_count = 0
     all_new_snapshots: list[dict[str, Any]] = []
+    # 全ツールの検査に成功したリポジトリ（Issue のクローズの判定の対象）
+    fully_scanned: set[str] = set()
     try:
         repos = list_target_repos(token)
         logger.info("CODESCAN (for %s): %d target repos to scan", username, len(repos))
@@ -50,7 +52,10 @@ def run_codescan_for_user(username: str, token: str) -> None:
                 )
                 continue
 
-            result = repository.sync(full_name, records)
+            failed_tools = failed_tools_of(records)
+            result = repository.sync(full_name, records, failed_tools)
+            if not failed_tools:
+                fully_scanned.add(full_name)
             new_count += result.inserted
             all_new_snapshots.extend(result.new_snapshots)
 
@@ -62,6 +67,13 @@ def run_codescan_for_user(username: str, token: str) -> None:
             except Exception as exc:
                 logger.error(
                     "CODESCAN (for %s): failed to file GitHub issues: %s",
+                    username, exc, exc_info=True,
+                )
+            try:
+                close_resolved_repo_issues(db, fully_scanned, token)
+            except Exception as exc:
+                logger.error(
+                    "CODESCAN (for %s): failed to close GitHub issues: %s",
                     username, exc, exc_info=True,
                 )
 

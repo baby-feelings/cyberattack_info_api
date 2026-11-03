@@ -43,14 +43,19 @@ class CodeFindingRepository:
     def __init__(self, db: Session) -> None:
         self._db = db
 
-    def sync(self, full_name: str, records: list[dict[str, Any]]) -> SyncResult:
+    def sync(
+        self, full_name: str, records: list[dict[str, Any]],
+        failed_tools: frozenset[str] = frozenset(),
+    ) -> SyncResult:
         """1リポジトリの今回の検査結果を反映する（Upsert + 検知されなくなったものを解決済みに）。
 
         CODESCAN はリポジトリ単位で全ファイルを検査し直すため、DEPSCAN のような全体横断の差分判定
         ではなく、リポジトリ単位で「今回の結果に含まれない前回の未解決 finding」を解決済みにする。
+        今回の検査で失敗したツール（`failed_tools`）の検知は、結果が無いのは失敗のためで、解決した
+        わけではないため、解決済みにしない。
         """
         inserted, snapshots = self.upsert(records)
-        resolved = self.resolve_stale(full_name, {key_of(r) for r in records})
+        resolved = self.resolve_stale(full_name, {key_of(r) for r in records}, failed_tools)
         return SyncResult(inserted=inserted, new_snapshots=snapshots, resolved=resolved)
 
     def upsert(
@@ -111,8 +116,14 @@ class CodeFindingRepository:
         db.commit()
         return inserted, new_snapshots
 
-    def resolve_stale(self, full_name: str, current_keys: set[FindingKey]) -> int:
-        """1リポジトリについて、今回の検査で検知されなくなった未解決 finding を解決済みにする。"""
+    def resolve_stale(
+        self, full_name: str, current_keys: set[FindingKey],
+        failed_tools: frozenset[str] = frozenset(),
+    ) -> int:
+        """1リポジトリについて、今回の検査で検知されなくなった未解決 finding を解決済みにする。
+
+        `failed_tools`（今回の検査で失敗したツール）の finding は、対象外（そのまま未解決）。
+        """
         db = self._db
         resolved = 0
         now = now_utc()
@@ -122,6 +133,8 @@ class CodeFindingRepository:
             .all()
         )
         for finding in open_findings:
+            if finding.tool in failed_tools:
+                continue
             key: FindingKey = (
                 finding.repo_full_name, finding.file_path, finding.rule_id, finding.line_start,
             )
