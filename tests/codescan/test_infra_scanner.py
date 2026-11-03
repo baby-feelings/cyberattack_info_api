@@ -6,8 +6,7 @@ os.environ.setdefault("API_KEY", "test-api-key-for-pytest")
 os.environ.setdefault("ENVIRONMENT", "development")
 os.environ.setdefault("GITHUB_USERNAME", "test-github-user")
 
-from app.codescan import scanners  # noqa: E402
-from app.codescan.scanners import InfraScanner, default_scanners  # noqa: E402
+from app.codescan.scanners import InfraScanner, base, default_scanners, infra  # noqa: E402  # noqa: E402
 
 GOOD_DOCKERFILE = "FROM python:3.13-slim\nRUN useradd -m app\nUSER app\n"
 
@@ -48,11 +47,11 @@ class TestRun:
         assert InfraScanner().run(str(tmp_path)) == []
 
     def test_skips_files_over_the_size_limit(self, tmp_path):
-        _write(tmp_path, "Dockerfile", "FROM python\n" + "#" * (scanners._IAC_MAX_FILE_BYTES + 1))
+        _write(tmp_path, "Dockerfile", "FROM python\n" + "#" * (infra._IAC_MAX_FILE_BYTES + 1))
         assert InfraScanner().run(str(tmp_path)) == []
 
     def test_caps_the_number_of_files(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(scanners, "_IAC_MAX_FILES", 2)
+        monkeypatch.setattr(infra, "_IAC_MAX_FILES", 2)
         for i in range(5):
             _write(tmp_path, f"d{i}/Dockerfile", GOOD_DOCKERFILE)
 
@@ -126,7 +125,7 @@ class TestParse:
     def test_a_long_snippet_is_cut(self):
         long_line = "allow write: if true; " + "x" * 5000
         [record] = InfraScanner().parse("o/r", [("firestore.rules", long_line)], "/root")
-        assert len(record["code_snippet"]) <= scanners._MAX_SNIPPET_LEN
+        assert len(record["code_snippet"]) <= base._MAX_SNIPPET_LEN
 
 
 class TestScan:

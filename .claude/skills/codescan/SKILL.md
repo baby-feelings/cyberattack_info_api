@@ -16,7 +16,7 @@ DEPSCANと完全に同じ（`GITHUB_USERNAME`配下、fork・archived除外）�
 
 ## 構成（役割ごとのモジュール）
 `crawler.py`は走査の組み立てだけ（`scan_repo`・`_run_codescan_body`・`fetch_and_scan_code`）。実装は役割ごとに分かれる:
-`archive.py`（`RepoArchive`=tarballの展開と一時ディレクトリの削除）・`scanners.py`（`Scanner`の
+`archive.py`（`RepoArchive`=tarballの展開と一時ディレクトリの削除）・`scanners/`（1ツール1ファイル: base・semgrep・gitleaks・zizmor・infra。`Scanner`の
 Strategy: `SemgrepScanner`/`GitleaksScanner`。`run`=ツール実行、`parse`=レコード化、`scan`=その連結。
 ツールを足すときは`Scanner`を継承して`default_scanners`に加える）・`repository.py`
 （`CodeFindingRepository`: `sync`=Upsert+検知されなくなったものを解決済みに、`delete_old_resolved`）。
@@ -262,7 +262,7 @@ allowlistを「テーブル」`[allowlist]`として読む**。配列`[[allowlis
 :v8.30.1 git --log-opts="--all -- <path>" /repo`で確認できる（`dir`モードは設定を対象ディレクトリ内で
 探すためリポジトリルートの設定が使われない点に注意）。
 
-## インフラ設定の診断（Issue #400、`InfraScanner`・`iac_rules.py`）
+## インフラ設定の診断（Issue #400、`InfraScanner`・`iac_rules/`〈common・firebase・dockerfile・compose〉）
 
 Firebaseのルール・Dockerfile・docker-composeの代表的な不備を、**外部ツールを使わずPythonで**判定する
 （サブプロセス・ネットワークなし。Firebaseのルールは、市販のIaC診断ツールが対応していないため自前が必須）。
