@@ -4,6 +4,7 @@ import {
 } from './shared/VulnPanelParts'
 import { CodescanRow } from './codescan/CodescanRow'
 import { RepoBarChart } from './codescan/RepoBarChart'
+import { CountBadge } from './codescan/CountBadge'
 import { useCodescanData } from './codescan/useCodescanData'
 import { OperatingFilter } from './shared/OperatingFilter'
 import { ActionSummary } from './shared/ActionSummary'
@@ -36,12 +37,8 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
     selectedRepo, handleRepo, totalPages, errorCount,
   } = useCodescanData(authToken)
 
-  // 一覧の総数と集計の総数の差＝例外として集計から外れている件数。
-  // 重要度・アプリで絞ると両者の対象がずれて差が不正確になるため、絞り込みなしの未解決のみ算出する
-  const excludedCount =
-    resolved === false && severity === null && selectedRepo === null && result && stats
-      ? Math.max(result.total - stats.total, 0)
-      : 0
+  // 例外（受容・影響なしなど）にした未解決の件数。一覧には出るが、「対応が必要」の件数には含めない
+  const exceptedTotal = stats?.excepted_total ?? 0
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg flex flex-col gap-5">
@@ -122,12 +119,12 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
         loading={statsLoading && !stats}
       />
 
-      {/* 一覧は例外（受容・影響なしなど）も表示するが、件数・グラフ・左の一覧には含めない。
-          食い違いに見えないよう、絞り込みなしの未解決表示のときだけ差分を明記する */}
-      {excludedCount > 0 && (
+      {/* 例外は、上の「対応が必要」の件数には含めないが、グラフ・左のアプリ一覧・一覧には出す。
+          数え方の違いを明記する */}
+      {exceptedTotal > 0 && (
         <p className="text-xs text-slate-500" data-testid="excepted-note">
-          一覧には、例外（受容・影響なし など）に登録した {excludedCount} 件も表示しています。
-          件数・グラフ・左のアプリ一覧には含めていません（合計 {result?.total ?? 0} 件）。
+          例外（受容・影響なし など）に登録した未解決の {exceptedTotal} 件は、「対応が必要」の件数には
+          含めていません。グラフと左のアプリ一覧では、灰色の「例外」として併記しています。
         </p>
       )}
 
@@ -136,11 +133,11 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
         <RepoRail
           selected={selectedRepo}
           onSelect={handleRepo}
-          allBadge={<span className="text-slate-500 tabular-nums">{stats?.total ?? 0}</span>}
+          allBadge={<CountBadge count={stats?.total ?? 0} excepted={exceptedTotal} muted />}
           items={(stats?.repos ?? []).map(r => ({
             key: r.repo_full_name,
             label: repoShortName(r.repo_full_name),
-            badge: <span className="text-slate-300 tabular-nums">{r.count}</span>,
+            badge: <CountBadge count={r.count} excepted={r.excepted_count} />,
           }))}
         />
 

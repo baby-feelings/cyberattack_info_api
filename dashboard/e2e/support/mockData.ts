@@ -246,7 +246,8 @@ export function depscanStats(keep: (repo: string) => boolean = () => true) {
   }
   return {
     total: open.length,
-    repos: [...repos].map(([repo_full_name, count]) => ({ repo_full_name, count })),
+    excepted_total: 0,
+    repos: [...repos].map(([repo_full_name, count]) => ({ repo_full_name, count, excepted_count: 0 })),
     severities: [...sev].map(([severity, count]) => ({ severity, count })),
   }
 }
@@ -309,7 +310,8 @@ export function codescanStats(keep: (repo: string) => boolean = () => true) {
   }
   return {
     total: open.length,
-    repos: [...repos].map(([repo_full_name, count]) => ({ repo_full_name, count })),
+    excepted_total: 0,
+    repos: [...repos].map(([repo_full_name, count]) => ({ repo_full_name, count, excepted_count: 0 })),
     severities: [...sev].map(([severity, count]) => ({ severity, count })),
   }
 }

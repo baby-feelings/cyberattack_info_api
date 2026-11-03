@@ -9,16 +9,18 @@ const REPO_CHART_COLORS = [
 ]
 
 // ツールチップの表示値フォーマッタ（テストで直接検証できるよう名前付き関数として切り出す）
-export function formatRepoTooltipValue(value: unknown): [string, string] {
-  return [String(value) + ' 件', '件数']
+export function formatRepoTooltipValue(value: unknown, name: unknown): [string, string] {
+  return [String(value) + ' 件', String(name)]
 }
 
-// リポジトリ別件数の棒グラフ（上位8件、DEPSCANのRepoBarChartと同じ構成）
+// リポジトリ別件数の棒グラフ（上位8件）。対応が必要な件数に、例外にした件数を積み上げて表示する
+// （例外だけのリポジトリも出して、下の一覧と食い違わないようにする）
 export function RepoBarChart({ stats, loading }: { stats: CodescanStatsResponse | null; loading: boolean }) {
   const data = (stats?.repos ?? []).slice(0, 8).map(r => ({
     // "owner/repo" だとラベルが長くなるため repo 名のみ表示
     name: r.repo_full_name.split('/')[1] ?? r.repo_full_name,
     count: r.count,
+    excepted: r.excepted_count,
   }))
 
   return (
@@ -52,11 +54,12 @@ export function RepoBarChart({ stats, loading }: { stats: CodescanStatsResponse 
             contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }}
             formatter={formatRepoTooltipValue}
           />
-          <Bar dataKey="count" radius={[3, 3, 0, 0]}>
+          <Bar dataKey="count" name="対応が必要" stackId="repo">
             {data.map((_entry, index) => (
               <Cell key={`cell-${index}`} fill={REPO_CHART_COLORS[index % REPO_CHART_COLORS.length]} />
             ))}
           </Bar>
+          <Bar dataKey="excepted" name="例外（受容・影響なし など）" stackId="repo" fill="#475569" radius={[3, 3, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </ChartCard>

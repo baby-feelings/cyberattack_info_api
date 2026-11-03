@@ -162,4 +162,4 @@ class TestEndpoints:
                 "/api/codescan/stats", params={"operating": "active"}, headers=_HEADERS,
             ).json()
         assert body["total"] == 2
-        assert body["repos"] == [{"repo_full_name": _ACTIVE, "count": 2}]
+        assert body["repos"] == [{"repo_full_name": _ACTIVE, "count": 2, "excepted_count": 0}]

@@ -41,7 +41,7 @@ function item(overrides: Partial<CodeFindingOut> = {}): CodeFindingOut {
 }
 
 const EMPTY_LIST: CodescanListResponse = { total: 0, page: 1, per_page: 30, data: [] }
-const EMPTY_STATS: CodescanStatsResponse = { total: 0, repos: [], severities: [] }
+const EMPTY_STATS: CodescanStatsResponse = { total: 0, excepted_total: 0, repos: [], severities: [] }
 
 describe('CodescanPanel', () => {
   afterEach(() => {
@@ -62,7 +62,8 @@ describe('CodescanPanel', () => {
     mockedList.mockResolvedValue({ total: 1, page: 1, per_page: 30, data: [item()] })
     mockedStats.mockResolvedValue({
       total: 1,
-      repos: [{ repo_full_name: 'baby-feelings/baby_grow', count: 1 }],
+      excepted_total: 0,
+      repos: [{ repo_full_name: 'baby-feelings/baby_grow', count: 1, excepted_count: 0 }],
       severities: [{ severity: 'ERROR', count: 1 }],
     })
     const user = userEvent.setup()
@@ -75,26 +76,35 @@ describe('CodescanPanel', () => {
     expect(screen.getByText('Hardcoded password detected')).toBeInTheDocument()
   })
 
-  it('notes how many excepted findings are listed but excluded from the counts', async () => {
-    // 一覧3件（うち2件は例外）／集計1件 → 差分の2件を注記する
-    mockedList.mockResolvedValue({ total: 3, page: 1, per_page: 30, data: [item()] })
+  it('shows excepted counts beside the actionable counts in the repo list and notes the difference', async () => {
+    // baby_grow: 対応が必要1件＋例外1件／other: 例外のみ2件（例外だけのアプリも左の一覧に出る）
+    mockedList.mockResolvedValue({ total: 4, page: 1, per_page: 30, data: [item()] })
     mockedStats.mockResolvedValue({
       total: 1,
-      repos: [{ repo_full_name: 'baby-feelings/baby_grow', count: 1 }],
+      excepted_total: 3,
+      repos: [
+        { repo_full_name: 'baby-feelings/baby_grow', count: 1, excepted_count: 1 },
+        { repo_full_name: 'baby-feelings/other', count: 0, excepted_count: 2 },
+      ],
       severities: [{ severity: 'ERROR', count: 1 }],
     })
 
     render(<CodescanPanel />)
     const note = await screen.findByTestId('excepted-note')
-    expect(note).toHaveTextContent('2 件')
-    expect(note).toHaveTextContent('合計 3 件')
+    expect(note).toHaveTextContent('3 件')
+    // 左のアプリ一覧に、例外だけのアプリも出て、例外の件数が「+N」で併記される
+    const rail = screen.getByRole('button', { name: /other/ })
+    expect(rail).toHaveTextContent('0')
+    expect(rail).toHaveTextContent('+2')
+    expect(screen.getByRole('button', { name: /baby_grow/ })).toHaveTextContent('+1')
   })
 
-  it('shows no exception note when the list and the counts match', async () => {
+  it('shows no exception note when there are no excepted findings', async () => {
     mockedList.mockResolvedValue({ total: 1, page: 1, per_page: 30, data: [item()] })
     mockedStats.mockResolvedValue({
       total: 1,
-      repos: [{ repo_full_name: 'baby-feelings/baby_grow', count: 1 }],
+      excepted_total: 0,
+      repos: [{ repo_full_name: 'baby-feelings/baby_grow', count: 1, excepted_count: 0 }],
       severities: [{ severity: 'ERROR', count: 1 }],
     })
 
@@ -210,7 +220,8 @@ describe('CodescanPanel', () => {
     mockedList.mockResolvedValue({ total: 1, page: 1, per_page: 30, data: [item()] })
     mockedStats.mockResolvedValue({
       total: 1,
-      repos: [{ repo_full_name: 'baby-feelings/baby_grow', count: 1 }],
+      excepted_total: 0,
+      repos: [{ repo_full_name: 'baby-feelings/baby_grow', count: 1, excepted_count: 0 }],
       severities: [{ severity: 'ERROR', count: 1 }],
     })
     const user = userEvent.setup()
@@ -263,7 +274,8 @@ describe('CodescanPanel', () => {
     mockedList.mockResolvedValue({ total: 1, page: 1, per_page: 30, data: [item()] })
     mockedStats.mockResolvedValue({
       total: 3,
-      repos: [{ repo_full_name: 'baby-feelings/baby_grow', count: 3 }],
+      excepted_total: 0,
+      repos: [{ repo_full_name: 'baby-feelings/baby_grow', count: 3, excepted_count: 0 }],
       severities: [{ severity: 'ERROR', count: 2 }, { severity: 'INFO', count: 1 }],
     })
 
@@ -276,9 +288,10 @@ describe('CodescanPanel', () => {
     mockedList.mockResolvedValue({ total: 1, page: 1, per_page: 30, data: [item()] })
     mockedStats.mockResolvedValue({
       total: 3,
+      excepted_total: 0,
       repos: [
-        { repo_full_name: 'baby-feelings/baby_grow', count: 2 },
-        { repo_full_name: 'baby-feelings/todo-app', count: 1 },
+        { repo_full_name: 'baby-feelings/baby_grow', count: 2, excepted_count: 0 },
+        { repo_full_name: 'baby-feelings/todo-app', count: 1, excepted_count: 0 },
       ],
       severities: [{ severity: 'ERROR', count: 3 }],
     })
@@ -308,7 +321,8 @@ describe('CodescanPanel', () => {
     mockedList.mockResolvedValue({ total: 1, page: 1, per_page: 30, data: [item()] })
     mockedStats.mockResolvedValue({
       total: 1,
-      repos: [{ repo_full_name: 'baby-feelings/baby_grow', count: 1 }],
+      excepted_total: 0,
+      repos: [{ repo_full_name: 'baby-feelings/baby_grow', count: 1, excepted_count: 0 }],
       severities: [{ severity: 'ERROR', count: 1 }],
     })
 
@@ -331,7 +345,8 @@ describe('CodescanPanel', () => {
     mockedList.mockResolvedValue({ total: 1, page: 1, per_page: 30, data: [item()] })
     mockedStats.mockResolvedValue({
       total: 1,
-      repos: [{ repo_full_name: 'baby-feelings/baby_grow', count: 1 }],
+      excepted_total: 0,
+      repos: [{ repo_full_name: 'baby-feelings/baby_grow', count: 1, excepted_count: 0 }],
       severities: [{ severity: 'ERROR', count: 1 }],
     })
 
