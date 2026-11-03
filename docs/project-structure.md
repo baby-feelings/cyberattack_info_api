@@ -16,7 +16,7 @@ cyberattack_info_api/
 │   │                           # external_login は、ログインの戻りを別機能（MCP の OAuth）が引き受ける登録口
 │   │                           # （auth は mcp_server を知らない。依存は mcp_server → auth の一方向）
 │   ├── core/                   # 横断的インフラ（個別のドメインを知らない。config・database・background・crawler_runner・
-│   │                           # crypto〈トークン暗号化〉・db_utils・notifications/〈slack・recipients・base・用途別〉・pagination・
+│   │                           # crypto〈トークン暗号化〉・db_utils・notifications/〈slack・recipients・base・共通の crawler/webhook_test。ドメイン固有の通知は各ドメインの notifier.py〉・pagination・
 │   │                           # osv_client・stix・github/〈api=`GitHubApi`・repo=`GitHubRepo`〈1リポジトリへの共通操作〉・
 │   │                           # accounts=所有リポジトリ一覧〉・issue_filing〈DEPSCAN/CODESCAN/ZAPのIssue起票共通処理〉・
 │   │                           # list_filters〈一覧APIの絞り込み条件の基底クラス〉・security_headers・共通 schemas。
@@ -36,6 +36,7 @@ cyberattack_info_api/
 │   ├── runtimes/                # 言語・実行環境（Python/Node.js/Flutter/Dart）の使用版の検出と、最新版・サポート期限（EOL）の判定
 │   ├── sla/                     # 脆弱性への対応状況（Issue #404）: policy〈重要度・KEVから対応期限〉・report〈期限超過・MTTRの集計〉・
 │   │                           # router〈GET /api/sla・POST /admin/sla-digest〉・digest〈週次まとめのSlack通知ジョブ〉。DBの変更なし
+│   ├── project_sync/            # GitHub Projects への Issue・PR の自動追加（PROJSYNC）: client〈GraphQL〉・crawler〈毎日のジョブ〉・router〈POST /admin/project-sync-crawl〉
 │   ├── audit/                   # 監査ログ（Issue #406）: models・recorder〈記録関数・ミドルウェア・掃除〉・router〈GET /api/audit-logs〉
 │   ├── commit_watch/            # コミットの監視（Issue #405）: analysis〈危険なパターン・信頼するコミッターの判定。純粋〉・
 │   │                           # crawler〈毎日のジョブ〉・router〈POST /admin/commit-watch-crawl〉
@@ -47,8 +48,8 @@ cyberattack_info_api/
 │   │                           # repository〈保存・DEPSCANとの突き合わせ〉・crawler〈毎日のジョブ〉・router〈/api/github-alerts〉
 │   ├── finding_exceptions/      # 検知の例外（Issue #403）: models〈finding_exceptions。検知とは別テーブル〉・matching〈同一性キー・除外・照合〉・
 │   │                           # repository・router〈/api/exceptions・VEX〉・lifecycle〈期限切れ・修正版の公開の毎日の確認〉・issue_sync〈Issueの整合〉・vex
-│   ├── codescan/                # 自アプリコード脆弱性診断（CODESCAN）ドメイン（Semgrep・インフラ設定〈iac_rules〉・Semgrep静的解析 + gitleaks
-│   │                           # シークレット検知。issue_management・cvss_mapping含む）
+│   ├── codescan/                # 自アプリコード脆弱性診断（CODESCAN）ドメイン（scanners/〈1ツール1ファイル: semgrep・gitleaks・zizmor・infra〉・
+│   │                           # iac_rules/〈common・firebase・dockerfile・compose〉・issue_management〈Issueの起票・自動クローズ〉・cvss_mapping含む）
 │   ├── mcp_server/             # AIエージェント向けリモートMCPサーバー（/mcp、Streamable HTTP。server〈組み立て〉・
 │   │                           # tools〈public/private/identity〉・gateway〈RestGateway〉・oauth/〈OAuth 2.1 認可サーバー〉・auth〈admin/public/userの認証。台帳で失効確認〉。詳細は docs/mcp-server.md）
 │   ├── zapscan/                # OWASP ZAPの結果→GitHub Issue起票（`python -m app.zapscan`。docs/zap-scan.md）
@@ -56,7 +57,7 @@ cyberattack_info_api/
 ├── tests/                      # app/ と同じドメイン構成
 │   ├── conftest.py             # テスト用フィクスチャ (SQLite テスト DB、全サブフォルダに自動継承)
 │   ├── test_main.py            # app.main（health/root）テスト
-│   ├── core/ auth/ kev/ osv/ jvn/ depscan/ depsops/ runtimes/ sla/ codescan/ mcp_server/ zapscan/ crawler_logs/
+│   ├── core/ auth/ kev/ osv/ jvn/ depscan/ depsops/ runtimes/ sla/ audit/ commit_watch/ external_monitor/ repo_audit/ github_alerts/ finding_exceptions/ project_sync/ codescan/ mcp_server/ zapscan/ crawler_logs/
 ├── dashboard/               # Vercel デプロイの React ダッシュボード（App.tsx は組み立てのみ。タブ定義と
 │                           # TabBar/TabPanel/HeaderMenu は components/layout/、ページ送りは shared/TableControls）（KEV・OSV（Pub 含む 10 エコシステム）・JVN・
 │                           # DEPSCAN〈GitHub ログイン必須。Dependabot運用状況＝DEPSOPS の判定履歴も統合〉・

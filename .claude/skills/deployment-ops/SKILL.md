@@ -114,6 +114,8 @@ CODESCANはUpsertのため二重実行の実害は薄いが、DEPSOPSは実行�
    （デプロイのたびにビルドキャッシュ・タグなしイメージが蓄積するため。自動クリーンアップの
    crontab/systemdタイマーは意図的に設置せず、手動デプロイのたびに掃除する方式に統一）
 
+**コンテナは非rootで動かす**（`Dockerfile`・`deploy/zap/Dockerfile.api`は`USER app`〈uid 10001〉。CODESCANのDockerfile診断が検知するため）。書き込む場所は`/app`と`/home/app`のみで、ボリュームのマウントを足すときは所有者を合わせる。
+
 **Dockerfileの外部CLI**: gitleaks（GitHub Releasesのバイナリ）とsemgrep（専用venv
 `/opt/semgrep-venv`、`semgrep-cli.txt`）・zizmor（専用venv`/opt/zizmor-venv`、`zizmor-cli.txt`。
 `~=1.31`でJSON形式が変わるメジャー版を自動で取り込まない）はアプリの`requirements.txt`とは別に導入する。
