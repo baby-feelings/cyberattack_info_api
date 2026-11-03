@@ -1,6 +1,6 @@
 import {
   expect, test as base,
-  type Page, type PlaywrightTestArgs, type PlaywrightTestOptions, type TestInfo,
+  type Locator, type Page, type PlaywrightTestArgs, type PlaywrightTestOptions, type TestInfo,
 } from '@playwright/test'
 import { installMockApi, type MockApi } from './mockApi'
 import type { ScenarioId } from './scenarios'
@@ -32,6 +32,9 @@ export function scenario(
 }
 
 export { expect }
+
+// 表の「データ行」（日付の区切り行を除く）。区切りが入る一覧（KEV・OSV・JVN・CODESCAN）で行数や位置を見るときに使う
+export const dataRows = (table: Locator) => table.locator('tr:not([data-divider])')
 export type { Page }
 
 // GitHubログイン済みのセッションを localStorage に仕込む

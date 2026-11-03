@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { Shield, RefreshCw, Search, X, BarChart2 } from 'lucide-react'
 import {
   SeverityPieChart, MonthlyBarChart,
@@ -11,6 +12,8 @@ import { PeriodFilter } from './shared/PeriodFilter'
 import { StatBand } from './shared/StatBand'
 import { WatchKeywords } from './shared/WatchKeywords'
 import { CollapsibleSection } from './shared/CollapsibleSection'
+import { DateDividerRow } from './shared/DateDividerRow'
+import { isNewDay } from './shared/dateDay'
 
 // 深刻度バッジのスタイル
 const SEVERITY_CLS: Record<string, string> = {
@@ -188,11 +191,13 @@ export function OsvPanel() {
               </thead>
               <tbody className="divide-y divide-slate-800/60">
                 {result.data.map((item, i) => (
-                  <OsvRow
-                    key={`${item.osv_id}-${item.ecosystem}-${item.package_name}-${i}`}
-                    item={item}
-                    severityClassMap={SEVERITY_CLS}
-                  />
+                  <Fragment key={`${item.osv_id}-${item.ecosystem}-${item.package_name}-${i}`}>
+                    {/* 更新日順のときだけ、更新日ごとに区切る（CVSS 順では日付が混ざるため出さない） */}
+                    {sortBy === 'modified' && isNewDay(result.data[i - 1]?.modified, item.modified) && (
+                      <DateDividerRow date={item.modified} colSpan={7} />
+                    )}
+                    <OsvRow item={item} severityClassMap={SEVERITY_CLS} />
+                  </Fragment>
                 ))}
               </tbody>
             </table>

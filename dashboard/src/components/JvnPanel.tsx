@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { FileWarning, RefreshCw, Search, X } from 'lucide-react'
 import {
   SeverityPieChart, MonthlyBarChart,
@@ -10,6 +11,8 @@ import { PeriodFilter } from './shared/PeriodFilter'
 import { StatBand } from './shared/StatBand'
 import { WatchKeywords } from './shared/WatchKeywords'
 import { CollapsibleSection } from './shared/CollapsibleSection'
+import { DateDividerRow } from './shared/DateDividerRow'
+import { isNewDay } from './shared/dateDay'
 
 // JVN の重要度は High / Medium / Low（OSV とは異なる）
 const SEVERITY_CLS: Record<string, string> = {
@@ -153,11 +156,13 @@ export function JvnPanel() {
               </thead>
               <tbody className="divide-y divide-slate-800/60">
                 {result.data.map((item, i) => (
-                  <JvnRow
-                    key={`${item.jvndb_id}-${i}`}
-                    item={item}
-                    severityClassMap={SEVERITY_CLS}
-                  />
+                  <Fragment key={`${item.jvndb_id}-${i}`}>
+                    {/* 更新日順のときだけ、更新日ごとに区切る（CVSS 順では日付が混ざるため出さない） */}
+                    {sortBy === 'modified' && isNewDay(result.data[i - 1]?.date_last_modified, item.date_last_modified) && (
+                      <DateDividerRow date={item.date_last_modified} colSpan={7} />
+                    )}
+                    <JvnRow item={item} severityClassMap={SEVERITY_CLS} />
+                  </Fragment>
                 ))}
               </tbody>
             </table>

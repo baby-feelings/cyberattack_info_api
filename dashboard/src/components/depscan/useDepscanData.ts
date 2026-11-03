@@ -4,9 +4,10 @@ import {
   type DependencyFindingOut, type DepscanStatsResponse, type OperatingStatus,
 } from '../../api/client'
 import {
-  ownerOf, groupFindings, groupBestSeverityRank, groupLatestDetectedAt,
+  ownerOf, groupFindings, type FindingGroup, groupBestSeverityRank, groupLatestDetectedAt,
 } from './grouping'
 import { summarizeRepos } from './repoSummary'
+import type { DepscanSort } from './DepscanSortSelector'
 
 const PER_PAGE = 30
 // 新しいDEPSCANクロールが完了していないかを確認する間隔（ミリ秒）
@@ -28,6 +29,8 @@ export function useDepscanData(authToken?: string) {
   const [operating, setOperating] = useState<OperatingStatus>('active')
   // 左のアプリ一覧で選んでいるリポジトリ（null = すべてのアプリ）。絞り込みは取得済みの結果に対して行う
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null)
+  // 並び順。既定は重要度順。検知日順のときは、検知日ごとの区切りを出す
+  const [sortBy, setSortBy] = useState<DepscanSort>('severity')
   const [page, setPage] = useState(1)
   const [findings, setFindings] = useState<DependencyFindingOut[]>([])
   const [stats, setStats] = useState<DepscanStatsResponse | null>(null)
@@ -107,17 +110,20 @@ export function useDepscanData(authToken?: string) {
   const repos = useMemo(() => summarizeRepos(findings), [findings])
   const activeRepo = repos.some(r => r.repo === selectedRepo) ? selectedRepo : null
 
-  // パッケージ×バージョン単位に集約し、重大度が高い順・検知が新しい順に並べる
+  // パッケージ×バージョン単位に集約する。重要度順は「重大度が高い順・検知が新しい順」、
+  // 検知日順は「検知が新しい順（同じ日は重大度が高い順）」
   const groups = useMemo(() => {
     const target = activeRepo ? findings.filter(f => f.repo_full_name === activeRepo) : findings
     const g = groupFindings(target)
-    g.sort((a, b) => {
-      const r = groupBestSeverityRank(a) - groupBestSeverityRank(b)
-      if (r !== 0) return r
-      return groupLatestDetectedAt(b).localeCompare(groupLatestDetectedAt(a))
-    })
+    const byDate = (a: FindingGroup, b: FindingGroup) =>
+      groupLatestDetectedAt(b).localeCompare(groupLatestDetectedAt(a))
+    const bySeverity = (a: FindingGroup, b: FindingGroup) =>
+      groupBestSeverityRank(a) - groupBestSeverityRank(b)
+    g.sort(sortBy === 'date'
+      ? (a, b) => byDate(a, b) || bySeverity(a, b)
+      : (a, b) => bySeverity(a, b) || byDate(a, b))
     return g
-  }, [findings, activeRepo])
+  }, [findings, activeRepo, sortBy])
 
   function handleRepo(repo: string | null) {
     setSelectedRepo(repo)
@@ -139,6 +145,11 @@ export function useDepscanData(authToken?: string) {
     setPage(1)
   }
 
+  function handleSort(sort: DepscanSort) {
+    setSortBy(sort)
+    setPage(1)
+  }
+
   function toggleShowResolved() {
     setShowResolved(v => !v)
     setPage(1)
@@ -156,7 +167,7 @@ export function useDepscanData(authToken?: string) {
   const highCount = stats?.severities.find(s => s.severity === 'HIGH')?.count ?? 0
 
   return {
-    owner, severity, showResolved, showExcepted, operating, page, setPage,
+    owner, severity, showResolved, showExcepted, operating, sortBy, handleSort, page, setPage,
     findings, stats, loading, newDataAvailable,
     load, handleOwner, handleSev, handleOperating, toggleShowResolved, toggleShowExcepted,
     owners, groups, totalPages, pageGroups, critCount, highCount,
