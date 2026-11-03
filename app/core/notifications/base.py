@@ -16,6 +16,7 @@ CRAWLER_LABELS: dict[str, tuple[str, str]] = {
     "REPOAUDIT": (":clipboard:", "リポジトリの設定の監査"),
     "EXTMON": (":globe_with_meridians:", "公開サイトの外形監視"),
     "COMMITWATCH": (":detective:", "コミットの監視"),
+    "PROJSYNC": (":card_index_dividers:", "GitHub Projects への追加"),
 }
 
 

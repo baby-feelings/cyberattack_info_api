@@ -40,6 +40,9 @@
 | `EXTMON_CRON_HOUR_UTC` / `EXTMON_CRON_MINUTE_UTC` | - | 公開サイトの外形監視の実行時刻（時・分・UTC）（デフォルト: `22`:`35`）（#401） |
 | `REPOAUDIT_CRON_HOUR_UTC` / `REPOAUDIT_CRON_MINUTE_UTC` | - | リポジトリの設定の監査の実行時刻（時・分・UTC）（デフォルト: `22`:`40`）（#398） |
 | `GHALERT_CRON_HOUR_UTC` / `GHALERT_CRON_MINUTE_UTC` | - | GitHubのセキュリティアラート取り込みの実行時刻（時・分・UTC）（デフォルト: `22`:`50`）（#402） |
+| `PROJSYNC_NUMBER` | - | GitHub Projects への Issue・PR の自動追加（PROJSYNC）の対象の Project 番号（`GITHUB_USERNAME` 所有。デフォルト: `0`＝無効）。`GITHUB_TOKEN` に `project` 権限が必要 |
+| `PROJSYNC_MAX_ADD` | - | 1回の実行で Project に追加する最大件数（デフォルト: `300`） |
+| `PROJSYNC_CRON_HOUR_UTC` / `PROJSYNC_CRON_MINUTE_UTC` | - | 自動追加の実行時刻（時・分・UTC）（デフォルト: `23`:`30`） |
 | `EXCEPTION_MAX_DAYS` / `EXCEPTION_EXPIRY_NOTICE_DAYS` | - | 検知の例外（受容）の期限の上限（日・デフォルト: `365`）と、期限の何日前に通知するか（デフォルト: `7`）（#403） |
 | `EXCEPTION_CRON_HOUR_UTC` / `EXCEPTION_CRON_MINUTE_UTC` | - | 例外の期限切れ・修正版の公開の確認と通知の実行時刻（時・分・UTC）（デフォルト: `22`:`55`。DEPSCAN・CODESCANの後）（#403） |
 | `SLA_MTTR_WINDOW_DAYS` | - | 平均対応日数（MTTR）を集計する、解決済みの期間（日・デフォルト: `90`。`DEPSCAN_RETENTION_DAYS`以内） |

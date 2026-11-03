@@ -152,6 +152,13 @@ class Settings(BaseSettings):
     GHALERT_CRON_HOUR_UTC: int = 22
     GHALERT_CRON_MINUTE_UTC: int = 50
 
+    # GitHub Projects への Issue・PR の自動追加（PROJSYNC）: 毎日 UTC 23:30。PROJSYNC_NUMBER は
+    # GITHUB_USERNAME 所有の Project の番号（0 なら無効）。トークンに `project` 権限が必要
+    PROJSYNC_NUMBER: int = 0
+    PROJSYNC_MAX_ADD: int = 300  # 1回の実行で追加する最大件数（暴走防止）
+    PROJSYNC_CRON_HOUR_UTC: int = 23
+    PROJSYNC_CRON_MINUTE_UTC: int = 30
+
     # リポジトリの設定の監査（Issue #398）: 毎日 UTC 22:40（言語監視の前）
     REPOAUDIT_CRON_HOUR_UTC: int = 22
     REPOAUDIT_CRON_MINUTE_UTC: int = 40
