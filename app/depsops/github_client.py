@@ -11,11 +11,11 @@ from typing import Any
 
 import httpx
 
+from app.core.github.api import MAX_PER_PAGE
 from app.core.github.repo import GitHubRepo
 
 logger = logging.getLogger(__name__)
 
-_PER_PAGE = 100
 
 # Dependabot が作成する PR の author（GitHub App の bot アカウント）
 _DEPENDABOT_LOGIN = "dependabot[bot]"
@@ -24,7 +24,7 @@ _DEPENDABOT_LOGIN = "dependabot[bot]"
 def list_open_dependabot_prs(repo: GitHubRepo) -> list[dict[str, Any]]:
     """Open な Dependabot 作成 PR の一覧を取得する（number・title を含む）。"""
     with repo.api() as api:
-        resp = api.get(repo.path("/pulls"), params={"state": "open", "per_page": _PER_PAGE})
+        resp = api.get(repo.path("/pulls"), params={"state": "open", "per_page": MAX_PER_PAGE})
     return [
         pr for pr in resp.json()
         if (pr.get("user") or {}).get("login") == _DEPENDABOT_LOGIN
@@ -90,6 +90,6 @@ def list_open_dependabot_alerts(repo: GitHubRepo) -> list[dict[str, Any]]:
     """
     with repo.api() as api:
         resp = api.get(
-            repo.path("/dependabot/alerts"), params={"state": "open", "per_page": _PER_PAGE},
+            repo.path("/dependabot/alerts"), params={"state": "open", "per_page": MAX_PER_PAGE},
         )
     return list(resp.json())

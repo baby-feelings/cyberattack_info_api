@@ -21,9 +21,8 @@ from app.auth.api_key import require_api_key, require_api_key_or_session
 from app.core.background import run_in_background
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.db_utils import as_utc
+from app.core.db_utils import as_utc, now_utc
 from app.core.owner_scope import is_owned_by
-from app.crawler_logs.writer import now_utc
 from app.depscan.models import DependencyFinding
 from app.finding_exceptions.issue_sync import sync_issues_after_change
 from app.finding_exceptions.lifecycle import run_exception_lifecycle

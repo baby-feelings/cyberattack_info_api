@@ -17,6 +17,11 @@ def year_month_expr(column) -> ColumnElement[str]:  # type: ignore[type-arg]
     return func.to_char(column, "YYYY-MM")  # type: ignore[return-value]
 
 
+def now_utc() -> datetime:
+    """現在の UTC 日時（tz つき）を返す。アプリ全体で、現在時刻はこの関数で取る。"""
+    return datetime.now(UTC)
+
+
 def as_utc(value: datetime) -> datetime:
     """タイムゾーンの無い日時（SQLite は tz を保持しない）は UTC として扱い、aware にそろえる。"""
     return value if value.tzinfo else value.replace(tzinfo=UTC)

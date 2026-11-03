@@ -5,10 +5,10 @@ VEX は「その脆弱性が、この製品で悪用できるか」を伝える�
 対象は依存ライブラリ（DEPSCAN）の例外のみ（コードの診断結果は、脆弱性の識別子を持たないため）。
 """
 from collections.abc import Iterable
-from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
+from app.core.db_utils import now_utc
 from app.core.osv_client import osv_vulnerability_url
 from app.depscan.models import DependencyFinding
 from app.depscan.sbom import build_purl
@@ -92,7 +92,7 @@ def build_openvex(
         "@id": f"urn:uuid:{uuid4()}",
         "author": _AUTHOR,
         "role": f"owner of {repo_full_name}",
-        "timestamp": datetime.now(UTC).isoformat(),
+        "timestamp": now_utc().isoformat(),
         "version": 1,
         "statements": [_statement(exc, finding) for exc, finding in rows],
     }
@@ -120,7 +120,7 @@ def build_cyclonedx_vex(
         "serialNumber": f"urn:uuid:{uuid4()}",
         "version": 1,
         "metadata": {
-            "timestamp": datetime.now(UTC).isoformat(),
+            "timestamp": now_utc().isoformat(),
             "component": {"type": "application", "name": repo_full_name},
         },
         "vulnerabilities": vulnerabilities,

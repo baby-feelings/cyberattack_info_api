@@ -11,11 +11,12 @@
 import hashlib
 import secrets
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 from sqlalchemy import delete, update
 from sqlalchemy.orm import Session
 
+from app.core.db_utils import now_utc
 from app.mcp_server.mcp_token_store import as_utc
 from app.mcp_server.models import OAuthRefreshToken
 
@@ -25,9 +26,6 @@ REFRESH_TTL = timedelta(days=30)
 # 失効・期限切れから、この日数を過ぎた行は発行時に掃除する（盗用検知のため、使用済みも一定期間残す）
 _RETENTION = timedelta(days=7)
 
-
-def _now() -> datetime:
-    return datetime.now(UTC)
 
 
 def hash_token(token: str) -> str:
@@ -43,7 +41,7 @@ def issue(
 
     `family_id` が None なら新しい系統（最初の認可）、指定があればローテーションで同じ系統に連ねる。
     """
-    now = now or _now()
+    now = now or now_utc()
     purge_stale(db, now)
     token = secrets.token_urlsafe(48)
     db.add(OAuthRefreshToken(
@@ -62,7 +60,7 @@ def issue(
 
 def purge_stale(db: Session, now: datetime | None = None) -> None:
     """期限切れ・失効から一定期間（_RETENTION）を過ぎた行を削除する。"""
-    cutoff = (now or _now()) - _RETENTION
+    cutoff = (now or now_utc()) - _RETENTION
     # synchronize_session=False: SQLite は tz 情報を落とすため、Python 側での比較評価を避ける
     db.execute(
         delete(OAuthRefreshToken).where(
@@ -80,7 +78,7 @@ def find_usable(
     使用済みのトークンが提示されたら盗用の疑いとして系統をすべて失効し、None を返す。
     別クライアントのトークン・期限切れ・失効済み・未登録も None。
     """
-    now = now or _now()
+    now = now or now_utc()
     row = db.get(OAuthRefreshToken, hash_token(token))
     if row is None or row.client_id != client_id:
         return None
@@ -104,7 +102,7 @@ def rotate(db: Session, row: OAuthRefreshToken, now: datetime | None = None) -> 
             OAuthRefreshToken.used_at.is_(None),
             OAuthRefreshToken.revoked_at.is_(None),
         )
-        .values(used_at=now or _now())
+        .values(used_at=now or now_utc())
         .execution_options(synchronize_session=False),
     )
     db.commit()
@@ -116,7 +114,7 @@ def revoke_family(db: Session, family_id: str, now: datetime | None = None) -> N
     db.execute(
         update(OAuthRefreshToken)
         .where(OAuthRefreshToken.family_id == family_id, OAuthRefreshToken.revoked_at.is_(None))
-        .values(revoked_at=now or _now())
+        .values(revoked_at=now or now_utc())
         .execution_options(synchronize_session=False),
     )
     db.commit()
@@ -133,7 +131,7 @@ def revoke_client_grants(
             OAuthRefreshToken.client_id == client_id,
             OAuthRefreshToken.revoked_at.is_(None),
         )
-        .values(revoked_at=now or _now())
+        .values(revoked_at=now or now_utc())
         .execution_options(synchronize_session=False),
     )
     db.commit()

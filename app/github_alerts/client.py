@@ -14,13 +14,13 @@ from typing import Any
 
 import httpx
 
+from app.core.db_utils import now_utc
+from app.core.github.api import MAX_PER_PAGE
 from app.core.github.repo import GitHubRepo
-from app.crawler_logs.writer import now_utc
 from app.github_alerts.models import KIND_CODE, KIND_DEPENDABOT, KIND_SECRET
 
 logger = logging.getLogger(__name__)
 
-_PER_PAGE = 100
 # 1リポジトリ・1種類あたりに読むページ数の上限（過剰な API 呼び出しを防ぐ安全弁）
 _MAX_PAGES = 10
 
@@ -116,14 +116,14 @@ def fetch_alerts(repo: GitHubRepo, kind: str) -> tuple[list[dict[str, Any]] | No
         for page in range(1, _MAX_PAGES + 1):
             response = api.get(
                 repo.path(_PATHS[kind]),
-                params={"state": "open", "per_page": _PER_PAGE, "page": page},
+                params={"state": "open", "per_page": MAX_PER_PAGE, "page": page},
             )
             if response.status_code in (403, 404):
                 return None, f"機能が無効、または権限がありません（HTTP {response.status_code}）"
             response.raise_for_status()
             items = response.json()
             alerts.extend(normalize(repo.full_name, item) for item in items)
-            if len(items) < _PER_PAGE:
+            if len(items) < MAX_PER_PAGE:
                 break
     return alerts, None
 

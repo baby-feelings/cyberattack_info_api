@@ -5,13 +5,13 @@ from typing import Any
 
 import httpx
 
+from app.core.db_utils import now_utc
 from app.core.osv_client import (
     fetch_vuln_by_id,
     is_malicious_advisory,
     parse_severity,
     query_versions_batch,
 )
-from app.crawler_logs.writer import now_utc
 from app.depscan.manifests import DepKey
 from app.depscan.registry_client import fetch_latest_version, is_newer_version
 

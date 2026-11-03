@@ -6,12 +6,10 @@ import logging
 from typing import Any
 
 from app.core.config import settings
-from app.core.github.api import GitHubApi
+from app.core.github.api import MAX_PER_PAGE, GitHubApi
 
 logger = logging.getLogger(__name__)
 
-_TIMEOUT = 30.0
-_PER_PAGE = 100
 
 
 def excluded_repo_names() -> set[str]:
@@ -39,17 +37,17 @@ def list_target_repos(token: str) -> list[dict[str, Any]]:
     """
     repos: list[dict[str, Any]] = []
     page = 1
-    with GitHubApi(token, timeout=_TIMEOUT) as api:
+    with GitHubApi(token) as api:
         while True:
             resp = api.get(
                 "/user/repos",
-                params={"affiliation": "owner", "per_page": _PER_PAGE, "page": page},
+                params={"affiliation": "owner", "per_page": MAX_PER_PAGE, "page": page},
             )
             batch = resp.json()
             if not batch:
                 break
             repos.extend(batch)
-            if len(batch) < _PER_PAGE:
+            if len(batch) < MAX_PER_PAGE:
                 break
             page += 1
 

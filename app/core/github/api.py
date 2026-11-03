@@ -16,6 +16,9 @@ from app.core.retry import request_with_retry
 logger = logging.getLogger(__name__)
 
 GITHUB_API_BASE = "https://api.github.com"
+# 呼び出しの既定のタイムアウト（秒）と、一覧 API の1ページの件数（GitHub の上限）
+DEFAULT_TIMEOUT = 30.0
+MAX_PER_PAGE = 100
 
 
 def github_headers(token: str) -> dict[str, str]:
@@ -42,7 +45,7 @@ class GitHubApi:
     """
 
     def __init__(
-        self, token: str, *, timeout: float = 30.0, follow_redirects: bool = False,
+        self, token: str, *, timeout: float = DEFAULT_TIMEOUT, follow_redirects: bool = False,
     ) -> None:
         self._token = token
         self._timeout = timeout

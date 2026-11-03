@@ -7,7 +7,7 @@
 - 直近 1 時間の登録数に上限（`MAX_REGISTRATIONS_PER_HOUR`）、総数にも上限（`MAX_CLIENTS`）
 - 一度も使われないまま一定期間を過ぎた登録は、登録時に掃除する
 """
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from urllib.parse import urlsplit
 
 from mcp.server.auth.provider import RegistrationError
@@ -15,6 +15,7 @@ from mcp.shared.auth import OAuthClientInformationFull
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from app.core.db_utils import now_utc
 from app.mcp_server.models import OAuthClient
 
 # 1 時間あたりの登録数の上限（全体。登録元 IP は SDK のハンドラーから見えないため全体で絞る）
@@ -31,9 +32,6 @@ MAX_REDIRECT_URIS = 5
 
 _LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 
-
-def _now() -> datetime:
-    return datetime.now(UTC)
 
 
 def validate_redirect_uri(uri: str) -> None:
@@ -64,7 +62,7 @@ def validate_registration(client: OAuthClientInformationFull) -> None:
 
 def purge_unused_clients(db: Session, now: datetime | None = None) -> int:
     """一度も使われず、登録から UNUSED_RETENTION を過ぎたクライアントを削除する。"""
-    cutoff = (now or _now()) - UNUSED_RETENTION
+    cutoff = (now or now_utc()) - UNUSED_RETENTION
     stale = (
         db.execute(
             select(OAuthClient.client_id).where(
@@ -84,7 +82,7 @@ def save_client(
     db: Session, client: OAuthClientInformationFull, now: datetime | None = None,
 ) -> None:
     """クライアントを保存する。上限超過なら RegistrationError（保存しない）。"""
-    now = now or _now()
+    now = now or now_utc()
     validate_registration(client)
     purge_unused_clients(db, now)
 
@@ -118,5 +116,5 @@ def touch_client(db: Session, client_id: str, now: datetime | None = None) -> No
     """クライアントが使われたことを記録する（未使用の掃除対象から外す）。"""
     row = db.get(OAuthClient, client_id)
     if row is not None:
-        row.last_used_at = now or _now()
+        row.last_used_at = now or now_utc()
         db.commit()

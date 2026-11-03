@@ -167,7 +167,7 @@ Write推奨）・`GITHUB_OAUTH_CLIENT_ID`/`GITHUB_OAUTH_CLIENT_SECRET`/`SESSION_
 （DEPSCAN/CODESCAN共有のダッシュボードログイン用、未設定だと`/auth/*`が503を返すのみで
 DEPSCAN・CODESCAN両タブが機能しない）・`TOKEN_ENCRYPTION_KEY`（ユーザー別Slack通知登録
 〈Issue #227〉用、GitHubアクセストークンをDBへ暗号化保存するFernet鍵。未設定時は登録済み
-ユーザーの定期実行が機能しない）・`FRONTEND_URL`・`API_BASE_URL_FOR_OAUTH`（GitHub
+ユーザーの定期実行が機能しない）・`DASHBOARD_URL`（GitHubログイン後のリダイレクト先。旧`FRONTEND_URL`を統一）・`API_BASE_URL_FOR_OAUTH`（GitHub
 OAuth Appのcallback URLとscheme含め一致させる必要あり。インスタンスを作り直した場合は
 `.env.production`・`app/core/config.py`のデフォルト値・GitHub OAuth Appのcallback URLの
 3箇所を同時に更新）・`METRICS_API_KEY`（運用監視、任意）。`SLACK_WEBHOOK_URL`は

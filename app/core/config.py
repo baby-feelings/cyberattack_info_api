@@ -76,7 +76,8 @@ class Settings(BaseSettings):
     CODESCAN_RETENTION_DAYS: int = 180
 
     # ダッシュボードのURL（末尾スラッシュなし）。Slack通知・GitHub Issue のリンクと、
-    # CORS で許可するオリジン（本番）に使う。ダッシュボードのドメインを変えたら、ここを変える
+    # CORS で許可するオリジン（本番）、GitHub ログイン後のリダイレクト先に使う。
+    # ダッシュボードのドメインを変えたら、ここを変える
     DASHBOARD_URL: str = "https://cyberattackinfoapi.vercel.app"
 
     # 言語・実行環境のバージョン監視（RUNTIME）設定
@@ -102,8 +103,6 @@ class Settings(BaseSettings):
     GITHUB_OAUTH_CLIENT_SECRET: str = ""
     # セッショントークン（JWT）の署名鍵。未設定のまま本番運用しないこと
     SESSION_SECRET_KEY: str = ""
-    # OAuth コールバック後にリダイレクトするダッシュボードの URL
-    FRONTEND_URL: str = "https://cyberattackinfoapi.vercel.app"
     # OAuth の redirect_uri 組み立てに使う、本 API 自身の公開 URL
     # （GitHub OAuth App の Authorization callback URL と scheme まで一致させる必要があるため、
     # リクエストヘッダーから動的に推測せず固定値を持つ）

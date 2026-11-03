@@ -5,7 +5,7 @@ KEV / OSV 両クローラーから呼ばれる共通ヘルパー。
 クロールがエラー終了した場合でもログが確実にコミットされるようにする。
 """
 import logging
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy.orm import Session
 
@@ -68,7 +68,3 @@ def write_crawler_log(
     finally:
         log_db.close()
 
-
-def now_utc() -> datetime:
-    """現在の UTC 日時を返す（クローラー開始・終了時刻の記録用）。"""
-    return datetime.now(UTC)

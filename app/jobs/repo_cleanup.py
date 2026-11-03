@@ -24,9 +24,10 @@ from app.codescan.issue_management import ISSUE_TITLE as CODESCAN_ISSUE_TITLE
 from app.codescan.models import CodeFinding
 from app.core.config import settings
 from app.core.database import SessionLocal
+from app.core.db_utils import now_utc
 from app.core.github.accounts import is_excluded_repo, list_target_repos
 from app.core.github.repo import GitHubRepo
-from app.crawler_logs.writer import now_utc, write_crawler_log
+from app.crawler_logs.writer import write_crawler_log
 from app.depscan.issue_management import ISSUE_TITLE as DEPSCAN_ISSUE_TITLE
 from app.depscan.models import DependencyFinding, RepoDependency
 from app.depsops.models import DependabotPrLog

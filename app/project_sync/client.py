@@ -10,12 +10,11 @@ Project は GraphQL でしか操作できない。Project への項目の追加�
 import logging
 from typing import Any
 
-from app.core.github.api import GitHubApi
+from app.core.github.api import MAX_PER_PAGE, GitHubApi
 from app.core.github.repo import GitHubRepo
 
 logger = logging.getLogger(__name__)
 
-_PER_PAGE = 100
 # 安全弁: Project の項目・リポジトリの Issue/PR を読むページ数の上限（過剰な API 呼び出しを防ぐ）
 _MAX_PROJECT_PAGES = 50
 _MAX_REPO_PAGES = 20
@@ -94,12 +93,12 @@ def list_open_items(repo: GitHubRepo) -> list[dict[str, str]]:
         for page in range(1, _MAX_REPO_PAGES + 1):
             resp = api.get(
                 repo.path("/issues"),
-                params={"state": "open", "per_page": _PER_PAGE, "page": page},
+                params={"state": "open", "per_page": MAX_PER_PAGE, "page": page},
             )
             resp.raise_for_status()
             batch = resp.json()
             items.extend({"node_id": i["node_id"], "html_url": i["html_url"]} for i in batch)
-            if len(batch) < _PER_PAGE:
+            if len(batch) < MAX_PER_PAGE:
                 break
     return items
 

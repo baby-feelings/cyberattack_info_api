@@ -12,7 +12,7 @@
 import hashlib
 import secrets
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 import jwt
 from mcp.server.auth.provider import AuthorizationParams
@@ -20,6 +20,7 @@ from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.db_utils import now_utc
 from app.mcp_server.mcp_token_store import as_utc
 from app.mcp_server.models import OAuthAuthorization
 
@@ -34,9 +35,6 @@ _STATE_ALGORITHM = "HS256"
 _STATE_AUDIENCE = "cyberattack-info-mcp-oauth-state"
 
 
-def _now() -> datetime:
-    return datetime.now(UTC)
-
 
 def hash_code(code: str) -> str:
     """認可コードの SHA-256（保存・照合用。十分なエントロピーのため塩は不要）。"""
@@ -48,7 +46,7 @@ def create_request(
     now: datetime | None = None,
 ) -> str:
     """認可リクエストを保存し、リクエストIDを返す。期限切れの古い行も掃除する。"""
-    now = now or _now()
+    now = now or now_utc()
     purge_expired(db, now)
     request_id = secrets.token_urlsafe(32)
     db.add(OAuthAuthorization(
@@ -72,7 +70,7 @@ def purge_expired(db: Session, now: datetime | None = None) -> None:
     # synchronize_session=False: SQLite は tz 情報を落とすため、Python 側での比較評価を避ける
     db.execute(
         delete(OAuthAuthorization)
-        .where(OAuthAuthorization.expires_at < (now or _now()))
+        .where(OAuthAuthorization.expires_at < (now or now_utc()))
         .execution_options(synchronize_session=False),
     )
     db.commit()
@@ -83,7 +81,7 @@ def load_pending(
 ) -> OAuthAuthorization | None:
     """ログイン待ちの（まだ本人が紐づいていない）有効な認可リクエストを返す。"""
     row = db.get(OAuthAuthorization, request_id)
-    if row is None or row.username is not None or as_utc(row.expires_at) <= (now or _now()):
+    if row is None or row.username is not None or as_utc(row.expires_at) <= (now or now_utc()):
         return None
     return row
 
@@ -124,7 +122,7 @@ def complete_request(
 
     同じリクエストでの二重発行を防ぐため、`load_pending` を通った（未完了の）行だけを渡すこと。
     """
-    now = now or _now()
+    now = now or now_utc()
     code = secrets.token_urlsafe(32)
     row.username = username
     row.code_hash = hash_code(code)
@@ -140,7 +138,7 @@ def find_by_code(db: Session, code: str, now: datetime | None = None) -> OAuthAu
         .filter(OAuthAuthorization.code_hash == hash_code(code))
         .first()
     )
-    if row is None or as_utc(row.expires_at) <= (now or _now()):
+    if row is None or as_utc(row.expires_at) <= (now or now_utc()):
         return None
     return row
 
@@ -161,7 +159,7 @@ def consume_code(db: Session, code: str) -> bool:
 
 def encode_state(request_id: str, now: datetime | None = None) -> str:
     """GitHub ログインへ渡す state（認可リクエストID入りの署名付きJWT）を作る。"""
-    now = now or _now()
+    now = now or now_utc()
     payload = {
         "rid": request_id, "aud": _STATE_AUDIENCE, "exp": now + REQUEST_TTL,
         "nonce": uuid.uuid4().hex,
