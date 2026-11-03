@@ -286,7 +286,7 @@ scenario('COD-13', '左のアプリ一覧でアプリを選ぶと、そのリポ
   await expect(table.getByRole('columnheader', { name: 'リポジトリ' })).toBeVisible()
 })
 
-scenario('COD-14', '検知を例外（影響なし）にすると一覧でタグが付く。受容は期限が必須', async ({ page, api }) => {
+scenario('COD-14', '検知を例外（影響なし）にすると一覧から外れ、「例外を含む」でタグつきで見られる。受容は期限が必須', async ({ page, api }) => {
   const table = await openCodescan(page)
 
   await table.getByRole('row').nth(1).click()
@@ -304,8 +304,39 @@ scenario('COD-14', '検知を例外（影響なし）にすると一覧でタグ
     kind: 'code', status: 'not_affected', reason: '意図的な設定', expires_at: null,
   })
 
-  // 一覧が読み直され、行にもタグが付く。展開すると、理由が出る
+  // 一覧が読み直され、例外にした検知は、初期表示では隠れる。「例外を含む」で、タグつきで見られる
+  await expect.poll(() => api.lastQuery('/api/codescan')?.get('include_excepted')).toBe('false')
+  await page.getByRole('button', { name: /例外を含む/ }).click()
   await expect(table.getByText('影響なし', { exact: true }).first()).toBeVisible()
   await table.getByRole('row').nth(1).click()
   await expect(page.getByRole('group', { name: '例外' })).toContainText('理由: 意図的な設定')
+})
+
+scenario('COD-15', '例外の検知は初期表示では隠れ、「例外を含む」で表示できる', async ({ page, api }) => {
+  // 先頭の検知（src/module1.ts:10）を、あらかじめ「受容」にしておく
+  const first = codescanItems[0]
+  api.state.exceptions.push({
+    id: 1, kind: 'code', repo_full_name: first.repo_full_name,
+    finding_key: `${first.file_path}|${first.rule_id}`, status: 'accepted',
+    reason: '意図した設定', expires_at: '2099-12-31T23:59:59Z', approver: 'octocat',
+  })
+  const table = await openCodescan(page)
+
+  // 初期表示は、例外を除いて取得し、その検知は一覧に出ない
+  await expect.poll(() => api.lastQuery('/api/codescan')?.get('include_excepted')).toBe('false')
+  await expect(table.getByText('src/module1.ts:10')).toHaveCount(0)
+
+  // 「例外を含む」で取り直すと、受容のタグつきで表示される
+  const toggle = page.getByRole('button', { name: /例外を含む/ })
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+  await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+  await expect.poll(() => api.lastQuery('/api/codescan')?.get('include_excepted')).toBeNull()
+  const row = table.getByRole('row', { name: /src\/module1\.ts:10/ })
+  await expect(row).toBeVisible()
+  await expect(row.getByText('受容', { exact: true })).toBeVisible()
+
+  // もう一度押すと、再び隠れる
+  await toggle.click()
+  await expect(table.getByText('src/module1.ts:10')).toHaveCount(0)
 })

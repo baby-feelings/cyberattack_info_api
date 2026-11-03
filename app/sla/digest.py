@@ -23,6 +23,7 @@ def run_sla_digest() -> bool:
         flt = DepscanListFilter(
             repo=None, owner=settings.GITHUB_USERNAME, ecosystem=None, severity=None,
             resolved=None, operating="active",
+            include_excepted=True,
         )
         report = build_report(
             db, flt, SlaPolicy.from_settings(), window_days=settings.SLA_MTTR_WINDOW_DAYS,

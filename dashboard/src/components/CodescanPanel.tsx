@@ -7,6 +7,7 @@ import { RepoBarChart } from './codescan/RepoBarChart'
 import { CountBadge } from './codescan/CountBadge'
 import { useCodescanData } from './codescan/useCodescanData'
 import { OperatingFilter } from './shared/OperatingFilter'
+import { ExceptedToggle } from './shared/ExceptedToggle'
 import { ActionSummary } from './shared/ActionSummary'
 import { CollapsibleSection } from './shared/CollapsibleSection'
 import { RepoRail } from './shared/RepoRail'
@@ -31,9 +32,9 @@ const SEVERITY_LABELS: Record<string, string> = {
 // によりログイン必須になる（Issue #219）。DepscanPanel と同じ props パターン。
 export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
   const {
-    severity, resolved, operating, page, setPage,
+    severity, resolved, showExcepted, operating, page, setPage,
     result, stats, loading, statsLoading,
-    load, handleSev, handleOperating, handleResolvedToggle,
+    load, handleSev, handleOperating, handleResolvedToggle, toggleShowExcepted,
     selectedRepo, handleRepo, totalPages, errorCount,
   } = useCodescanData(authToken)
 
@@ -53,7 +54,7 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
             </span>
           </div>
           <button
-            onClick={() => load(severity, resolved, page, operating, selectedRepo)}
+            onClick={() => load(severity, resolved, page, operating, selectedRepo, showExcepted)}
             disabled={loading || statsLoading}
             className="text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40 p-1 rounded"
             title="再読み込み"
@@ -78,7 +79,7 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
         <RepoBarChart stats={stats} loading={statsLoading} />
       </CollapsibleSection>
 
-      {/* 運用状態フィルター + 重要度フィルター + 解決状態フィルター */}
+      {/* 運用状態フィルター + 重要度フィルター + 解決状態フィルター + 例外の表示切替 */}
       <div className="flex flex-wrap items-center gap-3">
         <OperatingFilter value={operating} onChange={handleOperating} />
         <SeverityFilterButtons
@@ -109,6 +110,7 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
             </button>
           ))}
         </div>
+        <ExceptedToggle active={showExcepted} onToggle={toggleShowExcepted} count={exceptedTotal} />
       </div>
 
       {/* いま対応が必要な件数（未解決の重大＝ERROR） */}
@@ -119,12 +121,15 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
         loading={statsLoading && !stats}
       />
 
-      {/* 例外は、上の「対応が必要」の件数には含めないが、グラフ・左のアプリ一覧・一覧には出す。
-          数え方の違いを明記する */}
+      {/* 例外は、「対応が必要」の件数には含めない。一覧は、初期は例外を除き、切り替えで含める。
+          グラフと左のアプリ一覧では、灰色の「例外」として併記する。この違いを明記する */}
       {exceptedTotal > 0 && (
         <p className="text-xs text-slate-500" data-testid="excepted-note">
           例外（受容・影響なし など）に登録した未解決の {exceptedTotal} 件は、「対応が必要」の件数には
-          含めていません。グラフと左のアプリ一覧では、灰色の「例外」として併記しています。
+          含めていません。{showExcepted
+            ? '一覧にも表示しています（「例外を含む」を外すと隠せます）。'
+            : '一覧は非表示です（「例外を含む」で表示できます）。'}
+          グラフと左のアプリ一覧では、灰色の「例外」として併記しています。
         </p>
       )}
 
@@ -148,7 +153,11 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
 
           /* データなし */
           ) : result && result.total === 0 ? (
-            <EmptyState icon={<ScanSearch size={28} />} message="該当するコード脆弱性はありません" />
+            <EmptyState icon={<ScanSearch size={28} />} message={
+                exceptedTotal > 0 && !showExcepted && resolved === false
+                  ? `対応が必要なコード脆弱性はありません（例外 ${exceptedTotal} 件は非表示）`
+                  : '該当するコード脆弱性はありません'
+              } />
 
           /* テーブル */
           ) : result && (
@@ -177,7 +186,7 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
                         item={item}
                         showRepo={!selectedRepo}
                         authToken={authToken}
-                        onExceptionChanged={() => load(severity, resolved, page, operating, selectedRepo)}
+                        onExceptionChanged={() => load(severity, resolved, page, operating, selectedRepo, showExcepted)}
                       />
                     ))}
                   </tbody>

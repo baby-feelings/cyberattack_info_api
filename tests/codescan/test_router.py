@@ -129,6 +129,36 @@ class TestListCodescan:
         assert resp.status_code == 403
 
 
+class TestListCodescanExcepted:
+    """include_excepted=false で、例外にした検知を一覧から除く（ダッシュボードの初期表示）。"""
+
+    def _setup(self, db_session):
+        from datetime import timedelta
+
+        from app.finding_exceptions.models import FindingException
+
+        _make_finding(db_session, file_path="a.py", rule_id="rule.a")
+        _make_finding(db_session, file_path="b.py", rule_id="rule.b")
+        db_session.add(FindingException(
+            kind="code", repo_full_name="baby-feelings/baby_grow", finding_key="b.py|rule.b",
+            status="not_affected", reason="意図的", approver="owner",
+            expires_at=_NOW + timedelta(days=5),
+        ))
+        db_session.commit()
+
+    def test_default_includes_excepted(self, client, db_session):
+        """既定は従来どおり、例外も返す（MCP など既存の利用側に影響しない）。"""
+        self._setup(db_session)
+        body = client.get("/api/codescan", headers=HEADERS).json()
+        assert body["total"] == 2
+
+    def test_exclude_excepted_returns_only_actionable(self, client, db_session):
+        self._setup(db_session)
+        body = client.get("/api/codescan?include_excepted=false", headers=HEADERS).json()
+        assert body["total"] == 1
+        assert body["data"][0]["rule_id"] == "rule.a"
+
+
 class TestCodescanStats:
     def test_requires_auth(self, client):
         resp = client.get("/api/codescan/stats")

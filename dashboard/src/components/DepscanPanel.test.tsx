@@ -287,6 +287,24 @@ describe('DepscanPanel', () => {
     expect(mockedFindings).toHaveBeenLastCalledWith(expect.objectContaining({ resolved: null }))
   })
 
+  it('hides excepted findings at first and includes them with the toggle', async () => {
+    mockedFindings.mockResolvedValue([])
+    mockedStats.mockResolvedValue(EMPTY_STATS)
+    const user = userEvent.setup()
+
+    render(<DepscanPanel />)
+    await waitFor(() => expect(mockedFindings).toHaveBeenCalledTimes(1))
+    expect(mockedFindings).toHaveBeenLastCalledWith(
+      expect.objectContaining({ includeExcepted: false }),
+    )
+
+    await user.click(screen.getByRole('button', { name: '例外を含む' }))
+    await waitFor(() => expect(mockedFindings).toHaveBeenCalledTimes(2))
+    expect(mockedFindings).toHaveBeenLastCalledWith(
+      expect.objectContaining({ includeExcepted: true }),
+    )
+  })
+
   it('reloads with the selected severity when a severity filter is clicked', async () => {
     mockedFindings.mockResolvedValue([])
     mockedStats.mockResolvedValue(EMPTY_STATS)

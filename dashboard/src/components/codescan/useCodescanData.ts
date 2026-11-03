@@ -14,6 +14,8 @@ const PER_PAGE = 30
 export function useCodescanData(authToken?: string) {
   const [severity, setSeverity] = useState<string | null>(null)
   const [resolved, setResolved] = useState<boolean | null>(false)
+  // 例外（受容・影響なし・誤検知）にした検知を一覧に含めるか。初期は含めない（対応が必要なものだけを見せる）
+  const [showExcepted, setShowExcepted] = useState(false)
   // 初期表示は運用中のみ（運用停止中のアプリの脆弱性に埋もれず、運用中のものを見やすくするため）
   const [operating, setOperating] = useState<OperatingStatus>('active')
   // 左のアプリ一覧で選んでいるリポジトリ（null = すべてのアプリ）。一覧APIの repo で絞り込む
@@ -28,11 +30,13 @@ export function useCodescanData(authToken?: string) {
   // では変化しないため、ページ送りのたびにグラフが読み込み中表示に戻るのを防ぐ
   const loadList = useCallback(async (
     sev: string | null, res: boolean | null, p: number, op: OperatingStatus, repo: string | null,
+    withExcepted: boolean,
   ) => {
     setLoading(true)
     try {
       const list = await fetchCodescanList({
-        severity: sev, resolved: res, page: p, perPage: PER_PAGE, operating: op, repo, authToken,
+        severity: sev, resolved: res, page: p, perPage: PER_PAGE, operating: op, repo,
+        includeExcepted: withExcepted, authToken,
       })
       setResult(list)
     } catch {
@@ -56,14 +60,15 @@ export function useCodescanData(authToken?: string) {
 
   const load = useCallback((
     sev: string | null, res: boolean | null, p: number, op: OperatingStatus, repo: string | null,
+    withExcepted: boolean,
   ) => {
-    loadList(sev, res, p, op, repo)
+    loadList(sev, res, p, op, repo, withExcepted)
     loadStats(op)
   }, [loadList, loadStats])
 
   useEffect(() => {
-    loadList(severity, resolved, page, operating, selectedRepo)
-  }, [loadList, severity, resolved, page, operating, selectedRepo])
+    loadList(severity, resolved, page, operating, selectedRepo, showExcepted)
+  }, [loadList, severity, resolved, page, operating, selectedRepo, showExcepted])
 
   useEffect(() => {
     loadStats(operating)
@@ -91,13 +96,18 @@ export function useCodescanData(authToken?: string) {
     setPage(1)
   }
 
+  function toggleShowExcepted() {
+    setShowExcepted(v => !v)
+    setPage(1)
+  }
+
   const totalPages = result ? Math.ceil(result.total / PER_PAGE) : 0
   const errorCount = stats?.severities.find(s => s.severity === 'ERROR')?.count ?? 0
 
   return {
-    severity, resolved, page, setPage,
+    severity, resolved, showExcepted, page, setPage,
     result, stats, loading, statsLoading,
-    operating, load, handleSev, handleOperating, handleResolvedToggle,
+    operating, load, handleSev, handleOperating, handleResolvedToggle, toggleShowExcepted,
     selectedRepo, handleRepo, totalPages, errorCount,
   }
 }

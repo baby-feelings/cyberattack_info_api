@@ -166,6 +166,35 @@ class TestListDepscan:
         assert ctx["importance"] == "high"
 
 
+class TestListDepscanExcepted:
+    """include_excepted=false で、例外にした検知を一覧から除く（ダッシュボードの初期表示）。"""
+
+    def _setup(self, db_session):
+        from datetime import timedelta
+
+        from app.finding_exceptions.models import FindingException
+
+        repo = "baby-feelings/repo-a"
+        make_finding(db_session, repo_full_name=repo, osv_id="GHSA-a")
+        make_finding(db_session, repo_full_name=repo, osv_id="GHSA-b")
+        db_session.add(FindingException(
+            kind="dependency", repo_full_name=repo,
+            finding_key="PyPI|cryptography|GHSA-b", status="not_affected",
+            reason="意図的", approver="owner", expires_at=_NOW + timedelta(days=5),
+        ))
+        db_session.commit()
+
+    def test_default_includes_excepted(self, client, db_session):
+        self._setup(db_session)
+        assert client.get("/api/depscan", headers=HEADERS).json()["total"] == 2
+
+    def test_exclude_excepted_returns_only_actionable(self, client, db_session):
+        self._setup(db_session)
+        body = client.get("/api/depscan?include_excepted=false", headers=HEADERS).json()
+        assert body["total"] == 1
+        assert body["data"][0]["osv_id"] == "GHSA-a"
+
+
 class TestDepscanStats:
     def test_empty(self, client):
         res = client.get("/api/depscan/stats", headers=HEADERS)

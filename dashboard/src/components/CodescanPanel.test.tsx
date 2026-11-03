@@ -113,6 +113,46 @@ describe('CodescanPanel', () => {
     expect(screen.queryByTestId('excepted-note')).not.toBeInTheDocument()
   })
 
+  it('hides excepted findings at first and shows them with the toggle', async () => {
+    mockedList.mockResolvedValue({ total: 1, page: 1, per_page: 30, data: [item()] })
+    mockedStats.mockResolvedValue({
+      total: 1,
+      excepted_total: 2,
+      repos: [{ repo_full_name: 'baby-feelings/baby_grow', count: 1, excepted_count: 2 }],
+      severities: [{ severity: 'ERROR', count: 1 }],
+    })
+    const user = userEvent.setup()
+
+    render(<CodescanPanel />)
+    await waitFor(() => expect(mockedList).toHaveBeenCalled())
+    // 初期表示は、例外を除いて取得する
+    expect(mockedList.mock.calls[0][0]).toMatchObject({ includeExcepted: false })
+    expect(await screen.findByTestId('excepted-note')).toHaveTextContent('一覧は非表示です')
+
+    // 「例外を含む」で、例外も含めて取り直す
+    await user.click(screen.getByRole('button', { name: /例外を含む/ }))
+    await waitFor(() =>
+      expect(mockedList.mock.calls.at(-1)?.[0]).toMatchObject({ includeExcepted: true }),
+    )
+    expect(screen.getByRole('button', { name: /例外を含む/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByTestId('excepted-note')).toHaveTextContent('一覧にも表示しています')
+  })
+
+  it('tells that excepted findings are hidden when nothing needs action', async () => {
+    mockedList.mockResolvedValue(EMPTY_LIST)
+    mockedStats.mockResolvedValue({
+      total: 0,
+      excepted_total: 3,
+      repos: [{ repo_full_name: 'baby-feelings/baby_grow', count: 0, excepted_count: 3 }],
+      severities: [],
+    })
+
+    render(<CodescanPanel />)
+    expect(
+      await screen.findByText('対応が必要なコード脆弱性はありません（例外 3 件は非表示）'),
+    ).toBeInTheDocument()
+  })
+
   it('highlights CVSS scores of 7.0 or higher', async () => {
     mockedList.mockResolvedValue({ total: 1, page: 1, per_page: 30, data: [item({ cvss_score: 9.1 })] })
     mockedStats.mockResolvedValue(EMPTY_STATS)

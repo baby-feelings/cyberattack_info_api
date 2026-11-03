@@ -16,6 +16,7 @@ import { SlaModal } from './depscan/SlaModal'
 import { SEVERITY_CLS, SEVERITY_COLORS } from './depscan/grouping'
 import { useDepscanData } from './depscan/useDepscanData'
 import { OperatingFilter } from './shared/OperatingFilter'
+import { ExceptedToggle } from './shared/ExceptedToggle'
 import { ActionSummary } from './shared/ActionSummary'
 import { CollapsibleSection } from './shared/CollapsibleSection'
 import { RepoRail } from './shared/RepoRail'
@@ -50,9 +51,9 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
   const [slaOpen, setSlaOpen] = useState(false)
 
   const {
-    owner, severity, showResolved, operating, page, setPage,
+    owner, severity, showResolved, showExcepted, operating, page, setPage,
     stats, loading, newDataAvailable,
-    load, handleOwner, handleSev, handleOperating, toggleShowResolved,
+    load, handleOwner, handleSev, handleOperating, toggleShowResolved, toggleShowExcepted,
     owners, groups, totalPages, pageGroups, critCount, highCount,
     repos, activeRepo, handleRepo,
   } = useDepscanData(authToken)
@@ -70,7 +71,7 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
             新しいデータがあります
           </span>
           <button
-            onClick={() => load(owner, severity, showResolved, operating)}
+            onClick={() => load(owner, severity, showResolved, operating, showExcepted)}
             className="px-2.5 py-1 rounded-md bg-violet-600 hover:bg-violet-500 text-white font-medium transition-colors"
           >
             更新
@@ -90,7 +91,7 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
             </span>
           </div>
           <button
-            onClick={() => load(owner, severity, showResolved, operating)}
+            onClick={() => load(owner, severity, showResolved, operating, showExcepted)}
             disabled={loading}
             className="shrink-0 text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40 p-1 rounded"
             title="再読み込み"
@@ -185,6 +186,7 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
           <CheckCircle2 size={12} />
           解決済みを含む
         </button>
+        <ExceptedToggle active={showExcepted} onToggle={toggleShowExcepted} />
       </div>
 
       {/* いま対応が必要な件数（未解決の CRITICAL・HIGH） */}
@@ -243,7 +245,7 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
                         group={group}
                         showRepo={!activeRepo}
                         authToken={authToken}
-                        onExceptionChanged={() => load(owner, severity, showResolved, operating)}
+                        onExceptionChanged={() => load(owner, severity, showResolved, operating, showExcepted)}
                       />
                     ))}
                   </tbody>
