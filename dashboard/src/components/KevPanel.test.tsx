@@ -238,10 +238,10 @@ describe('KevPanel', () => {
     ])
 
     render(<KevPanel />)
-    await waitFor(() => expect(screen.getByRole('row', { name: '2026年10月20日に追加' })).toBeInTheDocument())
-    expect(screen.getByRole('row', { name: '2026年10月14日に追加' })).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('row', { name: '2026年10月20日の区切り' })).toBeInTheDocument())
+    expect(screen.getByRole('row', { name: '2026年10月14日の区切り' })).toBeInTheDocument()
     // 同じ日の2件に対して、区切りは1つだけ
-    expect(screen.getAllByRole('row', { name: /に追加$/ }).length).toBe(2)
+    expect(screen.getAllByRole('row', { name: /の区切り$/ }).length).toBe(2)
   })
 
   it('shows the charts at first and closes them when the heading is clicked', async () => {

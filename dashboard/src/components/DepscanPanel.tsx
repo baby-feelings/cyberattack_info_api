@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import {
   Bug, RefreshCw, CheckCircle2, Sparkles, GitPullRequest, Package, Cpu, Timer,
 } from 'lucide-react'
@@ -13,7 +13,7 @@ import { DependabotOpsModal } from './depscan/DependabotOpsModal'
 import { DependenciesModal } from './depscan/DependenciesModal'
 import { RuntimesModal } from './depscan/RuntimesModal'
 import { SlaModal } from './depscan/SlaModal'
-import { SEVERITY_CLS, SEVERITY_COLORS } from './depscan/grouping'
+import { SEVERITY_CLS, SEVERITY_COLORS, groupLatestDetectedAt } from './depscan/grouping'
 import { useDepscanData } from './depscan/useDepscanData'
 import { OperatingFilter } from './shared/OperatingFilter'
 import { ExceptedToggle } from './shared/ExceptedToggle'
@@ -21,6 +21,9 @@ import { ActionSummary } from './shared/ActionSummary'
 import { CollapsibleSection } from './shared/CollapsibleSection'
 import { RepoRail } from './shared/RepoRail'
 import { repoShortName } from './shared/repoName'
+import { DateDividerRow } from './shared/DateDividerRow'
+import { isNewDay } from './shared/dateDay'
+import { DepscanSortSelector } from './depscan/DepscanSortSelector'
 
 const SEVERITIES = ['ALL', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
 
@@ -51,7 +54,7 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
   const [slaOpen, setSlaOpen] = useState(false)
 
   const {
-    owner, severity, showResolved, showExcepted, operating, page, setPage,
+    owner, severity, showResolved, showExcepted, operating, sortBy, handleSort, page, setPage,
     stats, loading, newDataAvailable,
     load, handleOwner, handleSev, handleOperating, toggleShowResolved, toggleShowExcepted,
     owners, groups, totalPages, pageGroups, critCount, highCount,
@@ -187,6 +190,7 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
           解決済みを含む
         </button>
         <ExceptedToggle active={showExcepted} onToggle={toggleShowExcepted} />
+        <DepscanSortSelector value={sortBy} onChange={handleSort} />
       </div>
 
       {/* いま対応が必要な件数（未解決の CRITICAL・HIGH） */}
@@ -240,13 +244,21 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
                   </thead>
                   <tbody className="divide-y divide-slate-800/60">
                     {pageGroups.map((group, i) => (
-                      <DepscanGroupRow
-                        key={`${group.repo_full_name}-${group.package_name}-${group.installed_version}-${i}`}
-                        group={group}
-                        showRepo={!activeRepo}
-                        authToken={authToken}
-                        onExceptionChanged={() => load(owner, severity, showResolved, operating, showExcepted)}
-                      />
+                      <Fragment key={`${group.repo_full_name}-${group.package_name}-${group.installed_version}-${i}`}>
+                        {/* 検知日順のときだけ、検知日ごとに区切る（重要度順では日付が混ざるため出さない） */}
+                        {sortBy === 'date' && isNewDay(
+                          pageGroups[i - 1] && groupLatestDetectedAt(pageGroups[i - 1]),
+                          groupLatestDetectedAt(group),
+                        ) && (
+                          <DateDividerRow date={groupLatestDetectedAt(group)} colSpan={activeRepo ? 6 : 7} />
+                        )}
+                        <DepscanGroupRow
+                          group={group}
+                          showRepo={!activeRepo}
+                          authToken={authToken}
+                          onExceptionChanged={() => load(owner, severity, showResolved, operating, showExcepted)}
+                        />
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>

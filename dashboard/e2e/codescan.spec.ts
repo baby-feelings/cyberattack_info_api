@@ -1,4 +1,4 @@
-import { expect, openTab, scenario, seedSession, type Page } from './support/test'
+import { dataRows, expect, openTab, scenario, seedSession, type Page } from './support/test'
 import { API_PREFIX } from './support/mockApi'
 import { codescanItems } from './support/mockData'
 
@@ -31,7 +31,7 @@ scenario('COD-02', 'ログイン済みで一覧・統計・注記が表示され
   const table = await openCodescan(page)
 
   await expect(page.getByText('ログイン中:')).toBeVisible()
-  await expect(table.getByRole('row')).toHaveCount(PER_PAGE + 1)
+  await expect(dataRows(table)).toHaveCount(PER_PAGE + 1)
   // 帯: 対応が必要な件数（重大）と、未解決の総件数
   await expect(page.getByText(String(bySeverity('ERROR')), { exact: true }).first()).toBeVisible()
   await expect(page.getByText('件が対応必要（重大）')).toBeVisible()
@@ -43,7 +43,7 @@ scenario('COD-02', 'ログイン済みで一覧・統計・注記が表示され
   await expect(page.locator('.recharts-wrapper').first()).toBeVisible()
 
   // 先頭行: 重要度・CVSS・リポジトリ・ファイル:行・ツール・ルール
-  const first = table.getByRole('row').nth(1)
+  const first = dataRows(table).nth(1)
   await expect(first).toContainText('重大')
   await expect(first).toContainText('8.6')
   await expect(first).toContainText('baby-feelings/app-one')
@@ -62,13 +62,13 @@ scenario('COD-03', '重要度フィルター（重大/警告/情報）で絞り�
 
   await sev.getByRole('button', { name: '警告' }).click()
   await expect(sev.getByRole('button', { name: '警告' })).toHaveAttribute('aria-pressed', 'true')
-  await expect(table.getByRole('row')).toHaveCount(bySeverity('WARNING') + 1)
+  await expect(dataRows(table)).toHaveCount(bySeverity('WARNING') + 1)
   await expect(table.getByText('警告').first()).toBeVisible()
   expect(api.lastQuery('/api/codescan')?.get('severity')).toBe('WARNING')
 
   await sev.getByRole('button', { name: '情報' }).click()
   expect(api.lastQuery('/api/codescan')?.get('severity')).toBe('INFO')
-  await expect(table.getByRole('row')).toHaveCount(bySeverity('INFO') + 1)
+  await expect(dataRows(table)).toHaveCount(bySeverity('INFO') + 1)
 
   await sev.getByRole('button', { name: '重大' }).click()
   expect(api.lastQuery('/api/codescan')?.get('severity')).toBe('ERROR')
@@ -87,7 +87,7 @@ scenario('COD-04', '状態フィルター（未解決/解決済み/全件）が�
   await state.getByRole('button', { name: '解決済み' }).click()
   await expect(state.getByRole('button', { name: '解決済み' })).toHaveAttribute('aria-pressed', 'true')
   expect(api.lastQuery('/api/codescan')?.get('resolved')).toBe('true')
-  await expect(table.getByRole('row')).toHaveCount(codescanItems.length - open.length + 1)
+  await expect(dataRows(table)).toHaveCount(codescanItems.length - open.length + 1)
 
   await state.getByRole('button', { name: '全件' }).click()
   await expect(state.getByRole('button', { name: '全件' })).toHaveAttribute('aria-pressed', 'true')
@@ -100,7 +100,7 @@ scenario('COD-04', '状態フィルター（未解決/解決済み/全件）が�
 
 scenario('COD-05', '行クリックで詳細（メッセージ・スニペット・CWE・OWASP）が展開される', async ({ page }) => {
   const table = await openCodescan(page)
-  const row = table.getByRole('row').nth(1)
+  const row = dataRows(table).nth(1)
   const detail = row.locator('xpath=following-sibling::tr[1]')
 
   await row.click()
@@ -173,7 +173,7 @@ scenario('COD-09', 'ページ送り', async ({ page, api }) => {
   await bottom.getByRole('button', { name: '次へ →' }).click()
 
   await expect(bottom).toContainText('2 / 2')
-  await expect(table.getByRole('row')).toHaveCount(open.length - PER_PAGE + 1)
+  await expect(dataRows(table)).toHaveCount(open.length - PER_PAGE + 1)
   await expect(bottom.getByRole('button', { name: '次へ →' })).toBeDisabled()
   expect(api.lastQuery('/api/codescan')?.get('page')).toBe('2')
   expect(api.lastQuery('/api/codescan')?.get('per_page')).toBe(String(PER_PAGE))
@@ -181,7 +181,7 @@ scenario('COD-09', 'ページ送り', async ({ page, api }) => {
 
 scenario('COD-10', 'CVSS 7.0以上のバッジ強調・未算出表示・ツールバッジ', async ({ page }) => {
   const table = await openCodescan(page)
-  const rows = table.getByRole('row')
+  const rows = dataRows(table)
 
   // 7.0以上は赤バッジ、それ未満は強調なし
   await expect(rows.nth(1).getByText('8.6')).toHaveClass(/text-red-300/)
@@ -252,14 +252,14 @@ scenario('COD-12', '運用中／運用停止中を切り替えると、リクエ
   expect(api.lastQuery('/api/codescan')?.get('operating')).toBe('active')
   expect(api.lastQuery('/api/codescan/stats')?.get('operating')).toBe('active')
   // 16件は1ページに収まるため、ページ送りは出ない（見出し行 + 16行）
-  await expect(table.getByRole('row')).toHaveCount(17)
+  await expect(dataRows(table)).toHaveCount(17)
   await expect(table).toContainText('baby-feelings/app-one')
   await expect(table).not.toContainText('baby-feelings/app-two')
 
   await group.getByRole('button', { name: '運用停止中' }).click()
   expect(api.lastQuery('/api/codescan')?.get('operating')).toBe('inactive')
   expect(api.lastQuery('/api/codescan')?.get('page')).toBe('1')
-  await expect(table.getByRole('row')).toHaveCount(17)
+  await expect(dataRows(table)).toHaveCount(17)
   await expect(table).toContainText('baby-feelings/app-two')
   await expect(table).not.toContainText('baby-feelings/app-one')
 
@@ -289,7 +289,7 @@ scenario('COD-13', '左のアプリ一覧でアプリを選ぶと、そのリポ
 scenario('COD-14', '検知を例外（影響なし）にすると一覧から外れ、「例外を含む」でタグつきで見られる。受容は期限が必須', async ({ page, api }) => {
   const table = await openCodescan(page)
 
-  await table.getByRole('row').nth(1).click()
+  await dataRows(table).nth(1).click()
   await page.getByRole('button', { name: '例外にする' }).click()
   const form = page.getByRole('form', { name: '例外の登録' })
 
@@ -308,7 +308,7 @@ scenario('COD-14', '検知を例外（影響なし）にすると一覧から外
   await expect.poll(() => api.lastQuery('/api/codescan')?.get('include_excepted')).toBe('false')
   await page.getByRole('button', { name: /例外を含む/ }).click()
   await expect(table.getByText('影響なし', { exact: true }).first()).toBeVisible()
-  await table.getByRole('row').nth(1).click()
+  await dataRows(table).nth(1).click()
   await expect(page.getByRole('group', { name: '例外' })).toContainText('理由: 意図的な設定')
 })
 
@@ -339,4 +339,13 @@ scenario('COD-15', '例外の検知は初期表示では隠れ、「例外を含
   // もう一度押すと、再び隠れる
   await toggle.click()
   await expect(table.getByText('src/module1.ts:10')).toHaveCount(0)
+})
+
+scenario('COD-16', '検知日（新しい順）ごとの区切りが入る', async ({ page }) => {
+  const table = await openCodescan(page)
+  const dividers = table.getByRole('row', { name: /の区切り$/ })
+
+  // モックは 1 日 1 件ずつ検知しているため、先頭の行の上に、その日の区切りが入る
+  await expect(dividers.first()).toBeVisible()
+  await expect(table.locator('tr').nth(1)).toHaveAttribute('data-divider', 'true')
 })

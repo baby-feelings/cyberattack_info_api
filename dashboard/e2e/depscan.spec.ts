@@ -756,3 +756,22 @@ scenario('DEP-29', '例外の検知は初期表示では隠れ、「例外を含
   await table.getByText('lodash').click()
   await expect(page.getByRole('group', { name: '例外' })).toContainText('到達しないため受容')
 })
+
+scenario('DEP-30', '並び順を検知日順にすると、検知日ごとの区切りが入る（重要度順では出ない）', async ({ page }) => {
+  const table = await openDepscan(page)
+  const sort = page.getByRole('group', { name: '並び順' })
+  const dividers = table.getByRole('row', { name: /の区切り$/ })
+
+  // 既定は重要度順。区切りは出ない
+  await expect(sort.getByRole('button', { name: '重要度' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(dividers).toHaveCount(0)
+
+  // 検知日順にすると、検知日ごとの区切りが入る
+  await sort.getByRole('button', { name: '検知日' }).click()
+  await expect(sort.getByRole('button', { name: '検知日' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(dividers.first()).toBeVisible()
+
+  // 重要度順に戻すと、区切りは消える
+  await sort.getByRole('button', { name: '重要度' }).click()
+  await expect(dividers).toHaveCount(0)
+})

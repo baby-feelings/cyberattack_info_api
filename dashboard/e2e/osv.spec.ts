@@ -1,4 +1,4 @@
-import { expect, openTab, scenario, type Page } from './support/test'
+import { dataRows, expect, openTab, scenario, type Page } from './support/test'
 import { OSV_TOTAL, osvItems } from './support/mockData'
 
 const PER_PAGE = 30
@@ -14,7 +14,7 @@ async function openOsv(page: Page) {
 scenario('OSV-01', '一覧・CRIT/HIGH件数・グラフが表示される', async ({ page }) => {
   const table = await openOsv(page)
 
-  await expect(table.getByRole('row')).toHaveCount(PER_PAGE + 1)
+  await expect(dataRows(table)).toHaveCount(PER_PAGE + 1)
   await expect(table.getByRole('link', { name: 'GHSA-e2e0001' })).toBeVisible()
 
   // 件数の帯: 期間内の件数 / そのうち CRITICAL・HIGH（統計APIの深刻度別件数）
@@ -45,13 +45,13 @@ scenario('OSV-02', 'エコシステムフィルターでリクエストと一覧
   const npm = count((v) => v.ecosystem === 'npm')
   await expect(eco.getByRole('button', { name: /^npm/ })).toHaveAttribute('aria-pressed', 'true')
   await expect(eco.getByRole('button', { name: 'ALL' })).toHaveAttribute('aria-pressed', 'false')
-  await expect(table.getByRole('row')).toHaveCount(npm + 1)
+  await expect(dataRows(table)).toHaveCount(npm + 1)
   expect(api.lastQuery('/api/osv')?.get('ecosystem')).toBe('npm')
   // ボタンにはエコシステム別件数が併記される
   await expect(eco.getByRole('button', { name: new RegExp(`^npm${npm}$`) })).toBeVisible()
 
   await eco.getByRole('button', { name: 'ALL' }).click()
-  await expect(table.getByRole('row')).toHaveCount(PER_PAGE + 1)
+  await expect(dataRows(table)).toHaveCount(PER_PAGE + 1)
   expect(api.lastQuery('/api/osv')?.get('ecosystem')).toBeNull()
 })
 
@@ -62,7 +62,7 @@ scenario('OSV-03', '深刻度フィルターで絞り込まれ、ALLで解除さ
   await sev.getByRole('button', { name: 'HIGH' }).click()
   const high = count((v) => v.severity === 'HIGH')
   await expect(sev.getByRole('button', { name: 'HIGH' })).toHaveAttribute('aria-pressed', 'true')
-  await expect(table.getByRole('row')).toHaveCount(Math.min(high, PER_PAGE) + 1)
+  await expect(dataRows(table)).toHaveCount(Math.min(high, PER_PAGE) + 1)
   expect(api.lastQuery('/api/osv')?.get('severity')).toBe('HIGH')
 
   await sev.getByRole('button', { name: 'CRITICAL' }).click()
@@ -80,13 +80,13 @@ scenario('OSV-04', 'キーワード検索とクリア', async ({ page, api }) =>
   const search = page.getByRole('textbox', { name: 'OSV ID・パッケージ名・概要' })
 
   await search.fill('GHSA-e2e0007')
-  await expect(table.getByRole('row')).toHaveCount(2)
+  await expect(dataRows(table)).toHaveCount(2)
   await expect(table.getByRole('link', { name: 'GHSA-e2e0007' })).toBeVisible()
   expect(api.lastQuery('/api/osv')?.get('search')).toBe('GHSA-e2e0007')
 
   await page.getByRole('button', { name: '検索をクリア' }).click()
   await expect(search).toHaveValue('')
-  await expect(table.getByRole('row')).toHaveCount(PER_PAGE + 1)
+  await expect(dataRows(table)).toHaveCount(PER_PAGE + 1)
 })
 
 scenario('OSV-05', 'ソートを更新日/CVSSで切り替えられる', async ({ page, api }) => {
@@ -94,17 +94,17 @@ scenario('OSV-05', 'ソートを更新日/CVSSで切り替えられる', async (
   const sort = page.getByRole('group', { name: 'ソート' })
 
   await expect(sort.getByRole('button', { name: '更新日' })).toHaveAttribute('aria-pressed', 'true')
-  await expect(table.getByRole('row').nth(2)).toContainText('GHSA-e2e0002')
+  await expect(dataRows(table).nth(2)).toContainText('GHSA-e2e0002')
 
   await sort.getByRole('button', { name: 'CVSS' }).click()
   await expect(sort.getByRole('button', { name: 'CVSS' })).toHaveAttribute('aria-pressed', 'true')
   expect(api.lastQuery('/api/osv')?.get('sort_by')).toBe('cvss')
   // CVSS降順（9.8が先）。添字0,8,12,… の順に並ぶ
-  await expect(table.getByRole('row').nth(2)).toContainText('GHSA-e2e0009')
+  await expect(dataRows(table).nth(2)).toContainText('GHSA-e2e0009')
 
   await sort.getByRole('button', { name: '更新日' }).click()
   expect(api.lastQuery('/api/osv')?.get('sort_by')).toBe('modified')
-  await expect(table.getByRole('row').nth(2)).toContainText('GHSA-e2e0002')
+  await expect(dataRows(table).nth(2)).toContainText('GHSA-e2e0002')
 })
 
 scenario('OSV-06', '行クリックで詳細（修正版・エイリアス・参考リンク）が展開される', async ({ page }) => {
@@ -172,7 +172,7 @@ scenario('OSV-09', 'フィルター変更時にページが1に戻る', async ({
   await expect.poll(() => api.lastQuery('/api/osv')?.get('ecosystem')).toBe('Go')
   expect(api.lastQuery('/api/osv')?.get('page')).toBe('1')
   // Go は 16 件（1ページに収まる）ためページ送りは出ない
-  await expect(table.getByRole('row')).toHaveCount(count((v) => v.ecosystem === 'Go') + 1)
+  await expect(dataRows(table)).toHaveCount(count((v) => v.ecosystem === 'Go') + 1)
   await expect(bottom).toHaveCount(0)
 })
 
@@ -254,6 +254,20 @@ scenario('OSV-12', '登録したキーワードごとの該当件数が出て、
 
   await group.getByRole('button', { name: /^pkg-pypi\s*\d+$/ }).click()
   await expect(page.getByRole('textbox', { name: 'OSV ID・パッケージ名・概要' })).toHaveValue('pkg-pypi')
-  await expect(table.getByRole('row')).toHaveCount(17 + 1)
+  await expect(dataRows(table)).toHaveCount(17 + 1)
   expect(api.lastQuery('/api/osv')?.get('search')).toBe('pkg-pypi')
+})
+
+scenario('OSV-13', '更新日順のときだけ、更新日ごとの区切りが入る（CVSS順では出ない）', async ({ page }) => {
+  const table = await openOsv(page)
+  const sort = page.getByRole('group', { name: 'ソート' })
+  const dividers = table.getByRole('row', { name: /の区切り$/ })
+
+  // 更新日順（既定）: モックは 1 日 1 件ずつなので、行ごとに区切りが入る
+  await expect(dividers.first()).toBeVisible()
+  expect(await dividers.count()).toBe(PER_PAGE)
+
+  // CVSS順では日付が混ざるため、区切りは出ない
+  await sort.getByRole('button', { name: 'CVSS' }).click()
+  await expect(dividers).toHaveCount(0)
 })

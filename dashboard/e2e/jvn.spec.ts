@@ -1,4 +1,4 @@
-import { expect, openTab, scenario, type Page } from './support/test'
+import { dataRows, expect, openTab, scenario, type Page } from './support/test'
 import { JVN_TOTAL, jvnItems } from './support/mockData'
 
 const PER_PAGE = 30
@@ -14,7 +14,7 @@ async function openJvn(page: Page) {
 scenario('JVN-01', '一覧・件数の帯・グラフが表示される', async ({ page }) => {
   const table = await openJvn(page)
 
-  await expect(table.getByRole('row')).toHaveCount(PER_PAGE + 1)
+  await expect(dataRows(table)).toHaveCount(PER_PAGE + 1)
   await expect(table.getByRole('link', { name: 'JVNDB-2026-000001' })).toBeVisible()
   // 件数の帯: 期間内の件数 / そのうち High
   const band = page.getByRole('group', { name: '件数の集計' })
@@ -40,15 +40,15 @@ scenario('JVN-02', '深刻度フィルターで絞り込まれる', async ({ pag
 
   await sev.getByRole('button', { name: 'High', exact: true }).click()
   await expect(sev.getByRole('button', { name: 'High', exact: true })).toHaveAttribute('aria-pressed', 'true')
-  await expect(table.getByRole('row')).toHaveCount(count('High') + 1)
+  await expect(dataRows(table)).toHaveCount(count('High') + 1)
   expect(api.lastQuery('/api/jvn')?.get('severity')).toBe('High')
 
   await sev.getByRole('button', { name: 'Low', exact: true }).click()
-  await expect(table.getByRole('row')).toHaveCount(count('Low') + 1)
+  await expect(dataRows(table)).toHaveCount(count('Low') + 1)
   expect(api.lastQuery('/api/jvn')?.get('severity')).toBe('Low')
 
   await sev.getByRole('button', { name: 'ALL' }).click()
-  await expect(table.getByRole('row')).toHaveCount(PER_PAGE + 1)
+  await expect(dataRows(table)).toHaveCount(PER_PAGE + 1)
   expect(api.lastQuery('/api/jvn')?.get('severity')).toBeNull()
 })
 
@@ -57,29 +57,29 @@ scenario('JVN-03', 'キーワード検索とクリア', async ({ page, api }) =>
   const search = page.getByRole('textbox', { name: 'JVNDB ID・タイトル・概要' })
 
   await search.fill('JVNDB-2026-000007')
-  await expect(table.getByRole('row')).toHaveCount(2)
+  await expect(dataRows(table)).toHaveCount(2)
   await expect(table.getByRole('link', { name: 'JVNDB-2026-000007' })).toBeVisible()
   expect(api.lastQuery('/api/jvn')?.get('search')).toBe('JVNDB-2026-000007')
 
   await page.getByRole('button', { name: '検索をクリア' }).click()
   await expect(search).toHaveValue('')
-  await expect(table.getByRole('row')).toHaveCount(PER_PAGE + 1)
+  await expect(dataRows(table)).toHaveCount(PER_PAGE + 1)
 })
 
 scenario('JVN-04', 'ソートを更新日/CVSSで切り替えられる', async ({ page, api }) => {
   const table = await openJvn(page)
   const sort = page.getByRole('group', { name: 'ソート' })
 
-  await expect(table.getByRole('row').nth(2)).toContainText('JVNDB-2026-000002')
+  await expect(dataRows(table).nth(2)).toContainText('JVNDB-2026-000002')
   await sort.getByRole('button', { name: 'CVSS' }).click()
   await expect(sort.getByRole('button', { name: 'CVSS' })).toHaveAttribute('aria-pressed', 'true')
   expect(api.lastQuery('/api/jvn')?.get('sort_by')).toBe('cvss')
   // CVSS降順（8.1が先）。添字0,3,6,… の順に並ぶ
-  await expect(table.getByRole('row').nth(2)).toContainText('JVNDB-2026-000004')
+  await expect(dataRows(table).nth(2)).toContainText('JVNDB-2026-000004')
 
   await sort.getByRole('button', { name: '更新日' }).click()
   expect(api.lastQuery('/api/jvn')?.get('sort_by')).toBe('modified')
-  await expect(table.getByRole('row').nth(2)).toContainText('JVNDB-2026-000002')
+  await expect(dataRows(table).nth(2)).toContainText('JVNDB-2026-000002')
 })
 
 scenario('JVN-05', '行クリックで詳細（概要・CVSSベクター・影響製品）が展開される', async ({ page }) => {
@@ -112,7 +112,7 @@ scenario('JVN-06', 'ページ送り', async ({ page, api }) => {
   await expect(bottom).toContainText('1 / 2')
   await bottom.getByRole('button', { name: '次へ →' }).click()
   await expect(bottom).toContainText('2 / 2')
-  await expect(table.getByRole('row')).toHaveCount(JVN_TOTAL - PER_PAGE + 1)
+  await expect(dataRows(table)).toHaveCount(JVN_TOTAL - PER_PAGE + 1)
   await expect(bottom.getByRole('button', { name: '次へ →' })).toBeDisabled()
   expect(api.lastQuery('/api/jvn')?.get('page')).toBe('2')
 })
@@ -214,4 +214,16 @@ scenario('JVN-11', '登録したキーワードごとの該当件数が出て、
   await expect(page.getByRole('textbox', { name: 'JVNDB ID・タイトル・概要' })).toHaveValue('JVNタイトル 1')
   expect(api.lastQuery('/api/jvn')?.get('search')).toBe('JVNタイトル 1')
   await expect(table).toBeVisible()
+})
+
+scenario('JVN-12', '更新日順のときだけ、更新日ごとの区切りが入る（CVSS順では出ない）', async ({ page }) => {
+  const table = await openJvn(page)
+  const sort = page.getByRole('group', { name: 'ソート' })
+  const dividers = table.getByRole('row', { name: /の区切り$/ })
+
+  await expect(dividers.first()).toBeVisible()
+  expect(await dividers.count()).toBe(PER_PAGE)
+
+  await sort.getByRole('button', { name: 'CVSS' }).click()
+  await expect(dividers).toHaveCount(0)
 })

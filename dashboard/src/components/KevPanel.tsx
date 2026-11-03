@@ -12,11 +12,8 @@ import { PeriodFilter } from './shared/PeriodFilter'
 import { StatBand } from './shared/StatBand'
 import { WatchKeywords } from './shared/WatchKeywords'
 import { CollapsibleSection } from './shared/CollapsibleSection'
-
-// 追加日ごとの区切り行の表示（例: 2026年10月20日）
-function formatDay(date: string): string {
-  return new Date(date).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })
-}
+import { DateDividerRow } from './shared/DateDividerRow'
+import { isNewDay } from './shared/dateDay'
 
 export function KevPanel() {
   const {
@@ -127,12 +124,8 @@ export function KevPanel() {
               <tbody className="divide-y divide-slate-800/60">
                 {rows.map((item, i) => (
                   <Fragment key={item.cve_id}>
-                    {(i === 0 || rows[i - 1].date_added !== item.date_added) && (
-                      <tr aria-label={`${formatDay(item.date_added)}に追加`}>
-                        <td colSpan={7} className="bg-slate-950/50 px-2 py-1 text-[11px] font-semibold text-slate-500">
-                          {formatDay(item.date_added)}
-                        </td>
-                      </tr>
+                    {isNewDay(rows[i - 1]?.date_added, item.date_added) && (
+                      <DateDividerRow date={item.date_added} colSpan={7} />
                     )}
                     <KevRow item={item} />
                   </Fragment>

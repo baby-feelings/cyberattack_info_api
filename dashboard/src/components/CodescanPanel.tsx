@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { RefreshCw, ScanSearch } from 'lucide-react'
 import {
   TableLoadingSkeleton, EmptyState, Pagination, SeverityFilterButtons,
@@ -12,6 +13,8 @@ import { ActionSummary } from './shared/ActionSummary'
 import { CollapsibleSection } from './shared/CollapsibleSection'
 import { RepoRail } from './shared/RepoRail'
 import { repoShortName } from './shared/repoName'
+import { DateDividerRow } from './shared/DateDividerRow'
+import { isNewDay } from './shared/dateDay'
 
 const SEVERITY_CLS: Record<string, string> = {
   ERROR: 'bg-red-500/15 text-red-400 border-red-500/30',
@@ -181,13 +184,18 @@ export function CodescanPanel({ authToken }: { authToken?: string } = {}) {
                   </thead>
                   <tbody className="divide-y divide-slate-800/60">
                     {result.data.map((item, i) => (
-                      <CodescanRow
-                        key={`${item.repo_full_name}-${item.file_path}-${item.rule_id}-${item.line_start}-${i}`}
-                        item={item}
-                        showRepo={!selectedRepo}
-                        authToken={authToken}
-                        onExceptionChanged={() => load(severity, resolved, page, operating, selectedRepo, showExcepted)}
-                      />
+                      <Fragment key={`${item.repo_full_name}-${item.file_path}-${item.rule_id}-${item.line_start}-${i}`}>
+                        {/* 一覧は検知日の新しい順（API 側の並び）。検知日ごとに区切る */}
+                        {isNewDay(result.data[i - 1]?.detected_at, item.detected_at) && (
+                          <DateDividerRow date={item.detected_at} colSpan={selectedRepo ? 6 : 7} />
+                        )}
+                        <CodescanRow
+                          item={item}
+                          showRepo={!selectedRepo}
+                          authToken={authToken}
+                          onExceptionChanged={() => load(severity, resolved, page, operating, selectedRepo, showExcepted)}
+                        />
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>

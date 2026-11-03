@@ -286,7 +286,7 @@ scenario('KEV-13', '一覧は追加日ごとに区切られる', async ({ page }
   const table = page.getByRole('table', { name: TABLE })
 
   // モックは1日1件ずつ追加されているため、1ページ30件＝30日分の区切り。先頭は最新の日付
-  const days = table.getByRole('row', { name: /に追加$/ })
+  const days = table.getByRole('row', { name: /の区切り$/ })
   await expect(days).toHaveCount(30)
   await expect(days.first()).toHaveText('2026年9月20日')
   expect(kevItems[0].date_added).toBe('2026-09-20')
