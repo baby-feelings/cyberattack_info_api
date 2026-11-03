@@ -38,7 +38,7 @@ from app.auth.github_oauth import (
     get_authenticated_user_login,
 )
 from app.core.config import settings
-from app.core.notifications.mcp_token import notify_oauth_connection_granted
+from app.mcp_server.notifier import notify_oauth_connection_granted
 from app.mcp_server.oauth import clients as oauth_clients
 from app.mcp_server.oauth import flow as oauth_flow
 from app.mcp_server.oauth.services import CONSENT_PATH, SCOPE

@@ -1,4 +1,4 @@
-"""app.core.notifications.dependency_findings（DEPSCAN 検知の Slack 通知）のテスト。"""
+"""app.depscan.notifier（DEPSCAN 検知の Slack 通知）のテスト。"""
 import os
 from datetime import UTC, datetime
 from unittest.mock import patch
@@ -14,7 +14,7 @@ HEADERS = {"X-API-KEY": TEST_API_KEY}
 _NOW = datetime.now(UTC)
 _REPO = "app.core.github.repo.GitHubRepo"
 
-from app.core.notifications.dependency_findings import notify_dependency_findings  # noqa: E402
+from app.depscan.notifier import notify_dependency_findings  # noqa: E402
 
 
 class TestNotifyDependencyFindings:

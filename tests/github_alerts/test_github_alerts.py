@@ -11,11 +11,11 @@ os.environ.setdefault("API_KEY", "test-api-key-for-pytest")
 os.environ.setdefault("ENVIRONMENT", "development")
 
 from app.auth.session import create_session_token  # noqa: E402
-from app.core.notifications.github_alerts import GithubAlertNotifier  # noqa: E402
 from app.depscan.models import DependencyFinding  # noqa: E402
 from app.github_alerts import client  # noqa: E402
 from app.github_alerts.crawler import _GithubAlertJob  # noqa: E402
 from app.github_alerts.models import GithubAlert, GithubAlertSource  # noqa: E402
+from app.github_alerts.notifier import GithubAlertNotifier  # noqa: E402
 from app.github_alerts.repository import GithubAlertRepository, dependabot_vs_depscan  # noqa: E402
 
 HEADERS = {"X-API-KEY": "test-api-key-for-pytest"}

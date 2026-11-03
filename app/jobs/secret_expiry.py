@@ -4,7 +4,7 @@ from datetime import date
 
 from app.audit.recorder import delete_old_audit_logs
 from app.core.config import settings
-from app.core.notifications.secret_expiry import ExpiringSecret, SecretExpiryNotifier
+from app.jobs.secret_expiry_notifier import ExpiringSecret, SecretExpiryNotifier
 
 logger = logging.getLogger(__name__)
 

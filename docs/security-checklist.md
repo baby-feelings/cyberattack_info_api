@@ -10,7 +10,7 @@ IPA のチェックリスト（11 の脆弱性）を、本アプリの実装と�
 | 3 | パス名パラメータの未チェック | tarball は `extractall(filter="data")` で展開（`../` は拒否。フォールバックなし）。テストあり | `app/codescan/archive.py` |
 | 4 | セッション管理の不備 | セッションは Bearer の JWT（URL に載せない。ログイン後に新規発行）。7 日・利用で延長、ログインから 30 日で再認証 | `app/auth/session.py` |
 | 5 | XSS | React の自動エスケープ。外部データの URL は `http(s)` のみリンク化（`safeHttpUrl`）。ダッシュボードに CSP | `dashboard/src/components/shared/safeUrl.ts`・`dashboard/vercel.json` |
-| 6 | CSRF | 認証は Cookie ではなく Bearer ヘッダー（他サイトから送れない）。OAuth の state・同意画面はブラウザ紐づけ。MCP トークン・OAuth 接続の発行は本人の Slack へ事後通知 | `app/core/notifications/mcp_token.py` |
+| 6 | CSRF | 認証は Cookie ではなく Bearer ヘッダー（他サイトから送れない）。OAuth の state・同意画面はブラウザ紐づけ。MCP トークン・OAuth 接続の発行は本人の Slack へ事後通知 | `app/mcp_server/notifier.py` |
 | 7 | HTTP ヘッダ・インジェクション | ヘッダーは FastAPI/Starlette の API で出力（外部入力を直接入れない） | - |
 | 8 | メールヘッダ・インジェクション | メール送信なし。Slack の宛先は `https://hooks.slack.com/` のみ許可 | `app/core/notifications/slack.py` |
 | 9 | クリックジャッキング | API は `X-Frame-Options: DENY`、ダッシュボードは `X-Frame-Options`・`frame-ancestors 'none'` | `app/core/security_headers.py`・`dashboard/vercel.json` |

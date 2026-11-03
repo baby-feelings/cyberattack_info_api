@@ -11,11 +11,11 @@ os.environ.setdefault("API_KEY", "test-api-key-for-pytest")
 os.environ.setdefault("ENVIRONMENT", "development")
 
 from app.auth.session import create_session_token  # noqa: E402
-from app.core.notifications.repo_audit import RepoAuditChangeNotifier  # noqa: E402
 from app.repo_audit import checks as c  # noqa: E402
 from app.repo_audit import collector  # noqa: E402
 from app.repo_audit.crawler import _RepoAuditJob, audit_repo  # noqa: E402
 from app.repo_audit.models import RepoAudit  # noqa: E402
+from app.repo_audit.notifier import RepoAuditChangeNotifier  # noqa: E402
 
 HEADERS = {"X-API-KEY": "test-api-key-for-pytest"}
 NOW = datetime(2026, 10, 31, tzinfo=UTC)

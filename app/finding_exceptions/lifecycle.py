@@ -15,10 +15,10 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.db_utils import now_utc
-from app.core.notifications.exception_notices import ExceptionNoticeNotifier
 from app.finding_exceptions.issue_sync import is_admin_repo, refile_issues
 from app.finding_exceptions.matching import findings_for
 from app.finding_exceptions.models import ENDED_FIX_AVAILABLE, KIND_DEPENDENCY, FindingException
+from app.finding_exceptions.notifier import ExceptionNoticeNotifier
 from app.finding_exceptions.repository import FindingExceptionRepository
 
 logger = logging.getLogger(__name__)

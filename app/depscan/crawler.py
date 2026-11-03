@@ -21,11 +21,11 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.crawler_runner import CrawlCounters, CrawlJob
 from app.core.notifications.crawler import notify_error
-from app.core.notifications.dependency_findings import notify_dependency_findings
 from app.depscan.finding_builder import build_findings
 from app.depscan.inventory import RepoDependencyRepository
 from app.depscan.issue_management import close_resolved_repo_issues, file_github_issues
 from app.depscan.manifests import collect_dependencies
+from app.depscan.notifier import notify_dependency_findings
 from app.depscan.reachability_scan import apply_reachability
 from app.depscan.repository import DependencyFindingRepository
 from app.finding_exceptions.matching import drop_excepted

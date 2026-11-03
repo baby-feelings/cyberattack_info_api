@@ -23,11 +23,11 @@ from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
 from app.core.db_utils import now_utc
-from app.core.notifications.runtime_alerts import notify_runtime_alerts
 from app.runtimes.browse import list_runtimes
 from app.runtimes.detector import RUNTIME_LABELS
 from app.runtimes.filters import RuntimeFilter
 from app.runtimes.models import RuntimeAlert, RuntimeRelease
+from app.runtimes.notifier import notify_runtime_alerts
 
 logger = logging.getLogger(__name__)
 

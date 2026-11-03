@@ -79,7 +79,7 @@ description: 言語・実行環境のバージョン監視（RUNTIME。Issue #37
 - 状態は DB に保存しない（期限が日々近づくため、保存すると古くなる）。件数が少ない（リポジトリ数×数件）
   ため、条件に合う行を全て取って Python で判定し、絞り込む（DB のページネーションは使わない）
 
-## Slack 通知（`alerts.py`・`core/notifications/runtime_alerts.py`）
+## Slack 通知（`alerts.py`・`runtimes/notifier.py`）
 毎日の実行の成功後に、**変化があったときだけ**、管理者（`GITHUB_USERNAME`）の Slack に送る。毎日同じ内容を
 送ると見なくなるため。3種類（言語・系列ごと。キーは`<種類>:<言語>:<系列>`、例`eol_soon:python:3.11`）:
 

@@ -59,7 +59,7 @@ Issue として起票する（Slack通知と同じ `new_snapshots` を使用）�
 （`app.codescan.issue_management`）と完全に同一のため、`app.core.issue_filing
 .file_or_update_repo_issues` に共通化してある。各ドメインは Issue タイトル・本文整形関数
 （クロージャ）・ログ接頭辞のみを渡す（DRY原則。差分はここに集約する）。本文の整形ロジック
-（`format_package_lines`）自体は Slack 通知（`app.core.notifications.dependency_findings`）と共有するため
+（`format_package_lines`）自体は Slack 通知（`app.depscan.notifier`）と共有するため
 `app.core.finding_format` に切り出してある。
 
 `close_resolved_repo_issues` が、DEPSCAN の再スキャンで「そのリポジトリの未解決 finding が

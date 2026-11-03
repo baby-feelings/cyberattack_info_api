@@ -1,8 +1,8 @@
-"""app.core.notifications.runtime_alerts（言語・実行環境のバージョンの通知）のテスト。"""
+"""app.runtimes.notifier（言語・実行環境のバージョンの通知）のテスト。"""
 from unittest.mock import patch
 
-from app.core.notifications import runtime_alerts
-from app.core.notifications.runtime_alerts import RuntimeAlertNotifier, notify_runtime_alerts
+from app.runtimes import notifier as runtime_alerts
+from app.runtimes.notifier import RuntimeAlertNotifier, notify_runtime_alerts
 
 _EOL = {
     "kind": "eol", "runtime_label": "Python", "cycle": "3.10", "latest_version": "3.10.20",
@@ -50,7 +50,7 @@ class TestRuntimeAlertNotifier:
 
     def test_goes_only_to_the_admin(self):
         with patch(
-            "app.core.notifications.runtime_alerts.recipient_resolver.resolve_admin_recipient",
+            "app.runtimes.notifier.recipient_resolver.resolve_admin_recipient",
             return_value=["https://hooks.slack.com/services/admin"],
         ) as resolver:
             targets = RuntimeAlertNotifier([_EOL]).default_recipients()
@@ -75,7 +75,7 @@ class TestNotifyRuntimeAlerts:
 
     def test_returns_false_without_any_recipient(self):
         with patch(
-            "app.core.notifications.runtime_alerts.recipient_resolver.resolve_admin_recipient",
+            "app.runtimes.notifier.recipient_resolver.resolve_admin_recipient",
             return_value=[],
         ):
             assert notify_runtime_alerts([_EOL]) is False

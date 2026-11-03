@@ -23,12 +23,12 @@ from app.core.crawler_runner import CrawlCounters, CrawlJob
 from app.core.db_utils import now_utc
 from app.core.github.accounts import list_target_repos
 from app.core.github.repo import GitHubRepo
-from app.core.notifications.dependabot_ops import notify_dependabot_ops
 from app.depsops.github_client import (
     has_ci_workflows,
     list_open_dependabot_alerts,
     list_open_dependabot_prs,
 )
+from app.depsops.notifier import notify_dependabot_ops
 from app.depsops.pr_judge import PrJudge
 from app.depsops.pr_log_repository import PrLogRepository
 

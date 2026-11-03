@@ -20,7 +20,6 @@ from app.audit.recorder import record_audit
 from app.auth.account_store import get_webhook_for_user
 from app.auth.dependencies import get_current_username
 from app.core.database import get_db
-from app.core.notifications.mcp_token import notify_mcp_token_issued
 from app.mcp_server.mcp_token_store import (
     DEFAULT_DAYS,
     MAX_ACTIVE_TOKENS,
@@ -31,6 +30,7 @@ from app.mcp_server.mcp_token_store import (
     token_status,
 )
 from app.mcp_server.models import McpToken
+from app.mcp_server.notifier import notify_mcp_token_issued
 from app.mcp_server.oauth.connections import disconnect, list_connections
 
 logger = logging.getLogger(__name__)
