@@ -1073,8 +1073,27 @@ class TestNotifyDependabotOps:
         with patch("app.core.notifications.slack.send_slack") as mock_send:
             notify_dependabot_ops(merged, flagged, recipients=["https://hooks.slack.com/x"])
         message = mock_send.call_args[0][0]
-        assert "u/r1" in message and "bump x" in message
-        assert "u/r2" in message and "メジャー" in message
+        assert "u/r1" in message and "自動マージ（1件・1リポジトリ）" in message
+        assert "メジャー 1件" in message and "要確認（1件・1リポジトリ）" in message
+        # PR のタイトル・番号は載せない（概要のみ）
+        assert "bump x" not in message and "bump y" not in message
+
+    def test_summarizes_many_prs_per_repo_and_reason(self):
+        merged = [
+            {"repo_full_name": "u/r1", "pr_number": n, "title": f"bump {n}"} for n in range(5)
+        ] + [{"repo_full_name": "u/r2", "pr_number": 9, "title": "bump z"}]
+        flagged = [
+            {"repo_full_name": "u/r1", "pr_number": 20, "title": "a", "reason": "メジャー"},
+            {"repo_full_name": "u/r2", "pr_number": 21, "title": "b", "reason": "メジャー"},
+            {"repo_full_name": "u/r2", "pr_number": 22, "title": "c", "reason": "CI失敗"},
+        ]
+        with patch("app.core.notifications.slack.send_slack") as mock_send:
+            notify_dependabot_ops(merged, flagged, recipients=["https://hooks.slack.com/x"])
+        message = mock_send.call_args[0][0]
+        assert "自動マージ（6件・2リポジトリ）" in message
+        assert "`u/r1` 5件" in message and "`u/r2` 1件" in message
+        assert "メジャー 2件" in message and "CI失敗 1件" in message
+        assert "要確認（3件・2リポジトリ）" in message
 
 
 # ──────────────────────────────────────────────────────────────
