@@ -16,10 +16,10 @@ from sqlalchemy.orm import Session
 from app.auth.account_store import get_webhook_for_user
 from app.codescan.crawler import SCAN_ERRORS, failed_tools_of, scan_repo
 from app.codescan.issue_management import close_resolved_repo_issues, file_github_issues
+from app.codescan.notifier import notify_code_findings
 from app.codescan.repository import CodeFindingRepository
 from app.core.database import SessionLocal
 from app.core.github.accounts import list_target_repos
-from app.core.notifications.crawler import notify_success
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ def run_codescan_for_user(username: str, token: str) -> None:
 
         webhook = get_webhook_for_user(db, username)
         if webhook:
-            notify_success("CODESCAN", inserted=new_count, updated=0, recipients=[webhook])
+            notify_code_findings(all_new_snapshots, recipients=[webhook])
             try:
                 file_github_issues(all_new_snapshots, token)
             except Exception as exc:

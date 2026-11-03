@@ -27,10 +27,11 @@ from sqlalchemy.orm import Session
 
 from app.codescan.archive import RepoArchive
 from app.codescan.issue_management import close_resolved_repo_issues, file_github_issues
+from app.codescan.notifier import notify_code_findings
 from app.codescan.repository import CodeFindingRepository
 from app.codescan.scanners import Scanner, default_scanners
 from app.core.config import settings
-from app.core.crawler_runner import CrawlCounters, run_crawler
+from app.core.crawler_runner import CrawlCounters, CrawlJob
 from app.core.github.accounts import list_target_repos
 from app.core.github.repo import GitHubRepo
 from app.finding_exceptions.matching import drop_excepted
@@ -90,7 +91,9 @@ def scan_repo(
     return records
 
 
-def _run_codescan_body(db: Session, counters: CrawlCounters) -> None:
+def _run_codescan_body(
+    db: Session, counters: CrawlCounters, new_snapshots: list[dict[str, Any]] | None = None,
+) -> None:
     """CODESCAN 本体処理（`run_crawler` へ渡す body 関数）。
 
     リポジトリ単位で try/except し、1リポジトリの失敗（tarball取得失敗・Semgrepタイムアウト・
@@ -105,7 +108,7 @@ def _run_codescan_body(db: Session, counters: CrawlCounters) -> None:
     logger.info("CODESCAN: %d target repos to scan", len(repos))
 
     repository = CodeFindingRepository(db)
-    all_new_snapshots: list[dict[str, Any]] = []
+    all_new_snapshots: list[dict[str, Any]] = [] if new_snapshots is None else new_snapshots
     # 全ツールの検査に成功したリポジトリ（Issue のクローズの判定の対象）
     fully_scanned: set[str] = set()
 
@@ -148,12 +151,27 @@ def _run_codescan_body(db: Session, counters: CrawlCounters) -> None:
         logger.error("CODESCAN: failed to close resolved GitHub issues: %s", exc, exc_info=True)
 
 
+class _CodescanJob(CrawlJob):
+    """CODESCAN のクロール。成功後は、件数ではなく、新規検知のリポジトリ別の概要を通知する。"""
+
+    crawler_type = "CODESCAN"
+
+    def __init__(self) -> None:
+        self.new_snapshots: list[dict[str, Any]] = []
+
+    def execute(self, db: Session, counters: CrawlCounters) -> None:
+        _run_codescan_body(db, counters, self.new_snapshots)
+
+    def after_success(self, counters: CrawlCounters) -> None:
+        notify_code_findings(self.new_snapshots)
+
+
 def fetch_and_scan_code(*, force: bool = False) -> tuple[int, int, int]:
     """CODESCAN のメインエントリポイント。
 
     GitHub 上の全対象リポジトリのソースコードを Semgrep で静的解析し、自アプリの
     コード自体に潜む脆弱性を検知する。結果は crawler_logs に記録し、新規検知が
-    あれば Slack に通知する（`app.core.crawler_runner.run_crawler` 経由）。
+    あれば Slack に通知する（`CrawlJob` 経由。リポジトリ別の概要）。
     APScheduler から毎日呼び出される。
 
     Args:
@@ -165,8 +183,9 @@ def fetch_and_scan_code(*, force: bool = False) -> tuple[int, int, int]:
         deleted=今回解決済みにした件数）
     """
     logger.info("=== CODESCAN started ===")
-    result = run_crawler("CODESCAN", _run_codescan_body, force=force)
+    inserted, updated, deleted = _CodescanJob().run(force=force)
     logger.info(
-        "=== CODESCAN completed: inserted=%d, updated=%d, deleted=%d ===", *result,
+        "=== CODESCAN completed: inserted=%d, updated=%d, deleted=%d ===",
+        inserted, updated, deleted,
     )
-    return result
+    return inserted, updated, deleted
