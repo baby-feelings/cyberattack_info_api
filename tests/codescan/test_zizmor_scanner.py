@@ -56,7 +56,7 @@ def _completed(stdout="", stderr="", returncode=0):
 class TestRun:
     def test_runs_offline_with_json_output_in_the_repo_directory(self):
         with patch(
-            "app.codescan.scanners.subprocess.run", return_value=_completed("[]"),
+            "subprocess.run", return_value=_completed("[]"),
         ) as mock_run:
             ZizmorScanner().run("/tmp/repo")
 
@@ -78,19 +78,19 @@ class TestRun:
     def test_returns_the_parsed_findings(self):
         payload = [_finding()]
         with patch(
-            "app.codescan.scanners.subprocess.run", return_value=_completed(json.dumps(payload)),
+            "subprocess.run", return_value=_completed(json.dumps(payload)),
         ):
             assert ZizmorScanner().run("/tmp/repo") == payload
 
     def test_no_findings_is_an_empty_list(self):
-        with patch("app.codescan.scanners.subprocess.run", return_value=_completed("[]")):
+        with patch("subprocess.run", return_value=_completed("[]")):
             assert ZizmorScanner().run("/tmp/repo") == []
 
     def test_repo_without_workflows_is_not_an_error(self):
         # ワークフローが無いリポジトリ: 終了コード3・標準出力なし。検知なしとして扱う
         stderr = "fatal: no audit was performed\nerror: no inputs collected\n"
         with patch(
-            "app.codescan.scanners.subprocess.run",
+            "subprocess.run",
             return_value=_completed(stderr=stderr, returncode=3),
         ):
             assert ZizmorScanner().run("/tmp/repo") == []
@@ -98,19 +98,19 @@ class TestRun:
     def test_tool_failure_raises_instead_of_looking_like_no_findings(self):
         # 検知0件として扱うと、既存の検知を「解決済み」にしてしまうため、例外にする
         with patch(
-            "app.codescan.scanners.subprocess.run",
+            "subprocess.run",
             return_value=_completed(stderr="panic: something broke", returncode=1),
         ), pytest.raises(OSError, match="zizmor failed"):
             ZizmorScanner().run("/tmp/repo")
 
     def test_invalid_json_raises(self):
         with patch(
-            "app.codescan.scanners.subprocess.run", return_value=_completed("not json"),
+            "subprocess.run", return_value=_completed("not json"),
         ), pytest.raises(json.JSONDecodeError):
             ZizmorScanner().run("/tmp/repo")
 
     def test_non_list_json_is_treated_as_empty(self):
-        with patch("app.codescan.scanners.subprocess.run", return_value=_completed("{}")):
+        with patch("subprocess.run", return_value=_completed("{}")):
             assert ZizmorScanner().run("/tmp/repo") == []
 
 
