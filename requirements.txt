@@ -44,4 +44,4 @@ anyio>=4.15.1
 python-multipart>=0.0.32
 
 # AI エージェント向けリモートMCPサーバー（/mcp、Streamable HTTP。app/mcp_server/）
-mcp==1.30.0
+mcp==2.3.0
