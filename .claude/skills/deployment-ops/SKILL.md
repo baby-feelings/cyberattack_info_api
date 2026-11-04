@@ -91,7 +91,7 @@ FastAPIのOpenAPIに載らない`/mcp`・OAuth 2.1のルートは、ZAP専用の
 OCIインスタンスのドメイン（インスタンスを作り直した場合はここも更新）。GitHub Secretsに
 `API_KEY`の設定が必要。
 
-**同日重複実行の防止（Issue #239）**: 「二重バックアップ」という設計意図どおり、この
+**重複実行の防止（Issue #239。直近12時間の成功記録で判定）**: 「二重バックアップ」という設計意図どおり、この
 daily-crawl.ymlは無条件に毎日発火する。OCI移行後はAPSchedulerが確実に動作するため、
 実質的にバックアップではなく常に二重実行（1日2回）になっていた。KEV/OSV/JVN/DEPSCAN/
 CODESCANはUpsertのため二重実行の実害は薄いが、DEPSOPSは実行ごとに1PRにつき1行追記する
@@ -99,8 +99,10 @@ CODESCANはUpsertのため二重実行の実害は薄いが、DEPSOPSは実行�
 `app.core.crawler_runner.already_succeeded_recently`（全クローラーが共通の
 `CrawlJob.run`/`run_crawler`経由で呼ぶ）が、直近12時間
 （UTC日付の区切りではない）に成功実行済みなら2回目の実行を自動的にスキップする。動作確認等で
-明示的に同日再実行したい場合は、各`/admin/*`エンドポイントに`?force=true`を付与する
-（GitHub Actions・APSchedulerの自動トリガーは常に`force`無し=Falseで呼ぶ）。
+明示的に再実行したい場合は、各`/admin/*`エンドポイントに`?force=true`を付与する
+（GitHub Actions・APSchedulerの自動トリガーは常に`force`無し=Falseで呼ぶ）。判定を「UTCの同じ日」に
+すると、Actionsの補完cronが数時間遅れて翌日の未明に動いた場合に、その日の定期実行（KEV〜DEPSOPS）が
+丸ごとスキップされ、最新化が約2日止まったため、直近12時間（`DUPLICATE_RUN_WINDOW`）にした。
 
 ## OCI本番デプロイ手順（手動、都度実行）
 1. **SCP転送**: `deploy/deploy_to_oci.ps1`相当の手順、または変更範囲に応じて個別に

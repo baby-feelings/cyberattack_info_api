@@ -104,7 +104,7 @@ DEPSCAN・CODESCAN の手動実行（`?force=true`）で、起動とクローラ
 > 毎週月曜 00:00 対応状況（SLA）の週次まとめ。
 > GitHub Actions の単一 cron（KEV〜DEPSOPSのみ）は、ネットワーク障害等で APScheduler が不発火だった
 > 場合の二重バックアップとして維持している（削除済みリポジトリ掃除・登録済み他ユーザー向け実行は
-> APScheduler側のみ）。KEV/OSV/JVN/DEPSCAN/CODESCAN/DEPSOPSは今日（UTC日付）既に成功実行済みなら
+> APScheduler側のみ）。KEV/OSV/JVN/DEPSCAN/CODESCAN/DEPSOPSは直近12時間（UTC日付の区切りではない）に成功実行済みなら
 > 2回目の実行を自動的にスキップするため、この二重トリガー自体は無害（Issue #239）。
 
 ### CODESCAN などを単独で再スキャンする

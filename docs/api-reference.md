@@ -79,7 +79,7 @@
 
 クロール系の`/admin/*`（`*-crawl`・`dependabot-ops`）はバックグラウンド実行で即座に202を
 返す（結果は`/api/crawler-logs`で確認）。KEV/OSV/JVN/DEPSCAN/CODESCAN/DEPSOPSは
-`?force=true`を付けると、同日既に成功実行済みでもスキップせず強制的に再実行する
+`?force=true`を付けると、直近12時間に成功実行済みでもスキップせず強制的に再実行する
 （Issue #239。動作確認等の明示的な手動再実行用。GitHub Actions・APSchedulerの
 自動トリガーは常に`force`無しで呼ぶため二重実行にはならない）。
 `PUT /admin/depscan/assets/{owner}/{repo}`は同期的なUpsertのため200を即時返す

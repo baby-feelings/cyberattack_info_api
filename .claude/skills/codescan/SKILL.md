@@ -87,12 +87,14 @@ CVSS 7.0以上はダッシュボード（`CodescanRow.tsx`のCvssBadge）で赤�
 解決判定を行う設計にした（あるリポジトリのスキャンが失敗してスキップされた場合、
 そのリポジトリの既存findingを誤って解決済みにしないため）。
 
-## オーケストレーションは KEV/OSV/JVN と同じ `run_crawler` を使う
-DEPSCANは詳細なSlackダイジェスト（`notify_dependency_findings`）・Issue自動
-クローズ判定など固有の通知・戻り値を持つため`CrawlJob`のサブクラス（`_DepscanJob`）で
-実装しているが、CODESCANは`app.core.crawler_runner.run_crawler`（`CrawlJob`のラッパー）
-+ `CrawlCounters`をそのまま使い、通知は`notify_success`/`notify_error`の汎用
-フォーマットで済ませる設計にした（要件どおり、DRY原則を優先）。`CrawlCounters`
+## オーケストレーションは `CrawlJob` のサブクラス（`_CodescanJob`）で、通知はリポジトリ別の概要
+本体処理`_run_codescan_body(db, counters, new_snapshots)`は、新規検知のスナップショットを
+呼び出し側のリストに集める。`_CodescanJob`（`app.core.crawler_runner.CrawlJob`のサブクラス）が
+それを受け、成功後の通知を、件数だけの汎用通知（`notify_success`）ではなく、
+`app.codescan.notifier.notify_code_findings`（**リポジトリごとに、重要度別・ツール別の件数だけの
+概要の1通**。個別の内容はダッシュボードとIssueで確認。新規検知がなければ送らない。例外の検知は対象外）
+に差し替える。登録済み他ユーザー向け（`user_scan`）も同じ通知を使う。エラー通知は汎用の
+`notify_error`のまま。`CrawlCounters`
 への対応付けはDEPSCANのcrawler_logs記録方針を踏襲: `inserted`=新規検知件数、
 `deleted`=今回解決済みにした件数、`updated`=保持期間超過（`CODESCAN_RETENTION_DAYS`、
 既定180日）の実削除件数。
