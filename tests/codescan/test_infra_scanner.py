@@ -39,6 +39,9 @@ class TestRun:
 
     def test_ignores_other_files_and_dependency_directories(self, tmp_path):
         _write(tmp_path, "README.md", "Dockerfile")
+        # Dockerfile と名前が似たソースコード・文書は、設定ファイルではない（誤検知の回帰テスト）
+        _write(tmp_path, "app/iac_rules/dockerfile.py", "FROM python")
+        _write(tmp_path, "docs/Dockerfile.md", "FROM python")
         _write(tmp_path, "src/app.yml", "privileged: true")
         _write(tmp_path, "node_modules/pkg/Dockerfile", "FROM python")
         _write(tmp_path, ".git/Dockerfile", "FROM python")

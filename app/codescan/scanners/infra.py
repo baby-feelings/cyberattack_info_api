@@ -20,6 +20,13 @@ _IAC_SKIP_DIRS = frozenset({
 # 1ファイルの読み取り上限（バイト）と、1リポジトリで読むファイル数の上限
 # （巨大・大量の生成物への備え）
 _IAC_MAX_FILE_BYTES = 200_000
+# `dockerfile.py` のように、Dockerfile と名前が似たソースコード・文書は、
+# 設定ファイルではないため対象にしない
+# （Dockerfile の接尾辞は `Dockerfile.dev` のような環境名で、これらの拡張子にはならない）
+_NOT_CONFIG_SUFFIXES = (
+    ".py", ".pyi", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".go", ".rs", ".java", ".kt",
+    ".rb", ".php", ".cs", ".sh", ".md", ".txt", ".rst", ".json", ".html", ".css", ".snap",
+)
 _IAC_MAX_FILES = 200
 
 
@@ -32,9 +39,12 @@ def _iac_rules_for(filename: str):
         return iac_rules.check_realtime_db_rules
     if lowered == "firebase.json":
         return iac_rules.check_firebase_json
-    if lowered == "dockerfile" or lowered.startswith("dockerfile.") or (
-        lowered.endswith(".dockerfile")
-    ):
+    is_dockerfile_name = (
+        lowered == "dockerfile"
+        or lowered.startswith("dockerfile.")
+        or lowered.endswith(".dockerfile")
+    )
+    if is_dockerfile_name and not lowered.endswith(_NOT_CONFIG_SUFFIXES):
         return iac_rules.check_dockerfile
     if lowered.endswith((".yml", ".yaml")) and (
         lowered.startswith(("docker-compose", "compose"))
