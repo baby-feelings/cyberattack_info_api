@@ -271,7 +271,9 @@ Firebaseのルール・Dockerfile・docker-composeの代表的な不備を、**�
 Terraform・Kubernetesは対象外（YAGNI。使うアプリが出たら`iac_rules`に足す）。
 
 - **対象ファイル**: `firestore.rules`・`storage.rules`・`database.rules.json`・`firebase.json`・`Dockerfile*`・`*.Dockerfile`・
-  `docker-compose*.y(a)ml`・`compose*.y(a)ml`。`node_modules`・`.git`・`vendor`等は読まない。1ファイル200KB・1リポジトリ200ファイルまで
+  `docker-compose*.y(a)ml`・`compose*.y(a)ml`。`node_modules`・`.git`・`vendor`等は読まない。1ファイル200KB・1リポジトリ200ファイルまで。
+  **`dockerfile.py`・`Dockerfile.md`のように、Dockerfileと名前が似たソースコード・文書（`.py`・`.md`・`.json`等。
+  `_NOT_CONFIG_SUFFIXES`）はDockerfileとして診断しない**（`iac_rules/dockerfile.py`が誤検知された。#456）。`Dockerfile.dev`等の環境名の接尾辞は診断する
 - **ルール**: Firebase=`allow ... if true`（書き込みはERROR・読み取りはWARNING。ログインしていれば誰でも書ける・期限つきの
   テストモードも検知）・RTDBの`.read/.write: true`・`firebase.json`の`"public": "."`。Dockerfile=root実行・`latest`/タグなし・
   シークレットのCOPY・`ENV/ARG`の認証情報の直書き・`curl|sh`。compose=特権・Dockerソケット・ホストネットワーク・DB等の
