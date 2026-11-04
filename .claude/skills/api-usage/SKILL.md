@@ -146,7 +146,7 @@ DEPSCAN スキャンが実行され、`/api/depscan`・`/api/depscan/stats` は�
 |----------|------|
 | 毎日 JST 04:05（UTC 19:05） | GitHub Actions 単一 cron で KEV → OSV → JVN → DEPSCAN → CODESCAN → DEPSOPS を順次実行（Upsert・古いレコード削除） |
 | アプリ起動時 | DB テーブルの自動作成 |
-| `POST /admin/*-crawl` 実行時 | 各クローラーをバックグラウンド取得（202 即時返却。KEV/OSV/JVN/DEPSCAN/CODESCAN/DEPSOPSは`?force=true`で同日重複実行スキップをバイパス可能、Issue #239） |
+| `POST /admin/*-crawl` 実行時 | 各クローラーをバックグラウンド取得（202 即時返却。KEV/OSV/JVN/DEPSCAN/CODESCAN/DEPSOPSは`?force=true`で重複実行スキップ（直近12時間）をバイパス可能、Issue #239） |
 
 Upsertロジックの概要:
 - **KEV**: 新規→INSERT、内容変更あり→UPDATE、変更なし→スキップ。新規・更新時はSlack通知。

@@ -93,10 +93,10 @@ started_at計測 → DBセッション生成 → 本体処理 → crawler_logs�
 `notify_success`）・`result`（戻り値。既定は(inserted, updated, deleted)）・`skipped_result`
 （スキップ時の戻り値。既定は(0,0,0)）だけを差し替える。
 
-関数1つで済むクローラー（KEV/OSV/JVN/CODESCAN）は`run_crawler(type, body)`ラッパー
+関数1つで済むクローラー（KEV/OSV/JVN）は`run_crawler(type, body)`ラッパー
 （内部で`_CallableCrawlJob`を生成）を使い、取得・Upsert・保持期間削除といったドメイン固有の処理のみを
-`body(db, counters)` 関数として渡す。固有の状態・通知・戻り値を持つDEPSCAN/DEPSOPSは
-`CrawlJob`のサブクラス（`_DepscanJob`/`_DepsopsJob`）で実装する。進捗件数は `CrawlCounters`（dataclass）で受け渡し、`body` が処理の進行に
+`body(db, counters)` 関数として渡す。固有の状態・通知・戻り値を持つDEPSCAN/DEPSOPS/CODESCANは
+`CrawlJob`のサブクラス（`_DepscanJob`/`_DepsopsJob`/`_CodescanJob`）で実装する。進捗件数は `CrawlCounters`（dataclass）で受け渡し、`body` が処理の進行に
 応じて `counters.inserted`/`updated`/`deleted` を加算する。**エラー発生時もその時点までの
 counters の値を crawler_logs に反映する**（OSV はエコシステム単位で処理を継続する既存挙動が
 あり、途中で例外が発生してもそれまでに成功した件数を記録する。KEV/JVN はエラー時点で
