@@ -9,7 +9,13 @@ DEPSCAN/CODESCANはUpsertのため実害が薄いが、DEPSOPSは実行ごとに
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
-from app.core.crawler_runner import CrawlCounters, CrawlJob, already_succeeded_today, run_crawler
+from app.core.crawler_runner import (
+    DUPLICATE_RUN_WINDOW,
+    CrawlCounters,
+    CrawlJob,
+    already_succeeded_recently,
+    run_crawler,
+)
 from app.crawler_logs.models import CrawlerLog
 
 
@@ -24,33 +30,39 @@ def _make_log(db_session, crawler_type: str, status: str, started_at: datetime) 
     db_session.commit()
 
 
-class TestAlreadySucceededToday:
+class TestAlreadySucceededRecently:
     def test_returns_false_when_no_logs_exist(self, db_session):
-        assert already_succeeded_today("KEV") is False
+        assert already_succeeded_recently("KEV") is False
 
     def test_returns_true_when_succeeded_earlier_today(self, db_session):
         _make_log(db_session, "KEV", "success", datetime.now(UTC))
-        assert already_succeeded_today("KEV") is True
+        assert already_succeeded_recently("KEV") is True
 
     def test_returns_false_when_only_failed_today(self, db_session):
         """今日の実行が全て失敗（error）なら、まだ成功していないので実行を許可する。"""
         _make_log(db_session, "KEV", "error", datetime.now(UTC))
-        assert already_succeeded_today("KEV") is False
+        assert already_succeeded_recently("KEV") is False
 
-    def test_returns_false_when_success_was_yesterday(self, db_session):
-        """前日の成功は「今日」の判定に含めない（UTC日付境界で区切る）。"""
-        yesterday = datetime.now(UTC) - timedelta(days=1)
-        _make_log(db_session, "KEV", "success", yesterday)
-        assert already_succeeded_today("KEV") is False
+    def test_returns_false_when_success_is_older_than_the_window(self, db_session):
+        """窓（12時間）より前の成功は、重複とみなさない（翌日の定期実行を飛ばさない）。"""
+        old = datetime.now(UTC) - DUPLICATE_RUN_WINDOW - timedelta(minutes=1)
+        _make_log(db_session, "KEV", "success", old)
+        assert already_succeeded_recently("KEV") is False
+
+    def test_returns_true_when_success_is_within_the_window_across_utc_midnight(self, db_session):
+        """UTC の日付をまたいでいても、窓の内の成功は重複とみなす（遅れて動く補完 cron 対策）。"""
+        recent = datetime.now(UTC) - DUPLICATE_RUN_WINDOW + timedelta(minutes=1)
+        _make_log(db_session, "KEV", "success", recent)
+        assert already_succeeded_recently("KEV") is True
 
     def test_is_scoped_to_the_specific_crawler_type(self, db_session):
         """他のクローラー種別の成功記録には影響されない。"""
         _make_log(db_session, "OSV", "success", datetime.now(UTC))
-        assert already_succeeded_today("KEV") is False
+        assert already_succeeded_recently("KEV") is False
 
 
 class TestRunCrawlerDeduplication:
-    def test_skips_body_when_already_succeeded_today(self, db_session):
+    def test_skips_body_when_already_succeeded_recently(self, db_session):
         """今日既に成功済みなら body を呼ばずに (0, 0, 0) を返す（force未指定）。"""
         _make_log(db_session, "KEV", "success", datetime.now(UTC))
         mock_body = MagicMock()

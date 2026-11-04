@@ -221,10 +221,10 @@ OWASP Top 10:2025「ソフトウェアサプライチェーンの失敗」対策
 スキャンで解決済みにした件数（削除ではない）、`updated`=保持期間超過の**実削除**件数
 （DEPSCANの`updated`は元々常に0だったため、新カラムを追加せずここへ格納している）。
 
-## DEPSCAN/DEPSOPSの同日重複実行防止（Issue #239、`app.core.crawler_runner.already_succeeded_today`）
+## DEPSCAN/DEPSOPSの重複実行防止（Issue #239、`app.core.crawler_runner.already_succeeded_recently`）
 `fetch_and_scan_dependencies`・`run_dependabot_ops`は`CrawlJob`のサブクラス
-（`_DepscanJob`/`_DepsopsJob`）で、`CrawlJob.run`が`already_succeeded_today`を呼び、今日
-（UTC日付）既に成功実行済みなら`(0, 0, 0)`を返してスキップする（他のクローラーも同じ判定を
+（`_DepscanJob`/`_DepsopsJob`）で、`CrawlJob.run`が`already_succeeded_recently`を呼び、直近12時間
+（UTC日付の区切りではない）に成功実行済みなら`(0, 0, 0)`を返してスキップする（他のクローラーも同じ判定を
 共通で行う。詳細は`crawler-internals`スキル参照）。`CrawlCounters`への対応付け: DEPSCANは
 inserted=新規検知・updated=保持期間超過の実削除・deleted=解決済み、DEPSOPSは
 inserted=自動マージ・updated=要確認・deleted=解消済み。

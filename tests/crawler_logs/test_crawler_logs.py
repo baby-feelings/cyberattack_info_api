@@ -251,7 +251,7 @@ class TestCrawlerLogIntegration:
              patch("app.core.crawler_runner.notify_success"), \
              patch("app.core.crawler_runner.write_crawler_log") as mock_log, \
              patch("app.core.crawler_runner.SessionLocal"), \
-             patch("app.core.crawler_runner.already_succeeded_today", return_value=False):
+             patch("app.core.crawler_runner.already_succeeded_recently", return_value=False):
             from app.kev.crawler import fetch_and_store_kev
             fetch_and_store_kev()
 
@@ -271,7 +271,7 @@ class TestCrawlerLogIntegration:
              patch("app.core.crawler_runner.notify_error"), \
              patch("app.core.crawler_runner.write_crawler_log") as mock_log, \
              patch("app.core.crawler_runner.SessionLocal"), \
-             patch("app.core.crawler_runner.already_succeeded_today", return_value=False):
+             patch("app.core.crawler_runner.already_succeeded_recently", return_value=False):
             from app.kev.crawler import fetch_and_store_kev
             try:
                 fetch_and_store_kev()
@@ -293,7 +293,7 @@ class TestCrawlerLogIntegration:
              patch("app.core.crawler_runner.notify_success"), \
              patch("app.core.crawler_runner.write_crawler_log") as mock_log, \
              patch("app.core.crawler_runner.SessionLocal"), \
-             patch("app.core.crawler_runner.already_succeeded_today", return_value=False):
+             patch("app.core.crawler_runner.already_succeeded_recently", return_value=False):
             from app.osv.crawler import fetch_and_store_osv
             fetch_and_store_osv()
 

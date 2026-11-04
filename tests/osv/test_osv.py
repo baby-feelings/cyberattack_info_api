@@ -838,7 +838,7 @@ class TestFetchAndStoreOsvAdditional:
                 with patch("app.core.crawler_runner.SessionLocal") as mock_sl:
                     mock_sl.return_value = MagicMock()
                     with patch(
-                        "app.core.crawler_runner.already_succeeded_today", return_value=False,
+                        "app.core.crawler_runner.already_succeeded_recently", return_value=False,
                     ):
                         with _pytest.raises(RuntimeError, match="outer error"):
                             fetch_and_store_osv()

@@ -18,7 +18,7 @@ import logging
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime, time
+from datetime import timedelta
 
 from sqlalchemy.orm import Session
 
@@ -32,8 +32,15 @@ from app.crawler_logs.writer import write_crawler_log
 logger = logging.getLogger(__name__)
 
 
-def already_succeeded_today(crawler_type: CrawlerType) -> bool:
-    """指定クローラー種別が、今日（UTC日付）既に成功実行済みかを確認する（Issue #239）。
+# 重複実行とみなす期間。2つの起動経路（APScheduler と GitHub Actions の補完 cron）は同じ日の
+# 数時間以内に発火するが、GitHub Actions の cron は数時間遅れて動くことがあるため、
+# 「UTC の同じ日」ではなく「直近の一定時間」で見る（日付境界をまたぐ遅延で、翌日の定期実行が
+# 飛ばされないようにする）。1日1回の実行の間隔（24時間）より短く、遅延（数時間）より長くする。
+DUPLICATE_RUN_WINDOW = timedelta(hours=12)
+
+
+def already_succeeded_recently(crawler_type: CrawlerType) -> bool:
+    """指定クローラー種別が、直近 `DUPLICATE_RUN_WINDOW` に成功実行済みかを確認する（Issue #239）。
 
     本アプリはクローラーの起動経路を2つ持つ: (1) アプリ内部の APScheduler（各
     settings.*_CRON_HOUR_UTC で毎日発火）、(2) GitHub Actions の daily-crawl.yml
@@ -43,18 +50,20 @@ def already_succeeded_today(crawler_type: CrawlerType) -> bool:
     自然キーのUpsertのため二重実行の実害は小さいが、DEPSOPSは実行ごとに1行追記する
     ログ設計のため件数が二重に膨れ上がっていた（本番で2388件中約半数が重複）。
 
-    どちらが先に発火しても「その日2回目の実行」を検知してスキップできるよう、
-    実行順ではなく「今日すでに成功記録があるか」で判定する。
+    どちらが先に発火しても「直近の2回目の実行」を検知してスキップできるよう、
+    実行順ではなく「直近に成功記録があるか」で判定する。判定を UTC の日付で区切ると、
+    GitHub Actions の遅延（前日分が翌日の未明に動く）で、その日の定期実行が丸ごと飛ばされ、
+    最新化が約2日止まるため、直近の時間幅で見る。
     """
     db = SessionLocal()
     try:
-        today_start_utc = datetime.combine(now_utc().date(), time.min, tzinfo=UTC)
+        window_start = now_utc() - DUPLICATE_RUN_WINDOW
         existing = (
             db.query(CrawlerLog)
             .filter(
                 CrawlerLog.crawler_type == crawler_type,
                 CrawlerLog.status == "success",
-                CrawlerLog.started_at >= today_start_utc,
+                CrawlerLog.started_at >= window_start,
             )
             .first()
         )
@@ -116,9 +125,10 @@ class CrawlJob(ABC):
             execute 内で処理されず伝播した例外（crawler_logs への記録・Slack通知の後、再送出する）
         """
         crawler_type = self.crawler_type
-        if not force and already_succeeded_today(crawler_type):
+        if not force and already_succeeded_recently(crawler_type):
             logger.info(
-                "%s crawler already succeeded today (UTC), skipping duplicate run", crawler_type,
+                "%s crawler already succeeded within the last 12h, skipping duplicate run",
+                crawler_type,
             )
             return self.skipped_result()
 

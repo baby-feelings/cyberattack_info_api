@@ -198,7 +198,7 @@ class TestFetchAndScanRuntimes:
         log = db_session.query(CrawlerLog).filter_by(crawler_type="RUNTIME").one()
         assert log.status == "error"
 
-    def test_skips_when_already_succeeded_today(self, db_session):
+    def test_skips_when_already_succeeded_recently(self, db_session):
         repos = [{"full_name": "alice/web", "default_branch": "main"}]
         detected = {"alice/web": [DetectedRuntime("python", "3.13", "Dockerfile", True)]}
         self._run(repos, detected)

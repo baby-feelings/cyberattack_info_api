@@ -96,9 +96,9 @@ daily-crawl.ymlは無条件に毎日発火する。OCI移行後はAPSchedulerが
 実質的にバックアップではなく常に二重実行（1日2回）になっていた。KEV/OSV/JVN/DEPSCAN/
 CODESCANはUpsertのため二重実行の実害は薄いが、DEPSOPSは実行ごとに1PRにつき1行追記する
 ログ設計のため件数が二重に膨れ上がっていた（本番で総件数2388件中約半数が重複）。
-`app.core.crawler_runner.already_succeeded_today`（全クローラーが共通の
-`CrawlJob.run`/`run_crawler`経由で呼ぶ）が、今日
-（UTC日付）すでに成功実行済みなら2回目の実行を自動的にスキップする。動作確認等で
+`app.core.crawler_runner.already_succeeded_recently`（全クローラーが共通の
+`CrawlJob.run`/`run_crawler`経由で呼ぶ）が、直近12時間
+（UTC日付の区切りではない）に成功実行済みなら2回目の実行を自動的にスキップする。動作確認等で
 明示的に同日再実行したい場合は、各`/admin/*`エンドポイントに`?force=true`を付与する
 （GitHub Actions・APSchedulerの自動トリガーは常に`force`無し=Falseで呼ぶ）。
 

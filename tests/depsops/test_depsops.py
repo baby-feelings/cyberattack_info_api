@@ -429,7 +429,7 @@ class TestProcessPr:
 class TestRunDependabotOpsDeduplication:
     """Issue #239: APScheduler・GitHub Actionsの二重トリガー対策。"""
 
-    def test_skips_when_already_succeeded_today(self, db_session):
+    def test_skips_when_already_succeeded_recently(self, db_session):
         db_session.add(DependabotPrLog(
             repo_full_name="u/r", pr_number=1, title="t", action="merged",
             processed_at=datetime.now(UTC),
