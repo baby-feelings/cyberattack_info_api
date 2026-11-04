@@ -20,7 +20,7 @@ from app.depscan.crawler import fetch_and_scan_dependencies  # noqa: E402
 class TestFetchAndScanDependenciesDeduplication:
     """Issue #239: APScheduler・GitHub Actionsの二重トリガー対策。"""
 
-    def test_skips_when_already_succeeded_today(self, db_session):
+    def test_skips_when_already_succeeded_recently(self, db_session):
         from datetime import datetime
 
         from app.crawler_logs.models import CrawlerLog

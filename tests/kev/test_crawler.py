@@ -201,7 +201,7 @@ def test_fetch_and_store_kev_integration():
         patch("app.kev.crawler._apply_epss_scores", return_value=0),
         patch("app.kev.crawler._delete_stale_kev_records", return_value=0),
         patch("app.core.crawler_runner.SessionLocal") as mock_session_cls,
-        patch("app.core.crawler_runner.already_succeeded_today", return_value=False),
+        patch("app.core.crawler_runner.already_succeeded_recently", return_value=False),
     ):
         mock_db = MagicMock()
         mock_session_cls.return_value = mock_db
@@ -216,7 +216,7 @@ def test_fetch_and_store_kev_raises_http_error():
     with (
         patch("app.kev.crawler._fetch_cisa_kev", side_effect=http_err),
         patch("app.core.crawler_runner.SessionLocal") as mock_session_cls,
-        patch("app.core.crawler_runner.already_succeeded_today", return_value=False),
+        patch("app.core.crawler_runner.already_succeeded_recently", return_value=False),
     ):
         mock_db = MagicMock()
         mock_session_cls.return_value = mock_db
@@ -304,7 +304,7 @@ class TestDeleteStaleKevRecords:
                 side_effect=Exception("delete failed"),
             ),
             patch("app.core.crawler_runner.SessionLocal") as mock_session_cls,
-            patch("app.core.crawler_runner.already_succeeded_today", return_value=False),
+            patch("app.core.crawler_runner.already_succeeded_recently", return_value=False),
         ):
             mock_db = MagicMock()
             mock_session_cls.return_value = mock_db
@@ -324,7 +324,7 @@ class TestDeleteStaleKevRecords:
             ),
             patch("app.kev.crawler._delete_stale_kev_records", return_value=0),
             patch("app.core.crawler_runner.SessionLocal") as mock_session_cls,
-            patch("app.core.crawler_runner.already_succeeded_today", return_value=False),
+            patch("app.core.crawler_runner.already_succeeded_recently", return_value=False),
         ):
             mock_db = MagicMock()
             mock_session_cls.return_value = mock_db
@@ -432,7 +432,7 @@ def test_fetch_and_store_kev_raises_unexpected_error():
     with (
         patch("app.kev.crawler._fetch_cisa_kev", side_effect=RuntimeError("unexpected")),
         patch("app.core.crawler_runner.SessionLocal") as mock_session_cls,
-        patch("app.core.crawler_runner.already_succeeded_today", return_value=False),
+        patch("app.core.crawler_runner.already_succeeded_recently", return_value=False),
     ):
         mock_db = MagicMock()
         mock_session_cls.return_value = mock_db

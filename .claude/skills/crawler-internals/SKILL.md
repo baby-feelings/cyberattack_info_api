@@ -106,8 +106,8 @@ counters の値を crawler_logs に反映する**（OSV はエコシステム単
 クロージャとして渡すTemplate Methodのコールバックであり、直接の呼び出し元が見えない
 （静的解析で「呼び出し元なし」と誤検知されやすい）。削除しないこと。
 
-**同日重複実行の防止（Issue #239）**: `run_crawler`は本体処理の前に
-`already_succeeded_today(crawler_type)`を確認し、今日（UTC日付）既に`status="success"`の
+**重複実行の防止（Issue #239）**: `run_crawler`は本体処理の前に
+`already_succeeded_recently(crawler_type)`を確認し、直近12時間（`DUPLICATE_RUN_WINDOW`。UTC日付の区切りではない。Actionsが遅れて動いても翌日の定期実行を飛ばさないため）に`status="success"`の
 `crawler_logs`レコードがあれば`body`を呼ばずに`(0, 0, 0)`を返す。APSchedulerとGitHub
 Actions（daily-crawl.yml、「バックアップ」目的で無条件に毎日発火）の二重トリガーにより、
 全クローラーが実質1日2回実行されていた対策。`force: bool`引数（各`fetch_and_store_*`・
