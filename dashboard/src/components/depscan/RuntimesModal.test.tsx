@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RuntimesModal } from './RuntimesModal'
+import { fetchCrawlerLogs } from '../../api/crawlerLogs'
 import {
   fetchRuntimes, fetchRuntimeRepos, fetchRuntimeReleases,
   type RepoRuntimeOut, type RepoRuntimeRepoStat, type RuntimeReleaseOut,
@@ -14,7 +15,10 @@ vi.mock('../../api/client', async () => {
     fetchRuntimes: vi.fn(), fetchRuntimeRepos: vi.fn(), fetchRuntimeReleases: vi.fn(),
   }
 })
+// 「最終取得」の実行履歴の取得（LastFetched が直接読み込む）
+vi.mock('../../api/crawlerLogs', () => ({ fetchCrawlerLogs: vi.fn().mockResolvedValue([]) }))
 
+const mockedLogs = vi.mocked(fetchCrawlerLogs)
 const mockedList = vi.mocked(fetchRuntimes)
 const mockedRepos = vi.mocked(fetchRuntimeRepos)
 const mockedReleases = vi.mocked(fetchRuntimeReleases)
@@ -92,6 +96,12 @@ describe('RuntimesModal', () => {
     expect(mockedRepos).toHaveBeenCalledWith('session-token', 'active')
     expect(mockedReleases).toHaveBeenCalledWith('session-token')
     expect(screen.getByText('.github/workflows/ci.yml')).toBeInTheDocument()
+  })
+
+  it('shows when the runtime data was last fetched, from the RUNTIME crawler', async () => {
+    await renderOpen('session-token')
+    expect(await screen.findByTestId('last-fetched')).toBeInTheDocument()
+    expect(mockedLogs).toHaveBeenCalledWith(expect.objectContaining({ crawlerType: 'RUNTIME' }))
   })
 
   it('shows the state, the recommended version and the support end date', async () => {

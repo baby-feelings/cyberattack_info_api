@@ -4,7 +4,10 @@ import { HeaderMenu } from './HeaderMenu'
 import { TabBar } from './TabBar'
 import { TabPanel } from './TabPanel'
 import { TAB_DEFINITIONS } from './tabs'
+import { fetchCrawlerLogs } from '../../api/crawlerLogs'
 
+// 「最終取得」の実行履歴の取得は、ダミーへ差し替える
+vi.mock('../../api/crawlerLogs', () => ({ fetchCrawlerLogs: vi.fn().mockResolvedValue([]) }))
 // 重いパネル本体は軽量なダミーへ差し替える（レイアウトだけを検証する）
 vi.mock('../KevPanel', () => ({ KevPanel: () => <div>kev-panel</div> }))
 vi.mock('../OsvPanel', () => ({ OsvPanel: () => <div>osv-panel</div> }))
@@ -16,6 +19,10 @@ describe('TAB_DEFINITIONS', () => {
   it('defines the five tabs in display order with unique keys', () => {
     expect(TAB_DEFINITIONS.map((t) => t.key)).toEqual(['kev', 'osv', 'jvn', 'depscan', 'codescan'])
     expect(new Set(TAB_DEFINITIONS.map((t) => t.key)).size).toBe(5)
+  })
+
+  it('declares the crawler whose last fetch each tab shows', () => {
+    expect(TAB_DEFINITIONS.map((t) => t.crawlerType)).toEqual(['KEV', 'OSV', 'JVN', 'DEPSCAN', 'CODESCAN'])
   })
 })
 
@@ -40,6 +47,13 @@ describe('TabBar', () => {
 })
 
 describe('TabPanel', () => {
+  it('shows the last fetch of the crawler the tab declares, next to the heading', async () => {
+    const tab = TAB_DEFINITIONS.find((t) => t.key === 'osv')!
+    render(<TabPanel tab={tab} />)
+    expect(await screen.findByTestId('last-fetched')).toBeInTheDocument()
+    expect(fetchCrawlerLogs).toHaveBeenCalledWith(expect.objectContaining({ crawlerType: 'OSV' }))
+  })
+
   it('renders heading, subtitle and body with aria wiring back to the tab', () => {
     const tab = TAB_DEFINITIONS.find((t) => t.key === 'depscan')!
     render(<TabPanel tab={tab} />)

@@ -1,4 +1,5 @@
 import { FullScreenModal } from '../shared/FullScreenModal'
+import { LastFetched } from '../freshness/LastFetched'
 import { useEffect, useState } from 'react'
 import { Cpu, AlertTriangle } from 'lucide-react'
 import {
@@ -174,6 +175,9 @@ function RuntimesDialog({ onClose, authToken }: { onClose: () => void; authToken
         各アプリが使っている Python・Node.js・Flutter・Dart の版と、サポート期限です。
         サポートが終わった版には、セキュリティ修正が提供されません。左でアプリを選ぶと、そのアプリの設定を見られます。
       </p>
+
+      {/* 言語・実行環境の情報を最後に取得した日時 */}
+      <LastFetched crawlerType="RUNTIME" />
 
       <RecommendedStrip releases={releases} />
 

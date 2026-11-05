@@ -10,6 +10,8 @@ import {
 // クエリ（検索・フィルター・ページ）に反応する本物らしいレスポンスを返す。
 
 export const API_PREFIX = '/__api'
+// モックの実行履歴の、成功した実行が何時間前か（「最終取得」の既定の状態）
+export const RECENT_CRAWL_HOURS_AGO = 3
 
 export interface RecordedRequest {
   method: string
@@ -327,14 +329,18 @@ function defaultResponse(req: RecordedRequest, state: MockState): MockResponse {
     }
 
     // ── クローラーログ ──
-    case 'GET /api/crawler-logs':
+    case 'GET /api/crawler-logs': {
+      // 種別ごとに、数時間前に成功した実行を返す（「最終取得」が「最新」の状態になる）。
+      // 遅れ・失敗などの状態は、各テストが override で差し替える
+      const finished = new Date(Date.now() - RECENT_CRAWL_HOURS_AGO * 3_600_000).toISOString()
       return {
         body: [{
-          id: state.crawlerLogId, crawler_type: 'DEPSCAN', status: 'success',
-          started_at: '2026-09-20T22:00:00Z', finished_at: '2026-09-20T22:01:00Z',
-          duration_seconds: 60, inserted: 0, updated: 0, deleted: 0, error_message: null,
+          id: state.crawlerLogId, crawler_type: query.get('crawler_type') ?? 'DEPSCAN',
+          status: 'success', started_at: finished, finished_at: finished,
+          duration_seconds: 60, inserted: 1, updated: 0, deleted: 0, error_message: null,
         }],
       }
+    }
 
     // ── CODESCAN ──
     case 'GET /api/codescan/stats':

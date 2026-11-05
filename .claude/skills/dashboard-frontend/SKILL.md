@@ -165,6 +165,19 @@ http(s)のみリンクにする（`javascript:`等を弾くXSS対策）。
 （Tailwind の padding/margin ユーティリティ含む）よりも優先されてしまい、
 `px-*`/`py-*`/`pb-*` 等のユーティリティが軒並み無効化される（過去に実際に発生したバグ）。
 
+## 各タブの「最終取得」（`components/freshness/`）
+タブ見出し（`TabPanel`）の右に、そのタブのデータを最後に取得した時刻を出す（狭い画面では見出しの下に折り返す）。
+言語・実行環境のモーダルにも同じ部品を置く。データは`GET /api/crawler-logs`（成功時刻の記録）。
+- **ハードコードを避ける**: 種別は`TabDefinition.crawlerType`（タブ定義の1か所）。しきい値（実行間隔24時間＋余裕6時間）・
+  文言・状態ごとの色・更新間隔・ロケールは`freshnessConfig.ts`に置く。しきい値は環境変数`VITE_CRAWL_INTERVAL_HOURS`・
+  `VITE_STALE_GRACE_HOURS`で上書きできる（不正な値は既定値）。「○時間前」は`Intl.RelativeTimeFormat`で作り、手書きしない
+- **状態**: fresh（最新）・stale（成功から実行間隔＋余裕を超えた）・failed（直近の実行が失敗。最終成功も併記）・
+  unknown（実行履歴が無い・取得失敗。画面は壊さない）。判定は純粋関数（`freshness.ts`）で、時刻は引数で受ける。
+  色だけに頼らず文言でも示し、異常のときだけ点が脈打つ（`motion-safe`）
+- **日時の読み方**: APIの日時はUTCだが、開発用のSQLiteはタイムゾーン無しで返す。`parseApiDate`が、指定が無ければUTCとして読む
+  （そのまま読むと、ブラウザが現地時間とみなして数時間ずれる）。相対時間は「昨日」ではなく「1 日前」（24時間ごと）
+- **基準時刻**: 履歴を取得した時点で更新する（画面を開いた時刻のままだと、経過時間を短く表示する）。履歴は10分ごとに取り直す
+
 ## 実行環境表示の日本語化（HealthStatus.tsx）
 `/health` の `environment` フィールド（`production`/`development`）はそのまま表示せず、
 `ENVIRONMENT_LABELS` で「本番環境」/「開発環境」に変換してから表示する。
