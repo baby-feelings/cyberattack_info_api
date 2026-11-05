@@ -7,6 +7,11 @@ updates:
     # 公開直後の版を取り込まない（供給網攻撃で差し替えられた版の回避。セキュリティ更新は対象外）
     cooldown:
       default-days: 7
+    # mcp 2.x は mcp.server.fastmcp が無くなり、/mcp サーバーの書き換えが要る。1.x のまま据え置く
+    # （移行は開発環境で確認してから別途。マイナー・パッチは受け取る）
+    ignore:
+      - dependency-name: "mcp"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: "npm"
     directory: "/dashboard"
     schedule:
