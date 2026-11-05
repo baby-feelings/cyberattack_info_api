@@ -5,6 +5,7 @@ import { OsvPanel } from '../OsvPanel'
 import { JvnPanel } from '../JvnPanel'
 import { DepscanAuthGate } from '../DepscanAuthGate'
 import { CodescanAuthGate } from '../CodescanAuthGate'
+import type { FetchedCrawlerType } from '../freshness/freshnessConfig'
 
 // タブ種別
 export type TabKey = 'kev' | 'osv' | 'jvn' | 'depscan' | 'codescan'
@@ -14,6 +15,8 @@ export type TabKey = 'kev' | 'osv' | 'jvn' | 'depscan' | 'codescan'
 export interface TabDefinition {
   key: TabKey
   label: string
+  // 見出しの「最終取得」に使う、クローラーの種別（バックエンドの crawler_logs.crawler_type）
+  crawlerType: FetchedCrawlerType
   // タブバー用（20px）と見出し用（18px）で同じ色のアイコンを使う
   icon: (size: number) => ReactNode
   title: string
@@ -26,6 +29,7 @@ export const TAB_DEFINITIONS: TabDefinition[] = [
   {
     key: 'kev',
     label: 'KEV',
+    crawlerType: 'KEV',
     icon: (size) => <Shield size={size} className="text-blue-400" />,
     title: 'CISA KEV — Known Exploited Vulnerabilities',
     subtitle: '実際に悪用が確認された脆弱性（米 CISA 公式カタログ）',
@@ -36,6 +40,7 @@ export const TAB_DEFINITIONS: TabDefinition[] = [
   {
     key: 'osv',
     label: 'OSV',
+    crawlerType: 'OSV',
     icon: (size) => <Package size={size} className="text-emerald-400" />,
     title: 'OSV — Open Source Vulnerabilities',
     subtitle: 'オープンソースライブラリの脆弱性（過去 6 ヶ月）',
@@ -46,6 +51,7 @@ export const TAB_DEFINITIONS: TabDefinition[] = [
   {
     key: 'jvn',
     label: 'JVN',
+    crawlerType: 'JVN',
     icon: (size) => <FileWarning size={size} className="text-amber-400" />,
     title: 'JVN — Japan Vulnerability Notes',
     subtitle: '日本国内の脆弱性情報（MyJVN / JVNDB 過去 6 ヶ月）',
@@ -56,6 +62,7 @@ export const TAB_DEFINITIONS: TabDefinition[] = [
   {
     key: 'depscan',
     label: 'DEPSCAN',
+    crawlerType: 'DEPSCAN',
     icon: (size) => <Bug size={size} className="text-rose-400" />,
     title: 'DEPSCAN — 自作アプリの依存ライブラリ脆弱性',
     subtitle: 'GitHub上の自作リポジトリの依存関係を OSV と照合し、悪意あるパッケージ・言語のサポート期限・対応状況も監視',
@@ -66,6 +73,7 @@ export const TAB_DEFINITIONS: TabDefinition[] = [
   {
     key: 'codescan',
     label: 'CODESCAN',
+    crawlerType: 'CODESCAN',
     icon: (size) => <ScanSearch size={size} className="text-cyan-400" />,
     title: 'CODESCAN — 自アプリのコード脆弱性診断',
     subtitle: 'GitHub上の自作リポジトリのソースコードを静的解析し、GitHub Actions・Firebase・Dockerの設定も診断',
