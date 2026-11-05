@@ -5,7 +5,7 @@ pytest-cov>=7.1.0
 pytest-asyncio>=1.4.1
 httpx>=0.28.1
 ruff>=0.17.3
-mypy>=2.4.0
+mypy>=2.4.1
 types-psycopg2>=2.9.21.20261008
 pip-audit>=2.10.1
 
