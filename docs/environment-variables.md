@@ -60,4 +60,13 @@
 | `MCP_OAUTH_ISSUER` | - | MCP サーバーを OAuth 2.1 の認可サーバーとして公開する際の issuer URL（`https://...`、末尾スラッシュなし。Issue #303）。空なら OAuth 機能は無効（デフォルト）。ドメイン変更時は `BACKEND_DOMAIN`・`API_BASE_URL_FOR_OAUTH`・GitHub OAuth App の callback URL とあわせて更新する |
 | `METRICS_API_KEY` | - | 運用監視（Prometheus）用の `/metrics` エンドポイント保護キー（`Authorization: Bearer` で認証）。未設定時は `/metrics` 自体が `503` を返すのみ |
 
+## ダッシュボード（Vite。ビルド時に埋め込まれる値。`dashboard/.env.example`）
+
+| 変数 | 必須 | 説明 |
+|------|------|------|
+| `VITE_API_BASE_URL` | ✅ | 本 API の URL。開発・単体テストは localhost 、本番は Vercel の環境変数で設定する |
+| `VITE_PUBLIC_API_KEY` | ✅ | 読み取り専用の `PUBLIC_API_KEY`。**`API_KEY` は設定しない** |
+| `VITE_CRAWL_INTERVAL_HOURS` | - | 各タブ「最終取得」の、定期実行の間隔（時間。デフォルト 24）。しきい値＝この値＋余裕 |
+| `VITE_STALE_GRACE_HOURS` | - | 同、「遅れ」と判定するまでの余裕（時間。デフォルト 6）。不正な値はデフォルトに戻る |
+
 設定手順は [deployment.md](deployment.md) を参照。
