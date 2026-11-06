@@ -6,6 +6,7 @@ from fastapi import Query
 from sqlalchemy.orm import Query as SaQuery
 
 from app.core.list_filters import FeedListFilter
+from app.core.pagination import MAX_DAYS
 from app.osv.models import OsvVulnerability
 
 
@@ -20,7 +21,7 @@ class OsvListFilter(FeedListFilter):
 
     def __init__(
         self,
-        days: int = Query(30, ge=1, le=365, description="直近何日分を取得するか"),
+        days: int = Query(30, ge=1, le=MAX_DAYS, description="直近何日分を取得するか"),
         ecosystem: str | None = Query(None, description="エコシステム絞り込み（例: PyPI / npm）"),
         severity: str | None = Query(
             None, description="重要度絞り込み（CRITICAL / HIGH / MEDIUM / LOW）"

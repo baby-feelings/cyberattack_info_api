@@ -17,7 +17,7 @@ from app.auth.api_key import require_api_key, require_public_api_key
 from app.core.background import run_in_background
 from app.core.database import get_db
 from app.core.db_utils import now_utc, year_month_expr
-from app.core.pagination import paginate
+from app.core.pagination import DEFAULT_PER_PAGE, MAX_DAYS, MAX_PER_PAGE, paginate
 from app.core.schemas import MonthlyStat
 from app.osv.crawler import fetch_and_store_osv
 from app.osv.filters import OsvListFilter
@@ -53,7 +53,7 @@ admin_router = APIRouter(tags=["admin"])
 )
 def trigger_osv_crawl(
     days: int | None = Query(
-        None, ge=1, le=365, description="取得対象の直近日数（省略時は OSV_DAYS）"
+        None, ge=1, le=MAX_DAYS, description="取得対象の直近日数（省略時は OSV_DAYS）"
     ),
     force: bool = Query(
         False, description="今日すでに成功実行済みでも強制的に再実行する（Issue #239）",
@@ -77,7 +77,9 @@ def trigger_osv_crawl(
 def list_osv(
     db: Annotated[Session, Depends(get_db)],
     page: int = Query(1, ge=1, description="ページ番号（1始まり）"),
-    per_page: int = Query(50, ge=1, le=200, description="1ページあたりの件数"),
+    per_page: int = Query(
+        DEFAULT_PER_PAGE, ge=1, le=MAX_PER_PAGE, description="1ページあたりの件数",
+    ),
     flt: OsvListFilter = Depends(),
 ) -> OsvListResponse:
     """直近 N 日以内に更新された OSV 脆弱性を取得する。"""
@@ -107,7 +109,7 @@ def list_osv(
 )
 def get_osv_stats(
     db: Annotated[Session, Depends(get_db)],
-    days: int = Query(30, ge=1, le=365, description="集計対象の日数"),
+    days: int = Query(30, ge=1, le=MAX_DAYS, description="集計対象の日数"),
 ) -> OsvStatsResponse:
     """エコシステム・重要度・月別の統計を集計して返す。"""
     cutoff = now_utc() - timedelta(days=days)

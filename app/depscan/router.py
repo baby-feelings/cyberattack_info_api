@@ -19,7 +19,7 @@ from app.core.background import run_in_background
 from app.core.database import get_db
 from app.core.operating_status import OperatingQuery, apply_operating_status
 from app.core.owner_scope import is_owned_by
-from app.core.pagination import paginate
+from app.core.pagination import DEFAULT_PER_PAGE, MAX_PER_PAGE, paginate
 from app.core.schemas import SeverityStat
 from app.depscan.crawler import fetch_and_scan_dependencies
 from app.depscan.filters import DepscanListFilter
@@ -87,7 +87,9 @@ def list_depscan(
     db: Annotated[Session, Depends(get_db)],
     forced_owner: Annotated[str | None, Depends(_resolve_access)],
     page: int = Query(1, ge=1, description="ページ番号（1始まり）"),
-    per_page: int = Query(50, ge=1, le=200, description="1ページあたりの件数"),
+    per_page: int = Query(
+        DEFAULT_PER_PAGE, ge=1, le=MAX_PER_PAGE, description="1ページあたりの件数",
+    ),
     flt: DepscanListFilter = Depends(),
 ) -> DependencyFindingListResponse:
     """依存ライブラリ脆弱性の検知結果を取得する。

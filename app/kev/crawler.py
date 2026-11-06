@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.crawler_runner import CrawlCounters, run_crawler
 from app.core.db_utils import now_utc
-from app.core.retry import request_with_retry
+from app.core.retry import HTTP_TIMEOUT_SECONDS, request_with_retry
 from app.kev.models import Vulnerability
 
 logger = logging.getLogger(__name__)
@@ -38,7 +38,7 @@ def _fetch_cisa_kev() -> list[dict[str, Any]]:
         httpx.HTTPError: ネットワークエラーまたは HTTP エラー時
     """
     logger.info("Fetching CISA KEV feed: %s", settings.CISA_KEV_URL)
-    with httpx.Client(timeout=30.0) as client:
+    with httpx.Client(timeout=HTTP_TIMEOUT_SECONDS) as client:
         response = request_with_retry(lambda: client.get(settings.CISA_KEV_URL))
 
     data = response.json()
@@ -116,7 +116,7 @@ def _fetch_epss_scores(cve_ids: list[str]) -> dict[str, tuple[float, float]]:
         httpx.HTTPError: ネットワークエラーまたは HTTP エラー時
     """
     scores: dict[str, tuple[float, float]] = {}
-    with httpx.Client(timeout=30.0) as client:
+    with httpx.Client(timeout=HTTP_TIMEOUT_SECONDS) as client:
         for i in range(0, len(cve_ids), _EPSS_BATCH_SIZE):
             batch = cve_ids[i : i + _EPSS_BATCH_SIZE]
 

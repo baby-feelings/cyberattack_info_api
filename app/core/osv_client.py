@@ -9,7 +9,7 @@ from typing import Any
 
 import httpx
 
-from app.core.retry import request_with_retry
+from app.core.retry import HTTP_BULK_TIMEOUT_SECONDS, HTTP_TIMEOUT_SECONDS, request_with_retry
 
 # OSV REST API ベース URL
 OSV_API_BASE = "https://api.osv.dev/v1"
@@ -117,7 +117,7 @@ def query_packages_batch(
         for pkg, eco in packages
     ]
 
-    with httpx.Client(timeout=60.0) as client:
+    with httpx.Client(timeout=HTTP_BULK_TIMEOUT_SECONDS) as client:
         resp = request_with_retry(
             lambda: client.post(f"{OSV_API_BASE}/querybatch", json={"queries": queries}),
         )
@@ -157,7 +157,7 @@ def query_versions_batch(
 
     result_map: dict[tuple[str, str, str], list[str]] = {}
 
-    with httpx.Client(timeout=60.0) as client:
+    with httpx.Client(timeout=HTTP_BULK_TIMEOUT_SECONDS) as client:
         for i in range(0, len(items), BATCH_SIZE):
             chunk = items[i: i + BATCH_SIZE]
             queries = [
@@ -181,6 +181,6 @@ def query_versions_batch(
 
 def fetch_vuln_by_id(osv_id: str) -> dict[str, Any]:
     """GET /v1/vulns/{id} で脆弱性の完全な情報（affected・severity 等）を取得する。"""
-    with httpx.Client(timeout=30.0) as client:
+    with httpx.Client(timeout=HTTP_TIMEOUT_SECONDS) as client:
         resp = request_with_retry(lambda: client.get(f"{OSV_API_BASE}/vulns/{osv_id}"))
     return resp.json()

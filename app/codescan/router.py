@@ -32,7 +32,7 @@ from app.codescan.schemas import (
 from app.core.background import run_in_background
 from app.core.database import get_db
 from app.core.operating_status import OperatingQuery, apply_operating_status
-from app.core.pagination import paginate
+from app.core.pagination import DEFAULT_PER_PAGE, MAX_PER_PAGE, paginate
 from app.core.schemas import SeverityStat
 from app.finding_exceptions.matching import exception_map, key_of_finding, not_excepted
 from app.finding_exceptions.models import KIND_CODE
@@ -76,7 +76,9 @@ def list_codescan(
     db: Annotated[Session, Depends(get_db)],
     forced_owner: Annotated[str | None, Depends(require_api_key_or_session)],
     page: int = Query(1, ge=1, description="ページ番号（1始まり）"),
-    per_page: int = Query(50, ge=1, le=200, description="1ページあたりの件数"),
+    per_page: int = Query(
+        DEFAULT_PER_PAGE, ge=1, le=MAX_PER_PAGE, description="1ページあたりの件数",
+    ),
     flt: CodescanListFilter = Depends(),
 ) -> CodeFindingListResponse:
     """自アプリのコード脆弱性検知結果を取得する。

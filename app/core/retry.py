@@ -16,6 +16,10 @@ from prometheus_client import Counter
 
 logger = logging.getLogger(__name__)
 
+# 外部APIへのHTTPタイムアウト（秒）。各クライアントで同じ値を直書きしない
+HTTP_TIMEOUT_SECONDS = 30.0
+HTTP_BULK_TIMEOUT_SECONDS = 60.0  # OSVのバッチ取得など、応答が重いもの
+
 # 一時的な障害を示すステータスコード（無条件でリトライ対象）
 _RETRIABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 
