@@ -16,6 +16,8 @@ from sqlalchemy.orm import sessionmaker
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
 os.environ.setdefault("API_KEY", "test-api-key-for-pytest")
 os.environ.setdefault("ENVIRONMENT", "development")
+# 通知のリンク・CORS のテストが、本番のダッシュボードの URL を前提にする（設定の既定は localhost）
+os.environ.setdefault("DASHBOARD_URL", "https://cyberattackinfoapi.vercel.app")
 # レート制限は、テストでは無効にする（多数のリクエストで、制限に掛からないように）。
 # 制限そのものは、tests/core/test_rate_limit.py が、専用のアプリで検証する
 os.environ.setdefault("RATE_LIMIT_ENABLED", "false")
