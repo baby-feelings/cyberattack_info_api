@@ -12,7 +12,7 @@
   },
   "refresh": "1m",
   "schemaVersion": 42,
-  "version": 3,
+  "version": 4,
   "graphTooltip": 1,
   "fiscalYearStartMonth": 0,
   "weekStart": "",
@@ -205,6 +205,8 @@
             "uid": "prometheus_ds"
           },
           "expr": "count(crawler_last_run_success == 0) or vector(0)",
+          "instant": true,
+          "range": false,
           "legendFormat": "異常",
           "refId": "A"
         }
@@ -460,6 +462,8 @@
             "uid": "prometheus_ds"
           },
           "expr": "crawler_last_run_success",
+          "instant": true,
+          "range": false,
           "legendFormat": "{{crawler_type}}",
           "refId": "A"
         }
@@ -536,6 +540,8 @@
             "uid": "prometheus_ds"
           },
           "expr": "(time() - crawler_last_run_timestamp_seconds) / 3600",
+          "instant": true,
+          "range": false,
           "legendFormat": "{{crawler_type}}",
           "refId": "A"
         }
