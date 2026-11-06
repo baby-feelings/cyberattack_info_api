@@ -64,13 +64,14 @@ cyberattack_info_api/
 │                           # CODESCAN〈GitHub ログイン必須。DEPSCANとセッション共有。CVSSベストエフォート
 │                           # 推定値・検知ツールバッジを表示〉を5つの固定タブで切り替え表示。ヘッダーの
 │                           # ハンバーガーメニュー「設定」からSlack Webhook通知を登録可能、Issue #227。各タブの見出しに、
-│                           # crawler_logsから「最終取得」〈最新/遅れ/失敗〉を表示＝components/freshness/）
+│                           # crawler_logsから「最終取得」〈最新/遅れ/失敗〉を表示＝components/freshness/。
+│                           # 各タブと、依存パッケージ・対応状況・Dependabot運用状況・言語・実行環境の画面）
 │   └── e2e/                 # Playwright E2Eテスト（specs・support/mockApi.ts・scenarios.ts〈網羅率カタログ〉・reporters/）
 ├── alembic/                 # DBスキーマのマイグレーション管理（app.core.migrate から呼び出す）
 │   └── versions/            # マイグレーションスクリプト（Gitで追跡）
 ├── docs/                    # README.mdから分離した詳細ドキュメント（本ファイル含む）
 ├── .github/
-│   ├── dependabot.yml       # Dependabot（pip: / ・npm: /dashboard、週次で依存更新PRを自動作成）
+│   ├── dependabot.yml       # Dependabot（pip: / ・npm: /dashboard、週次で依存更新PRを自動作成。mcpのメジャー更新は除外〈#466〉）
 │   └── workflows/
 │       ├── ci.yml                    # CI: lint + type check + test (PR 時に自動実行)
 │       ├── deploy.yml                # CD: Vercel デプロイ (dashboard/変更時のmainマージ時のみ自動実行。バックエンドは手動デプロイ)

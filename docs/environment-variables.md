@@ -66,7 +66,7 @@
 |------|------|------|
 | `VITE_API_BASE_URL` | ✅ | 本 API の URL。開発・単体テストは localhost 、本番は Vercel の環境変数で設定する |
 | `VITE_PUBLIC_API_KEY` | ✅ | 読み取り専用の `PUBLIC_API_KEY`。**`API_KEY` は設定しない** |
-| `VITE_CRAWL_INTERVAL_HOURS` | - | 各タブ「最終取得」の、定期実行の間隔（時間。デフォルト 24）。しきい値＝この値＋余裕 |
+| `VITE_CRAWL_INTERVAL_HOURS` | - | 各タブ・各画面の「最終取得」の、定期実行の間隔（時間。デフォルト 24）。しきい値＝この値＋余裕 |
 | `VITE_STALE_GRACE_HOURS` | - | 同、「遅れ」と判定するまでの余裕（時間。デフォルト 6）。不正な値はデフォルトに戻る |
 
 設定手順は [deployment.md](deployment.md) を参照。
