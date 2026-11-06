@@ -7,6 +7,8 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+import httpx
+
 from app.core.github.api import MAX_PER_PAGE, GitHubApi
 from app.core.github.repo import GitHubRepo
 from app.repo_audit.checks import hook_url, sanitize_url, url_fingerprint
@@ -18,8 +20,17 @@ _UPGRADE_HINT = "upgrade"
 
 
 def _optional_get(api: GitHubApi, path: str, **params: Any) -> tuple[int, Any]:
-    """GET して (ステータス, JSON) を返す。403・404 は例外にせず、そのまま返す。"""
-    response = api.get(path, params=params or None)
+    """GET して (ステータス, JSON) を返す。403・404 は例外にせず、そのまま返す。
+
+    `api.get` は、リトライの対象外のステータス（403・404 など）で `HTTPStatusError` を送出するため、
+    ここで受けて、応答を取り出す（受けないと、「取得不可」の判定に到達せず、リポジトリごと失敗になる）。
+    """
+    try:
+        response = api.get(path, params=params or None)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code not in (403, 404):
+            raise
+        response = exc.response
     if response.status_code in (403, 404):
         try:
             return response.status_code, response.json()
