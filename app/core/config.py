@@ -1,7 +1,7 @@
 """アプリケーション設定モジュール。
 .env ファイルから環境変数を読み込み、型安全な設定オブジェクトを提供する。
 """
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -70,8 +70,9 @@ class Settings(BaseSettings):
 
     # ダッシュボードのURL（末尾スラッシュなし）。Slack通知・GitHub Issue のリンクと、
     # CORS で許可するオリジン（本番）、GitHub ログイン後のリダイレクト先に使う。
-    # ダッシュボードのドメインを変えたら、ここを変える
-    DASHBOARD_URL: str = "https://cyberattackinfoapi.vercel.app"
+    # 既定は、開発用のダッシュボード（Vite）。本番は `.env.production` で必ず指定する
+    # （localhost のままだと、起動時に失敗する）。ダッシュボードのドメインを変えたら、ここを変える
+    DASHBOARD_URL: str = "http://localhost:5173"
 
     # 言語・実行環境のバージョン監視（RUNTIME）設定
     # CODESCAN の後段・DEPSOPS の前に配置: JST 7:45 = UTC 22:45
@@ -98,8 +99,9 @@ class Settings(BaseSettings):
     SESSION_SECRET_KEY: str = ""
     # OAuth の redirect_uri 組み立てに使う、本 API 自身の公開 URL
     # （GitHub OAuth App の Authorization callback URL と scheme まで一致させる必要があるため、
-    # リクエストヘッダーから動的に推測せず固定値を持つ）
-    API_BASE_URL_FOR_OAUTH: str = "https://168.138.213.240.nip.io"
+    # リクエストヘッダーから動的に推測せず固定値を持つ）。既定は、開発用の API。
+    # 本番は `.env.production` で必ず指定する（localhost のままだと、起動時に失敗する）
+    API_BASE_URL_FOR_OAUTH: str = "http://localhost:8000"
 
     # MCP サーバーを OAuth 2.1 の認可サーバーとして公開する際の issuer URL（Issue #303）。
     # 空なら OAuth 機能は無効（従来の貼り付け方式のトークンのみ）。ドメイン変更時はこの値を
@@ -229,6 +231,25 @@ class Settings(BaseSettings):
                     f"{entry!r}",
                 )
         return value
+
+    @model_validator(mode="after")
+    def _require_public_urls_in_production(self) -> "Settings":
+        """本番では、公開 URL が localhost のままの起動を弾く（Fail Fast）。
+
+        既定値は開発用。本番の設定漏れのまま起動すると、GitHub ログインのリダイレクトや
+        通知のリンク、CORS が、開発用の URL を向いて、気づきにくい不具合になる。
+        """
+        if self.ENVIRONMENT != "production":
+            return self
+        local_hosts = ("localhost", "127.0.0.1", "[::1]")
+        for name in ("DASHBOARD_URL", "API_BASE_URL_FOR_OAUTH"):
+            host = getattr(self, name).split("://", 1)[-1].split("/", 1)[0].rsplit(":", 1)[0]
+            if host in local_hosts:
+                raise ValueError(
+                    f"本番では {name} を、公開 URL で指定してください（.env.production）: "
+                    f"{getattr(self, name)}"
+                )
+        return self
 
     model_config = SettingsConfigDict(
         # 環境に応じて .env.development または .env.production を使用

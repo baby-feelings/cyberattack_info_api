@@ -17,7 +17,7 @@
 | `GITHUB_TOKEN` | - | DEPSCAN/DEPSOPS/CODESCAN 共用の GitHub PAT（fine-grained: Contents Read-only + **Issues Write** + **Pull requests Write** / classic: repo スコープ）。未設定時は DEPSCAN/DEPSOPS/CODESCAN のみエラー終了。Issues Write が無い場合、Issue自動起票・自動クローズのみ失敗（DEPSCAN/CODESCAN自体は成功扱い）。Pull requests Write が無い場合、DEPSOPSのPRマージ・rebase依頼のみ失敗。DEPSOPS の `is_security_update` 判定には別途 Dependabot alerts の読み取り権限（fine-grained: 「Dependabot alerts: Read-only」/ classic: `security_events` スコープ）が必要（無い場合は判定結果が `null` のまま記録されるのみで、DEPSOPS本来のマージ判定には影響しない） |
 | `GITHUB_USERNAME` | ✅ | DEPSCAN/CODESCAN のスキャン対象 GitHub アカウント。コード側にデフォルト値は持たないため、**未設定だとアプリ全体が起動しない** |
 | `SCAN_EXCLUDE_REPOS` | - | スキャン対象外にするリポジトリ（カンマ区切りの `owner/name`。例 `baby-feelings/AppGoat_web_v305`）。DEPSCAN・CODESCAN・DEPSOPS のすべてで対象外にし、すでにあるデータと起票済みの Issue は、毎日のクリーンアップ（UTC 23:15）で片付ける。形式が不正なら起動時にエラー（Issue #342） |
-| `DASHBOARD_URL` | - | ダッシュボードの URL（末尾スラッシュなし。デフォルト: `https://cyberattackinfoapi.vercel.app`）。Slack 通知・GitHub Issue のリンクと、本番で CORS を許可するオリジンに使う。ダッシュボードのドメインを変えたら変更する |
+| `DASHBOARD_URL` | - | ダッシュボードの URL（末尾スラッシュなし。デフォルト: `http://localhost:5173`＝開発用。**本番は必須**で、localhost のままだと起動時に失敗する）。Slack 通知・GitHub Issue のリンクと、本番で CORS を許可するオリジンに使う。ダッシュボードのドメインを変えたら変更する |
 | `INACTIVE_REPOS` | - | 運用を止めたアプリのリポジトリ（カンマ区切りの `owner/name`）。ダッシュボードの DEPSCAN・DEPSOPS・CODESCAN で「運用中」「運用停止中」に分けて見られる（初期表示は運用中）。**スキャンは止めない**（止めるのは `SCAN_EXCLUDE_REPOS`）。載っていないリポジトリは運用中。取得のたびに照合するため、運用を再開するときは外して再起動（デプロイ）するだけで、過去の検知もすぐに入れ替わる。形式が不正なら起動時にエラー |
 | `DEPSCAN_CRON_HOUR_UTC` | - | DEPSCAN 実行時刻（時・UTC）（デフォルト: `22`） |
 | `DEPSCAN_RETENTION_DAYS` | - | DEPSCAN データの保持期間（日数・デフォルト: `180`）。解決済み（`resolved_at` 設定済み）のままこの日数を超えたレコードのみ自動削除（未解決レコードは対象外） |
@@ -53,7 +53,7 @@
 | `GITHUB_OAUTH_CLIENT_SECRET` | - | 同 OAuth App の Client Secret |
 | `SESSION_SECRET_KEY` | - | セッショントークン（JWT・HS256）の署名鍵。未設定のまま本番運用しないこと |
 | `TOKEN_ENCRYPTION_KEY` | - | ユーザー別Slack通知登録（Issue #227）用、GitHubアクセストークンをDBへ暗号化保存するFernet鍵。未設定時は登録済みユーザーの定期実行（DEPSCAN/CODESCAN/DEPSOPS）が機能しない |
-| `API_BASE_URL_FOR_OAUTH` | - | OAuth の `redirect_uri` 組み立てに使う本 API 自身の公開 URL。GitHub OAuth App の Authorization callback URL と一致させる必要がある（デフォルト・現在値: OCI インスタンスの URL） |
+| `API_BASE_URL_FOR_OAUTH` | - | OAuth の `redirect_uri` 組み立てに使う本 API 自身の公開 URL。GitHub OAuth App の Authorization callback URL と一致させる必要がある（デフォルト: `http://localhost:8000`＝開発用。**本番は必須**で、localhost のままだと起動時に失敗する） |
 | `MCP_OAUTH_ISSUER` | - | MCP サーバーを OAuth 2.1 の認可サーバーとして公開する際の issuer URL（`https://...`、末尾スラッシュなし。Issue #303）。空なら OAuth 機能は無効（デフォルト）。ドメイン変更時は `BACKEND_DOMAIN`・`API_BASE_URL_FOR_OAUTH`・GitHub OAuth App の callback URL とあわせて更新する |
 | `METRICS_API_KEY` | - | 運用監視（Prometheus）用の `/metrics` エンドポイント保護キー（`Authorization: Bearer` で認証）。未設定時は `/metrics` 自体が `503` を返すのみ |
 

@@ -9,7 +9,7 @@ from app.core.notifications import slack  # noqa: E402
 
 
 class TestDashboardUrl:
-    def test_default_is_the_production_dashboard(self):
+    def test_link_comes_from_the_setting(self):
         assert slack.DASHBOARD_URL == "https://cyberattackinfoapi.vercel.app/"
 
     def test_notification_link_always_ends_with_a_slash(self):
