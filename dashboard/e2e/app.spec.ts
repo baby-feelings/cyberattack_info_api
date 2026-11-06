@@ -119,3 +119,17 @@ scenario('APP-07', 'モバイル幅でもタブバーとコンテンツが操作
   )
   expect(overflow).toBeLessThanOrEqual(1)
 })
+
+scenario('APP-08', '下部のタブの横幅が均等で、タブバー全体を使い切る', async ({ page }) => {
+  await page.goto('/')
+
+  const tabs = page.getByRole('tablist').getByRole('tab')
+  const boxes = await tabs.evaluateAll((els) => els.map((el) => el.getBoundingClientRect()))
+  const list = await page.getByRole('tablist').evaluate((el) => el.getBoundingClientRect().width)
+
+  // 幅がそろっている（小数の丸めを許す）
+  const widths = boxes.map((b) => b.width)
+  expect(Math.max(...widths) - Math.min(...widths)).toBeLessThan(1)
+  // 隙間なく並び、タブの合計がタブバーの幅に一致する（右側が空かない）
+  expect(widths.reduce((sum, w) => sum + w, 0)).toBeCloseTo(list, 0)
+})

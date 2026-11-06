@@ -34,6 +34,14 @@ describe('TabBar', () => {
     expect(screen.getByRole('tab', { name: /KEV/ })).toHaveAttribute('aria-selected', 'false')
   })
 
+  it('splits the width evenly, with one column per tab', () => {
+    render(<TabBar activeTab="kev" onSelect={vi.fn()} />)
+    // 列数を固定値にすると、タブを増減したときに、右側が空く（JVN の廃止で実際に起きた）
+    expect(screen.getByRole('tablist')).toHaveStyle(
+      `grid-template-columns: repeat(${TAB_DEFINITIONS.length}, minmax(0, 1fr))`,
+    )
+  })
+
   it('links each tab to its panel via aria-controls and calls onSelect with the key', () => {
     const onSelect = vi.fn()
     render(<TabBar activeTab="kev" onSelect={onSelect} />)
