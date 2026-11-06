@@ -22,6 +22,14 @@ from app.repo_audit.notifier import RepoAuditChangeNotifier
 logger = logging.getLogger(__name__)
 
 
+class RepoAuditError(Exception):
+    """対象のリポジトリを1件も点検できなかったことを表す例外（権限・GitHub の障害など）。
+
+    0件の「成功」として記録すると、点検が止まっていても異常に気づけないため、
+    例外にして run_crawler に error の記録と Slack 通知をさせる。
+    """
+
+
 def audit_repo(db: Session, repo_info: dict[str, Any]) -> list[dict[str, str]]:
     """1リポジトリを点検して保存する。前回からの変化を返す（取得に失敗したら、保存せず例外）。"""
     full_name = repo_info["full_name"]
@@ -58,12 +66,15 @@ class _RepoAuditJob(CrawlJob):
         self.changes: dict[str, list[dict[str, str]]] = {}
 
     def execute(self, db: Session, counters: CrawlCounters) -> None:
-        for repo_info in list_target_repos(settings.GITHUB_TOKEN):
+        targets = list_target_repos(settings.GITHUB_TOKEN)
+        failed: list[str] = []
+        for repo_info in targets:
             # 1リポジトリの失敗で、他のリポジトリの点検を止めない
             try:
                 changes = audit_repo(db, repo_info)
             except httpx.HTTPError as exc:
                 logger.warning("REPOAUDIT: %s failed: %s", repo_info["full_name"], exc)
+                failed.append(repo_info["full_name"])
                 continue
             counters.inserted += 1
             if changes:
@@ -73,6 +84,11 @@ class _RepoAuditJob(CrawlJob):
             1 for row in db.query(RepoAudit)
             if any(c["status"] == audit_checks.NG for c in row.checks)
         )
+        # 1件も点検できなかったときは、成功にしない（一部の失敗は、上の警告ログにとどめる）
+        if targets and counters.inserted == 0:
+            raise RepoAuditError(
+                f"対象の {len(targets)} リポジトリを、1件も点検できませんでした（例: {failed[0]}）"
+            )
 
     def after_success(self, counters: CrawlCounters) -> None:
         logger.info(

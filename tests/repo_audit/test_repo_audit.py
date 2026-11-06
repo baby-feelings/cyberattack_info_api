@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import httpx
+import pytest
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
 os.environ.setdefault("API_KEY", "test-api-key-for-pytest")
@@ -13,7 +14,7 @@ os.environ.setdefault("ENVIRONMENT", "development")
 from app.auth.session import create_session_token  # noqa: E402
 from app.repo_audit import checks as c  # noqa: E402
 from app.repo_audit import collector  # noqa: E402
-from app.repo_audit.crawler import _RepoAuditJob, audit_repo  # noqa: E402
+from app.repo_audit.crawler import RepoAuditError, _RepoAuditJob, audit_repo  # noqa: E402
 from app.repo_audit.models import RepoAudit  # noqa: E402
 from app.repo_audit.notifier import RepoAuditChangeNotifier  # noqa: E402
 
@@ -201,7 +202,7 @@ def _resp(status=200, body=None, content=b"x"):
     resp.json.return_value = body if body is not None else {}
     resp.content = content
     resp.raise_for_status.side_effect = (
-        httpx.HTTPStatusError("x", request=MagicMock(), response=resp) if status >= 500 else None
+        httpx.HTTPStatusError("x", request=MagicMock(), response=resp) if status >= 400 else None
     )
     return resp
 
@@ -209,8 +210,14 @@ def _resp(status=200, body=None, content=b"x"):
 def _repo(routes):
     """パスの末尾で応答を返す、偽のリポジトリ。"""
     api = MagicMock()
-    api.get.side_effect = lambda path, **kw: next(
-        (r for suffix, r in routes.items() if path.endswith(suffix)), _resp(404))
+
+    def get(path, **kw):
+        resp = next((r for suffix, r in routes.items() if path.endswith(suffix)), _resp(404))
+        # 本物の GitHubApi.get（request_with_retry）と同じく、エラーのステータスは例外で返る
+        resp.raise_for_status()
+        return resp
+
+    api.get.side_effect = get
     repo = MagicMock()
     repo.full_name = "u/app"
     repo.path.side_effect = lambda s: f"/repos/u/app{s}"
@@ -313,6 +320,21 @@ class TestCrawler:
         notifier.return_value.send.assert_called_once()
         with patch("app.repo_audit.crawler.RepoAuditChangeNotifier", side_effect=RuntimeError("x")):
             job.after_success(MagicMock(inserted=1, updated=1, deleted=1))  # 例外を送出しない
+
+    def test_job_fails_when_not_a_single_repo_could_be_audited(self, db_session):
+        """全リポジトリが失敗したら、0件の成功にせず例外にする（実行記録が error になる）。"""
+        job = _RepoAuditJob()
+        counters = MagicMock(inserted=0, deleted=0, updated=0)
+        with patch("app.repo_audit.crawler.list_target_repos", return_value=[
+                self.REPO_INFO, {"full_name": "u/other"}]),              patch("app.repo_audit.crawler.collect", side_effect=httpx.ConnectError("x")):
+            with pytest.raises(RepoAuditError, match="2 リポジトリ.*u/app"):
+                job.execute(db_session, counters)
+
+    def test_job_succeeds_when_there_are_no_target_repos(self, db_session):
+        job = _RepoAuditJob()
+        counters = MagicMock(inserted=0, deleted=0, updated=0)
+        with patch("app.repo_audit.crawler.list_target_repos", return_value=[]):
+            job.execute(db_session, counters)  # 対象が無いのは、失敗ではない
 
     def test_job_result_and_entry_point(self):
         assert _RepoAuditJob().result(MagicMock(inserted=3, deleted=2, updated=1)) == (3, 2, 1)
