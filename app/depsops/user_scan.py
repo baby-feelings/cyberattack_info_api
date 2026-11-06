@@ -20,6 +20,7 @@ from app.core.github.accounts import list_target_repos
 from app.core.user_scan import UserScanJob
 from app.depsops.notifier import notify_dependabot_ops
 from app.depsops.pr_log_repository import PrLogRepository
+from app.depsops.pr_log_retention import PrLogRetention
 from app.depsops.runner import scan_target_repos
 
 logger = logging.getLogger(__name__)
@@ -45,7 +46,7 @@ class DependabotOpsUserScan(UserScanJob):
             if processed_at_repos:
                 repository = PrLogRepository(db)
                 repository.record(merged, flagged, now_utc(), resolved=resolved)
-                repository.cleanup()
+                PrLogRetention(db).cleanup()
 
         notify_dependabot_ops(merged, flagged, recipients=[self.webhook_url])
         logger.info(
