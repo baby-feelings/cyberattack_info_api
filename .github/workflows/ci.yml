@@ -72,6 +72,22 @@ jobs:
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
 
+    # 本番と同じ PostgreSQL でテストする（使い捨て。パスワードは CI 内だけの値）。
+    # SQLite は文字数の上限・タイムゾーン等を検査しないため、本番でだけ起きる不具合を見逃す
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: pytest_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -97,8 +113,8 @@ jobs:
       # ── テスト実行 ──────────────────────────────────────────
       - name: Run tests with pytest
         env:
-          # テスト用環境変数（SQLite インメモリ使用）
-          DATABASE_URL: sqlite:///./test.db
+          # テスト用環境変数（本番と同じ PostgreSQL。ローカルの既定は SQLite）
+          DATABASE_URL: postgresql://postgres:ci-only-password@localhost:5432/pytest_db
           API_KEY: test-api-key-for-pytest
           ENVIRONMENT: development
           GITHUB_USERNAME: test-github-user
