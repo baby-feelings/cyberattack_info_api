@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   CRAWL_INTERVAL_HOURS, FRESHNESS_STYLE, FRESHNESS_TEXT, STALE_AFTER_HOURS, STALE_GRACE_HOURS,
-  numberFromEnv,
+  numberFromEnv, SCREEN_FETCH_SOURCE,
 } from './freshnessConfig'
 
 describe('numberFromEnv', () => {
@@ -34,5 +34,13 @@ describe('freshness settings', () => {
     expect(FRESHNESS_STYLE.fresh.dot).not.toContain('animate-pulse')
     expect(FRESHNESS_STYLE.stale.dot).toContain('motion-safe:animate-pulse')
     expect(FRESHNESS_STYLE.failed.dot).toContain('motion-safe:animate-pulse')
+  })
+})
+
+describe('SCREEN_FETCH_SOURCE', () => {
+  it('maps each modal screen to the crawler whose data it shows', () => {
+    expect(SCREEN_FETCH_SOURCE).toEqual({
+      dependencies: 'DEPSCAN', sla: 'DEPSCAN', depsops: 'DEPSOPS', runtimes: 'RUNTIME',
+    })
   })
 })

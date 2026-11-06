@@ -167,8 +167,9 @@ http(s)のみリンクにする（`javascript:`等を弾くXSS対策）。
 
 ## 各タブの「最終取得」（`components/freshness/`）
 タブ見出し（`TabPanel`）の右に、そのタブのデータを最後に取得した時刻を出す（狭い画面では見出しの下に折り返す）。
-言語・実行環境のモーダルにも同じ部品を置く。データは`GET /api/crawler-logs`（成功時刻の記録）。
-- **ハードコードを避ける**: 種別は`TabDefinition.crawlerType`（タブ定義の1か所）。しきい値（実行間隔24時間＋余裕6時間）・
+言語・実行環境・依存パッケージ・対応状況・Dependabot運用状況のモーダルにも同じ部品を置く。データは`GET /api/crawler-logs`（成功時刻の記録）。
+- **ハードコードを避ける**: 種別は、タブは`TabDefinition.crawlerType`（タブ定義の1か所）、モーダルは`SCREEN_FETCH_SOURCE`
+  （`freshnessConfig.ts`。依存パッケージ・対応状況＝DEPSCAN、Dependabot運用状況＝DEPSOPS、言語・実行環境＝RUNTIME）。しきい値（実行間隔24時間＋余裕6時間）・
   文言・状態ごとの色・更新間隔・ロケールは`freshnessConfig.ts`に置く。しきい値は環境変数`VITE_CRAWL_INTERVAL_HOURS`・
   `VITE_STALE_GRACE_HOURS`で上書きできる（不正な値は既定値）。「○時間前」は`Intl.RelativeTimeFormat`で作り、手書きしない
 - **状態**: fresh（最新）・stale（成功から実行間隔＋余裕を超えた）・failed（直近の実行が失敗。最終成功も併記）・

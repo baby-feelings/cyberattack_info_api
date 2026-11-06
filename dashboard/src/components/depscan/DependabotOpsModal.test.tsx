@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { DependabotOpsModal } from './DependabotOpsModal'
+import { fetchCrawlerLogs } from '../../api/crawlerLogs'
 import {
   fetchDepsOpsList, fetchDepsOpsStats,
   type DependabotPrLogOut, type DepsOpsListResponse,
@@ -11,6 +12,10 @@ vi.mock('../../api/client', async () => {
   const actual = await vi.importActual<typeof import('../../api/client')>('../../api/client')
   return { ...actual, fetchDepsOpsList: vi.fn(), fetchDepsOpsStats: vi.fn() }
 })
+
+// 「最終取得」の実行履歴の取得（LastFetched が直接読み込む）
+vi.mock('../../api/crawlerLogs', () => ({ fetchCrawlerLogs: vi.fn().mockResolvedValue([]) }))
+const mockedLogs = vi.mocked(fetchCrawlerLogs)
 
 const mockedList = vi.mocked(fetchDepsOpsList)
 const mockedStats = vi.mocked(fetchDepsOpsStats)
@@ -55,6 +60,15 @@ describe('DependabotOpsModal', () => {
       expect(screen.getByText(/Bump lucide-react/)).toBeInTheDocument()
     })
     expect(mockedList).toHaveBeenCalledWith(expect.objectContaining({ action: null }))
+  })
+
+  it('shows when the data was last fetched, from the DEPSOPS crawler', async () => {
+    mockedList.mockResolvedValue(listResponse([item()]))
+    mockedStats.mockResolvedValue({ repos: [] })
+    render(<DependabotOpsModal open onClose={vi.fn()} />)
+
+    expect(await screen.findByTestId('last-fetched')).toBeInTheDocument()
+    expect(mockedLogs).toHaveBeenCalledWith(expect.objectContaining({ crawlerType: 'DEPSOPS' }))
   })
 
   it('shows the empty state when there are no matching PRs', async () => {

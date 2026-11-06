@@ -1,5 +1,6 @@
 import { FullScreenModal } from '../shared/FullScreenModal'
 import { LastFetched } from '../freshness/LastFetched'
+import { SCREEN_FETCH_SOURCE } from '../freshness/freshnessConfig'
 import { useEffect, useState } from 'react'
 import { Cpu, AlertTriangle } from 'lucide-react'
 import {
@@ -177,7 +178,7 @@ function RuntimesDialog({ onClose, authToken }: { onClose: () => void; authToken
       </p>
 
       {/* 言語・実行環境の情報を最後に取得した日時 */}
-      <LastFetched crawlerType="RUNTIME" />
+      <LastFetched crawlerType={SCREEN_FETCH_SOURCE.runtimes} />
 
       <RecommendedStrip releases={releases} />
 

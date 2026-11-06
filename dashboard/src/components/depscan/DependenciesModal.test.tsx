@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { DependenciesModal } from './DependenciesModal'
+import { fetchCrawlerLogs } from '../../api/crawlerLogs'
 import {
   fetchRepoDependencies, fetchRepoDependencyRepos,
   type RepoDependencyOut, type RepoDependencyListResponse, type RepoDependencyRepoStat,
@@ -11,6 +12,10 @@ vi.mock('../../api/client', async () => {
   const actual = await vi.importActual<typeof import('../../api/client')>('../../api/client')
   return { ...actual, fetchRepoDependencies: vi.fn(), fetchRepoDependencyRepos: vi.fn() }
 })
+
+// 「最終取得」の実行履歴の取得（LastFetched が直接読み込む）
+vi.mock('../../api/crawlerLogs', () => ({ fetchCrawlerLogs: vi.fn().mockResolvedValue([]) }))
+const mockedLogs = vi.mocked(fetchCrawlerLogs)
 
 const mockedList = vi.mocked(fetchRepoDependencies)
 const mockedRepos = vi.mocked(fetchRepoDependencyRepos)
@@ -59,6 +64,12 @@ describe('DependenciesModal', () => {
     expect(screen.queryByRole('dialog', { name: '依存パッケージ' })).not.toBeInTheDocument()
     expect(mockedList).not.toHaveBeenCalled()
     expect(mockedRepos).not.toHaveBeenCalled()
+  })
+
+  it('shows when the data was last fetched, from the DEPSCAN crawler', async () => {
+    await renderOpen()
+    expect(await screen.findByTestId('last-fetched')).toBeInTheDocument()
+    expect(mockedLogs).toHaveBeenCalledWith(expect.objectContaining({ crawlerType: 'DEPSCAN' }))
   })
 
   it('lists the dependencies as soon as it opens, without any input', async () => {

@@ -1,4 +1,6 @@
 import { FullScreenModal } from '../shared/FullScreenModal'
+import { LastFetched } from '../freshness/LastFetched'
+import { SCREEN_FETCH_SOURCE } from '../freshness/freshnessConfig'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Search, Package, Bug } from 'lucide-react'
 import {
@@ -138,6 +140,8 @@ function DependenciesDialog({ onClose, authToken }: { onClose: () => void; authT
         各アプリが使っている依存パッケージの一覧です。左でアプリを選ぶと、そのアプリが使っている依存を見られます。
         新しい脆弱性が公表されたときは、パッケージ名で検索して、影響を受けるアプリと版を確認できます。
       </p>
+
+      <LastFetched crawlerType={SCREEN_FETCH_SOURCE.dependencies} />
 
       <div className="flex flex-wrap items-center gap-3">
         <OperatingFilter value={filters.operating} onChange={handleOperating} />

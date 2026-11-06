@@ -1,4 +1,6 @@
 import { FullScreenModal } from '../shared/FullScreenModal'
+import { LastFetched } from '../freshness/LastFetched'
+import { SCREEN_FETCH_SOURCE } from '../freshness/freshnessConfig'
 import { useEffect, useState } from 'react'
 import { Timer } from 'lucide-react'
 import { fetchSlaReport, type OperatingStatus, type SlaReport } from '../../api/client'
@@ -65,6 +67,8 @@ function SlaDialog({ onClose, authToken }: { onClose: () => void; authToken?: st
         検知から解決までの日数と、重要度ごとの対応期限（SLA）を超えている検知です。
         LOW・重要度不明は期限がありません。CISA KEV に掲載された検知は、重要度によらず期限が短くなります。
       </p>
+
+      <LastFetched crawlerType={SCREEN_FETCH_SOURCE.sla} />
 
       <div className="flex flex-wrap items-center gap-3">
         <OperatingFilter value={operating} onChange={setOperating} />
