@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from app.auth.account_store import get_webhook_for_user
 from app.core.database import SessionLocal
 from app.core.db_utils import now_utc
+from app.core.user_scan import UserScanJob
 from app.depscan.finding_builder import build_findings
 from app.depscan.inventory import RepoDependencyRepository
 from app.depscan.issue_management import file_github_issues
@@ -109,6 +110,48 @@ def _set_user_scan_status(
     db.commit()
 
 
+class DepscanUserScan(UserScanJob):
+    """ログインしたユーザー自身のリポジトリのオンデマンド DEPSCAN。進捗は `UserScan` に記録する。"""
+
+    source = "DEPSCAN"
+    scope = "on-demand for"
+
+    def __init__(self, username, token, session_factory):
+        super().__init__(username, token, session_factory)
+        self.started_at = now_utc()
+
+    def execute(self, db: Session) -> None:
+        _set_user_scan_status(db, self.username, "running", started_at=self.started_at)
+
+        dep_to_repos, repos_scanned, repo_visibility = collect_dependencies(self.token)
+        # 依存の全量（SBOM・横断検索用）の保存失敗はスキャン全体を失敗させない
+        with self.guard("save dependency inventory"):
+            RepoDependencyRepository(db).replace(dep_to_repos, repo_visibility)
+        records = build_findings(dep_to_repos, repo_visibility)
+        result = DependencyFindingRepository(db).sync(records, repo_owner_prefix=self.username)
+        new_count, new_snapshots = result.inserted, result.new_snapshots
+
+        # Slack通知・GitHub Issue起票は、本人が通知を有効にして登録している場合のみ
+        # 行う（未登録ユーザーがログインしただけでは一切通知しない既存方針を維持）
+        webhook = get_webhook_for_user(db, self.username)
+        if webhook:
+            notify_dependency_findings(new_snapshots, recipients=[webhook])
+            with self.guard("file GitHub issues"):
+                file_github_issues(new_snapshots, self.token)
+
+        _set_user_scan_status(
+            db, self.username, "done", started_at=self.started_at, repos_scanned=repos_scanned,
+        )
+        logger.info(
+            "=== %s completed: repos=%d, new=%d ===", self.tag, repos_scanned, new_count,
+        )
+
+    def on_error(self, db: Session, exc: Exception) -> None:
+        _set_user_scan_status(
+            db, self.username, "error", started_at=self.started_at, error_message=str(exc),
+        )
+
+
 def run_depscan_for_user(username: str, token: str) -> None:
     """GitHub ログインしたユーザー自身のリポジトリをオンデマンドでスキャンする。
 
@@ -117,47 +160,4 @@ def run_depscan_for_user(username: str, token: str) -> None:
     `GET /auth/scan-status` でポーリングできるようにする。`app.jobs.user_crawl_runner`
     （登録済み他ユーザーの定期実行、Issue #227）からも同じ関数を再利用する。
     """
-    logger.info("=== DEPSCAN (on-demand for %s) started ===", username)
-    started_at = now_utc()
-    db: Session = SessionLocal()
-    try:
-        _set_user_scan_status(db, username, "running", started_at=started_at)
-
-        dep_to_repos, repos_scanned, repo_visibility = collect_dependencies(token)
-        # 依存の全量（SBOM・横断検索用）の保存失敗はスキャン全体を失敗させない
-        try:
-            RepoDependencyRepository(db).replace(dep_to_repos, repo_visibility)
-        except Exception as exc:
-            logger.error(
-                "DEPSCAN (on-demand for %s): failed to save dependency inventory: %s",
-                username, exc, exc_info=True,
-            )
-        records = build_findings(dep_to_repos, repo_visibility)
-        result = DependencyFindingRepository(db).sync(records, repo_owner_prefix=username)
-        new_count, new_snapshots = result.inserted, result.new_snapshots
-
-        # Slack通知・GitHub Issue起票は、本人が通知を有効にして登録している場合のみ
-        # 行う（未登録ユーザーがログインしただけでは一切通知しない既存方針を維持）
-        webhook = get_webhook_for_user(db, username)
-        if webhook:
-            notify_dependency_findings(new_snapshots, recipients=[webhook])
-            try:
-                file_github_issues(new_snapshots, token)
-            except Exception as exc:
-                logger.error(
-                    "DEPSCAN (on-demand for %s): failed to file GitHub issues: %s",
-                    username, exc, exc_info=True,
-                )
-
-        _set_user_scan_status(
-            db, username, "done", started_at=started_at, repos_scanned=repos_scanned,
-        )
-        logger.info(
-            "=== DEPSCAN (on-demand for %s) completed: repos=%d, new=%d ===",
-            username, repos_scanned, new_count,
-        )
-    except Exception as exc:
-        logger.error("DEPSCAN (on-demand for %s) failed: %s", username, exc, exc_info=True)
-        _set_user_scan_status(db, username, "error", started_at=started_at, error_message=str(exc))
-    finally:
-        db.close()
+    DepscanUserScan(username, token, SessionLocal).run()

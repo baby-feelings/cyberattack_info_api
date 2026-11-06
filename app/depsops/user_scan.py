@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
 from app.core.db_utils import now_utc
 from app.core.github.accounts import list_target_repos
+from app.core.user_scan import UserScanJob
 from app.depsops.notifier import notify_dependabot_ops
 from app.depsops.pr_log_repository import PrLogRepository
 from app.depsops.runner import scan_target_repos
@@ -24,35 +25,37 @@ from app.depsops.runner import scan_target_repos
 logger = logging.getLogger(__name__)
 
 
-def run_dependabot_ops_for_user(username: str, token: str, webhook_url: str) -> None:
-    """登録済みユーザー自身のリポジトリを対象に DEPSOPS（安全な Dependabot PR の
-    自動マージ）を実行し、結果を本人の Webhook にのみ通知する。
-    """
-    logger.info("=== DEPSOPS (for %s) started ===", username)
-    db: Session = SessionLocal()
-    try:
-        repos = list_target_repos(token)
-        logger.info("DEPSOPS (for %s): %d target repos to scan", username, len(repos))
+class DependabotOpsUserScan(UserScanJob):
+    """登録済みユーザー自身のリポジトリの DEPSOPS（安全な Dependabot PR の自動マージ）。"""
 
-        merged, flagged, resolved, error_count = scan_target_repos(db, repos, token)
+    source = "DEPSOPS"
 
-        try:
+    def __init__(self, username, token, session_factory, webhook_url: str):
+        super().__init__(username, token, session_factory)
+        self.webhook_url = webhook_url
+
+    def execute(self, db: Session) -> None:
+        repos = list_target_repos(self.token)
+        logger.info("%s: %d target repos to scan", self.tag, len(repos))
+
+        merged, flagged, resolved, error_count = scan_target_repos(db, repos, self.token)
+
+        with self.guard("record PR logs"):
             processed_at_repos: list[dict[str, Any]] = merged + flagged + resolved
             if processed_at_repos:
                 repository = PrLogRepository(db)
                 repository.record(merged, flagged, now_utc(), resolved=resolved)
                 repository.cleanup()
-        except Exception as exc:
-            logger.error(
-                "DEPSOPS (for %s): failed to record PR logs: %s", username, exc, exc_info=True,
-            )
 
-        notify_dependabot_ops(merged, flagged, recipients=[webhook_url])
+        notify_dependabot_ops(merged, flagged, recipients=[self.webhook_url])
         logger.info(
-            "=== DEPSOPS (for %s) completed: merged=%d, flagged=%d, resolved=%d, errors=%d ===",
-            username, len(merged), len(flagged), len(resolved), error_count,
+            "=== %s completed: merged=%d, flagged=%d, resolved=%d, errors=%d ===",
+            self.tag, len(merged), len(flagged), len(resolved), error_count,
         )
-    except Exception as exc:
-        logger.error("DEPSOPS (for %s) failed: %s", username, exc, exc_info=True)
-    finally:
-        db.close()
+
+
+def run_dependabot_ops_for_user(username: str, token: str, webhook_url: str) -> None:
+    """登録済みユーザー自身のリポジトリを対象に DEPSOPS（安全な Dependabot PR の
+    自動マージ）を実行し、結果を本人の Webhook にのみ通知する。
+    """
+    DependabotOpsUserScan(username, token, SessionLocal, webhook_url).run()

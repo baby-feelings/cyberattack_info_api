@@ -13,6 +13,7 @@ from tests.depscan.support import make_finding  # noqa: E402
 
 TEST_API_KEY = "test-api-key-for-pytest"
 HEADERS = {"X-API-KEY": TEST_API_KEY}
+# 収集時に1回だけ評価される時刻。「N分前か」を見るテストでは使わない（実行が長引くと崩れる）
 _NOW = datetime.now(UTC)
 _REPO = "app.core.github.repo.GitHubRepo"
 
@@ -178,7 +179,7 @@ class TestShouldRescanForUser:
         assert should_rescan_for_user(db_session, "octocat") is True
 
     def test_running_status_returns_false(self, db_session):
-        db_session.add(UserScan(username="octocat", status="running", started_at=_NOW))
+        db_session.add(UserScan(username="octocat", status="running", started_at=datetime.now(UTC)))
         db_session.commit()
         assert should_rescan_for_user(db_session, "octocat") is False
 
@@ -210,7 +211,7 @@ class TestShouldRescanForUser:
     def test_recently_started_running_scan_returns_false(self, db_session):
         from app.depscan.user_scan import STALE_RUNNING_THRESHOLD_MINUTES
 
-        recent = _NOW - timedelta(minutes=STALE_RUNNING_THRESHOLD_MINUTES - 1)
+        recent = datetime.now(UTC) - timedelta(minutes=STALE_RUNNING_THRESHOLD_MINUTES - 1)
         db_session.add(UserScan(username="octocat", status="running", started_at=recent))
         db_session.commit()
         assert should_rescan_for_user(db_session, "octocat") is False

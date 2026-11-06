@@ -20,36 +20,33 @@ from app.codescan.notifier import notify_code_findings
 from app.codescan.repository import CodeFindingRepository
 from app.core.database import SessionLocal
 from app.core.github.accounts import list_target_repos
+from app.core.user_scan import UserScanJob
 
 logger = logging.getLogger(__name__)
 
 
-def run_codescan_for_user(username: str, token: str) -> None:
-    """GitHub ログインしたユーザー自身のリポジトリを CODESCAN でスキャンする。
+class CodescanUserScan(UserScanJob):
+    """ユーザー自身のリポジトリの CODESCAN。進捗テーブルは持たない（ログのみ）。"""
 
-    `app.jobs.user_crawl_runner`（登録済み他ユーザーの定期実行）から呼ばれる。
-    """
-    logger.info("=== CODESCAN (for %s) started ===", username)
-    db: Session = SessionLocal()
-    repository = CodeFindingRepository(db)
-    new_count = 0
-    all_new_snapshots: list[dict[str, Any]] = []
-    # 全ツールの検査に成功したリポジトリ（Issue のクローズの判定の対象）
-    fully_scanned: set[str] = set()
-    try:
-        repos = list_target_repos(token)
-        logger.info("CODESCAN (for %s): %d target repos to scan", username, len(repos))
+    source = "CODESCAN"
+
+    def execute(self, db: Session) -> None:
+        repository = CodeFindingRepository(db)
+        new_count = 0
+        all_new_snapshots: list[dict[str, Any]] = []
+        # 全ツールの検査に成功したリポジトリ（Issue のクローズの判定の対象）
+        fully_scanned: set[str] = set()
+
+        repos = list_target_repos(self.token)
+        logger.info("%s: %d target repos to scan", self.tag, len(repos))
 
         for repo_info in repos:
             full_name = repo_info["full_name"]
             default_branch = repo_info.get("default_branch") or "main"
             try:
-                records = scan_repo(full_name, default_branch, token)
+                records = scan_repo(full_name, default_branch, self.token)
             except SCAN_ERRORS as exc:
-                logger.warning(
-                    "CODESCAN (for %s): failed to scan %s, skipping: %s",
-                    username, full_name, exc,
-                )
+                logger.warning("%s: failed to scan %s, skipping: %s", self.tag, full_name, exc)
                 continue
 
             failed_tools = failed_tools_of(records)
@@ -59,29 +56,22 @@ def run_codescan_for_user(username: str, token: str) -> None:
             new_count += result.inserted
             all_new_snapshots.extend(result.new_snapshots)
 
-        webhook = get_webhook_for_user(db, username)
+        webhook = get_webhook_for_user(db, self.username)
         if webhook:
             notify_code_findings(all_new_snapshots, recipients=[webhook])
-            try:
-                file_github_issues(all_new_snapshots, token)
-            except Exception as exc:
-                logger.error(
-                    "CODESCAN (for %s): failed to file GitHub issues: %s",
-                    username, exc, exc_info=True,
-                )
-            try:
-                close_resolved_repo_issues(db, fully_scanned, token)
-            except Exception as exc:
-                logger.error(
-                    "CODESCAN (for %s): failed to close GitHub issues: %s",
-                    username, exc, exc_info=True,
-                )
+            with self.guard("file GitHub issues"):
+                file_github_issues(all_new_snapshots, self.token)
+            with self.guard("close GitHub issues"):
+                close_resolved_repo_issues(db, fully_scanned, self.token)
 
         logger.info(
-            "=== CODESCAN (for %s) completed: repos=%d, new=%d ===",
-            username, len(repos), new_count,
+            "=== %s completed: repos=%d, new=%d ===", self.tag, len(repos), new_count,
         )
-    except Exception as exc:
-        logger.error("CODESCAN (for %s) failed: %s", username, exc, exc_info=True)
-    finally:
-        db.close()
+
+
+def run_codescan_for_user(username: str, token: str) -> None:
+    """GitHub ログインしたユーザー自身のリポジトリを CODESCAN でスキャンする。
+
+    `app.jobs.user_crawl_runner`（登録済み他ユーザーの定期実行）から呼ばれる。
+    """
+    CodescanUserScan(username, token, SessionLocal).run()
