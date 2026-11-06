@@ -21,7 +21,7 @@ Vercelのプレビューは`dashboard/vercel.json`の`ignoreCommand`でダッシ
 **`test`（バックエンド、Python 3.13 のみ。本番Dockerfile・`.python-version`と同じ。3.10・3.11は廃止）**
 1. `ruff check app/ tests/` — Linting（`S`=flake8-bandit相当を含む。testsは`S`除外）
 2. `mypy app/ --ignore-missing-imports` — 型チェック
-3. `pytest --cov=app --cov-fail-under=90` — テスト（カバレッジ 90% 未満で失敗）
+3. `pytest --cov=app --cov-fail-under=90` — テスト（カバレッジ 90% 未満で失敗）。**本番と同じ PostgreSQL 16**（サービスコンテナ。SQLite は文字数の上限・タイムゾーンを検査しないため）
 4. `htmlcov/` を Artifact として 30 日間保持
 
 **`dashboard-test`（ダッシュボードのユニットテスト・ビルド）**
