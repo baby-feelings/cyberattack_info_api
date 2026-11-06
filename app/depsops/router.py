@@ -15,7 +15,7 @@ from app.auth.api_key import require_api_key, require_public_api_key
 from app.core.background import run_in_background
 from app.core.database import get_db
 from app.core.operating_status import OperatingQuery, apply_operating_status
-from app.core.pagination import paginate
+from app.core.pagination import DEFAULT_PER_PAGE, MAX_PER_PAGE, paginate
 from app.depsops.models import DependabotPrLog
 from app.depsops.runner import run_dependabot_ops
 from app.depsops.schemas import (
@@ -68,7 +68,9 @@ def trigger_dependabot_ops(
 def list_depsops(
     db: Annotated[Session, Depends(get_db)],
     page: int = Query(1, ge=1, description="ページ番号（1始まり）"),
-    per_page: int = Query(50, ge=1, le=200, description="1ページあたりの件数"),
+    per_page: int = Query(
+        DEFAULT_PER_PAGE, ge=1, le=MAX_PER_PAGE, description="1ページあたりの件数",
+    ),
     repo: str | None = Query(None, description="リポジトリ名絞り込み（例: owner/repo）"),
     action: str | None = Query(None, description="判定結果で絞り込み（merged / flagged）"),
     operating: OperatingQuery = "all",

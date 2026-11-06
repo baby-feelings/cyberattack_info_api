@@ -18,7 +18,6 @@ from app.codescan.models import CodeFinding  # noqa: E402
 from app.core.operating_status import (  # noqa: E402
     apply_operating_status,
     inactive_repo_names,
-    is_inactive_repo,
 )
 from app.depscan.models import DependencyFinding  # noqa: E402
 from app.depsops.models import DependabotPrLog  # noqa: E402
@@ -79,12 +78,6 @@ class TestSettingHelpers:
     def test_empty_means_nothing_is_inactive(self):
         with patch(_CFG, ""):
             assert inactive_repo_names() == set()
-            assert is_inactive_repo(_STOPPED) is False
-
-    def test_is_inactive_repo_ignores_case(self):
-        with patch(_CFG, _STOPPED):
-            assert is_inactive_repo("BABY-FEELINGS/Baby_Grow") is True
-            assert is_inactive_repo(_ACTIVE) is False
 
 
 class TestApplyOperatingStatus:

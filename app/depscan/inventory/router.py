@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.auth.api_key import require_api_key_or_session
 from app.core.database import get_db
 from app.core.operating_status import OperatingQuery
+from app.core.pagination import DEFAULT_PER_PAGE, MAX_PER_PAGE
 from app.depscan.inventory.filters import DependencyFilter
 from app.depscan.inventory.search import search_dependencies, summarize_repos
 from app.depscan.sbom import build_purl
@@ -64,7 +65,9 @@ def search_repo_dependencies(
     forced_owner: Annotated[str | None, Depends(require_api_key_or_session)],
     flt: Annotated[DependencyFilter, Depends(dependency_filter)],
     page: int = Query(1, ge=1, description="ページ番号（1始まり）"),
-    per_page: int = Query(50, ge=1, le=200, description="1ページあたりの件数"),
+    per_page: int = Query(
+        DEFAULT_PER_PAGE, ge=1, le=MAX_PER_PAGE, description="1ページあたりの件数",
+    ),
 ) -> RepoDependencyListResponse:
     """依存パッケージを横断検索する。
 

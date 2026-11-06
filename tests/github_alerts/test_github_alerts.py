@@ -134,10 +134,6 @@ class TestFetchAlerts:
             return
         raise AssertionError("expected an error")
 
-    def test_is_unavailable_error(self):
-        assert client.is_unavailable_error(httpx.ConnectError("x")) is True
-        assert client.is_unavailable_error(ValueError("x")) is False
-
 
 class TestRepository:
     def test_sync_inserts_updates_and_resolves(self, db_session):

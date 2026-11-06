@@ -12,8 +12,6 @@ import logging
 from datetime import datetime
 from typing import Any
 
-import httpx
-
 from app.core.db_utils import now_utc
 from app.core.github.api import MAX_PER_PAGE
 from app.core.github.repo import GitHubRepo
@@ -127,7 +125,3 @@ def fetch_alerts(repo: GitHubRepo, kind: str) -> tuple[list[dict[str, Any]] | No
                 break
     return alerts, None
 
-
-def is_unavailable_error(exc: Exception) -> bool:
-    """通信の失敗か（呼び出し側が、そのリポジトリを飛ばして続けるための判定）。"""
-    return isinstance(exc, httpx.HTTPError)

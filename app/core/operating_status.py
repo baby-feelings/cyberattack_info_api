@@ -33,11 +33,6 @@ def inactive_repo_names() -> set[str]:
     return {e.strip().lower() for e in settings.INACTIVE_REPOS.split(",") if e.strip()}
 
 
-def is_inactive_repo(full_name: str) -> bool:
-    """運用停止中に指定されたリポジトリか（大文字小文字は区別しない）。"""
-    return full_name.lower() in inactive_repo_names()
-
-
 def apply_operating_status(
     query: SaQuery[Any], repo_column: Any, operating: OperatingStatus,
 ) -> SaQuery[Any]:
