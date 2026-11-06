@@ -31,6 +31,7 @@ from app.depsops.github_client import (
 from app.depsops.notifier import notify_dependabot_ops
 from app.depsops.pr_judge import PrJudge
 from app.depsops.pr_log_repository import PrLogRepository
+from app.depsops.pr_log_retention import PrLogRetention
 
 logger = logging.getLogger(__name__)
 
@@ -164,7 +165,7 @@ class _DepsopsJob(CrawlJob):
         try:
             repository = PrLogRepository(db)
             repository.record(self.merged, self.flagged, started_at, resolved=resolved)
-            repository.cleanup()
+            PrLogRetention(db).cleanup()
         except Exception as exc:
             logger.error("Failed to record DEPSOPS PR logs: %s", exc, exc_info=True)
 

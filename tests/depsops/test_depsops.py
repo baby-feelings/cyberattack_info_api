@@ -34,6 +34,7 @@ from app.depsops.pr_judge import (  # noqa: E402
     matches_security_alert,
 )
 from app.depsops.pr_log_repository import PrLogRepository  # noqa: E402
+from app.depsops.pr_log_retention import PrLogRetention  # noqa: E402
 from app.depsops.runner import run_dependabot_ops  # noqa: E402
 
 TEST_API_KEY = "test-api-key-for-pytest"
@@ -764,7 +765,7 @@ class TestCleanupPrLogs:
         self._add(db_session, 3, "merged", 1)
         db_session.commit()
 
-        deleted = PrLogRepository(db_session).purge_legacy_closed()
+        deleted = PrLogRetention(db_session).purge_legacy_closed()
 
         assert deleted == 3
         remaining = sorted(
@@ -778,7 +779,7 @@ class TestCleanupPrLogs:
         self._add(db_session, 1, "flagged", 2)
         db_session.commit()
 
-        assert PrLogRepository(db_session).purge_legacy_closed() == 0
+        assert PrLogRetention(db_session).purge_legacy_closed() == 0
         assert db_session.query(DependabotPrLog).count() == 2
 
     def test_collapse_keeps_only_latest_of_identical_consecutive_flagged_rows(self, db_session):
@@ -787,7 +788,7 @@ class TestCleanupPrLogs:
         self._add(db_session, 2, "flagged", 1)
         db_session.commit()
 
-        deleted = PrLogRepository(db_session).collapse_duplicate_flagged()
+        deleted = PrLogRetention(db_session).collapse_duplicate_flagged()
 
         assert deleted == 3
         rows = db_session.query(DependabotPrLog).filter_by(pr_number=1).all()
@@ -803,7 +804,7 @@ class TestCleanupPrLogs:
         self._add(db_session, 1, "flagged", 4, reason="メジャー")
         db_session.commit()
 
-        assert PrLogRepository(db_session).collapse_duplicate_flagged() == 2
+        assert PrLogRetention(db_session).collapse_duplicate_flagged() == 2
         days = sorted(
             r.processed_at.replace(tzinfo=UTC).day
             for r in db_session.query(DependabotPrLog).all()
@@ -816,7 +817,7 @@ class TestCleanupPrLogs:
         self._add(db_session, 2, "flagged", 1, repo="u/a")
         db_session.commit()
 
-        assert PrLogRepository(db_session).collapse_duplicate_flagged() == 0
+        assert PrLogRetention(db_session).collapse_duplicate_flagged() == 0
         assert db_session.query(DependabotPrLog).count() == 3
 
     def test_collapse_does_not_touch_merged_rows(self, db_session):
@@ -824,7 +825,7 @@ class TestCleanupPrLogs:
         self._add(db_session, 1, "merged", 2)
         db_session.commit()
 
-        assert PrLogRepository(db_session).collapse_duplicate_flagged() == 0
+        assert PrLogRetention(db_session).collapse_duplicate_flagged() == 0
 
     def test_cleanup_is_idempotent(self, db_session):
         for day in (1, 2, 3):
@@ -832,9 +833,9 @@ class TestCleanupPrLogs:
         self._add(db_session, 2, "closed", 1, reason="解消済み")
         db_session.commit()
 
-        PrLogRepository(db_session).cleanup()
+        PrLogRetention(db_session).cleanup()
         first = db_session.query(DependabotPrLog).count()
-        PrLogRepository(db_session).cleanup()
+        PrLogRetention(db_session).cleanup()
 
         assert first == 1
         assert db_session.query(DependabotPrLog).count() == 1
@@ -922,7 +923,7 @@ class TestDeleteOldDepsopsRecords:
         db_session.add_all([old, recent])
         db_session.commit()
 
-        deleted = PrLogRepository(db_session).delete_expired()
+        deleted = PrLogRetention(db_session).delete_expired()
 
         assert deleted == 1
         remaining = db_session.query(DependabotPrLog).all()
