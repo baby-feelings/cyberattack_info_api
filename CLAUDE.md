@@ -24,7 +24,7 @@ code-review-graph watch
 | **フレームワーク** | FastAPI 0.162.x |
 | **ORM** | SQLAlchemy 2.x（`Mapped` / `mapped_column` スタイル） |
 | **スケジューラ** | APScheduler 3.x + GitHub Actions cron（補完） |
-| **開発 DB** | SQLite／**本番 DB** | PostgreSQL（Neon） |
+| **開発 DB** | SQLite（CIのpytestは PostgreSQL）／**本番 DB** | PostgreSQL（Neon） |
 | **バリデーション** | Pydantic 2.14.x + pydantic-settings 2.16.x |
 | **HTTP クライアント** | httpx／**XML パーサー** | defusedxml |
 | **デプロイ先** | OCI（Compute VM、Docker Compose） |

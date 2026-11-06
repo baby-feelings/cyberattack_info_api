@@ -13,7 +13,7 @@ description: Reactダッシュボード（dashboard/）のアーキテクチャ�
 テスト用の`jsonResponse`は`src/test/http.ts`（カバレッジの対象外）。
 
 ## タブ切り替え UI（App.tsx）
-KEV / OSV / DEPSCAN / CODESCAN の 5 データソースは、画面下部固定のタブバーで切り替え
+KEV / OSV / DEPSCAN / CODESCAN の 4 データソースは、画面下部固定のタブバーで切り替え
 表示する構成（縦並び表示ではない）。DEPSOPS（Dependabot 運用状況）に専用タブは作らず、DEPSCAN
 タブ内のボタンから開く全画面モーダルとして統合している。「依存パッケージ」
 （`DependenciesModal.tsx`。`GET /api/depscan/dependencies`）も同じ作りで、左のアプリ一覧（`RepoRail`）で
@@ -32,7 +32,7 @@ DEPSCANパネルのヘッダーは、1段目をタイトルと再読み込み、
 `App.tsx`（約70行）は組み立てのみ。タブごとの定義（キー・ラベル・アイコン・見出し・サブタイトル・
 枠線色・本体パネル）は `components/layout/tabs.tsx` の `TAB_DEFINITIONS` に集約しており
 （新しいタブはここに1件足す。以前は`App.tsx`にタブ数×約20行の同じ構造が並んでいた）、
-`TabBar.tsx`（下部固定タブバー）・`TabPanel.tsx`（見出し＋本体）・`HeaderMenu.tsx`
+`TabBar.tsx`（下部固定タブバー。列数は`TAB_DEFINITIONS.length`から決める。固定値だとタブの増減で右側が空く）・`TabPanel.tsx`（見出し＋本体）・`HeaderMenu.tsx`
 （ハンバーガーメニュー）が描画する。`activeTab` state で選択中のパネルのみを条件レンダリングし、
 サーバー稼働状況（`HealthStatus`）とエラーバナーは全タブ共通で常に表示する。
 タブには `role="tablist"/"tab"/"tabpanel"` と `aria-selected`/`aria-controls`/`aria-labelledby` を付与済み。

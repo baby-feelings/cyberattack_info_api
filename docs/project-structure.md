@@ -54,7 +54,7 @@ cyberattack_info_api/
 │   ├── zapscan/                # OWASP ZAPの結果→GitHub Issue起票（`python -m app.zapscan`。docs/zap-scan.md）
 │   └── crawler_logs/           # クローラー実行ログドメイン（models・schemas・writer・router）
 ├── tests/                      # app/ と同じドメイン構成
-│   ├── conftest.py             # テスト用フィクスチャ (SQLite テスト DB、全サブフォルダに自動継承)
+│   ├── conftest.py             # テスト用フィクスチャ (既定は SQLite、DATABASE_URL で PostgreSQL。全サブフォルダに自動継承)
 │   ├── test_main.py            # app.main（health/root）テスト
 │   ├── core/ auth/ kev/ osv/ depscan/ depsops/ runtimes/ sla/ audit/ commit_watch/ external_monitor/ repo_audit/ github_alerts/ finding_exceptions/ project_sync/ codescan/ mcp_server/ zapscan/ crawler_logs/
 ├── dashboard/               # Vercel デプロイの React ダッシュボード（App.tsx は組み立てのみ。タブ定義と

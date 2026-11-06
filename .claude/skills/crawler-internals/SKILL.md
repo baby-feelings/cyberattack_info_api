@@ -19,6 +19,16 @@ APIのレート制限は `X-RateLimit-Remaining`/`X-RateLimit-Reset`/`Retry-Afte
 `rate_limited`/`transient_error` を区別）として `/metrics` に自動的に公開され、
 Grafanaダッシュボードの「外部API呼び出しのリトライ発生回数」パネルで可視化する。
 
+**落とし穴（403・404は例外になる）**: `request_with_retry`は403・404でも`HTTPStatusError`を送出する。
+「403・404は取得不可として扱う」処理は、`api.get`の**例外を受けて**`exc.response`から取り出す
+（応答のステータスだけを見る実装は、到達せず、リポジトリごと失敗になる。REPOAUDITで実際に起きた）。
+テストの偽APIも、本物と同じくエラーのステータスで例外にする。
+
+**取得の失敗を「成功」にしない**: 取得に失敗して空の結果を返すと、0件の成功として記録され、失敗通知も
+ダッシュボードの失敗表示も出ない（MyJVNの503で10/20から新着が止まったのに気づけなかった）。
+クローラーは失敗を例外で伝え、`run_crawler`が`status=error`の記録とSlack通知を行う。
+一部のページ・リポジトリの失敗を許す場合も、**1件も取れなかったら**例外にする。
+
 **新規リソース作成（POST）にはリトライを適用しない**: `create_issue`・
 `add_issue_comment`・`request_rebase` は、タイムアウト等でレスポンス受信前に
 失敗した場合、実際には成功しているリクエストを再送すると重複作成（Issue・
@@ -167,6 +177,9 @@ datetime 型の属性だけ自動変換する。`OsvVulnerabilityOut`/
 ## SQLite / PostgreSQL 切り替え
 `DATABASE_URL` が `sqlite://` で始まる場合は `check_same_thread=False` と PRAGMA 設定を自動適用。
 PostgreSQL の場合は `pool_pre_ping=True` で接続断を自動検出。
+テストの既定は SQLite だが、**CI の pytest は PostgreSQL**（`DATABASE_URL`で切り替え。`tests/conftest.py`）。
+SQLite は文字数の上限（`String(10)`に11文字など）・タイムゾーンを検査しないため、本番でだけ起きる不具合を防ぐ。
+`crawler_logs.crawler_type`は20文字で、`CrawlerType`の全値が収まることをテストで保証する。
 
 ## DBマイグレーションは Alembic で管理する
 `app/main.py` の lifespan が呼ぶ `Base.metadata.create_all()` は新規テーブルの作成のみ行い、
