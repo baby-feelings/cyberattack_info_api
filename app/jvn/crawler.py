@@ -26,6 +26,15 @@ from app.jvn.parser import parse_item as _parse_item
 
 logger = logging.getLogger(__name__)
 
+
+class JvnFetchError(Exception):
+    """MyJVN API の取得に失敗したことを表す例外。
+
+    取得失敗を空の結果として扱うと、新着が0件の「成功」として記録され、異常に気づけない
+    （JVN側の障害で取り込みが止まっても、失敗通知もダッシュボードの失敗表示も出ない）。
+    そのため例外にして伝播させ、run_crawler が crawler_logs への error 記録と Slack 通知を行う。
+    """
+
 # MyJVN REST API ベース URL
 _MYJVN_BASE_URL = "https://jvndb.jvn.jp/myjvn"
 
@@ -36,7 +45,7 @@ _MAX_COUNT_ITEM = 50
 _COMMIT_EVERY = 50
 
 
-def _fetch_page(cutoff_date: str, start_item: int) -> stdlib_ET.Element | None:
+def _fetch_page(cutoff_date: str, start_item: int) -> stdlib_ET.Element:
     """MyJVN API の getVulnOverviewList を 1 ページ分取得する。
 
     Args:
@@ -44,7 +53,10 @@ def _fetch_page(cutoff_date: str, start_item: int) -> stdlib_ET.Element | None:
         start_item:  取得開始位置（1始まり）
 
     Returns:
-        XML の root Element、失敗時は None
+        XML の root Element
+
+    Raises:
+        JvnFetchError: 通信・HTTPエラー（リトライ後も失敗）または XML の解析に失敗した場合
     """
     params = {
         "method": "getVulnOverviewList",
@@ -59,7 +71,7 @@ def _fetch_page(cutoff_date: str, start_item: int) -> stdlib_ET.Element | None:
         return defused_ET.fromstring(resp.text)
     except (httpx.HTTPError, stdlib_ET.ParseError) as exc:
         logger.error("MyJVN API fetch failed (start=%d): %s", start_item, exc)
-        return None
+        raise JvnFetchError(f"MyJVN API の取得に失敗しました (start={start_item}): {exc}") from exc
 
 
 def _fetch_all_entries(cutoff_date: str) -> list[dict]:
@@ -70,14 +82,15 @@ def _fetch_all_entries(cutoff_date: str) -> list[dict]:
 
     Returns:
         脆弱性データの dict リスト
+
+    Raises:
+        JvnFetchError: いずれかのページの取得に失敗した場合（一部だけ取り込んだ成功にしない）
     """
     entries: list[dict] = []
     start_item = 1
 
     # 1ページ目を取得して totalRes（総件数）を確認
-    root: stdlib_ET.Element | None = _fetch_page(cutoff_date, start_item)
-    if root is None:
-        return entries
+    root = _fetch_page(cutoff_date, start_item)
 
     # Status 要素から総件数を取得
     status_elem = root.find("status:Status", namespaces=_NS)
@@ -92,8 +105,6 @@ def _fetch_all_entries(cutoff_date: str) -> list[dict]:
 
     # 全ページをループして item を収集
     while True:
-        if root is None:
-            break
         for item in root.findall("rss:item", namespaces=_NS):
             parsed = _parse_item(item)
             if parsed:
