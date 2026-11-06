@@ -34,7 +34,7 @@ git push -u origin feature/your-feature-name
 | チェック | 内容 |
 |---------|------|
 | ruff（`S`=bandit 相当を含む）・mypy | 静的解析・セキュリティ系の静的解析（`pyproject.toml`） |
-| pytest（カバレッジ 90% 未満で失敗） | バックエンドのテスト |
+| pytest（カバレッジ 90% 未満で失敗） | バックエンドのテスト。CI は本番と同じ PostgreSQL（サービスコンテナ）、ローカルは既定で SQLite |
 | ESLint（`--max-warnings` の上限超過で失敗）・tsc・Vitest・Playwright | ダッシュボード |
 | gitleaks（`gitleaks.yml`） | コミット範囲のシークレット検出 |
 | Semgrep（`semgrep.yml`） | 静的解析（`p/security-audit`・`p/secrets`。CODESCAN と同じルール。検出があれば失敗） |
@@ -56,3 +56,13 @@ DEPSCAN/CODESCAN（毎日）。
 依存の向きは `tests/test_dependency_rules.py` が検査する（`auth` は `mcp_server` を、`core` は個別の
 ドメインを、CODESCAN・DEPSOPS は DEPSCAN を import してはならない）。新しいモジュールを足す・移すときは、
 このテストが通ることを確認する（例外は理由つきでテスト内に明記）。
+
+### ローカルで PostgreSQL に対してテストする（CI と同じ条件）
+
+SQLite は文字数の上限・タイムゾーンを検査しないため、DB まわりを変えたときは PostgreSQL でも流す。
+
+```bash
+docker run -d --rm --name pgtest -e POSTGRES_PASSWORD=ci-only-password -e POSTGRES_DB=pytest_db -p 55432:5432 postgres:16
+DATABASE_URL=postgresql://postgres:ci-only-password@localhost:55432/pytest_db pytest
+docker stop pgtest
+```

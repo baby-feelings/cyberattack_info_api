@@ -516,8 +516,9 @@ class TestUpsertOsvRecords:
 
         assert ins == 0
         assert upd == 0  # modified は変化していないので updated 扱いにはならない
-        # SQLite はタイムゾーン情報を保持せず naive で返すため、tzinfoを外して比較する
-        assert record.fetched_at == new_fetched_at.replace(tzinfo=None)
+        # SQLite はタイムゾーン情報を保持せず naive で返す（PostgreSQL は保持する）ため、
+        # tzinfo を外して、時刻だけを比較する
+        assert record.fetched_at.replace(tzinfo=None) == new_fetched_at.replace(tzinfo=None)
 
     def test_no_double_insert(self, db_session):
         """同じキーのレコードを 2 回 upsert しても 2 回 insert されないこと。"""

@@ -1,6 +1,9 @@
 """pytest 共通フィクスチャ。
-テスト用にファイルベース SQLite DB と FastAPI テストクライアントを提供する。
-各テスト間のデータ汚染を防ぐため、テスト毎にテーブルを truncate する。
+テスト用 DB と FastAPI テストクライアントを提供する。
+DB は既定でファイルベース SQLite。環境変数 DATABASE_URL で PostgreSQL にも切り替えられる。
+各テスト間のデータ汚染を防ぐため、テスト毎にテーブルのデータを消去する。
+CI は本番と同じ PostgreSQL で実行する（SQLite は文字数の上限などを検査しないため、
+本番でだけ起きる不具合を見逃す）。
 """
 import os
 
@@ -24,11 +27,13 @@ os.environ.setdefault("TOKEN_ENCRYPTION_KEY", "c0eGxtqQBhGVNn9Fews4q_WLHX0gkNbLg
 from app.core.database import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402
 
-# ── テスト用 SQLite DB ─────────────────────────────────────────
-TEST_DATABASE_URL = "sqlite:///./test.db"
+# ── テスト用 DB ────────────────────────────────────────────────
+# 上の setdefault で、未指定のときは SQLite になる。PostgreSQL のときは接続の追加引数は不要
+TEST_DATABASE_URL = os.environ["DATABASE_URL"]
+IS_SQLITE = TEST_DATABASE_URL.startswith("sqlite")
 test_engine = create_engine(
     TEST_DATABASE_URL,
-    connect_args={"check_same_thread": False},
+    connect_args={"check_same_thread": False} if IS_SQLITE else {},
 )
 TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
@@ -42,7 +47,7 @@ def setup_test_db():
     # エンジンの接続を全て閉じてからファイルを削除（Windows のファイルロック対策）
     test_engine.dispose()
     try:
-        if os.path.exists("test.db"):
+        if IS_SQLITE and os.path.exists("test.db"):
             os.remove("test.db")
     except OSError:
         pass  # ファイルロックが残っている場合は無視（CI の Linux 環境では発生しない）
