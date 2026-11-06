@@ -12,7 +12,7 @@
   },
   "refresh": "1m",
   "schemaVersion": 42,
-  "version": 4,
+  "version": 5,
   "graphTooltip": 1,
   "fiscalYearStartMonth": 0,
   "weekStart": "",
@@ -204,7 +204,7 @@
             "type": "prometheus",
             "uid": "prometheus_ds"
           },
-          "expr": "count(crawler_last_run_success == 0) or vector(0)",
+          "expr": "count(last_over_time(crawler_last_run_success[15m]) == 0) or vector(0)",
           "instant": true,
           "range": false,
           "legendFormat": "異常",
@@ -461,7 +461,7 @@
             "type": "prometheus",
             "uid": "prometheus_ds"
           },
-          "expr": "crawler_last_run_success",
+          "expr": "last_over_time(crawler_last_run_success[15m])",
           "instant": true,
           "range": false,
           "legendFormat": "{{crawler_type}}",
@@ -539,7 +539,7 @@
             "type": "prometheus",
             "uid": "prometheus_ds"
           },
-          "expr": "(time() - crawler_last_run_timestamp_seconds) / 3600",
+          "expr": "(time() - last_over_time(crawler_last_run_timestamp_seconds[15m])) / 3600",
           "instant": true,
           "range": false,
           "legendFormat": "{{crawler_type}}",

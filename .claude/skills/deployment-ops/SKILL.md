@@ -241,9 +241,11 @@ Issue #227でダッシュボードからのユーザー別登録方式（`UserAc
   5. 行は、稼働状態／クローラー／防御と期限／サーバーのリソースの順。パネルを足したら`id`を振り直し、
      `version`を上げる。手元のGrafana（`grafana/grafana:13.2.4`）に読み込ませ、正規化の差分が
      `version`のみであることを確認してから、デプロイする
-  6. **「いまの状態」を出すパネル（`stat`）は、クエリを`instant: true`・`range: false`にする**。範囲クエリ＋
-     `lastNotNull`だと、表示期間（既定24時間）に1つでも値があれば、廃止したクローラー（JVNなど）が、
-     止まった値のまま表示期間の間残る。時系列のグラフは、範囲クエリのままでよい
+  6. **「いまの状態」を出すパネル（`stat`）は、`instant: true`・`range: false`にし、クエリを
+     `last_over_time(指標[15m])`で包む**。範囲クエリ＋`lastNotNull`だと、表示期間（既定24時間）に1つでも
+     値があれば、廃止したクローラー（JVNなど）が止まった値のまま残る。素の`instant`だと、デプロイ中のAPIの
+     再起動や取得失敗（Prometheusが直近の値にstaleの印を付ける）で、全系列が「No data」になる。
+     `[15m]`なら、廃止した系列は15分で消え、短い欠落では直前の値が出る。時系列のグラフは範囲クエリのままでよい
 - **`deploy/docker-compose.yml`**: `prometheus`（30秒間隔でスクレイプ、`127.0.0.1`のみ
   バインド）・`node-exporter`・`grafana`（Caddy経由でHTTPS公開）。**`node-exporter`の
   `/:/host:ro,rslave`マウントはWindows Docker Desktop（WSL2）ではエラーになる**が、
