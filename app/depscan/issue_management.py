@@ -1,51 +1,35 @@
 """DEPSCAN 検知結果の GitHub Issue 管理（起票・追記・自動クローズ）。
 
-DEPSCAN のクローラーから GitHub Issue 関連ロジックのみを切り出したモジュール。
-新規検知の起票（`file_github_issues`）・未解決 finding が0件になった
-リポジトリの自動クローズ（`close_resolved_repo_issues`）を担当し、
+起票・クローズの共通の手順は `app.core.issue_filing.IssueReporter`（Template Method）にあり、
+ここには DEPSCAN 固有の差分（タイトル・本文・未解決の数え方）だけを置く。
 DEPSCAN 全体のオーケストレーション（crawler.py）とは責務を分離する。
+
+公開する関数（`file_github_issues`・`close_resolved_repo_issues`）は、呼び出し元
+（crawler・user_scan・例外の同期）が変わらないよう、`DepscanIssueReporter` への委譲にしている。
 """
-import logging
 from typing import Any
 
-import httpx
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
-from app.core.db_utils import now_utc
 from app.core.finding_format import format_malicious_section, format_package_lines, split_malicious
-from app.core.github.repo import GitHubRepo
-from app.core.issue_filing import file_or_update_repo_issues
+from app.core.issue_filing import IssueReporter
 from app.core.notifications.slack import DASHBOARD_URL
 from app.depscan.models import DependencyFinding
 from app.finding_exceptions.matching import not_excepted
 from app.finding_exceptions.models import KIND_DEPENDENCY
 
-logger = logging.getLogger(__name__)
-
 # GitHub Issue自動起票時のタイトル（Open Issue検索の一致キーも兼ねる）
 ISSUE_TITLE = "🚨 依存ライブラリの脆弱性が検出されました (DEPSCAN)"
 
 
-def file_github_issues(new_snapshots: list[dict[str, Any]], token: str | None = None) -> None:
-    """新規検知を、検知されたリポジトリ自身に GitHub Issue として自動起票する。
+class DepscanIssueReporter(IssueReporter):
+    """DEPSCAN（依存ライブラリの脆弱性）の Issue の起票とクローズ。"""
 
-    同名の Open な Issue が既にあればコメントを追記し、無ければ新規作成する。
-    GitHub API 呼び出しが失敗しても（Issues 書き込み権限が無いトークン等）、
-    DEPSCAN 全体の成功を妨げないようリポジトリ単位で例外を握りつぶす。
+    source = "DEPSCAN"
+    issue_title = ISSUE_TITLE
+    resolved_subject = "依存ライブラリ脆弱性"
 
-    Args:
-        token: 省略時は`settings.GITHUB_TOKEN`（baby-feelings向け毎日クロールの
-            既定）。登録済み他ユーザー自身のリポジトリに対して起票する場合
-            （Issue #227）は、そのユーザー自身のOAuthアクセストークンを渡す。
-    """
-    if not new_snapshots:
-        return
-
-    timestamp = now_utc().strftime("%Y-%m-%d %H:%M UTC")
-    token = token if token is not None else settings.GITHUB_TOKEN
-
-    def format_body(findings: list[dict[str, Any]]) -> str:
+    def format_body(self, findings: list[dict[str, Any]], timestamp: str) -> str:
         malicious, others = split_malicious(findings)
         # 悪意あるパッケージは、脆弱性の一覧より前に、対応手順つきで示す
         malicious_section = (
@@ -58,50 +42,40 @@ def file_github_issues(new_snapshots: list[dict[str, Any]], token: str | None = 
             + f"\n\n---\n詳細: {DASHBOARD_URL}"
         )
 
-    file_or_update_repo_issues(new_snapshots, ISSUE_TITLE, format_body, token, "DEPSCAN")
-
-
-def close_resolved_repo_issues(db: Session, candidate_repos: set[str]) -> None:
-    """未解決 finding が0件になったリポジトリの Open な DEPSCAN Issue をクローズする。
-
-    Issue 本文に列挙された個々の CVE を突き合わせるのではなく、「そのリポジトリに
-    今なお未解決の finding が1件でも残っているか」で判定する（シンプルな設計判断）。
-    `candidate_repos`（今回のスキャンで1件以上 finding が解決したリポジトリ）に
-    絞ってチェックすることで、無関係なリポジトリへの無駄な API 呼び出しを避ける。
-    GitHub API 呼び出しが失敗してもリポジトリ単位で握りつぶし、DEPSCAN 全体の
-    成功可否には影響させない（Issue 起票と同じ方針）。
-    """
-    if not candidate_repos:
-        return
-
-    token = settings.GITHUB_TOKEN
-    timestamp = now_utc().strftime("%Y-%m-%d %H:%M UTC")
-
-    for full_name in candidate_repos:
+    def unresolved_count(self, db: Session, full_name: str) -> int:
         # 例外（受容など）にした検知は、対応が要らないため、残りに数えない（Issue #403）
-        remaining = not_excepted(
+        return not_excepted(
             db.query(DependencyFinding).filter(
                 DependencyFinding.repo_full_name == full_name,
                 DependencyFinding.resolved_at.is_(None),
             ),
             KIND_DEPENDENCY,
         ).count()
-        if remaining > 0:
-            continue
 
-        repo = GitHubRepo.from_full_name(full_name, token)
-        try:
-            issue_number = repo.find_open_issue(ISSUE_TITLE)
-            if issue_number is None:
-                continue
-            repo.add_issue_comment(
-                issue_number,
-                f"対応が必要な依存ライブラリ脆弱性（受容などの例外を除く）が0件になったため自動的にクローズします"
-                f"（{timestamp}）。",
-            )
-            repo.close_issue(issue_number)
-            logger.info(
-                "DEPSCAN: closed issue #%d in %s (0 unresolved findings)", issue_number, full_name,
-            )
-        except httpx.HTTPError as exc:
-            logger.warning("DEPSCAN: failed to close GitHub issue for %s: %s", full_name, exc)
+
+_reporter = DepscanIssueReporter()
+
+
+def file_github_issues(new_snapshots: list[dict[str, Any]], token: str | None = None) -> None:
+    """新規検知を、検知されたリポジトリ自身に GitHub Issue として自動起票する。
+
+    同名の Open な Issue が既にあればコメントを追記し、無ければ新規作成する。
+    GitHub API 呼び出しが失敗しても、DEPSCAN 全体の成功を妨げない。
+
+    Args:
+        token: 省略時は`settings.GITHUB_TOKEN`（baby-feelings向け毎日クロールの
+            既定）。登録済み他ユーザー自身のリポジトリに対して起票する場合
+            （Issue #227）は、そのユーザー自身のOAuthアクセストークンを渡す。
+    """
+    _reporter.file_issues(new_snapshots, token)
+
+
+def close_resolved_repo_issues(
+    db: Session, candidate_repos: set[str], token: str | None = None,
+) -> None:
+    """未解決 finding が0件になったリポジトリの Open な DEPSCAN Issue をクローズする。
+
+    `candidate_repos`（今回のスキャンで1件以上 finding が解決したリポジトリ）に絞って
+    チェックする。GitHub API の失敗は、リポジトリ単位で握りつぶす（起票と同じ方針）。
+    """
+    _reporter.close_resolved(db, candidate_repos, token)
