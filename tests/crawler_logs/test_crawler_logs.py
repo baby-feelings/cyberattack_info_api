@@ -5,6 +5,7 @@ GET /api/crawler-logs エンドポイントおよび write_crawler_log ヘルパ
 from datetime import UTC, datetime
 from unittest.mock import patch
 
+from app.core.types import CrawlerType
 from app.crawler_logs.models import CrawlerLog
 from app.crawler_logs.writer import write_crawler_log
 from tests.conftest import TEST_API_KEY
@@ -302,3 +303,17 @@ class TestCrawlerLogIntegration:
         assert call_kwargs["crawler_type"] == "OSV"
         assert call_kwargs["status"] == "success"
         assert call_kwargs["deleted"] == 5
+
+
+
+def test_crawler_type_column_fits_every_crawler_type():
+    """CrawlerType の全値が crawler_type 列の長さに収まること。
+
+    SQLite は文字数を検査しないため、本番（PostgreSQL）でしか表れない
+    「value too long」（COMMITWATCH の実行記録が保存できなかった不具合）を、ここで防ぐ。
+    """
+    from typing import get_args
+
+    max_length = CrawlerLog.__table__.c.crawler_type.type.length
+    too_long = [t for t in get_args(CrawlerType) if len(t) > max_length]
+    assert too_long == []
