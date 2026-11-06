@@ -1,4 +1,6 @@
 import { FullScreenModal } from '../shared/FullScreenModal'
+import { LastFetched } from '../freshness/LastFetched'
+import { SCREEN_FETCH_SOURCE } from '../freshness/freshnessConfig'
 import { useCallback, useEffect, useState } from 'react'
 import { GitPullRequest, ExternalLink } from 'lucide-react'
 import {
@@ -139,6 +141,8 @@ export function DependabotOpsModal({ open, onClose }: { open: boolean; onClose: 
       label="Dependabot 運用状況" title="Dependabot 運用状況（DEPSOPS）"
       icon={GitPullRequest} maxWidth="max-w-5xl" onClose={onClose}
     >
+      <LastFetched crawlerType={SCREEN_FETCH_SOURCE.depsops} />
+
       <DepsOpsRepoBarChart stats={repoStats} loading={statsLoading} />
 
       <div className="flex flex-wrap items-center gap-3">

@@ -2,12 +2,17 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { SlaModal } from './SlaModal'
+import { fetchCrawlerLogs } from '../../api/crawlerLogs'
 import { fetchSlaReport, type SlaReport } from '../../api/client'
 
 vi.mock('../../api/client', async () => {
   const actual = await vi.importActual<typeof import('../../api/client')>('../../api/client')
   return { ...actual, fetchSlaReport: vi.fn() }
 })
+
+// 「最終取得」の実行履歴の取得（LastFetched が直接読み込む）
+vi.mock('../../api/crawlerLogs', () => ({ fetchCrawlerLogs: vi.fn().mockResolvedValue([]) }))
+const mockedLogs = vi.mocked(fetchCrawlerLogs)
 
 const mockedFetch = vi.mocked(fetchSlaReport)
 
@@ -59,6 +64,12 @@ describe('SlaModal', () => {
 
     expect(screen.queryByRole('dialog', { name: '対応状況' })).not.toBeInTheDocument()
     expect(mockedFetch).not.toHaveBeenCalled()
+  })
+
+  it('shows when the data was last fetched, from the DEPSCAN crawler', async () => {
+    await openDialog()
+    expect(await screen.findByTestId('last-fetched')).toBeInTheDocument()
+    expect(mockedLogs).toHaveBeenCalledWith(expect.objectContaining({ crawlerType: 'DEPSCAN' }))
   })
 
   it('fetches the active apps first, with the session token', async () => {

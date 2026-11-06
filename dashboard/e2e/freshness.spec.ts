@@ -82,3 +82,23 @@ scenario('FRS-06', '言語・実行環境の画面にも、最終取得が表示
   await expect.poll(() => api.requestsTo('/api/crawler-logs')
     .some((r) => r.query.get('crawler_type') === 'RUNTIME')).toBe(true)
 })
+
+scenario('FRS-07', '依存パッケージ・対応状況・Dependabot運用状況の画面にも、最終取得が表示される', async ({ page, api }) => {
+  await seedSession(page)
+  await page.goto('/')
+  await openTab(page, 'DEPSCAN')
+
+  // 画面（ボタン名＝ダイアログ名）と、その画面が表示するデータを取得するクローラーの種別
+  const screens = [
+    ['依存パッケージ', 'DEPSCAN'], ['対応状況', 'DEPSCAN'], ['Dependabot運用状況', 'DEPSOPS'],
+  ] as const
+  for (const [name, crawlerType] of screens) {
+    await page.getByRole('button', { name }).click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByTestId('last-fetched')).toBeVisible()
+    await expect.poll(() => api.requestsTo('/api/crawler-logs')
+      .some((r) => r.query.get('crawler_type') === crawlerType)).toBe(true)
+    await page.keyboard.press('Escape')
+    await expect(dialog).toBeHidden()
+  }
+})
