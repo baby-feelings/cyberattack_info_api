@@ -74,7 +74,7 @@ class TestGitHubApi:
             transient = _ok(503)
             getattr(client, verb).side_effect = [transient, _ok(200)]
             with patch("app.core.github.api.httpx.Client", return_value=_client_cm(client)), \
-                 patch("app.core.retry.time.sleep"):
+                 patch("app.core.net.retry.time.sleep"):
                 with GitHubApi("tok") as api:
                     resp = getattr(api, verb)("/x")
             assert resp.status_code == 200, verb

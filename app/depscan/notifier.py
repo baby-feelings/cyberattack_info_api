@@ -1,7 +1,11 @@
 """DEPSCAN（依存ライブラリ脆弱性）の新規検知の通知。"""
 from typing import Any
 
-from app.core.finding_format import format_malicious_section, format_package_lines, split_malicious
+from app.core.findings.finding_format import (
+    format_malicious_section,
+    format_package_lines,
+    split_malicious,
+)
 from app.core.notifications import recipients as recipient_resolver
 from app.core.notifications.base import CRAWLER_LABELS, Notifier
 from app.core.notifications.slack import truncate_for_slack

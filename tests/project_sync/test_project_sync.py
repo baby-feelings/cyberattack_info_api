@@ -8,7 +8,7 @@ import httpx
 import pytest
 
 from app.core.config import settings
-from app.core.crawler_runner import CrawlCounters
+from app.core.runner.crawler_runner import CrawlCounters
 from app.project_sync import crawler as crawler_mod
 from app.project_sync.client import (
     ProjectScopeError,

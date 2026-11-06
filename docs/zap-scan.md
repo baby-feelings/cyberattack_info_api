@@ -54,7 +54,7 @@ python -m app.zapscan deploy/zap/reports/zap-report.json --min-risk 2
 
 ## Issue 起票の仕様
 
-DEPSCAN / CODESCAN と同じ運用（`app/core/issue_filing.py` を共用）。
+DEPSCAN / CODESCAN と同じ運用（`app/core/findings/issue_filing.py` を共用）。
 
 - タイトル固定: `🕷️ API の脆弱性が検出されました (OWASP ZAP)`
 - Open な同名 Issue があればコメント追記、無ければ新規作成

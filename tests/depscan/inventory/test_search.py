@@ -148,7 +148,7 @@ class TestSearchDependencies:
 
     def test_operating_filter_uses_inactive_repos(self, db_session):
         _seed(db_session)
-        with patch("app.core.operating_status.settings.INACTIVE_REPOS", "bob/app"):
+        with patch("app.core.findings.operating_status.settings.INACTIVE_REPOS", "bob/app"):
             active, _ = _search(db_session, page=1, per_page=50, operating="active")
             inactive, rows = _search(
                 db_session, page=1, per_page=50, operating="inactive",
@@ -179,7 +179,7 @@ class TestSummarizeRepos:
         assert [r for r, _, _ in _summarize(db_session, forced_owner="alice")] == [
             "alice/api", "alice/web",
         ]
-        with patch("app.core.operating_status.settings.INACTIVE_REPOS", "alice/api"):
+        with patch("app.core.findings.operating_status.settings.INACTIVE_REPOS", "alice/api"):
             assert [r for r, _, _ in _summarize(db_session, operating="active")] == [
                 "alice/web", "bob/app",
             ]
@@ -250,7 +250,7 @@ class TestDependenciesEndpoint:
 
     def test_operating_filter(self, client, db_session):
         _seed(db_session)
-        with patch("app.core.operating_status.settings.INACTIVE_REPOS", "bob/app"):
+        with patch("app.core.findings.operating_status.settings.INACTIVE_REPOS", "bob/app"):
             res = client.get(f"{_URL}?operating=inactive", headers=HEADERS)
         assert [row["repo_full_name"] for row in res.json()["data"]] == ["bob/app"]
 
@@ -285,6 +285,6 @@ class TestDependencyReposEndpoint:
 
     def test_operating_filter(self, client, db_session):
         _seed(db_session)
-        with patch("app.core.operating_status.settings.INACTIVE_REPOS", "bob/app"):
+        with patch("app.core.findings.operating_status.settings.INACTIVE_REPOS", "bob/app"):
             res = client.get(f"{_URL}/repos?operating=active", headers=HEADERS)
         assert {r["repo_full_name"] for r in res.json()["repos"]} == {"alice/api", "alice/web"}

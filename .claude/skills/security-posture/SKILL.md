@@ -214,7 +214,7 @@ tarball方式のCODESCANは現在のツリーしか見えないため、GitHub�
 
 
 
-## 本アプリ自身の防御（Issue #406。`app/core/rate_limit.py`・`app/audit/`・`docs/security-hardening.md`）
+## 本アプリ自身の防御（Issue #406。`app/core/net/rate_limit.py`・`app/audit/`・`docs/security-hardening.md`）
 
 
 
@@ -222,7 +222,7 @@ tarball方式のCODESCANは現在のツリーしか見えないため、GitHub�
 
 
 
-- **レート制限・ロックアウト**（`core/rate_limit.py`）: `/admin/`・`/auth/`・`/oauth/`・`/token`・`/register`・`/authorize`が対象
+- **レート制限・ロックアウト**（`core/net/rate_limit.py`）: `/admin/`・`/auth/`・`/oauth/`・`/token`・`/register`・`/authorize`が対象
 
   （公開の読み取りAPI・`/mcp`・`/health`は対象外）。1分あたりの上限（429・`Retry-After`）と、認証失敗（401・403）の連続によるロック。
 

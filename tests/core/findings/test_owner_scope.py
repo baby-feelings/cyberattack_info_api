@@ -1,11 +1,11 @@
-"""app.core.owner_scope（リポジトリの所有者による絞り込み・所有の判定）のテスト。"""
+"""app.core.findings.owner_scope（リポジトリの所有者による絞り込み・所有の判定）のテスト。"""
 import os
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
 os.environ.setdefault("API_KEY", "test-api-key-for-pytest")
 os.environ.setdefault("ENVIRONMENT", "development")
 
-from app.core.owner_scope import is_owned_by, owner_prefix, restrict_to_owner  # noqa: E402
+from app.core.findings.owner_scope import is_owned_by, owner_prefix, restrict_to_owner  # noqa: E402
 from app.runtimes.models import RepoRuntime  # noqa: E402
 
 

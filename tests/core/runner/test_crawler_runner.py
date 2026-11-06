@@ -1,4 +1,4 @@
-"""app.core.crawler_runner（クローラー共通実行ラッパー・同日重複実行防止）のテスト。
+"""app.core.runner.crawler_runner（クローラー共通実行ラッパー・同日重複実行防止）のテスト。
 
 Issue #239: APScheduler（毎日自動実行）とGitHub Actionsのdaily-crawl.yml
 （「APSchedulerが不発火だった場合のバックアップ」として無条件に毎日発火）の
@@ -9,7 +9,7 @@ DEPSCAN/CODESCANはUpsertのため実害が薄いが、DEPSOPSは実行ごとに
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
-from app.core.crawler_runner import (
+from app.core.runner.crawler_runner import (
     DUPLICATE_RUN_WINDOW,
     CrawlCounters,
     CrawlJob,
@@ -80,8 +80,8 @@ class TestRunCrawlerDeduplication:
             counters.inserted = 5
 
         with (
-            patch("app.core.crawler_runner.SessionLocal", return_value=db_session),
-            patch("app.core.crawler_runner.notify_success"),
+            patch("app.core.runner.crawler_runner.SessionLocal", return_value=db_session),
+            patch("app.core.runner.crawler_runner.notify_success"),
         ):
             # run_crawler の finally で閉じられても支障が無いようにする
             db_session.close = MagicMock()
@@ -95,8 +95,8 @@ class TestRunCrawlerDeduplication:
             counters.inserted = 3
 
         with (
-            patch("app.core.crawler_runner.SessionLocal", return_value=db_session),
-            patch("app.core.crawler_runner.notify_success"),
+            patch("app.core.runner.crawler_runner.SessionLocal", return_value=db_session),
+            patch("app.core.runner.crawler_runner.notify_success"),
         ):
             db_session.close = MagicMock()
             result = run_crawler("KEV", _body)
@@ -136,9 +136,9 @@ class TestCrawlJob:
     def test_success_runs_hooks_and_returns_custom_result(self, db_session):
         job = _FakeJob()
         with (
-            patch("app.core.crawler_runner.SessionLocal", return_value=db_session),
-            patch("app.core.crawler_runner.write_crawler_log") as mock_log,
-            patch("app.core.crawler_runner.notify_success") as mock_default_notify,
+            patch("app.core.runner.crawler_runner.SessionLocal", return_value=db_session),
+            patch("app.core.runner.crawler_runner.write_crawler_log") as mock_log,
+            patch("app.core.runner.crawler_runner.notify_success") as mock_default_notify,
         ):
             db_session.close = MagicMock()
             result = job.run(force=True)
@@ -156,8 +156,8 @@ class TestCrawlJob:
             counters.inserted = 4
 
         with (
-            patch("app.core.crawler_runner.SessionLocal", return_value=db_session),
-            patch("app.core.crawler_runner.notify_success") as mock_notify,
+            patch("app.core.runner.crawler_runner.SessionLocal", return_value=db_session),
+            patch("app.core.runner.crawler_runner.notify_success") as mock_notify,
         ):
             db_session.close = MagicMock()
             run_crawler("KEV", _body, force=True)
@@ -174,9 +174,9 @@ class TestCrawlJob:
     def test_error_logs_partial_counters_notifies_and_reraises(self, db_session):
         job = _FakeJob(fail=RuntimeError("boom"))
         with (
-            patch("app.core.crawler_runner.SessionLocal", return_value=db_session),
-            patch("app.core.crawler_runner.write_crawler_log") as mock_log,
-            patch("app.core.crawler_runner.notify_error") as mock_notify_error,
+            patch("app.core.runner.crawler_runner.SessionLocal", return_value=db_session),
+            patch("app.core.runner.crawler_runner.write_crawler_log") as mock_log,
+            patch("app.core.runner.crawler_runner.notify_error") as mock_notify_error,
         ):
             db_session.close = MagicMock()
             try:
@@ -196,9 +196,9 @@ class TestCrawlJob:
         """成功後の通知で例外が出ても、success ログは残り error ログは追加されない。"""
         job = _FakeJob(after_fail=ValueError("notify failed"))
         with (
-            patch("app.core.crawler_runner.SessionLocal", return_value=db_session),
-            patch("app.core.crawler_runner.write_crawler_log") as mock_log,
-            patch("app.core.crawler_runner.notify_error") as mock_notify_error,
+            patch("app.core.runner.crawler_runner.SessionLocal", return_value=db_session),
+            patch("app.core.runner.crawler_runner.write_crawler_log") as mock_log,
+            patch("app.core.runner.crawler_runner.notify_error") as mock_notify_error,
         ):
             db_session.close = MagicMock()
             try:

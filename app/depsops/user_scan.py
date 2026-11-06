@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
 from app.core.db_utils import now_utc
 from app.core.github.accounts import list_target_repos
-from app.core.user_scan import UserScanJob
+from app.core.runner.user_scan import UserScanJob
 from app.depsops.notifier import notify_dependabot_ops
 from app.depsops.pr_log_repository import PrLogRepository
 from app.depsops.pr_log_retention import PrLogRetention

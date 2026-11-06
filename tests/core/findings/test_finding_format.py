@@ -1,5 +1,5 @@
-"""app.core.finding_format（検知の共通整形）の、悪意あるパッケージ（OSV `MAL-*`）まわりのテスト。"""
-from app.core.finding_format import (
+"""app.core.findings.finding_format（検知の共通整形）の、悪意あるパッケージ（`MAL-*`）のテスト。"""
+from app.core.findings.finding_format import (
     MALICIOUS_RESPONSE_STEPS,
     format_malicious_section,
     format_package_lines,

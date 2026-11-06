@@ -11,10 +11,10 @@ from fastapi import APIRouter, Depends, Query, Security
 from sqlalchemy.orm import Session
 
 from app.auth.api_key import require_api_key, require_api_key_or_session
-from app.core.background import run_in_background
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.operating_status import OperatingQuery
+from app.core.findings.operating_status import OperatingQuery
+from app.core.runner.background import run_in_background
 from app.depscan.filters import DepscanListFilter
 from app.sla.digest import run_sla_digest
 from app.sla.policy import SlaPolicy

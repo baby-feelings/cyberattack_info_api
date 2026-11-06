@@ -16,7 +16,7 @@ from app.codescan.crawler import (  # noqa: E402
     scan_repo,
 )
 from app.codescan.models import CodeFinding  # noqa: E402
-from app.core.crawler_runner import CrawlCounters  # noqa: E402
+from app.core.runner.crawler_runner import CrawlCounters  # noqa: E402
 from tests.codescan.support import (  # noqa: E402
     SAMPLE_GITLEAKS_JSON,
     SAMPLE_SEMGREP_JSON,
@@ -148,7 +148,7 @@ class TestFetchAndScanCode:
         job.new_snapshots.append({"repo_full_name": "u/r", "severity": "ERROR"})
         with (
             patch("app.codescan.crawler.notify_code_findings") as mock_notify,
-            patch("app.core.crawler_runner.notify_success") as mock_counts,
+            patch("app.core.runner.crawler_runner.notify_success") as mock_counts,
         ):
             job.after_success(CrawlCounters())
         mock_notify.assert_called_once_with(job.new_snapshots)

@@ -13,8 +13,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.auth.api_key import require_api_key, require_api_key_or_session
-from app.core.background import run_in_background
 from app.core.database import get_db
+from app.core.runner.background import run_in_background
 from app.external_monitor.crawler import fetch_and_monitor_sites
 from app.external_monitor.models import SiteCheck
 

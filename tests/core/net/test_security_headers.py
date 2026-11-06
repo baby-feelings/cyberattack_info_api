@@ -1,4 +1,4 @@
-"""app.core.security_headers（セキュリティヘッダー付与ミドルウェア）のテスト。"""
+"""app.core.net.security_headers（セキュリティヘッダー付与ミドルウェア）のテスト。"""
 import os
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
@@ -9,7 +9,7 @@ os.environ.setdefault("GITHUB_USERNAME", "test-github-user")
 from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app.core.security_headers import SECURITY_HEADERS, SecurityHeadersMiddleware  # noqa: E402
+from app.core.net.security_headers import SECURITY_HEADERS, SecurityHeadersMiddleware  # noqa: E402
 
 
 def _client() -> TestClient:

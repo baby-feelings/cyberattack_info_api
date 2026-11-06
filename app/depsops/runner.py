@@ -19,10 +19,10 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.crawler_runner import CrawlCounters, CrawlJob
 from app.core.db_utils import now_utc
 from app.core.github.accounts import list_target_repos
 from app.core.github.repo import GitHubRepo
+from app.core.runner.crawler_runner import CrawlCounters, CrawlJob
 from app.depsops.github_client import (
     has_ci_workflows,
     list_open_dependabot_alerts,

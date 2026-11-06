@@ -104,7 +104,7 @@ def test_fetch_cisa_kev_retries_on_transient_error_then_succeeds():
     success_response.json.return_value = SAMPLE_KEV_RESPONSE
 
     with patch("app.kev.crawler.httpx.Client") as mock_client_cls, \
-         patch("app.core.retry.time.sleep"):
+         patch("app.core.net.retry.time.sleep"):
         mock_get = mock_client_cls.return_value.__enter__.return_value.get
         mock_get.side_effect = [transient_response, success_response]
         entries = _fetch_cisa_kev()
@@ -200,8 +200,8 @@ def test_fetch_and_store_kev_integration():
         patch("app.kev.crawler._upsert_vulnerabilities", return_value=(2, 0)),
         patch("app.kev.crawler._apply_epss_scores", return_value=0),
         patch("app.kev.crawler._delete_stale_kev_records", return_value=0),
-        patch("app.core.crawler_runner.SessionLocal") as mock_session_cls,
-        patch("app.core.crawler_runner.already_succeeded_recently", return_value=False),
+        patch("app.core.runner.crawler_runner.SessionLocal") as mock_session_cls,
+        patch("app.core.runner.crawler_runner.already_succeeded_recently", return_value=False),
     ):
         mock_db = MagicMock()
         mock_session_cls.return_value = mock_db
@@ -215,8 +215,8 @@ def test_fetch_and_store_kev_raises_http_error():
 
     with (
         patch("app.kev.crawler._fetch_cisa_kev", side_effect=http_err),
-        patch("app.core.crawler_runner.SessionLocal") as mock_session_cls,
-        patch("app.core.crawler_runner.already_succeeded_recently", return_value=False),
+        patch("app.core.runner.crawler_runner.SessionLocal") as mock_session_cls,
+        patch("app.core.runner.crawler_runner.already_succeeded_recently", return_value=False),
     ):
         mock_db = MagicMock()
         mock_session_cls.return_value = mock_db
@@ -303,8 +303,8 @@ class TestDeleteStaleKevRecords:
                 "app.kev.crawler._delete_stale_kev_records",
                 side_effect=Exception("delete failed"),
             ),
-            patch("app.core.crawler_runner.SessionLocal") as mock_session_cls,
-            patch("app.core.crawler_runner.already_succeeded_recently", return_value=False),
+            patch("app.core.runner.crawler_runner.SessionLocal") as mock_session_cls,
+            patch("app.core.runner.crawler_runner.already_succeeded_recently", return_value=False),
         ):
             mock_db = MagicMock()
             mock_session_cls.return_value = mock_db
@@ -323,8 +323,8 @@ class TestDeleteStaleKevRecords:
                 side_effect=Exception("EPSS API down"),
             ),
             patch("app.kev.crawler._delete_stale_kev_records", return_value=0),
-            patch("app.core.crawler_runner.SessionLocal") as mock_session_cls,
-            patch("app.core.crawler_runner.already_succeeded_recently", return_value=False),
+            patch("app.core.runner.crawler_runner.SessionLocal") as mock_session_cls,
+            patch("app.core.runner.crawler_runner.already_succeeded_recently", return_value=False),
         ):
             mock_db = MagicMock()
             mock_session_cls.return_value = mock_db
@@ -431,8 +431,8 @@ def test_fetch_and_store_kev_raises_unexpected_error():
     """fetch_and_store_kev が予期しない例外時にログを記録して再送出することを確認する。"""
     with (
         patch("app.kev.crawler._fetch_cisa_kev", side_effect=RuntimeError("unexpected")),
-        patch("app.core.crawler_runner.SessionLocal") as mock_session_cls,
-        patch("app.core.crawler_runner.already_succeeded_recently", return_value=False),
+        patch("app.core.runner.crawler_runner.SessionLocal") as mock_session_cls,
+        patch("app.core.runner.crawler_runner.already_succeeded_recently", return_value=False),
     ):
         mock_db = MagicMock()
         mock_session_cls.return_value = mock_db

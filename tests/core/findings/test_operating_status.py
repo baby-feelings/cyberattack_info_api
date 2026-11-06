@@ -15,7 +15,7 @@ os.environ.setdefault("GITHUB_USERNAME", "test-github-user")
 import pytest  # noqa: E402
 
 from app.codescan.models import CodeFinding  # noqa: E402
-from app.core.operating_status import (  # noqa: E402
+from app.core.findings.operating_status import (  # noqa: E402
     apply_operating_status,
     inactive_repo_names,
 )
@@ -24,7 +24,7 @@ from app.depsops.models import DependabotPrLog  # noqa: E402
 
 _NOW = datetime.now(UTC)
 _HEADERS = {"X-API-KEY": "test-api-key-for-pytest"}
-_CFG = "app.core.operating_status.settings.INACTIVE_REPOS"
+_CFG = "app.core.findings.operating_status.settings.INACTIVE_REPOS"
 _ACTIVE = "baby-feelings/baby_compass"
 _STOPPED = "baby-feelings/baby_grow"
 

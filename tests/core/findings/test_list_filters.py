@@ -1,4 +1,5 @@
-"""一覧 API の絞り込み条件クラス（app.core.list_filters と各ドメインの filters.py）のテスト。
+"""一覧 API の絞り込み条件クラス
+（app.core.findings.list_filters と各ドメインの filters.py）のテスト。
 
 クラスのコンストラクタは FastAPI が `Query(...)` 既定値付きで呼ぶ想定のため、
 テストではすべての引数を明示して直接生成する。
@@ -10,7 +11,7 @@ from fastapi import HTTPException
 
 from app.codescan.filters import CodescanListFilter
 from app.codescan.models import CodeFinding
-from app.core.list_filters import RepoFindingFilter
+from app.core.findings.list_filters import RepoFindingFilter
 from app.depscan.filters import DepscanListFilter
 from app.depscan.models import DependencyFinding
 from app.kev.filters import KevListFilter

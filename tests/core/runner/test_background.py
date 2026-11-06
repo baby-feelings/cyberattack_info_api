@@ -1,4 +1,4 @@
-"""app.core.background.run_in_background のテスト。
+"""app.core.runner.background.run_in_background のテスト。
 
 daemon スレッドで実際に実行されるため、完了同期には threading.Event を使う
 （関数がごく短時間で終わるとスレッドが即座に終了し threading.enumerate() から
@@ -7,7 +7,7 @@ daemon スレッドで実際に実行されるため、完了同期には thread
 import logging
 import threading
 
-from app.core.background import run_in_background
+from app.core.runner.background import run_in_background
 
 
 def test_runs_function_in_background_thread():
@@ -44,7 +44,7 @@ class _CaptureHandler(logging.Handler):
 
 def test_logs_error_and_does_not_propagate_when_function_raises():
     """関数が例外を送出しても呼び出し元には伝播せず、エラーログに記録されること。"""
-    logger = logging.getLogger("app.core.background")
+    logger = logging.getLogger("app.core.runner.background")
     handler = _CaptureHandler()
     logger.addHandler(handler)
     try:

@@ -14,10 +14,10 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.auth.api_key import require_api_key, require_public_api_key
-from app.core.background import run_in_background
 from app.core.database import get_db
 from app.core.db_utils import year_month_expr
 from app.core.pagination import DEFAULT_PER_PAGE, MAX_DAYS, MAX_PER_PAGE_LARGE, paginate
+from app.core.runner.background import run_in_background
 from app.core.schemas import MonthlyStat
 from app.kev.crawler import fetch_and_store_kev
 from app.kev.filters import KevListFilter

@@ -12,7 +12,6 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.crawler_runner import CrawlCounters, run_crawler
 from app.core.db_utils import now_utc
 from app.core.osv_client import (
     BATCH_SIZE,
@@ -21,6 +20,7 @@ from app.core.osv_client import (
     parse_severity,
     query_packages_batch,
 )
+from app.core.runner.crawler_runner import CrawlCounters, run_crawler
 from app.osv.models import OsvVulnerability
 from app.osv.packages import POPULAR_PACKAGES
 

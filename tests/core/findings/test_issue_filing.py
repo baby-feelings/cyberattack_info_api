@@ -1,4 +1,4 @@
-"""app.core.issue_filing.IssueReporter（Issue 起票・自動クローズの共通の手順）のテスト。
+"""app.core.findings.issue_filing.IssueReporter（Issue 起票・自動クローズの共通の手順）のテスト。
 
 ドメイン固有の差分（タイトル・本文・未解決の数え方）だけを持つ最小のサブクラスで、
 共通の手順（トークンの既定値・例外の握りつぶし・クローズの判定）を確認する。
@@ -14,7 +14,7 @@ os.environ.setdefault("ENVIRONMENT", "development")
 import httpx  # noqa: E402
 
 from app.core.config import settings  # noqa: E402
-from app.core.issue_filing import IssueReporter  # noqa: E402
+from app.core.findings.issue_filing import IssueReporter  # noqa: E402
 
 _FACTORY = "app.core.github.repo.GitHubRepo.from_full_name"
 

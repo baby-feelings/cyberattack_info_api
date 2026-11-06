@@ -27,7 +27,7 @@ Contents: Read-only + **Issues: Write** 推奨）を使用する。
 は公開リポジトリのみ返す仕様のため、プライベートリポジトリを含めるにはこちらが必須。PR #72で修正）。
 引数は`token`のみ（以前の`username`は使っておらず、紛らわしいため削除した）。
 
-**所有者による絞り込みは`app/core/owner_scope.py`**（`restrict_to_owner`・`is_owned_by`）に集約している。
+**所有者による絞り込みは`app/core/findings/owner_scope.py`**（`restrict_to_owner`・`is_owned_by`）に集約している。
 依存の検索・言語バージョンの閲覧・一覧の絞り込み・SBOMエクスポートが共通で使う。前方一致で判定する
 （`LIKE`だと`_`がワイルドカードになり、`a_b`が`aXb`に一致する）。**ファイルツリーの除外ディレクトリ**
 は`app/core/github/tree_paths.py`（`VENDORED_DIR_SEGMENTS`）で共通にし、用途ごとの違いだけを足す。
@@ -56,11 +56,11 @@ Issue として起票する（Slack通知と同じ `new_snapshots` を使用）�
 → タイトル固定文字列でOpen Issueを検索 → あれば `add_issue_comment` で追記、無ければ
 `create_issue` で新規作成（1リポジトリにつき常に1つの Open Issue に集約）→ GitHub API 呼び出し
 失敗はリポジトリ単位で `except httpx.HTTPError` により握りつぶす」という手順自体は CODESCAN
-（`app.codescan.issue_management`）と完全に同一のため、`app.core.issue_filing
+（`app.codescan.issue_management`）と完全に同一のため、`app.core.findings.issue_filing
 .file_or_update_repo_issues` に共通化してある。各ドメインは Issue タイトル・本文整形関数
 （クロージャ）・ログ接頭辞のみを渡す（DRY原則。差分はここに集約する）。本文の整形ロジック
 （`format_package_lines`）自体は Slack 通知（`app.depscan.notifier`）と共有するため
-`app.core.finding_format` に切り出してある。
+`app.core.findings.finding_format` に切り出してある。
 
 `close_resolved_repo_issues` が、DEPSCAN の再スキャンで「そのリポジトリの未解決 finding が
 実際に0件になったこと」を確認できたタイミングで Open な DEPSCAN Issue を自動的にクローズする。
@@ -128,7 +128,7 @@ OpenSSF malicious-packages 由来の勧告は、**脆弱性ではなくマルウ
 - `FindingBuilder`は`MAL-*`の重要度を**CRITICAL**にする（CVSSが付かないため、そのままだと最上位にならない）
 - 通知: `notify_dependency_findings`が`split_malicious`で分け、悪意ありは**ダイジェストに混ぜず**、対応手順
   （`MALICIOUS_RESPONSE_STEPS`）つきの専用の緊急通知（`MaliciousPackageNotifier`）を先に1通送る
-- Issue本文も、悪意ありの節（対応手順つき）を脆弱性の一覧より前に置く。文言は`app/core/finding_format.py`に集約
+- Issue本文も、悪意ありの節（対応手順つき）を脆弱性の一覧より前に置く。文言は`app/core/findings/finding_format.py`に集約
 - ダッシュボードは、グループ行に「🛑 悪意あり」バッジ（`MaliciousBadge`）。E2EはDEP-26
 - 履歴: 検知〜解決は通常の検知と同じく`detected_at`/`resolved_at`で残る
 
@@ -221,7 +221,7 @@ OWASP Top 10:2025「ソフトウェアサプライチェーンの失敗」対策
 スキャンで解決済みにした件数（削除ではない）、`updated`=保持期間超過の**実削除**件数
 （DEPSCANの`updated`は元々常に0だったため、新カラムを追加せずここへ格納している）。
 
-## DEPSCAN/DEPSOPSの重複実行防止（Issue #239、`app.core.crawler_runner.already_succeeded_recently`）
+## DEPSCAN/DEPSOPSの重複実行防止（Issue #239、`app.core.runner.crawler_runner.already_succeeded_recently`）
 `fetch_and_scan_dependencies`・`run_dependabot_ops`は`CrawlJob`のサブクラス
 （`_DepscanJob`/`_DepsopsJob`）で、`CrawlJob.run`が`already_succeeded_recently`を呼び、直近12時間
 （UTC日付の区切りではない）に成功実行済みなら`(0, 0, 0)`を返してスキップする（他のクローラーも同じ判定を

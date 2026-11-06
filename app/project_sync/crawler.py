@@ -14,10 +14,10 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.crawler_runner import CrawlCounters, CrawlJob
 from app.core.github.accounts import list_target_repos
 from app.core.github.api import GitHubApi
 from app.core.github.repo import GitHubRepo
+from app.core.runner.crawler_runner import CrawlCounters, CrawlJob
 from app.project_sync.client import ProjectSyncError, add_item, fetch_project, list_open_items
 
 logger = logging.getLogger(__name__)

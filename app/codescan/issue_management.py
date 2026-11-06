@@ -1,7 +1,8 @@
 """CODESCAN 検知結果の GitHub Issue 自動起票。
 
 DEPSCAN と同じ「1リポジトリにつき常に1つの Open Issue に集約する」設計で、共通の手順は
-`app.core.issue_filing.IssueReporter`（Template Method）にある。ここには CODESCAN 固有の差分
+`app.core.findings.issue_filing.IssueReporter`（Template Method）にある。
+ここには CODESCAN 固有の差分
 （タイトル・本文・未解決の数え方）だけを置き、CODESCAN 専用の固定タイトル文字列で
 DEPSCAN の Issue と混同しないようにする。
 
@@ -14,7 +15,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.codescan.models import CodeFinding
-from app.core.issue_filing import IssueReporter
+from app.core.findings.issue_filing import IssueReporter
 from app.core.notifications.slack import DASHBOARD_URL
 from app.finding_exceptions.matching import not_excepted
 from app.finding_exceptions.models import KIND_CODE

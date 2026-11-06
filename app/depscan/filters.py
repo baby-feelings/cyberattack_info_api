@@ -4,8 +4,8 @@ from typing import Any
 from fastapi import Query
 from sqlalchemy.orm import Query as SaQuery
 
-from app.core.list_filters import RepoFindingFilter
-from app.core.operating_status import OperatingQuery
+from app.core.findings.list_filters import RepoFindingFilter
+from app.core.findings.operating_status import OperatingQuery
 from app.depscan.models import DependencyFinding
 from app.finding_exceptions.matching import not_excepted
 from app.finding_exceptions.models import KIND_DEPENDENCY

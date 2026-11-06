@@ -29,7 +29,7 @@ def _finding(**kwargs) -> dict:
 
 
 class TestFileGithubIssues:
-    # 実際の GitHub API 呼び出しは app.core.issue_filing に共通処理として切り出されて
+    # 実際の GitHub API 呼び出しは app.core.findings.issue_filing に共通処理として切り出されて
     # いるため、モックはそちら側を対象にする（DEPSCAN 側テストと同じ方針）
 
     def test_does_nothing_when_no_new_findings(self):

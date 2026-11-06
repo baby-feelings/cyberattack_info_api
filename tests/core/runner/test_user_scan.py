@@ -1,4 +1,4 @@
-"""app.core.user_scan.UserScanJob（ユーザー別スキャンの共通の骨格）のテスト。
+"""app.core.runner.user_scan.UserScanJob（ユーザー別スキャンの共通の骨格）のテスト。
 
 骨格の責務（開始のログ・セッションを必ず閉じる・失敗を送出しない・`on_error` の呼び出し・
 `guard` が個別の失敗を握りつぶす）を、最小のサブクラスで確認する。
@@ -11,7 +11,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
 os.environ.setdefault("API_KEY", "test-api-key-for-pytest")
 os.environ.setdefault("ENVIRONMENT", "development")
 
-from app.core.user_scan import UserScanJob  # noqa: E402
+from app.core.runner.user_scan import UserScanJob  # noqa: E402
 
 
 class _Job(UserScanJob):

@@ -187,7 +187,7 @@ class TestFetchAndScanRuntimes:
     def test_release_fetch_failure_fails_the_crawl_and_is_logged(self, db_session):
         with (
             patch("app.runtimes.crawler.fetch_all_releases", side_effect=httpx.ConnectError("x")),
-            patch("app.core.crawler_runner.notify_error"),
+            patch("app.core.runner.crawler_runner.notify_error"),
         ):
             try:
                 fetch_and_scan_runtimes(force=True)
@@ -223,7 +223,7 @@ class TestAlertsAfterTheCrawl:
     def test_not_sent_when_the_crawl_fails(self, db_session):
         with (
             patch("app.runtimes.crawler.fetch_all_releases", side_effect=httpx.ConnectError("x")),
-            patch("app.core.crawler_runner.notify_error"),
+            patch("app.core.runner.crawler_runner.notify_error"),
             patch("app.runtimes.crawler.send_runtime_alerts") as send,
         ):
             try:

@@ -76,11 +76,11 @@ app/
 ├── main.py       # FastAPI アプリ・lifespan・ルーター include（定期ジョブは jobs/scheduler_jobs）
 ├── auth/         # GitHubログイン・ユーザーアカウント（UserAccount/account_store。router.pyは
 │                 #   github_router/account_routerを束ね、認証の依存関数はdependencies.py。mcp_serverを知らない）
-├── core/         # 横断的インフラ（個別のドメインを知らない）: config/database/background/crawler_runner/
-│                 #   crypto/db_utils/notifications/〈slack・recipients・base・共通crawler。固有の通知は各ドメインのnotifier.py〉/osv_client/pagination/
-│                 #   schemas/github/（`GitHubApi`・`GitHubRepo`〈1リポジトリへの共通操作〉・`list_target_repos`）/
-│                 #   issue_filing（Issue起票共通化）/list_filters（一覧の絞り込み基底）/stix/security_headers。
-│                 #   crawler_runner=`CrawlJob`・notifications=`Notifier`（いずれもTemplate Method）
+├── core/         # 横断的インフラ（個別のドメインを知らない）: config/database/crypto/db_utils/osv_client/pagination/stix/schemas/
+│                 #   net/〈retry・http_metrics・rate_limit・security_headers〉/findings/〈finding_format・list_filters・owner_scope・operating_status・issue_filing〉/
+│                 #   runner/〈crawler_runner・user_scan・background〉/notifications/〈slack・recipients・base・共通crawler。固有の通知は各ドメインのnotifier.py〉/
+│                 #   github/（`GitHubApi`・`GitHubRepo`〈1リポジトリへの共通操作〉・`list_target_repos`）。
+│                 #   Template Method: `CrawlJob`・`UserScanJob`・`IssueReporter`・`Notifier`
 ├── jobs/         # 各ドメインを束ねる定期実行・一括実行: scheduler_jobs（定期ジョブ定義）/repo_cleanup/
 │                 #   user_crawl_runner（登録済み他ユーザー向け）/各管理API
 ├── taxii/        # STIX/TAXII 2.1 配信（KEV/OSV。router.py）
@@ -139,7 +139,7 @@ deploy/       # OCIデプロイ関連（deploy_to_oci.ps1・docker-compose.yml�
 - MCP（`/mcp`）はRESTの読み取りGETの薄いラッパー。DEPSCAN/CODESCANは本人所有リポジトリのみ見え、
   `PUBLIC_API_KEY`では見えない。MCPトークンは台帳（`mcp_tokens`）で個別に失効でき、台帳に無い
   トークンは拒否（`docs/mcp-server.md`）。`/api/codescan`もセッション認証時は本人所有のみ
-- 全レスポンスに`core/security_headers.py`がnosniff等を付与（ZAP指摘対応）。ダッシュボードのCSP
+- 全レスポンスに`core/net/security_headers.py`がnosniff等を付与（ZAP指摘対応）。ダッシュボードのCSP
   （`dashboard/vercel.json`）の`connect-src`にAPIのオリジン、`img-src`にDependabotバッジのホストを書いている。
   **APIのドメイン変更・外部画像の追加時は更新**（`csp.test.ts`が抜けを検査。`docs/security-checklist.md`）。
   外部データのURLは`safeHttpUrl`でhttp(s)のみリンク化する

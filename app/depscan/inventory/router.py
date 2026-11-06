@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.api_key import require_api_key_or_session
 from app.core.database import get_db
-from app.core.operating_status import OperatingQuery
+from app.core.findings.operating_status import OperatingQuery
 from app.core.pagination import DEFAULT_PER_PAGE, MAX_PER_PAGE
 from app.depscan.inventory.filters import DependencyFilter
 from app.depscan.inventory.search import search_dependencies, summarize_repos

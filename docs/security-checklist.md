@@ -13,7 +13,7 @@ IPA のチェックリスト（11 の脆弱性）を、本アプリの実装と�
 | 6 | CSRF | 認証は Cookie ではなく Bearer ヘッダー（他サイトから送れない）。OAuth の state・同意画面はブラウザ紐づけ。MCP トークン・OAuth 接続の発行は本人の Slack へ事後通知 | `app/mcp_server/notifier.py` |
 | 7 | HTTP ヘッダ・インジェクション | ヘッダーは FastAPI/Starlette の API で出力（外部入力を直接入れない） | - |
 | 8 | メールヘッダ・インジェクション | メール送信なし。Slack の宛先は `https://hooks.slack.com/` のみ許可 | `app/core/notifications/slack.py` |
-| 9 | クリックジャッキング | API は `X-Frame-Options: DENY`、ダッシュボードは `X-Frame-Options`・`frame-ancestors 'none'` | `app/core/security_headers.py`・`dashboard/vercel.json` |
+| 9 | クリックジャッキング | API は `X-Frame-Options: DENY`、ダッシュボードは `X-Frame-Options`・`frame-ancestors 'none'` | `app/core/net/security_headers.py`・`dashboard/vercel.json` |
 | 10 | バッファオーバーフロー | Python（メモリ直接操作なし）。依存は pip-audit・OSV-Scanner・Dependabot で最新化 | `.github/workflows/` |
 | 11 | アクセス制御・認可の欠落 | DEPSCAN/CODESCAN は本人所有のリポジトリのみ（セッション・MCP とも）。管理 API は API キー | `app/auth/dependencies.py` |
 

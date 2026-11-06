@@ -74,7 +74,7 @@ class TestGetSlaReport:
     def test_operating_filter(self, client, db_session):
         _seed(db_session)
 
-        with patch("app.core.operating_status.settings.INACTIVE_REPOS", "bob/app"):
+        with patch("app.core.findings.operating_status.settings.INACTIVE_REPOS", "bob/app"):
             active = client.get("/api/sla?operating=active", headers=HEADERS).json()
             inactive = client.get("/api/sla?operating=inactive", headers=HEADERS).json()
 

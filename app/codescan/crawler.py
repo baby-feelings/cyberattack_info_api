@@ -12,7 +12,7 @@ GitHub 上の自作アプリ全リポジトリのソースコードを tarball �
 
 対象リポジトリ一覧は DEPSCAN と同じ（`GITHUB_USERNAME` 配下、fork・archived 除外）ため
 `app.core.github.accounts.list_target_repos` を共有する。オーケストレーションは KEV/OSV と同じ
-`app.core.crawler_runner.run_crawler`（Template Method）+ `CrawlCounters` を使う。
+`app.core.runner.crawler_runner.run_crawler`（Template Method）+ `CrawlCounters` を使う。
 APScheduler から毎日呼び出される。
 """
 import json
@@ -31,9 +31,9 @@ from app.codescan.notifier import notify_code_findings
 from app.codescan.repository import CodeFindingRepository
 from app.codescan.scanners import Scanner, default_scanners
 from app.core.config import settings
-from app.core.crawler_runner import CrawlCounters, CrawlJob
 from app.core.github.accounts import list_target_repos
 from app.core.github.repo import GitHubRepo
+from app.core.runner.crawler_runner import CrawlCounters, CrawlJob
 from app.finding_exceptions.matching import drop_excepted
 from app.finding_exceptions.models import KIND_CODE
 

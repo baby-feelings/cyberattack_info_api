@@ -1,6 +1,7 @@
 """DEPSCAN 検知結果の GitHub Issue 管理（起票・追記・自動クローズ）。
 
-起票・クローズの共通の手順は `app.core.issue_filing.IssueReporter`（Template Method）にあり、
+起票・クローズの共通の手順は
+`app.core.findings.issue_filing.IssueReporter`（Template Method）にあり、
 ここには DEPSCAN 固有の差分（タイトル・本文・未解決の数え方）だけを置く。
 DEPSCAN 全体のオーケストレーション（crawler.py）とは責務を分離する。
 
@@ -11,8 +12,12 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.core.finding_format import format_malicious_section, format_package_lines, split_malicious
-from app.core.issue_filing import IssueReporter
+from app.core.findings.finding_format import (
+    format_malicious_section,
+    format_package_lines,
+    split_malicious,
+)
+from app.core.findings.issue_filing import IssueReporter
 from app.core.notifications.slack import DASHBOARD_URL
 from app.depscan.models import DependencyFinding
 from app.finding_exceptions.matching import not_excepted

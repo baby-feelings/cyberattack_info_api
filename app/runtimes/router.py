@@ -16,10 +16,10 @@ from fastapi import APIRouter, Depends, Query, Security
 from sqlalchemy.orm import Session
 
 from app.auth.api_key import require_api_key, require_api_key_or_session
-from app.core.background import run_in_background
 from app.core.database import get_db
 from app.core.db_utils import now_utc
-from app.core.operating_status import OperatingQuery
+from app.core.findings.operating_status import OperatingQuery
+from app.core.runner.background import run_in_background
 from app.runtimes.browse import list_runtimes, summarize_repos
 from app.runtimes.crawler import fetch_and_scan_runtimes
 from app.runtimes.detector import RUNTIME_LABELS, RUNTIMES
