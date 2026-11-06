@@ -102,7 +102,7 @@ class TestCloseResolvedRepoIssues:
 
     def test_uses_the_given_token(self, db_session):
         with patch(f"{_REPO}.find_open_issue", autospec=True, return_value=None), \
-             patch("app.codescan.issue_management.GitHubRepo.from_full_name") as factory:
+             patch("app.core.github.repo.GitHubRepo.from_full_name") as factory:
             factory.return_value.find_open_issue.return_value = None
             close_resolved_repo_issues(db_session, {_FULL}, token="gho_user")
         assert factory.call_args[0][1] == "gho_user"

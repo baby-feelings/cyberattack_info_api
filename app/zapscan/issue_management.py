@@ -88,6 +88,16 @@ def _format_alert_lines(alerts: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
+def format_body(findings: list[dict[str, Any]]) -> str:
+    """ZAP のアラートの一覧から、Issue 本文（Markdown）を組み立てる。"""
+    return (
+        "OWASP ZAP（API Scan）が API の脆弱性を検知しました。\n\n"
+        + "\n".join(_format_alert_lines(findings))
+        + "\n\n---\nスキャンは使い捨ての API コンテナ（ダミー鍵・外部通信なし）に対する"
+        "ものです。誤検知の可能性があるため、内容を確認して対応を判断してください。"
+    )
+
+
 def file_github_issues(
     alerts: list[dict[str, Any]],
     repo_full_name: str,
@@ -109,13 +119,5 @@ def file_github_issues(
     # 共通処理は「リポジトリ単位でグルーピングした finding リスト」を受け取る形のため、
     # アラートに repo_full_name を付けて渡す
     snapshots = [{**alert, "repo_full_name": repo_full_name} for alert in alerts]
-
-    def format_body(findings: list[dict[str, Any]]) -> str:
-        return (
-            "OWASP ZAP（API Scan）が API の脆弱性を検知しました。\n\n"
-            + "\n".join(_format_alert_lines(findings))
-            + "\n\n---\nスキャンは使い捨ての API コンテナ（ダミー鍵・外部通信なし）に対する"
-            "ものです。誤検知の可能性があるため、内容を確認して対応を判断してください。"
-        )
 
     file_or_update_repo_issues(snapshots, _ISSUE_TITLE, format_body, token, "ZAP")
