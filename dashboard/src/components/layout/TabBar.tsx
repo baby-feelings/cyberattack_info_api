@@ -9,7 +9,12 @@ export function TabBar({
 }) {
   return (
     <nav className="fixed bottom-0 inset-x-0 z-20 border-t border-slate-800/60 bg-[#0a0e1a]/95 backdrop-blur-md">
-      <div role="tablist" className="max-w-screen-xl mx-auto grid grid-cols-5">
+      {/* 列数はタブの数に合わせる（固定値だと、タブを増減したときに幅が均等にならない） */}
+      <div
+        role="tablist"
+        className="max-w-screen-xl mx-auto grid"
+        style={{ gridTemplateColumns: `repeat(${TAB_DEFINITIONS.length}, minmax(0, 1fr))` }}
+      >
         {TAB_DEFINITIONS.map((tab) => {
           const isActive = activeTab === tab.key
           return (
