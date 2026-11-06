@@ -1,6 +1,6 @@
 ---
 name: api-usage
-description: サイバー攻撃情報API（本番稼働中のREST API）の使い方リファレンス。KEV/OSV/JVN脆弱性検索、DEPSCAN依存ライブラリスキャン、DEPSOPS判定履歴、STIX/TAXII配信、クローラーログ、Grafana監視、リモートMCPサーバー（/mcp）など、APIを叩いて何かを調べたい・分析したい時に読む。フィールド定義・エラーレスポンス・データ更新スケジュールも含む。
+description: サイバー攻撃情報API（本番稼働中のREST API）の使い方リファレンス。KEV/OSV脆弱性検索、DEPSCAN依存ライブラリスキャン、DEPSOPS判定履歴、STIX/TAXII配信、クローラーログ、Grafana監視、リモートMCPサーバー（/mcp）など、APIを叩いて何かを調べたい・分析したい時に読む。フィールド定義・エラーレスポンス・データ更新スケジュールも含む。
 ---
 
 # Cyberattack Info API — スキルガイド
@@ -19,7 +19,7 @@ Claude Code や AI エージェントがこの API を「スキル（道具）�
 | **ベース URL（開発）** | `http://localhost:8000` |
 | **認証方式** | `X-API-KEY` リクエストヘッダー |
 | **レスポンス形式** | JSON |
-| **データソース** | CISA KEV／OSV API／JVN MyJVN API／DEPSCAN（GitHub API + OSV API）（毎日 JST 04:05 に一括順次実行） |
+| **データソース** | CISA KEV／OSV API／DEPSCAN（GitHub API + OSV API）（毎日 JST 04:05 に一括順次実行） |
 | **Swagger UI** | `https://168.138.213.240.nip.io/docs` |
 
 ---
@@ -38,7 +38,7 @@ curl -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 API キーの比較には `hmac.compare_digest` を使用し、タイミング攻撃を防止しています。
 
 > **Note:** 上記の `API_KEY` は管理者用・フルアクセスキー（`/admin/*` を含む全エンドポイントに使用可）。
-> 別途、読み取り専用エンドポイント（KEV/OSV/JVN/crawler-logs）だけに通用する `PUBLIC_API_KEY`
+> 別途、読み取り専用エンドポイント（KEV/OSV/crawler-logs）だけに通用する `PUBLIC_API_KEY`
 > も存在する（React ダッシュボードのビルド成果物に埋め込まれるキーで、ブラウザから誰でも
 > 抽出できるため管理者用キーとは分離してある）。Claude Code からの利用では引き続き
 > `API_KEY` を使えばよく、影響はない。
@@ -51,13 +51,13 @@ API キーの比較には `hmac.compare_digest` を使用し、タイミング�
 
 ## MCPサーバーとして使う（AIエージェント向け・推奨）
 curlの代わりに、リモートMCPサーバー（`https://168.138.213.240.nip.io/mcp`、Streamable HTTP）を
-登録すると、ツール（`search_kev`/`get_recent_kev`/`get_kev`/`search_osv`/`search_jvn`/
+登録すると、ツール（`search_kev`/`get_recent_kev`/`get_kev`/`search_osv`/
 `list_depscan_findings`/`get_depscan_stats`/`search_dependencies`/`list_codescan_findings`/`get_codescan_stats`/`whoami`）として
 使える。キーはMCPの設定に閉じ、CLAUDE.mdにcurl例を書く必要がない。読み取り専用で`/admin/*`は無い。
 
 | 認証 | 見えるもの |
 |------|-----------|
-| `X-API-KEY`=`PUBLIC_API_KEY` | KEV/OSV/JVNの公開情報のみ |
+| `X-API-KEY`=`PUBLIC_API_KEY` | KEV/OSVの公開情報のみ |
 | `Authorization: Bearer <MCPトークン>`（ダッシュボードの設定画面で発行。期限7/30/90日、個別に失効可） | 公開情報＋**自分が所有する**リポジトリのDEPSCAN/CODESCAN |
 | `X-API-KEY`=`API_KEY`（運用者） | すべて |
 
@@ -68,7 +68,7 @@ curlの代わりに、リモートMCPサーバー（`https://168.138.213.240.nip
 
 ## スキル一覧（詳細は reference/endpoints-feeds.md・reference/endpoints-ops.md）
 
-**KEV/OSV/JVN/DEPSCAN**（`reference/endpoints-feeds.md`）:
+**KEV/OSV/DEPSCAN**（`reference/endpoints-feeds.md`）:
 
 1. 直近の脅威を取得する（CISA KEV） — `GET /api/vulnerabilities/recent`
 2. 脆弱性を検索・フィルタリングする（CISA KEV） — `GET /api/vulnerabilities`
@@ -76,8 +76,7 @@ curlの代わりに、リモートMCPサーバー（`https://168.138.213.240.nip
 4. 統計情報を取得する（CISA KEV） — `GET /api/vulnerabilities/stats`
 5. OSV 脆弱性を検索する — `GET /api/osv`
 6. OSV 統計情報を取得する — `GET /api/osv/stats`
-7. JVN 脆弱性を検索する — `GET /api/jvn`
-8. JVN 統計情報を取得する — `GET /api/jvn/stats`
+（7・8は欠番。JVN は廃止した）
 9. 自作アプリの依存ライブラリ脆弱性を確認する（DEPSCAN） — `GET /api/depscan`
 10. DEPSCAN 統計情報を取得する — `GET /api/depscan/stats`
 11. DEPSCAN検知結果をSBOM形式でエクスポートする — `GET /api/depscan/export`
@@ -96,7 +95,7 @@ curlの代わりに、リモートMCPサーバー（`https://168.138.213.240.nip
 14. クローラーの実行ログを確認する — `GET /api/crawler-logs`
 15. サービス状態を確認する — `GET /health`
 16. 運用監視ダッシュボード（Grafana）を確認する
-17. KEV/OSV/JVNデータをTAXII 2.1で購読する — `GET /taxii2/...`
+17. KEV/OSVデータをTAXII 2.1で購読する — `GET /taxii2/...`
 
 同ファイルに「Claude Code での活用パターン」（`claude -p`との組み合わせ例・CI死活監視例）も掲載。
 
@@ -123,7 +122,7 @@ DEPSCAN スキャンが実行され、`/api/depscan`・`/api/depscan/stats` は�
 
 ## フィールド定義
 
-各レスポンスのフィールド定義（`VulnerabilityOut`・`OsvVulnerabilityOut`・`JvnVulnerabilityOut`・
+各レスポンスのフィールド定義（`VulnerabilityOut`・`OsvVulnerabilityOut`・
 `DependencyFindingOut`・`CodeFindingOut`・`DependabotPrLogOut`・`CrawlerLogOut`）は
 `reference/fields.md` を参照。
 
@@ -144,15 +143,15 @@ DEPSCAN スキャンが実行され、`/api/depscan`・`/api/depscan/stats` は�
 
 | タイミング | 処理 |
 |----------|------|
-| 毎日 JST 04:05（UTC 19:05） | GitHub Actions 単一 cron で KEV → OSV → JVN → DEPSCAN → CODESCAN → DEPSOPS を順次実行（Upsert・古いレコード削除） |
+| 毎日 JST 04:05（UTC 19:05） | GitHub Actions 単一 cron で KEV → OSV → DEPSCAN → CODESCAN → DEPSOPS を順次実行（Upsert・古いレコード削除） |
 | アプリ起動時 | DB テーブルの自動作成 |
-| `POST /admin/*-crawl` 実行時 | 各クローラーをバックグラウンド取得（202 即時返却。KEV/OSV/JVN/DEPSCAN/CODESCAN/DEPSOPSは`?force=true`で重複実行スキップ（直近12時間）をバイパス可能、Issue #239） |
+| `POST /admin/*-crawl` 実行時 | 各クローラーをバックグラウンド取得（202 即時返却。KEV/OSV/DEPSCAN/CODESCAN/DEPSOPSは`?force=true`で重複実行スキップ（直近12時間）をバイパス可能、Issue #239） |
 
 Upsertロジックの概要:
 - **KEV**: 新規→INSERT、内容変更あり→UPDATE、変更なし→スキップ。新規・更新時はSlack通知。
   削除は「今回のCISAフィードに存在しないレコードのみ」（Issue #239でage-based削除の
   重大バグを修正済み。詳細は`crawler-internals`スキル参照）
-- **OSV/JVN**: KEVと同様のUpsertだが、削除は保持期間（既定180日、`*_RETENTION_DAYS`）超過
+- **OSV**: KEVと同様のUpsertだが、削除は保持期間（既定180日、`*_RETENTION_DAYS`）超過
   レコードが対象（フェッチ自体が直近30日限定のため、KEVと違い削除後に復活しない）
 - **DEPSCAN**: OSV APIとリアルタイム照合。新規検知はSlack通知＋対象リポジトリへの
   GitHub Issue自動起票（未解決findingが0件になると自動クローズ）。実際の修正はDependabot

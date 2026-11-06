@@ -1,4 +1,4 @@
-"""クローラー（KEV/OSV/JVN/CODESCAN）の成功・エラー通知。"""
+"""クローラー（KEV/OSV/CODESCAN）の成功・エラー通知。"""
 import re
 
 from app.core.notifications import recipients as recipient_resolver
@@ -20,7 +20,7 @@ def sanitize_error(error: str) -> str:
 
 
 class CrawlerSuccessNotifier(Notifier):
-    """クローラー成功時の通知（KEV/OSV/JVN/CODESCAN 共通。変化がなければ通知しない）。"""
+    """クローラー成功時の通知（KEV/OSV/CODESCAN 共通。変化がなければ通知しない）。"""
 
     def __init__(
         self, crawler_type: CrawlerType, inserted: int, updated: int, deleted: int = 0,
@@ -53,7 +53,7 @@ class CrawlerErrorNotifier(Notifier):
     """クローラーエラー時の通知。
 
     検知結果の通知とは異なり、crawler_type に関わらず常に管理者（GITHUB_USERNAME）自身が
-    登録した Webhook にのみ送る（KEV/OSV/JVN のエラーでも全登録ユーザーへは送らない）。
+    登録した Webhook にのみ送る（KEV/OSV のエラーでも全登録ユーザーへは送らない）。
     """
 
     def __init__(

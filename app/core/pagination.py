@@ -1,6 +1,6 @@
 """一覧APIで共通のページネーション処理（DRY）。
 
-KEV/OSV/JVN/DEPSCAN の各一覧エンドポイントは、フィルタ適用済みの SQLAlchemy Query
+KEV/OSV/DEPSCAN の各一覧エンドポイントは、フィルタ適用済みの SQLAlchemy Query
 から「件数カウント → offset 算出 → 並び替え・offset・limit を適用して取得」という
 定型処理を共通で行っている。フィルタの構築自体（検索条件・絞り込み）はドメインごとに
 大きく異なるため対象外とし、この定型部分のみを一元化する。

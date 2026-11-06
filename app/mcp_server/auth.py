@@ -3,7 +3,7 @@
 呼び出し元を3種類の主体（Principal）に分類し、ツール側が権限に応じて振る舞いを変える。
 
 - admin : `X-API-KEY` = API_KEY。すべて参照できる（運用者本人）
-- public: `X-API-KEY` = PUBLIC_API_KEY。KEV / OSV / JVN の公開情報のみ
+- public: `X-API-KEY` = PUBLIC_API_KEY。KEV / OSV の公開情報のみ
 - user  : `Authorization: Bearer <MCPトークン>`。公開情報 + 自分が所有する
           リポジトリの DEPSCAN / CODESCAN（署名・期限に加え、台帳で失効していないことも確認する）
 

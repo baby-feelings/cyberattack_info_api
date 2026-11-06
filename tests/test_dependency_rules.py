@@ -9,7 +9,7 @@ from pathlib import Path
 APP = Path(__file__).resolve().parents[1] / "app"
 
 # 個別のドメイン（`core` は、これらを知らない）
-_DOMAINS = ("kev", "osv", "jvn", "depscan", "depsops", "codescan", "mcp_server", "zapscan")
+_DOMAINS = ("kev", "osv", "depscan", "depsops", "codescan", "mcp_server", "zapscan")
 
 # (呼び出し元パッケージ, 依存してはいけないパッケージ, 理由)
 FORBIDDEN: list[tuple[str, str, str]] = [

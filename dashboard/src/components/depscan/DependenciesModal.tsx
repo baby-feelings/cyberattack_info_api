@@ -283,7 +283,7 @@ function DependenciesDialog({ onClose, authToken }: { onClose: () => void; authT
 }
 
 // 使っている依存パッケージを、アプリごとに閲覧し、パッケージ名・版で検索する全画面モーダル。
-// DEPSCAN タブ内のボタンから開く（Dependabot 運用状況と同じ設計。5つ目の固定タブにはしない）。
+// DEPSCAN タブ内のボタンから開く（Dependabot 運用状況と同じ設計。追加の固定タブにはしない）。
 // 開いたときにだけ内側を組み立てるため、閉じている間は取得しない。
 export function DependenciesModal({
   open, onClose, authToken,

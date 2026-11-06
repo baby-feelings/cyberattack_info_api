@@ -7,7 +7,6 @@ from app.core.notifications import slack
 CRAWLER_LABELS: dict[str, tuple[str, str]] = {
     "KEV": (":shield:", "CISA KEV"),
     "OSV": (":package:", "OSV 脆弱性データ"),
-    "JVN": (":jigsaw:", "JVN 脆弱性データ"),
     "DEPSCAN": (":rotating_light:", "依存ライブラリ脆弱性"),
     "DEPSOPS": (":robot_face:", "Dependabot PR 自動運用"),
     "CODESCAN": (":mag:", "自アプリコード脆弱性"),

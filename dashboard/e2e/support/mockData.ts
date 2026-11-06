@@ -97,43 +97,6 @@ export function osvStats() {
   }
 }
 
-// ── JVN ───────────────────────────────────────────────────────────
-
-const JVN_SEVERITIES = ['High', 'Medium', 'Low']
-export const JVN_TOTAL = 40
-
-export const jvnItems = Array.from({ length: JVN_TOTAL }, (_, i) => ({
-  jvndb_id: `JVNDB-2026-${pad(i + 1, 6)}`,
-  title: `JVNタイトル ${i + 1}: 国内製品の脆弱性`,
-  overview: `JVN概要 ${i + 1}: クロスサイトスクリプティングの脆弱性。`,
-  cve_ids: [`CVE-2026-8${pad(i + 1)}`],
-  severity: JVN_SEVERITIES[i % 3],
-  cvss_score: 8.1 - (i % 3) * 2,
-  cvss_vector: 'CVSS:3.0/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N',
-  // 1件目は影響製品が複数（「+N 製品」表示の分岐）、2件目は影響製品なし（「—」表示）
-  affected_products: i === 1 ? [] : [
-    { vendor: 'ACME', product: `Widget ${i + 1}`, cpe: 'cpe:/a:acme:widget' },
-    ...(i === 0 ? [{ vendor: 'ACME', product: 'Gadget', cpe: 'cpe:/a:acme:gadget' }] : []),
-  ],
-  references: [],
-  jvn_url: `https://jvndb.jvn.jp/ja/contents/2026/JVNDB-2026-${pad(i + 1, 6)}.html`,
-  date_published: isoDay(i + 5),
-  date_last_modified: isoDay(i),
-}))
-
-export function jvnStats() {
-  const sev = new Map<string, number>()
-  for (const v of jvnItems) sev.set(v.severity, (sev.get(v.severity) ?? 0) + 1)
-  return {
-    total: jvnItems.length,
-    severities: [...sev].map(([severity, count]) => ({ severity, count })),
-    monthly_trend: [
-      { year_month: '2026-08', count: 15 },
-      { year_month: '2026-09', count: 25 },
-    ],
-  }
-}
-
 // ── DEPSCAN ───────────────────────────────────────────────────────
 
 interface FindingSeed {

@@ -32,7 +32,7 @@ def write_crawler_log(
     クロール失敗時でもログは確実にコミットされる。
 
     Args:
-        crawler_type:  "KEV" / "OSV" / "JVN" / "DEPSCAN"
+        crawler_type:  "KEV" / "OSV" / "DEPSCAN"
         status:        "success" または "error"
         started_at:    クローラー開始日時（UTC）
         finished_at:   クローラー終了日時（UTC）

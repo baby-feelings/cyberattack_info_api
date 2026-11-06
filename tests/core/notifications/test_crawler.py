@@ -68,9 +68,9 @@ def test_notify_sends_when_only_deleted():
 def test_notify_message_uses_crawler_label():
     """crawler_type ごとのラベル・絵文字がメッセージに反映されること。"""
     with patch("app.core.notifications.slack.send_slack") as mock_send:
-        notify_success("JVN", inserted=7, updated=3, recipients=[_TEST_URL])
+        notify_success("OSV", inserted=7, updated=3, recipients=[_TEST_URL])
         msg = mock_send.call_args[0][0]
-        assert "JVN 脆弱性データ" in msg
+        assert "OSV 脆弱性データ" in msg
         assert "7" in msg
         assert "3" in msg
 

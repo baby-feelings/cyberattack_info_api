@@ -65,7 +65,7 @@ def clear_slack_webhook(db: Session, username: str) -> None:
 
 def list_all_webhooks(db: Session) -> list[str]:
     """通知が有効な、登録済み全ユーザーの Webhook URL 一覧を返す
-    （KEV/OSV/JVN のようなグローバルな脅威情報の通知先に使う。重複除去済み）。
+    （KEV/OSV のようなグローバルな脅威情報の通知先に使う。重複除去済み）。
     """
     rows = (
         db.query(UserAccount.slack_webhook_url)

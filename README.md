@@ -4,7 +4,7 @@
 [![Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen)](https://github.com/baby-feelings/cyberattack_info_api/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.13-blue)](https://www.python.org/)
 
-米 CISA の [Known Exploited Vulnerabilities (KEV) Catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog)・[OSV (Open Source Vulnerabilities)](https://osv.dev/)・[JVN (Japan Vulnerability Notes)](https://jvndb.jvn.jp/) を定期収集し、REST API として配信するプラットフォームです。  
+米 CISA の [Known Exploited Vulnerabilities (KEV) Catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog)・[OSV (Open Source Vulnerabilities)](https://osv.dev/)を定期収集し、REST API として配信するプラットフォームです。  
 Claude Code や CI/CD ツールから「今まさに悪用されているサイバー脅威」をリアルタイムに取得するために最適化されています。
 
 詳細なドキュメントは [docs/](docs/) 配下に分離しています（本READMEはトップレベルの概要のみ）。
@@ -15,7 +15,7 @@ Claude Code や CI/CD ツールから「今まさに悪用されているサイ�
 
 | 機能 | 説明 |
 |------|------|
-| **KEV / OSV / JVN 自動クローラー** | アプリ内スケジューラが毎日 JST 04:00〜08:50 に KEV → OSV → JVN → DEPSCAN → CODESCAN などを順次実行（各フィード取得・Upsert）。GitHub Actions の cron（JST 04:05）は補完（詳細: [docs/deployment.md](docs/deployment.md)） |
+| **KEV / OSV 自動クローラー** | アプリ内スケジューラが毎日 JST 04:00〜08:50 に KEV → OSV → DEPSCAN → CODESCAN などを順次実行（各フィード取得・Upsert）。GitHub Actions の cron（JST 04:05）は補完（詳細: [docs/deployment.md](docs/deployment.md)） |
 | **言語・実行環境のバージョン監視（RUNTIME）** | 各リポジトリが使っている Python・Node.js・Flutter・Dart の版を設定ファイル（Dockerfile・CI・firebase.json 等）から検出し、最新版・サポート期限（endoflife.date・Flutter 公式）と突き合わせる。期限切れ・期限間近・新しい系列ありを、`GET /api/runtimes` とダッシュボードの「言語・実行環境」画面で見られ、変化があったとき（新しい系列の公開・サポート終了が近い・終了）は管理者の Slack に通知する（Issue #373） |
 | **依存ライブラリ脆弱性スキャン（DEPSCAN）** | GitHub 上の自作アプリ全リポジトリのロックファイルを OSV API とリアルタイム照合。新規検知はリポジトリへ GitHub Issue も自動起票し、解消を確認すると自動クローズ。悪意あるパッケージ（OSV `MAL-*`）は対応手順つきの緊急通知で区別する。重要度別の対応期限（CRITICAL 7日・HIGH 30日・KEV掲載7日）を超えた検知と平均対応日数（MTTR）を `GET /api/sla` とダッシュボードの「対応状況」で見られ、毎週月曜にSlackへまとめを送る |
 | **自アプリコード脆弱性診断（CODESCAN）** | GitHub 上の自作アプリ全リポジトリを、Semgrep（コード）・gitleaks（シークレット）・zizmor（GitHub Actions の設定）・インフラ設定（Firebase のルール・Dockerfile・docker-compose）で診断。CVSSはベストエフォート推定。解消を確認すると、起票した GitHub Issue も自動クローズ |
@@ -25,14 +25,14 @@ Claude Code や CI/CD ツールから「今まさに悪用されているサイ�
 | **本アプリ自身の防御** | 管理 API のレート制限とロックアウト、監査ログ、API キー等の更新期限の通知（詳細: [docs/security-hardening.md](docs/security-hardening.md)） |
 | **Dependabot PR 自動運用（DEPSOPS）** | 安全性の高い Dependabot PR（マイナー/パッチ・CIあり・コンフリクトなし）のみ自動マージ、それ以外はSlack通知 |
 | **DEPSCAN/CODESCAN ダッシュボードの GitHub ログイン** | 任意の GitHub アカウントでログインし、本人が所有するリポジトリの検知結果のみ閲覧可能（DEPSCAN・CODESCAN とも。他の人には見えない） |
-| **AIエージェント向けリモートMCPサーバー** | `/mcp`（Streamable HTTP）で、KEV/OSV/JVN の検索と、本人所有リポジトリの DEPSCAN/CODESCAN をツールとして提供。MCPトークンはダッシュボードの設定画面から発行（期限 7/30/90 日の選択、個別失効に対応。詳細: [docs/mcp-server.md](docs/mcp-server.md)） |
+| **AIエージェント向けリモートMCPサーバー** | `/mcp`（Streamable HTTP）で、KEV/OSV の検索と、本人所有リポジトリの DEPSCAN/CODESCAN をツールとして提供。MCPトークンはダッシュボードの設定画面から発行（期限 7/30/90 日の選択、個別失効に対応。詳細: [docs/mcp-server.md](docs/mcp-server.md)） |
 | **ユーザー別 Slack 通知登録** | ダッシュボードから任意の GitHub アカウントで自分専用の Slack Webhook を登録可能（詳細: [docs/slack-notifications.md](docs/slack-notifications.md)） |
 | **運用中／運用停止中の切り替え** | DEPSCAN・DEPSOPS・CODESCAN を、運用中のアプリと運用を止めたアプリ（`INACTIVE_REPOS`）に分けて表示（初期表示は運用中）。DEPSCAN・CODESCAN は「いま対応が必要な件数（CRITICAL・HIGH／重大）」を最上部に出し、左のアプリ一覧から絞り込める |
 | **削除済みリポジトリ・古いデータの自動削除** | GitHub上で削除確認できたリポジトリのデータ、保持期間超過レコードを自動削除。`SCAN_EXCLUDE_REPOS` で指定したリポジトリはスキャン対象外（データと起票済みIssueも片付ける） |
 | **品質・セキュリティ検査** | ruff（bandit 相当含む）・mypy・ESLint・pytest/Vitest/Playwright、gitleaks・OSV-Scanner・pip-audit、OWASP ZAP による動的診断を CI で実行 |
 | **運用監視** | Prometheus + Grafana による稼働状態（API・エラー率・応答時間・ジョブの成否・防御・鍵の期限・ホストリソース）の可視化（OCI上、任意） |
 | **一覧・統計・実行ログ API** | ページネーション・検索・フィルタリング対応（詳細: [docs/api-reference.md](docs/api-reference.md)） |
-| **React ダッシュボード** | KEV・OSV・JVN・DEPSCAN・CODESCANを画面下部固定タブで切り替え表示（Vercel デプロイ）。KEV・OSV・JVN は期間（初期は直近30日）と、使っている製品名のキーワード別の該当件数で、新しい脆弱性を先に確認できる。一覧は日付（追加日・更新日・検知日）ごとに区切って表示 |
+| **React ダッシュボード** | KEV・OSV・DEPSCAN・CODESCANを画面下部固定タブで切り替え表示（Vercel デプロイ）。KEV・OSV は期間（初期は直近30日）と、使っている製品名のキーワード別の該当件数で、新しい脆弱性を先に確認できる。一覧は日付（追加日・更新日・検知日）ごとに区切って表示 |
 
 ---
 
@@ -84,8 +84,8 @@ cd dashboard && npm run lint          # ESLint（警告数の上限あり）
 deploy/zap/run_zap_scan.ps1           # OWASP ZAP の動的診断（Docker Desktop。docs/zap-scan.md）
 ```
 
-**テスト結果（最新）:** バックエンド 1972 テスト / カバレッジ 99%（Windows は、POSIXパス前提の1件をスキップ）、ダッシュボード 628 テスト
-（Vitest）/ カバレッジ 98%、E2E 121 シナリオ
+**テスト結果（最新）:** バックエンド 1913 テスト / カバレッジ 99%（Windows は、POSIXパス前提の1件をスキップ）、ダッシュボード 606 テスト
+（Vitest）/ カバレッジ 98%、E2E 109 シナリオ
 
 ダッシュボードのE2Eテスト（Playwright、API全モック）は `dashboard/` で `npm run e2e`。
 HTMLレポートは `npm run e2e:report`、画面・機能のシナリオ網羅率（90%未満で失敗）は
@@ -95,7 +95,7 @@ HTMLレポートは `npm run e2e:report`、画面・機能のシナリオ網羅�
 
 ## プロジェクト構成
 
-`app/` はドメイン（KEV / OSV / JVN / DEPSCAN / CODESCAN / DEPSOPS / クローラーログ / 横断的
+`app/` はドメイン（KEV / OSV / DEPSCAN / CODESCAN / DEPSOPS / クローラーログ / 横断的
 共通処理）単位のパッケージ構成。詳細なディレクトリツリーは
 [docs/project-structure.md](docs/project-structure.md) を参照。
 

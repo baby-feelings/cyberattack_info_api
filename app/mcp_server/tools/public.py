@@ -1,4 +1,4 @@
-"""公開情報（KEV / OSV / JVN）を参照する MCP ツール。認証済みの全主体が使える。"""
+"""公開情報（KEV / OSV）を参照する MCP ツール。認証済みの全主体が使える。"""
 from typing import Any
 
 from mcp.server.fastmcp import Context, FastMCP
@@ -62,19 +62,4 @@ def register(mcp: FastMCP) -> None:
         return await RestGateway(ctx).get("/api/osv", {
             "search": search, "ecosystem": ecosystem, "severity": severity,
             "days": days, "page": page, "per_page": per_page,
-        })
-
-    @mcp.tool()
-    async def search_jvn(
-        ctx: Context,
-        search: str | None = None,
-        severity: str | None = None,
-        days: int = 30,
-        page: int = 1,
-        per_page: int = 20,
-    ) -> dict[str, Any]:
-        """JVN（日本の脆弱性情報データベース）を検索する。days は直近何日に更新されたものか。"""
-        return await RestGateway(ctx).get("/api/jvn", {
-            "search": search, "severity": severity, "days": days,
-            "page": page, "per_page": per_page,
         })

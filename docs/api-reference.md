@@ -15,9 +15,6 @@
 | GET | `/api/osv` | OSV 一覧（10エコシステム対応） |
 | GET | `/api/osv/{osv_id}` | 同一osv_idの全行取得（`?format=stix`でSTIX Bundle形式、Issue #134） |
 | GET | `/api/osv/stats` | OSV統計 |
-| GET | `/api/jvn` | JVN 一覧 |
-| GET | `/api/jvn/{jvndb_id}` | JVNDB ID個別取得（`?format=stix`でSTIX 2.1形式、Issue #134） |
-| GET | `/api/jvn/stats` | JVN統計 |
 | GET | `/api/depscan` | DEPSCAN検知結果一覧（`reachability`到達可能性判定・`repo_visibility`・`asset_context`・`priority_reasons`含む） |
 | GET | `/api/depscan/stats` | DEPSCAN統計（リポジトリ別・重要度別） |
 | - | `operating=active\|inactive\|all` | 上の DEPSCAN・CODESCAN・DEPSOPS の一覧・統計共通の絞り込み。運用中／運用停止中（`INACTIVE_REPOS`）で分ける。未指定は `all`（全件） |
@@ -58,7 +55,6 @@
 | GET/PUT/DELETE | `/auth/notification-settings` | ログイン中ユーザーのSlack Webhook通知登録・解除（Bearer認証、Issue #227）。PUTは実際にテスト送信し成功した場合のみ保存 |
 | POST | `/admin/crawl` | KEV手動クロール（`?force=true`対応、Issue #239） |
 | POST | `/admin/osv-crawl` | OSV手動クロール（`?days=N`・`?force=true`対応） |
-| POST | `/admin/jvn-crawl` | JVN手動クロール（`?days=N`・`?force=true`対応） |
 | POST | `/admin/depscan-crawl` | DEPSCAN手動実行（`?force=true`対応） |
 | POST | `/admin/commit-watch-crawl` | コミットの監視（見慣れないコミッター・ワークフローの危険な変更。Issue #405）をいま実行（`?force=true`対応。バックグラウンド。結果はSlack通知） |
 | POST | `/admin/site-monitor-crawl` | 公開サイトの外形監視をいま実行（`?force=true`対応。バックグラウンド） |
@@ -73,12 +69,12 @@
 | POST | `/admin/dependabot-ops` | DEPSOPS手動実行（安全なPRのみ自動マージ。`?force=true`対応） |
 | POST | `/admin/repo-cleanup` | 削除済み・スキャン対象外（`SCAN_EXCLUDE_REPOS`）のリポジトリのDEPSCAN/CODESCAN/DEPSOPSデータ削除（対象外は起票済みIssueも閉じる）を手動実行（Issue #228・#342） |
 | POST | `/admin/user-crawl` | 登録済み他ユーザー（`GITHUB_USERNAME`以外、Webhook登録済み）向けDEPSCAN/CODESCAN/DEPSOPSを手動実行（Issue #227） |
-| GET | `/taxii2/*` | TAXII 2.1配信（KEV/OSV/JVN 3コレクション購読用、最小実装。Issue #134） |
+| GET | `/taxii2/*` | TAXII 2.1配信（KEV/OSV 3コレクション購読用、最小実装。Issue #134） |
 | GET | `/metrics` | Prometheus用メトリクス（`Authorization: Bearer <METRICS_API_KEY>`。未設定時は503） |
 | GET | `/health` | ヘルスチェック（認証不要） |
 
 クロール系の`/admin/*`（`*-crawl`・`dependabot-ops`）はバックグラウンド実行で即座に202を
-返す（結果は`/api/crawler-logs`で確認）。KEV/OSV/JVN/DEPSCAN/CODESCAN/DEPSOPSは
+返す（結果は`/api/crawler-logs`で確認）。KEV/OSV/DEPSCAN/CODESCAN/DEPSOPSは
 `?force=true`を付けると、直近12時間に成功実行済みでもスキップせず強制的に再実行する
 （Issue #239。動作確認等の明示的な手動再実行用。GitHub Actions・APSchedulerの
 自動トリガーは常に`force`無しで呼ぶため二重実行にはならない）。

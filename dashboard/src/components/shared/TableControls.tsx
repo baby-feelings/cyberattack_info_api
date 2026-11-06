@@ -1,6 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 
-// OsvPanel・JvnPanel で共有する、テーブル一覧の制御系パーツ群
+// OsvPanel で共有する、テーブル一覧の制御系パーツ群
 // （ローディングスケルトン・空状態・ページネーション・重要度フィルター・
 // 検索ボックス・ソートセレクター）。
 

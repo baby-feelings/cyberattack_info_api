@@ -17,7 +17,7 @@ scenario('FRS-01', '各タブの見出しに、そのタブのクローラーの
   await page.goto('/')
   await expect(lastFetched(page)).toBeVisible()
   const tabs = [
-    ['KEV', 'KEV'], ['OSV', 'OSV'], ['JVN', 'JVN'], ['DEPSCAN', 'DEPSCAN'], ['CODESCAN', 'CODESCAN'],
+    ['KEV', 'KEV'], ['OSV', 'OSV'], ['DEPSCAN', 'DEPSCAN'], ['CODESCAN', 'CODESCAN'],
   ] as const
   for (const [tab, crawlerType] of tabs) {
     await openTab(page, tab)

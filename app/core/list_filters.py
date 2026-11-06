@@ -8,7 +8,7 @@ FastAPI は `Depends()` に渡したクラスの `__init__` 引数をクエリ�
 そのため OpenAPI 上のパラメータ名・制約・説明は、従来のエンドポイント引数と変わらない
 （サブクラスは自身の `__init__` で `Query(...)` を宣言する）。
 
-- `FeedListFilter`: OSV / JVN 共通（直近 N 日・重要度・キーワード・ソート・差分取得）
+- `FeedListFilter`: OSV 共通（直近 N 日・重要度・キーワード・ソート・差分取得）
 - `RepoFindingFilter`: DEPSCAN / CODESCAN 共通（リポジトリ・オーナー・重要度・解決状態・運用状態）
 """
 from collections.abc import Callable
@@ -25,7 +25,7 @@ from app.core.owner_scope import is_owned_by
 
 
 class FeedListFilter:
-    """OSV / JVN の一覧絞り込み（サブクラスが対象モデルと列を宣言する）。"""
+    """OSV の一覧絞り込み（サブクラスが対象モデルと列を宣言する）。"""
 
     # サブクラスで宣言する: 対象モデル・「直近 N 日」の基準列名・キーワード検索対象の列名・
     # CVSS 以外のデフォルトソート列名・重要度の正規化方法

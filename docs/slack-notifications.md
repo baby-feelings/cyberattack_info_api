@@ -11,10 +11,10 @@
 
 | クローラー種別 | 送信先 |
 |---------------|--------|
-| KEV / OSV / JVN（リポジトリに紐づかないグローバルな脅威情報） | 通知を有効にしている**全登録ユーザー**へブロードキャスト |
+| KEV / OSV（リポジトリに紐づかないグローバルな脅威情報） | 通知を有効にしている**全登録ユーザー**へブロードキャスト |
 | DEPSCAN / DEPSOPS / CODESCAN の毎日クロール（`GITHUB_USERNAME` 自身のリポジトリ対象） | `GITHUB_USERNAME` 自身が登録した Webhook にのみ送信 |
 | DEPSCAN / DEPSOPS / CODESCAN の登録済み他ユーザー向け定期実行 | 本人が登録した Webhook にのみ送信 |
-| **クローラーエラー発生時**（`:warning:`、KEV/OSV/JVN/DEPSCAN/DEPSOPS/CODESCAN 共通） | crawler_type に関わらず**常に管理者（`GITHUB_USERNAME`）自身の Webhook にのみ**送信（全登録ユーザーへはブロードキャストしない） |
+| **クローラーエラー発生時**（`:warning:`、KEV/OSV/DEPSCAN/DEPSOPS/CODESCAN 共通） | crawler_type に関わらず**常に管理者（`GITHUB_USERNAME`）自身の Webhook にのみ**送信（全登録ユーザーへはブロードキャストしない） |
 
 通知内容:
 
@@ -22,7 +22,6 @@
 |-----------|---------|
 | CISA KEV クロール完了（新規追加・更新あり） | `:shield: CISA KEV 更新通知`（新規・更新件数） |
 | OSV クロール完了（新規・更新あり） | `:package: OSV 脆弱性データ更新通知`（新規・更新・削除件数） |
-| JVN クロール完了（新規・更新あり） | `:jigsaw: JVN 脆弱性データ更新通知`（新規・更新件数） |
 | DEPSCAN（毎日クロール・登録済み他ユーザー向け実行）で新規検知あり | `:rotating_light: 依存ライブラリ脆弱性を検知`（リポジトリ別グルーピング・パッケージ単位に集約したダイジェスト1通） |
 | DEPSCANで**悪意あるパッケージ**（OSV `MAL-*`）を新規検知（#399） | `:skull_and_crossbones: 【緊急】悪意あるパッケージを検知`（脆弱性のダイジェストとは**別の1通を先に**送る。対応手順＝削除・認証情報の再発行つき。GitHub Issueにも同じ節を先頭に載せる） |
 | 毎日（`SECRET_EXPIRY_*`。管理者のみ。#406）で、API_KEY・GITHUB_TOKEN の**更新期限**が近い（または過ぎた） | `:key: 本アプリの鍵の更新期限が近づいています`（期限・残り日数・更新の手順。鍵の値は含まない） |

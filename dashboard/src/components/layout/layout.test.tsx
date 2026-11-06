@@ -11,18 +11,17 @@ vi.mock('../../api/crawlerLogs', () => ({ fetchCrawlerLogs: vi.fn().mockResolved
 // 重いパネル本体は軽量なダミーへ差し替える（レイアウトだけを検証する）
 vi.mock('../KevPanel', () => ({ KevPanel: () => <div>kev-panel</div> }))
 vi.mock('../OsvPanel', () => ({ OsvPanel: () => <div>osv-panel</div> }))
-vi.mock('../JvnPanel', () => ({ JvnPanel: () => <div>jvn-panel</div> }))
 vi.mock('../DepscanAuthGate', () => ({ DepscanAuthGate: () => <div>depscan-gate</div> }))
 vi.mock('../CodescanAuthGate', () => ({ CodescanAuthGate: () => <div>codescan-gate</div> }))
 
 describe('TAB_DEFINITIONS', () => {
-  it('defines the five tabs in display order with unique keys', () => {
-    expect(TAB_DEFINITIONS.map((t) => t.key)).toEqual(['kev', 'osv', 'jvn', 'depscan', 'codescan'])
-    expect(new Set(TAB_DEFINITIONS.map((t) => t.key)).size).toBe(5)
+  it('defines the four tabs in display order with unique keys', () => {
+    expect(TAB_DEFINITIONS.map((t) => t.key)).toEqual(['kev', 'osv', 'depscan', 'codescan'])
+    expect(new Set(TAB_DEFINITIONS.map((t) => t.key)).size).toBe(4)
   })
 
   it('declares the crawler whose last fetch each tab shows', () => {
-    expect(TAB_DEFINITIONS.map((t) => t.crawlerType)).toEqual(['KEV', 'OSV', 'JVN', 'DEPSCAN', 'CODESCAN'])
+    expect(TAB_DEFINITIONS.map((t) => t.crawlerType)).toEqual(['KEV', 'OSV', 'DEPSCAN', 'CODESCAN'])
   })
 })
 
@@ -30,7 +29,7 @@ describe('TabBar', () => {
   it('renders one tab per definition and marks only the active one as selected', () => {
     render(<TabBar activeTab="osv" onSelect={vi.fn()} />)
     const tabs = screen.getAllByRole('tab')
-    expect(tabs).toHaveLength(5)
+    expect(tabs).toHaveLength(4)
     expect(screen.getByRole('tab', { name: /OSV/ })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('tab', { name: /KEV/ })).toHaveAttribute('aria-selected', 'false')
   })
@@ -38,11 +37,11 @@ describe('TabBar', () => {
   it('links each tab to its panel via aria-controls and calls onSelect with the key', () => {
     const onSelect = vi.fn()
     render(<TabBar activeTab="kev" onSelect={onSelect} />)
-    const jvn = screen.getByRole('tab', { name: /JVN/ })
-    expect(jvn).toHaveAttribute('id', 'tab-jvn')
-    expect(jvn).toHaveAttribute('aria-controls', 'tabpanel-jvn')
-    fireEvent.click(jvn)
-    expect(onSelect).toHaveBeenCalledWith('jvn')
+    const osv = screen.getByRole('tab', { name: /OSV/ })
+    expect(osv).toHaveAttribute('id', 'tab-osv')
+    expect(osv).toHaveAttribute('aria-controls', 'tabpanel-osv')
+    fireEvent.click(osv)
+    expect(onSelect).toHaveBeenCalledWith('osv')
   })
 })
 

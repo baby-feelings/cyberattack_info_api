@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 
-// 自分が使っている製品名などのキーワード（KEV・OSV・JVN で共通）。ブラウザ内に保存するため、
+// 自分が使っている製品名などのキーワード（KEV・OSV で共通）。ブラウザ内に保存するため、
 // 端末をまたぐと別になる。サーバーには送らない
 const STORAGE_KEY = 'watch_keywords'
 export const MAX_KEYWORDS = 10

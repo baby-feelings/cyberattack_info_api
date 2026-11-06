@@ -11,7 +11,7 @@ const TONE_CLS: Record<NonNullable<StatItem['tone']>, string> = {
   red: 'text-red-400',
 }
 
-// KEV・OSV・JVN 共通の件数の帯。期間内に何件あり、そのうち注目すべきものが何件かを、大きく見せる
+// KEV・OSV 共通の件数の帯。期間内に何件あり、そのうち注目すべきものが何件かを、大きく見せる
 export function StatBand({ items, loading }: { items: StatItem[]; loading: boolean }) {
   if (loading) {
     return <div role="status" aria-label="集計中" className="h-12 w-72 rounded-lg bg-slate-800/60 animate-pulse" />

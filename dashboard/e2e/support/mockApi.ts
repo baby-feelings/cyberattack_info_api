@@ -1,7 +1,7 @@
 import type { Page, Route } from '@playwright/test'
 import {
   codescanItems, codescanStats, depscanFindings, depscanStats, depsopsItems,
-  jvnItems, jvnStats, kevItems, kevStats, osvItems, osvStats, repoDependencies, repoRuntimes,
+  kevItems, kevStats, osvItems, osvStats, repoDependencies, repoRuntimes,
   runtimeReleases, slaOverdue, slaPolicy, slaRepos,
 } from './mockData'
 
@@ -170,22 +170,6 @@ function defaultResponse(req: RecordedRequest, state: MockState): MockResponse {
         && (!sev || v.severity === sev)
         && (!search || includesCI(v.osv_id, search) || includesCI(v.package_name, search)
           || includesCI(v.summary, search)))
-      if (query.get('sort_by') === 'cvss') {
-        items = [...items].sort((a, b) => (b.cvss_score ?? -1) - (a.cvss_score ?? -1))
-      }
-      return { body: paginate(items, query, 50) }
-    }
-
-    // ── JVN ──
-    case 'GET /api/jvn/stats':
-      return { body: jvnStats() }
-    case 'GET /api/jvn': {
-      const sev = query.get('severity')
-      const search = query.get('search')
-      let items = jvnItems.filter((v) =>
-        (!sev || v.severity === sev)
-        && (!search || includesCI(v.jvndb_id, search) || includesCI(v.title, search)
-          || includesCI(v.overview, search)))
       if (query.get('sort_by') === 'cvss') {
         items = [...items].sort((a, b) => (b.cvss_score ?? -1) - (a.cvss_score ?? -1))
       }

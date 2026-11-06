@@ -13,7 +13,6 @@ from app.codescan.models import CodeFinding
 from app.core.list_filters import RepoFindingFilter
 from app.depscan.filters import DepscanListFilter
 from app.depscan.models import DependencyFinding
-from app.jvn.filters import JvnListFilter
 from app.kev.filters import KevListFilter
 from app.kev.models import Vulnerability
 from app.main import app
@@ -32,28 +31,16 @@ def _osv(**kw):
     return OsvListFilter(**{**base, **kw})
 
 
-def _jvn(**kw):
-    base = dict(days=30, severity=None, search=None, sort_by="modified", updated_since=None)
-    return JvnListFilter(**{**base, **kw})
-
-
 class TestFeedListFilter:
     def test_base_query_limits_to_recent_days_on_the_date_column(self, db_session):
         sql = _sql(_osv().base_query(db_session))
         assert "osv_vulnerabilities.modified >=" in sql
-        sql_jvn = _sql(_jvn().base_query(db_session))
-        assert "jvn_vulnerabilities.date_last_modified >=" in sql_jvn
 
     def test_osv_severity_is_uppercased_and_ecosystem_matches_exactly(self, db_session):
         flt = _osv(severity="high", ecosystem="PyPI")
         sql = _sql(flt.apply(db_session.query(OsvVulnerability)))
         assert "osv_vulnerabilities.severity = 'HIGH'" in sql
         assert "osv_vulnerabilities.ecosystem = 'PyPI'" in sql
-
-    def test_jvn_severity_is_capitalized(self, db_session):
-        flt = _jvn(severity="hIGH")
-        sql = _sql(flt.apply(db_session.query(_jvn().model)))
-        assert "jvn_vulnerabilities.severity = 'High'" in sql
 
     def test_search_matches_any_of_the_declared_columns(self, db_session):
         sql = _sql(_osv(search="log4j").apply(db_session.query(OsvVulnerability))).lower()
@@ -63,9 +50,9 @@ class TestFeedListFilter:
 
     def test_updated_since_filters_on_updated_at(self, db_session):
         from datetime import datetime
-        flt = _jvn(updated_since=datetime(2026, 1, 2, tzinfo=UTC))
+        flt = _osv(updated_since=datetime(2026, 1, 2, tzinfo=UTC))
         sql = _sql(flt.apply(db_session.query(flt.model)))
-        assert "jvn_vulnerabilities.updated_at >=" in sql
+        assert "osv_vulnerabilities.updated_at >=" in sql
 
     def test_no_conditions_leaves_query_unfiltered(self, db_session):
         query = db_session.query(OsvVulnerability)
@@ -74,7 +61,6 @@ class TestFeedListFilter:
     def test_order_cvss_puts_nulls_last_and_default_is_date_desc(self):
         assert "cvss_score DESC NULLS LAST" in str(_osv(sort_by="cvss").order())
         assert "osv_vulnerabilities.modified DESC" in str(_osv().order())
-        assert "jvn_vulnerabilities.date_last_modified DESC" in str(_jvn().order())
 
 
 class TestKevListFilter:
@@ -161,7 +147,7 @@ class TestListEndpointsExposeSameQueryParameters:
         assert params["per_page"]["schema"]["maximum"] == 500
         assert params["min_epss"]["schema"]["anyOf"][0]["maximum"] == 1.0
 
-    def test_osv_and_jvn(self):
+    def test_osv(self):
         osv = self._params("/api/osv")
         assert set(osv) == {
             "page", "per_page", "days", "ecosystem", "severity", "search", "sort_by",
@@ -169,10 +155,6 @@ class TestListEndpointsExposeSameQueryParameters:
         }
         assert osv["days"]["schema"]["maximum"] == 365
         assert osv["sort_by"]["schema"]["enum"] == ["modified", "cvss"]
-        jvn = self._params("/api/jvn")
-        assert set(jvn) == {
-            "page", "per_page", "days", "severity", "search", "sort_by", "updated_since",
-        }
 
     def test_depscan_and_codescan(self):
         depscan = self._params("/api/depscan")

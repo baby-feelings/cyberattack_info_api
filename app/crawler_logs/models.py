@@ -11,7 +11,7 @@ from app.core.database import Base
 
 class CrawlerLog(Base):
     """クローラー実行履歴テーブル。
-    KEV / OSV / JVN / DEPSCAN 各クローラーの実行結果（成功・失敗・件数・所要時間）を記録する。
+    KEV / OSV / DEPSCAN 各クローラーの実行結果（成功・失敗・件数・所要時間）を記録する。
     """
 
     __tablename__ = "crawler_logs"

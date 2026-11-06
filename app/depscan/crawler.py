@@ -86,7 +86,7 @@ class _DepscanJob(CrawlJob):
         except Exception as exc:
             logger.error("Failed to close resolved GitHub issues: %s", exc, exc_info=True)
 
-        # 保持期間超過の削除失敗はクロール全体を失敗させない（KEV/OSV/JVN と同様の方針）
+        # 保持期間超過の削除失敗はクロール全体を失敗させない（KEV/OSV と同様の方針）
         try:
             counters.updated = repository.delete_old_resolved()
         except Exception as exc:

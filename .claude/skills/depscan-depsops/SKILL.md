@@ -390,7 +390,7 @@ DEPSCANのGitHubログインを土台に、任意のユーザーが自分専用�
   （不正なURLを誤登録する事故を防ぐ）。バリデーションは`https://hooks.slack.com/`
   プレフィックスの簡易チェックのみ（本物かどうかはテスト送信の成否で判断する）
 - **通知先の解決**（`app.core.notifications.recipients.resolve_recipients`）: `SLACK_WEBHOOK_URL`
-  環境変数は廃止し、`UserAccount`から動的解決する方式に移行した。KEV/OSV/JVN
+  環境変数は廃止し、`UserAccount`から動的解決する方式に移行した。KEV/OSV
   （リポジトリに紐づかないグローバルな脅威情報）は通知有効な全登録ユーザーへ
   ブロードキャスト、DEPSCAN/DEPSOPS/CODESCANの`GITHUB_USERNAME`向け毎日クロールは
   `GITHUB_USERNAME`自身の登録Webhookにのみ送る。**`notify_error`だけは例外**で、
@@ -433,7 +433,7 @@ Vite の `VITE_` 接頭辞の環境変数はビルド時にJSバンドルへ平�
 ダッシュボードに管理者用`API_KEY`（`/admin/*`も保護する単一キー）を設定すると、
 誰でもバンドルから抽出して管理操作を実行できてしまう（実際に本番でこの状態が発生し、
 キーローテーションで対応したインシデントあり）。読み取り専用エンドポイント
-（KEV/OSV/JVN/crawler-logs）だけは`require_public_api_key`（`API_KEY`または
+（KEV/OSV/crawler-logs）だけは`require_public_api_key`（`API_KEY`または
 `PUBLIC_API_KEY`のいずれか）で保護し、ダッシュボードの`VITE_PUBLIC_API_KEY`には
 `PUBLIC_API_KEY`の値のみを設定する。`/admin/*`は`require_api_key`（`API_KEY`のみ）
 のまま。DEPSCANはダッシュボードから`X-API-KEY`を一切送らずセッショントークンのみを

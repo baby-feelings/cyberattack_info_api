@@ -25,7 +25,6 @@ from app.github_alerts.crawler import fetch_and_store_github_alerts
 from app.jobs.repo_cleanup import run_repo_cleanup
 from app.jobs.secret_expiry import run_secret_expiry_notice
 from app.jobs.user_crawl_runner import run_user_crawls_for_all_accounts
-from app.jvn.crawler import fetch_and_store_jvn
 from app.kev.crawler import fetch_and_store_kev
 from app.mcp_server.mcp_token_expiry import run_mcp_token_expiry_notices
 from app.mcp_server.oauth.cleanup import run_oauth_cleanup
@@ -52,7 +51,7 @@ class ScheduledJob:
 
 
 def _collection_jobs() -> list[ScheduledJob]:
-    """脆弱性・依存・言語の情報を集めるジョブ（KEV/OSV/JVN → DEPSCAN → CODESCAN → …）。"""
+    """脆弱性・依存・言語の情報を集めるジョブ（KEV/OSV → DEPSCAN → CODESCAN → …）。"""
     return [
         # CISA KEV クローラー: 毎日 UTC 19:00（JST 翌日 4:00）
         ScheduledJob(
@@ -60,7 +59,6 @@ def _collection_jobs() -> list[ScheduledJob]:
             settings.CRON_HOUR_UTC, settings.CRON_MINUTE_UTC,
         ),
         ScheduledJob("osv_crawler", "OSV", fetch_and_store_osv, settings.OSV_CRON_HOUR_UTC),
-        ScheduledJob("jvn_crawler", "JVN", fetch_and_store_jvn, settings.JVN_CRON_HOUR_UTC),
         # 依存ライブラリ脆弱性スキャナー（DEPSCAN）
         ScheduledJob(
             "depscan_crawler", "DEPSCAN", fetch_and_scan_dependencies,
@@ -159,7 +157,7 @@ def _housekeeping_jobs() -> list[ScheduledJob]:
 
 
 def build_scheduled_jobs() -> list[ScheduledJob]:
-    """登録するジョブの一覧（実行順の目安: KEV/OSV/JVN → DEPSCAN → CODESCAN → DEPSOPS →
+    """登録するジョブの一覧（実行順の目安: KEV/OSV → DEPSCAN → CODESCAN → DEPSOPS →
     削除済みリポジトリの掃除 → 登録ユーザー向け）。"""
     return [*_collection_jobs(), *_posture_jobs(), *_housekeeping_jobs()]
 

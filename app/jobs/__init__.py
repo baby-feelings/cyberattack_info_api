@@ -1,4 +1,4 @@
-"""各ドメイン（KEV/OSV/JVN/DEPSCAN/CODESCAN/DEPSOPS/MCP）を束ねる、定期実行・一括実行の処理。
+"""各ドメイン（KEV/OSV/DEPSCAN/CODESCAN/DEPSOPS/MCP）を束ねる、定期実行・一括実行の処理。
 
 - `scheduler_jobs`: APScheduler に登録する定期ジョブの定義と登録
 - `repo_cleanup`: 削除済みリポジトリのデータ削除（Issue #228）

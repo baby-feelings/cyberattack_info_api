@@ -1,4 +1,4 @@
-// OsvPanel・JvnPanel で共有する、脆弱性一覧パネルの汎用パーツ群のバーレルファイル。
+// OsvPanel で共有する、脆弱性一覧パネルの汎用パーツ群のバーレルファイル。
 //
 // 実装は Badge系（Badge.tsx）・Chart系（ChartParts.tsx）・テーブル制御系
 // （TableControls.tsx）の3ファイルに分割されている。既存の呼び出し元が

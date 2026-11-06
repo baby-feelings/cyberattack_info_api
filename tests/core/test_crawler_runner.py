@@ -2,7 +2,7 @@
 
 Issue #239: APScheduler（毎日自動実行）とGitHub Actionsのdaily-crawl.yml
 （「APSchedulerが不発火だった場合のバックアップ」として無条件に毎日発火）の
-二重トリガーにより、全クローラーが実質1日2回実行されていた。KEV/OSV/JVN/
+二重トリガーにより、全クローラーが実質1日2回実行されていた。KEV/OSV/
 DEPSCAN/CODESCANはUpsertのため実害が薄いが、DEPSOPSは実行ごとに1行追記する
 ログ設計のため件数が二重に膨れ上がっていた（本番で総件数2388件中約半数が重複）。
 """

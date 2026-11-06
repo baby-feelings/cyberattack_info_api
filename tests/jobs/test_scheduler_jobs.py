@@ -17,7 +17,6 @@ from app.jobs.repo_cleanup import run_repo_cleanup
 from app.jobs.scheduler_jobs import ScheduledJob, build_scheduled_jobs, register_jobs
 from app.jobs.secret_expiry import run_secret_expiry_notice
 from app.jobs.user_crawl_runner import run_user_crawls_for_all_accounts
-from app.jvn.crawler import fetch_and_store_jvn
 from app.kev.crawler import fetch_and_store_kev
 from app.mcp_server.mcp_token_expiry import run_mcp_token_expiry_notices
 from app.mcp_server.oauth.cleanup import run_oauth_cleanup
@@ -33,7 +32,7 @@ class TestBuildScheduledJobs:
         jobs = {j.job_id: j for j in build_scheduled_jobs()}
 
         assert set(jobs) == {
-            "cisa_kev_crawler", "osv_crawler", "jvn_crawler", "depscan_crawler",
+            "cisa_kev_crawler", "osv_crawler", "depscan_crawler",
             "codescan_crawler", "dependabot_ops", "repo_cleanup", "user_crawl",
             "mcp_token_expiry_notice", "oauth_cleanup", "runtime_crawler", "sla_digest",
             "exception_lifecycle", "github_alerts", "repo_audit",
@@ -43,7 +42,6 @@ class TestBuildScheduledJobs:
             "cisa_kev_crawler": (fetch_and_store_kev, settings.CRON_HOUR_UTC,
                                  settings.CRON_MINUTE_UTC),
             "osv_crawler": (fetch_and_store_osv, settings.OSV_CRON_HOUR_UTC, 0),
-            "jvn_crawler": (fetch_and_store_jvn, settings.JVN_CRON_HOUR_UTC, 0),
             "depscan_crawler": (fetch_and_scan_dependencies, settings.DEPSCAN_CRON_HOUR_UTC, 0),
             "codescan_crawler": (fetch_and_scan_code, settings.CODESCAN_CRON_HOUR_UTC,
                                  settings.CODESCAN_CRON_MINUTE_UTC),

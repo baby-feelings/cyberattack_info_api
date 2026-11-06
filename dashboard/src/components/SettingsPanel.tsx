@@ -149,7 +149,7 @@ function NotificationSettingsForm({ authToken, username }: { authToken: string; 
         <p className="text-xs text-slate-500 leading-relaxed">
           {username} さん自身のGitHubリポジトリに対するDEPSCAN・CODESCAN・DEPSOPSの
           検知結果を、登録したSlack Webhookへ通知します（悪意あるパッケージは、
-          緊急の通知として先に届きます）。加えて、KEV・OSV・JVNの最新脅威情報も通知されます。
+          緊急の通知として先に届きます）。加えて、KEV・OSVの最新脅威情報も通知されます。
         </p>
       </div>
 

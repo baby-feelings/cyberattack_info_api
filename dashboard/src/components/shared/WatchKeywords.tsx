@@ -23,7 +23,7 @@ function CountPill({ count }: { count: number | undefined }) {
   return <span className={`px-1.5 rounded-full font-semibold tabular-nums ${cls}`}>{count}</span>
 }
 
-// 自分が使っている製品名などのキーワード別に、該当する脆弱性の件数を見せる（KEV・OSV・JVN 共通）。
+// 自分が使っている製品名などのキーワード別に、該当する脆弱性の件数を見せる（KEV・OSV 共通）。
 // チップを押すと、そのキーワードで一覧を絞り込む
 export function WatchKeywords({
   keywords, counts, active, total, onSelect, onAdd, onRemove,

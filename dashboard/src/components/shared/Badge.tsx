@@ -1,4 +1,4 @@
-// OsvPanel・JvnPanel・KevPanel で共有する深刻度バッジ。
+// OsvPanel・KevPanel で共有する深刻度バッジ。
 // 深刻度の値・配色はドメイン固有のため、呼び出し側から classMap として渡す。
 
 export function SeverityBadge({

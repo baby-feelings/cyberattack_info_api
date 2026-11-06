@@ -441,7 +441,7 @@
     {
       "type": "stat",
       "title": "クローラー実行結果（直近、1=成功 / 0=エラー）",
-      "description": "種別ごとの、直近1回の実行結果。KEV・OSV・JVN・DEPSCAN・CODESCAN・RUNTIME・DEPSOPS・GHALERT・REPOAUDIT・EXTMON・COMMITWATCH・CLEANUP など、実行記録がある全ての種別が出る。",
+      "description": "種別ごとの、直近1回の実行結果。KEV・OSV・DEPSCAN・CODESCAN・RUNTIME・DEPSOPS・GHALERT・REPOAUDIT・EXTMON・COMMITWATCH・CLEANUP など、実行記録がある全ての種別が出る。",
       "id": 9,
       "datasource": {
         "type": "prometheus",
