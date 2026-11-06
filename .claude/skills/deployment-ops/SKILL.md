@@ -172,8 +172,8 @@ DEPSCAN・CODESCAN両タブが機能しない）・`TOKEN_ENCRYPTION_KEY`（ユ�
 〈Issue #227〉用、GitHubアクセストークンをDBへ暗号化保存するFernet鍵。未設定時は登録済み
 ユーザーの定期実行が機能しない）・`DASHBOARD_URL`（GitHubログイン後のリダイレクト先。旧`FRONTEND_URL`を統一）・`API_BASE_URL_FOR_OAUTH`（GitHub
 OAuth Appのcallback URLとscheme含め一致させる必要あり。インスタンスを作り直した場合は
-`.env.production`・`app/core/config.py`のデフォルト値・GitHub OAuth Appのcallback URLの
-3箇所を同時に更新）・`METRICS_API_KEY`（運用監視、任意）。`SLACK_WEBHOOK_URL`は
+`.env.production`・GitHub OAuth Appのcallback URLの2箇所を同時に更新。コードの既定値は
+開発用のlocalhostで、**本番は2つとも必須**〈localhostのままなら起動時に失敗する。Fail Fast〉）・`METRICS_API_KEY`（運用監視、任意）。`SLACK_WEBHOOK_URL`は
 Issue #227でダッシュボードからのユーザー別登録方式（`UserAccount`テーブル）に移行済みで、
 もはや参照されない（設定していても無害だが不要）。
 
@@ -311,7 +311,7 @@ CIで自動実行される。間接依存（他パッケージ経由で入る依
 `dependabot.yml`の`ignore`でメジャー更新の提案を止めている（移行はIssue #466。完了時に`ignore`を外す）。
 
 ## CORS・Swagger の本番制限
-- CORS: 本番は**設定の`DASHBOARD_URL`**（既定`https://cyberattackinfoapi.vercel.app`）のみ許可。開発時は localhost も追加。
+- CORS: 本番は**設定の`DASHBOARD_URL`**（`.env.production`で必須。コードの既定は開発用の`http://localhost:5173`）のみ許可。開発時は localhost も追加。
   Slack通知・GitHub Issueのリンクも同じ設定を使う。ダッシュボードのドメインを変えたら、`DASHBOARD_URL`を変える
 - Swagger UI / ReDoc: `settings.ENVIRONMENT != "production"` の場合のみ有効
 - **`allow_methods`に新しいHTTPメソッドを使うエンドポイントを追加したら必ず更新する**:

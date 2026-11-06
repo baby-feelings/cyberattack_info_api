@@ -31,7 +31,8 @@ Infrastructure（OCI）のCompute VM（Always Free、Ampere A1）上でDocker Co
    `GRAFANA_DOMAIN`・`GRAFANA_ADMIN_PASSWORD` を設定する
 2. `.env.example`（リポジトリルート）を元に `.env.production` を作成する
    （ローカル開発と同じファイルをそのままOCIへ転送して使う。本番専用の別ファイルは作らない）。
-   設定する変数の一覧は [environment-variables.md](environment-variables.md) を参照
+   設定する変数の一覧は [environment-variables.md](environment-variables.md) を参照。
+   **`DASHBOARD_URL`・`API_BASE_URL_FOR_OAUTH` は本番で必須**（開発用の localhost のままだと、起動時に失敗する）
 3. `deploy/prometheus.yml.example` を `deploy/prometheus.yml` にコピーし、
    `credentials` に `METRICS_API_KEY` と同じ値を設定する（運用監視を使う場合）
 
