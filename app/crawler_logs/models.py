@@ -18,8 +18,8 @@ class CrawlerLog(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
-    # クローラー種別（"KEV" / "OSV" / "JVN" / "DEPSCAN"）
-    crawler_type: Mapped[str] = mapped_column(String(10), nullable=False)
+    # クローラー種別（app.core.types.CrawlerType）。最長は "COMMITWATCH"（11文字）のため20文字
+    crawler_type: Mapped[str] = mapped_column(String(20), nullable=False)
 
     # 実行結果（"success" / "error"）
     status: Mapped[str] = mapped_column(String(10), nullable=False)
