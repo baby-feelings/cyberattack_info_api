@@ -88,7 +88,7 @@ app/
 ├── osv/          # OSV（10エコシステム対応、+packages.py）
 ├── depscan/      # 依存ライブラリ脆弱性スキャン（crawler=ジョブ組み立て+manifests/inventory/〈依存の全量の保存・検索・API〉/finding_builder/
 │                 #   reachability_scan/repository+issue_management/priority/sbom/user_scan/source_files/parsers/）
-├── depsops/      # Dependabot PR 自動運用（runner/pr_judge/pr_log_repository/classify/github_client〈PR操作〉/user_scan）
+├── depsops/      # Dependabot PR 自動運用（runner/pr_judge/pr_log_repository〈記録〉/pr_log_retention〈整理〉/classify/github_client〈PR操作〉/user_scan）
 ├── runtimes/     # 言語・実行環境（Python/Node.js/Flutter/Dart）の使用版の検出と、最新版・サポート期限（EOL）の判定
 ├── sla/ finding_exceptions/ github_alerts/ repo_audit/ external_monitor/ commit_watch/ audit/ project_sync/  # 対応状況/例外(VEX)/GitHubアラート/設定の監査/外形監視/コミット監視/監査ログ/GitHub Projectsへの自動追加
 ├── codescan/     # 自アプリのコード脆弱性診断（Semgrep+gitleaks+zizmor+インフラ設定〈Firebase・Docker〉。GitHubログイン

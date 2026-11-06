@@ -13,7 +13,8 @@ description: DEPSCAN（GitHub全リポジトリの依存ライブラリ脆弱性
 `reachability_scan.py`（到達可能性の付与。判定自体の純粋な解析は`reachability.py`）・
 `repository.py`（`DependencyFindingRepository`: `sync`=Upsert+検知されなくなったものを解決済みに、
 `delete_old_resolved`。`repo_owner_prefix`で他人のリポジトリを解決済みにしない）。
-毎日クロールと`user_scan.py`（オンデマンド・ユーザー別）が同じ部品を使う。
+毎日クロールと`user_scan.py`（オンデマンド・ユーザー別。`app.core.runner.user_scan.UserScanJob`の
+サブクラス`DepscanUserScan`）が同じ部品を使う。
 
 ## DEPSCAN はリアルタイムで OSV API に照合する（事前クロール済みデータには頼らない）
 既存の `OsvVulnerability` テーブルは `POPULAR_PACKAGES`（各エコシステム50〜60件の主要パッケージ）しか
@@ -51,8 +52,9 @@ PyPI流の名前正規化）の`last_affected`を集め、`app.depscan.registry_
 反映する（一時的に引けなかった回に空で上書きして既知の修正版を消さないため）。
 
 ## DEPSCAN の新規検知は GitHub Issue としても自動起票する（issue_management.py）
-`app.depscan.issue_management.file_github_issues` が、新規検知を検知されたリポジトリ自身に
-Issue として起票する（Slack通知と同じ `new_snapshots` を使用）。「リポジトリ単位でグルーピング
+`app.depscan.issue_management.file_github_issues`（実体は`DepscanIssueReporter`。共通の手順は
+`app.core.findings.issue_filing.IssueReporter`の Template Method）が、新規検知を検知された
+リポジトリ自身に Issue として起票する（Slack通知と同じ `new_snapshots` を使用）。「リポジトリ単位でグルーピング
 → タイトル固定文字列でOpen Issueを検索 → あれば `add_issue_comment` で追記、無ければ
 `create_issue` で新規作成（1リポジトリにつき常に1つの Open Issue に集約）→ GitHub API 呼び出し
 失敗はリポジトリ単位で `except httpx.HTTPError` により握りつぶす」という手順自体は CODESCAN
@@ -241,9 +243,10 @@ DEPSCAN（検知）・Dependabot（修正PR作成）に続く3層目として、
 リポジトリ単位の`_process_repo`・全体走査の`scan_target_repos`）、**`pr_judge.py`**＝PR判定
 （`PrJudge`クラス。所有者・リポジトリ名・トークン・CI有無・alert名集合をインスタンスに保持し、
 `judge(pr)`はPRだけを受け取る。マージ・リベース依頼の副作用もここに閉じ込める）、
-**`pr_log_repository.py`**＝履歴DBの操作（`PrLogRepository(db)`の`record`/`find_resolved_flagged`/
-`cleanup`〈旧closed行の削除`purge_legacy_closed`・重複集約`collapse_duplicate_flagged`・
-保持期間超過`delete_expired`〉）。
+**`pr_log_repository.py`**＝履歴DBの記録・検索（`PrLogRepository(db)`の`record`/`find_resolved_flagged`）。
+**`pr_log_retention.py`**＝保持期間の整理（`PrLogRetention(db)`の`cleanup`〈旧closed行の削除
+`purge_legacy_closed`・重複集約`collapse_duplicate_flagged`・保持期間超過`delete_expired`〉）。
+記録と整理は変わる理由が別のため、クラスを分けている。
 コンフリクトでマージできなかったPRは、翌日以降リベースが完了していれば自動的に
 再判定・マージされる（複数日にまたがる自己修復）。
 
@@ -291,7 +294,7 @@ PAT: 「Dependabot alerts: Read-only」）。無い場合は`null`のまま記�
 **行数の抑制（毎日追記しない）**: 同じ理由（`reason`・`is_security_update`）で`flagged`のまま
 続くPRは、`PrLogRepository.record`が新しい行を足さず既存行の`processed_at`を更新する（以前は毎日1行
 追記され、解決済みを含め総件数が約2,700行まで膨らんでいた）。理由が変わった場合のみ履歴として
-新しい行を足す。`PrLogRepository.cleanup`が実行のたびに(1)旧`closed`行の削除
+新しい行を足す。`PrLogRetention.cleanup`が実行のたびに(1)旧`closed`行の削除
 （`purge_legacy_closed`）(2)連続する同一内容`flagged`行の最新1行への集約
 （`collapse_duplicate_flagged`）(3)保持期間超過分の削除（`delete_expired`）を行い、既存データも
 マイグレーション無しで新方針へ収束する（いずれも冪等）。
