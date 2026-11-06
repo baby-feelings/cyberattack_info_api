@@ -303,7 +303,8 @@ CIで自動実行される。間接依存（他パッケージ経由で入る依
 
 **注（アプリ自身の`mcp`依存）:** 上記の「別の依存（`mcp`/`click`）」はsemgrepの依存の話で、semgrepは
 専用venvのため影響しない。アプリ自身はリモートMCPサーバー用に`requirements.txt`で`mcp==1.30.0`を直接ピン
-留めしている（更新時は`pip-audit`で前後比較）。
+留めしている（更新時は`pip-audit`で前後比較）。mcp 2.xは`mcp.server.fastmcp`が無くなり書き換えが要るため、
+`dependabot.yml`の`ignore`でメジャー更新の提案を止めている（移行はIssue #466。完了時に`ignore`を外す）。
 
 ## CORS・Swagger の本番制限
 - CORS: 本番は**設定の`DASHBOARD_URL`**（既定`https://cyberattackinfoapi.vercel.app`）のみ許可。開発時は localhost も追加。
