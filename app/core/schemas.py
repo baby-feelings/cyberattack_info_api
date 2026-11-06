@@ -11,7 +11,7 @@ class OrmDatetimeModel(BaseModel):
 
     素の `from_attributes=True` では、フィールド型を `str` と宣言した属性に
     ORM 側の datetime 値をそのまま渡すとバリデーションエラーになる。これを
-    避けるため、JVN/OSV の出力スキーマは「ORM オブジェクトから手動で dict を
+    避けるため、OSV の出力スキーマは「ORM オブジェクトから手動で dict を
     構築し、日時だけ isoformat() してから super().model_validate() へ委譲する」
     実装を個別に持っていたが、フィールドを手動で列挙する方式は、新フィールド
     追加時に列挙し忘れるとサイレントにデフォルト値（None）へフォールバック
@@ -45,14 +45,14 @@ class HealthResponse(BaseModel):
 
 
 class MonthlyStat(BaseModel):
-    """月別集計（KEV / OSV / JVN 共通）。"""
+    """月別集計（KEV / OSV 共通）。"""
 
     year_month: str = Field(description="YYYY-MM 形式")
     count: int
 
 
 class SeverityStat(BaseModel):
-    """重要度別件数（OSV / JVN / DEPSCAN 共通）。"""
+    """重要度別件数（OSV / DEPSCAN 共通）。"""
 
     severity: str
     count: int

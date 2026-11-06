@@ -6,7 +6,7 @@ class CrawlerLogOut(BaseModel):
     """クローラー実行ログの出力スキーマ。"""
 
     id: int = Field(description="ログ ID")
-    crawler_type: str = Field(description="クローラー種別（KEV / OSV / JVN / DEPSCAN）")
+    crawler_type: str = Field(description="クローラー種別（KEV / OSV / DEPSCAN）")
     status: str = Field(description="実行結果（success / error）")
     started_at: str = Field(description="開始日時（ISO 8601）")
     finished_at: str = Field(description="終了日時（ISO 8601）")

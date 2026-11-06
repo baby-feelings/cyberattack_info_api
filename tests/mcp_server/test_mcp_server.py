@@ -31,7 +31,6 @@ from app.depscan.router import router as depscan_router  # noqa: E402
 from app.external_monitor.router import router as site_monitor_router  # noqa: E402
 from app.finding_exceptions.router import router as exceptions_router  # noqa: E402
 from app.github_alerts.router import router as github_alerts_router  # noqa: E402
-from app.jvn.router import router as jvn_router  # noqa: E402
 from app.kev.models import Vulnerability  # noqa: E402
 from app.kev.router import router as kev_router  # noqa: E402
 from app.mcp_server.gateway import MAX_PER_PAGE  # noqa: E402
@@ -88,7 +87,7 @@ def mcp_client(db_session):
 
     test_app = FastAPI(lifespan=lifespan)
     routers = (
-        kev_router, osv_router, jvn_router, depscan_router, depscan_inventory_router,
+        kev_router, osv_router, depscan_router, depscan_inventory_router,
         codescan_router, runtimes_router, sla_router, exceptions_router, github_alerts_router,
         repo_audit_router, site_monitor_router,
     )
@@ -210,6 +209,7 @@ class TestToolList:
         names = {t["name"] for t in resp.json()["result"]["tools"]}
         assert {"search_kev", "get_kev", "search_osv", "list_depscan_findings",
                 "list_codescan_findings", "whoami"} <= names
+        assert "search_jvn" not in names  # JVN は廃止した
         # 管理系・書き込み系はツール化しない
         assert not any("crawl" in n or "admin" in n or "trigger" in n for n in names)
 

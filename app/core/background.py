@@ -3,7 +3,7 @@
 Render Free プランのリクエストタイムアウト（~30s）に対し、OSV クロール等の
 長時間処理が 502 になるのを避けるため、/admin/*-crawl エンドポイントは
 即座に 202 Accepted を返し、実処理は daemon スレッドで実行する。
-KEV/OSV/JVN/DEPSCAN の各ドメインルーターから共通で利用する。
+KEV/OSV/DEPSCAN の各ドメインルーターから共通で利用する。
 """
 import logging
 import threading

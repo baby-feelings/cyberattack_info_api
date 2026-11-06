@@ -1,4 +1,4 @@
-"""KEV/OSV/JVNデータのTAXII 2.1配信（Issue #134、OSV/JVN拡張）。
+"""KEV/OSVデータのTAXII 2.1配信（Issue #134、OSV拡張）。
 
 複数の脆弱性DB・APIを跨いで情報を収集する際、標準フォーマットの欠如が
 相互運用の障害となっている問題に対応する。MISP等の既存CTI共有基盤や
@@ -7,7 +7,7 @@ SIEM/TIPからの購読を想定した、最小構成のTAXII 2.1サーバー実
 
 当初はKEV専用（app.kev.taxii）として実装したが、TAXIIはKEV固有ではなく
 複数ドメインを跨ぐ配信機構であるため app.taxii.router へ移動し、コレクション
-レジストリパターンでKEV/OSV/JVNの3ドメインに対応する。
+レジストリパターンでKEV/OSVの2ドメインに対応する。
 
 対応範囲: 配信（読み取り専用）のみ。以下はスコープ外
 （Issue #134本文もTAXIIを「将来的な拡張」と位置づけているため、
@@ -35,9 +35,6 @@ from sqlalchemy.orm import Session
 
 from app.auth.api_key import require_public_api_key
 from app.core.database import get_db
-from app.jvn.models import JvnVulnerability
-from app.jvn.stix import build_stix_vulnerability as build_jvn_stix_vulnerability
-from app.jvn.stix import stix_vulnerability_id as jvn_stix_vulnerability_id
 from app.kev.models import Vulnerability
 from app.kev.stix import build_stix_vulnerability as build_kev_stix_vulnerability
 from app.kev.stix import stix_vulnerability_id as kev_stix_vulnerability_id
@@ -50,7 +47,7 @@ logger = logging.getLogger(__name__)
 _TAXII_MEDIA_TYPE = "application/taxii+json;version=2.1"
 _STIX_MEDIA_TYPE = "application/stix+json;version=2.1"
 
-# 単一API root構成（KEV/OSV/JVNをまとめて同じapi-root配下のコレクションとして
+# 単一API root構成（KEV/OSVをまとめて同じapi-root配下のコレクションとして
 # 配信する）。api-root名はKEV専用実装当時から変更しない
 _API_ROOT = "cyberattack-info-api"
 
@@ -134,32 +131,8 @@ def _get_osv_object(db: Session, object_id: str) -> dict[str, Any] | None:
     return build_osv_stix_vulnerability(item)
 
 
-def _query_jvn_objects(
-    db: Session, added_after: datetime | None, limit: int,
-) -> list[dict[str, Any]]:
-    """JVNコレクションのobjects一覧を取得する。"""
-    query = db.query(JvnVulnerability)
-    if added_after is not None:
-        query = query.filter(JvnVulnerability.updated_at > added_after)
-    items = query.order_by(JvnVulnerability.updated_at.asc()).limit(limit).all()
-    return [build_jvn_stix_vulnerability(v) for v in items]
-
-
-def _get_jvn_object(db: Session, object_id: str) -> dict[str, Any] | None:
-    """JVNコレクションのobject単体取得（KEVと同じ線形走査方式）。"""
-    jvndb_ids = [row[0] for row in db.query(JvnVulnerability.jvndb_id).all()]
-    matched = next(
-        (j for j in jvndb_ids if jvn_stix_vulnerability_id(j) == object_id), None,
-    )
-    if matched is None:
-        return None
-    item = db.query(JvnVulnerability).filter(JvnVulnerability.jvndb_id == matched).first()
-    assert item is not None  # noqa: S101  # matchedはjvndb_ids一覧から取得したため必ず存在する（型の絞り込み）
-    return build_jvn_stix_vulnerability(item)
-
-
 # コレクションレジストリ。KEVのcollection_idは変更禁止（既存クライアントの
-# 購読設定が壊れるため）。OSV/JVNは今回新規追加する固定値
+# 購読設定が壊れるため）。OSVは固定値
 _COLLECTIONS: dict[str, _CollectionSpec] = {
     "d4d8f0c0-3f5f-5b1e-9c1a-6f6f6a6b6a6a": _CollectionSpec(
         collection_id="d4d8f0c0-3f5f-5b1e-9c1a-6f6f6a6b6a6a",
@@ -174,13 +147,6 @@ _COLLECTIONS: dict[str, _CollectionSpec] = {
         description="OSV（Open Source Vulnerabilities）のSTIX 2.1 Vulnerability SDO",
         query_objects=_query_osv_objects,
         get_object=_get_osv_object,
-    ),
-    "1c34f413-fd30-56cc-bf87-daf79113b5a8": _CollectionSpec(
-        collection_id="1c34f413-fd30-56cc-bf87-daf79113b5a8",
-        title="JVN Vulnerabilities",
-        description="JVN（Japan Vulnerability Notes）のSTIX 2.1 Vulnerability SDO",
-        query_objects=_query_jvn_objects,
-        get_object=_get_jvn_object,
     ),
 }
 
@@ -230,8 +196,8 @@ def discovery() -> Response:
     return _taxii_response({
         "title": "サイバー攻撃情報API TAXII 2.1 サーバー",
         "description": (
-            "CISA KEV（悪用確認済み脆弱性）・OSV（Open Source Vulnerabilities）・"
-            "JVN（Japan Vulnerability Notes）をSTIX 2.1形式で配信する。"
+            "CISA KEV（悪用確認済み脆弱性）・OSV（Open Source Vulnerabilities）を"
+            "STIX 2.1形式で配信する。"
         ),
         "default": f"/taxii2/{_API_ROOT}/",
         "api_roots": [f"/taxii2/{_API_ROOT}/"],
@@ -244,7 +210,7 @@ def api_root_info(api_root: str) -> Response:
     _validate_root(api_root)
     return _taxii_response({
         "title": "サイバー攻撃情報API",
-        "description": "CISA KEV・OSV・JVNデータのTAXII 2.1配信",
+        "description": "CISA KEV・OSVデータのTAXII 2.1配信",
         "versions": [_TAXII_MEDIA_TYPE],
         "max_content_length": 10_485_760,
     })
@@ -252,7 +218,7 @@ def api_root_info(api_root: str) -> Response:
 
 @taxii_router.get("/{api_root}/collections/", summary="TAXII 2.1 Collections")
 def list_collections(api_root: str) -> Response:
-    """このAPI root配下のコレクション一覧を返す（KEV/OSV/JVNの3件）。"""
+    """このAPI root配下のコレクション一覧を返す（KEV/OSVの2件）。"""
     _validate_root(api_root)
     return _taxii_response({
         "collections": [_collection_resource(spec) for spec in _COLLECTIONS.values()],

@@ -1,4 +1,4 @@
-"""app.core.stix（STIX 2.1変換の共通処理、Issue #134のOSV/JVN拡張）のテスト。"""
+"""app.core.stix（STIX 2.1変換の共通処理、Issue #134のOSV拡張）のテスト。"""
 from datetime import UTC, datetime, timezone
 
 from app.core.stix import STIX_ID_NAMESPACE, stix_timestamp

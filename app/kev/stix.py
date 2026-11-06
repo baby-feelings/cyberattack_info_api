@@ -5,10 +5,10 @@
 SIEM/TIPとの連携を想定し、KEVレコードをSTIX 2.1のVulnerability SDO
 形式に変換する。
 
-対応範囲: KEV/OSV/JVNの3ドメイン（Issue #134本文の具体例
+対応範囲: KEV/OSVの2ドメイン（Issue #134本文の具体例
 `GET /api/vulnerabilities/{cve_id}?format=stix` に準拠したKEV対応がベース。
-OSV/JVNへの拡張はIssue #134の後続対応として実装済み。OSV/JVN向けの変換は
-それぞれ app.osv.stix / app.jvn.stix を参照）。
+OSVへの拡張はIssue #134の後続対応として実装済み。OSV向けの変換は
+app.osv.stix を参照）。
 
 タイムスタンプ変換・IDネームスペースといった共通処理は app.core.stix に
 切り出してあり、本モジュールはそれをimportして使う（DRY。既存のオブジェクトID

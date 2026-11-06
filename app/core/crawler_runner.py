@@ -1,10 +1,10 @@
 """クローラー実行の共通オーケストレーション（Template Method）。
 
-KEV / OSV / JVN / DEPSCAN / CODESCAN / DEPSOPS の各エントリポイントが個別に実装していた
+KEV / OSV / DEPSCAN / CODESCAN / DEPSOPS の各エントリポイントが個別に実装していた
 「重複実行スキップ → started_at 計測 → DB セッション生成 → 本体処理 → crawler_logs 記録 →
 Slack 通知 → DB セッションクローズ」という定型処理を `CrawlJob` に一元化する。
 
-- 単純な関数だけで済むクローラー（KEV/OSV/JVN/CODESCAN）は `run_crawler(type, body)` を使う。
+- 単純な関数だけで済むクローラー（KEV/OSV/CODESCAN）は `run_crawler(type, body)` を使う。
 - 固有の状態・通知・戻り値を持つスキャナー（DEPSCAN/DEPSOPS）は `CrawlJob` のサブクラスにし、
   `execute`（本体）・`after_success`（成功後の通知）・`result`（戻り値）だけを差し替える。
 
@@ -46,7 +46,7 @@ def already_succeeded_recently(crawler_type: CrawlerType) -> bool:
     settings.*_CRON_HOUR_UTC で毎日発火）、(2) GitHub Actions の daily-crawl.yml
     （「APSchedulerがネットワーク障害等で不発火だった場合のバックアップ」として
     無条件に毎日発火）。OCI移行後はAPSchedulerが確実に動作するため、実質的に
-    バックアップではなく常に二重実行になっていた。KEV/OSV/JVN/DEPSCAN/CODESCANは
+    バックアップではなく常に二重実行になっていた。KEV/OSV/DEPSCAN/CODESCANは
     自然キーのUpsertのため二重実行の実害は小さいが、DEPSOPSは実行ごとに1行追記する
     ログ設計のため件数が二重に膨れ上がっていた（本番で2388件中約半数が重複）。
 
@@ -102,7 +102,7 @@ class CrawlJob(ABC):
         """本体処理。例外はそのまま伝播させる（`run` がログ・通知した後に再送出する）。"""
 
     def after_success(self, counters: CrawlCounters) -> None:
-        """成功後の通知。既定は KEV/OSV/JVN 共通の Slack 成功通知。"""
+        """成功後の通知。既定は KEV/OSV 共通の Slack 成功通知。"""
         notify_success(self.crawler_type, counters.inserted, counters.updated, counters.deleted)
 
     def result(self, counters: CrawlCounters) -> tuple[int, ...]:
@@ -194,7 +194,7 @@ def run_crawler(
     """クローラーの共通実行ラッパー（関数だけで済むクローラー向け）。
 
     Args:
-        crawler_type: "KEV" / "OSV" / "JVN" / "CODESCAN"
+        crawler_type: "KEV" / "OSV" / "CODESCAN"
         body: (db, counters) を受け取り、counters を更新しながら本体処理を行う関数
         force: True の場合、今日すでに成功実行済みでも強制的に再実行する
 

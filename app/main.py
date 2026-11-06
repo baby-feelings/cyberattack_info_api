@@ -43,8 +43,6 @@ from app.jobs.domain_metrics import register_domain_metrics
 from app.jobs.repo_cleanup_router import admin_router as repo_cleanup_admin_router
 from app.jobs.scheduler_jobs import build_scheduled_jobs, register_jobs
 from app.jobs.user_crawl_router import admin_router as user_crawl_admin_router
-from app.jvn.router import admin_router as jvn_admin_router
-from app.jvn.router import router as jvn_router
 from app.kev.router import admin_router as kev_admin_router
 from app.kev.router import router as kev_router
 from app.mcp_server.management_router import router as mcp_management_router
@@ -160,7 +158,6 @@ app.include_router(auth_router)
 app.include_router(mcp_management_router)
 app.include_router(kev_router)
 app.include_router(osv_router)
-app.include_router(jvn_router)
 app.include_router(crawler_logs_router)
 app.include_router(depscan_router)
 app.include_router(depscan_inventory_router)
@@ -174,7 +171,6 @@ app.include_router(repo_audit_router)
 app.include_router(site_monitor_router)
 app.include_router(kev_admin_router)
 app.include_router(osv_admin_router)
-app.include_router(jvn_admin_router)
 app.include_router(depscan_admin_router)
 app.include_router(depsops_admin_router)
 app.include_router(codescan_admin_router)

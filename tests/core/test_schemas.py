@@ -1,6 +1,6 @@
 """app.core.schemas.OrmDatetimeModel のテスト。
 
-JVN/OSVスキーマ共通の基底クラス。ORMオブジェクトのdatetime属性を自動で
+OSVスキーマの基底クラス。ORMオブジェクトのdatetime属性を自動で
 ISO文字列に変換する挙動と、新フィールド追加時の実装漏れを構造的に防ぐ
 （フィールドを手動列挙しない）という設計意図を直接検証する。
 """

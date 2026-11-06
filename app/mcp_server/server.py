@@ -8,7 +8,7 @@ REST と MCP の挙動が必ず一致し、DEPSCAN / CODESCAN の「本人所有
 REST 側の実装がそのまま効く。
 
 セキュリティ（他の人に自分のリポジトリを見せない）:
-- 公開情報（KEV / OSV / JVN）: 認証済みの全主体が参照できる
+- 公開情報（KEV / OSV）: 認証済みの全主体が参照できる
 - 非公開情報（DEPSCAN / CODESCAN）: admin（API_KEY）か、GitHub ログインで発行した MCP
   トークンを持つ user のみ。user には REST が本人所有リポジトリのみに強制的に絞る。
   さらに多層防御として、応答に他人のリポジトリが混じっていたら（REST の絞り込みの不具合など）
@@ -33,7 +33,7 @@ from app.mcp_server.tools import register_all
 logger = logging.getLogger(__name__)
 
 _INSTRUCTIONS = (
-    "米 CISA KEV・OSV・JVN の脆弱性情報と、自分のリポジトリの依存ライブラリ脆弱性（DEPSCAN）・"
+    "米 CISA KEV・OSV の脆弱性情報と、自分のリポジトリの依存ライブラリ脆弱性（DEPSCAN）・"
     "コード・設定の問題（CODESCAN）・言語のサポート期限・対応状況（SLA）・検知の例外（VEX）・"
     "GitHub のセキュリティアラート・設定の監査・公開サイトの外形監視を"
     "参照する読み取り専用ツール群。"

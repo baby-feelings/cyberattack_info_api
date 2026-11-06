@@ -15,7 +15,7 @@ def register(mcp: FastMCP) -> None:
         principal = principal_of(ctx)
         scope = {
             "admin": "すべて",
-            "public": "KEV / OSV / JVN の公開情報のみ",
+            "public": "KEV / OSV の公開情報のみ",
             "user": f"公開情報 + {principal.username} が所有するリポジトリの DEPSCAN / CODESCAN",
         }[principal.kind]
         return {"access": principal.kind, "username": principal.username, "scope": scope}

@@ -11,7 +11,7 @@ GitHub 上の自作アプリ全リポジトリのソースコードを tarball �
 - `repository.CodeFindingRepository`: 検知結果の永続化（Upsert・解決済み化・保持期間超過の削除）
 
 対象リポジトリ一覧は DEPSCAN と同じ（`GITHUB_USERNAME` 配下、fork・archived 除外）ため
-`app.core.github.accounts.list_target_repos` を共有する。オーケストレーションは KEV/OSV/JVN と同じ
+`app.core.github.accounts.list_target_repos` を共有する。オーケストレーションは KEV/OSV と同じ
 `app.core.crawler_runner.run_crawler`（Template Method）+ `CrawlCounters` を使う。
 APScheduler から毎日呼び出される。
 """
@@ -132,7 +132,7 @@ def _run_codescan_body(
         # 例外（受容など）のある検知は、再発しても、通知・Issue 起票の対象にしない（Issue #403）
         all_new_snapshots.extend(drop_excepted(db, KIND_CODE, result.new_snapshots))
 
-    # 保持期間超過の削除失敗はクロール全体を失敗させない（DEPSCAN/KEV/OSV/JVNと同様の方針）
+    # 保持期間超過の削除失敗はクロール全体を失敗させない（DEPSCAN/KEV/OSVと同様の方針）
     try:
         counters.updated = repository.delete_old_resolved()
     except Exception as exc:
