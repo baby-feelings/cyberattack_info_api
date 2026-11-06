@@ -20,7 +20,7 @@ DEPSCANと完全に同じ（`GITHUB_USERNAME`配下、fork・archived除外）�
 Strategy: `SemgrepScanner`/`GitleaksScanner`。`run`=ツール実行、`parse`=レコード化、`scan`=その連結。
 ツールを足すときは`Scanner`を継承して`default_scanners`に加える）・`repository.py`
 （`CodeFindingRepository`: `sync`=Upsert+検知されなくなったものを解決済みに、`delete_old_resolved`）。
-`SCAN_ERRORS`（1リポジトリの検査で起こりうる例外の組）は`crawler.py`の毎日実行と`user_scan.py`が共有する。
+`SCAN_ERRORS`（1リポジトリの検査で起こりうる例外の組）は`crawler.py`の毎日実行と`user_scan.py`（`UserScanJob`のサブクラス`CodescanUserScan`）が共有する。
 
 ## ソースコード取得は tarball 方式（ファイル単位APIではない）
 `GitHubRepo.tree`/`file_content`はファイル単位のAPI呼び出しを要し、
@@ -102,7 +102,8 @@ CVSS 7.0以上はダッシュボード（`CodescanRow.tsx`のCvssBadge）で赤�
 ## GitHub Issue自動起票はDEPSCANと共通処理を共有、タイトルと本文整形のみ分離
 「リポジトリ単位でグルーピング→Open Issue検索→追記または新規作成→API失敗は
 握りつぶす」という手順自体はDEPSCANの`app.depscan.issue_management`と完全に
-同一のため、`app.core.findings.issue_filing.file_or_update_repo_issues`に共通化されている。
+同一のため、`app.core.findings.issue_filing`（`IssueReporter`＝起票とクローズの共通の手順。差分は
+`CodescanIssueReporter`のタイトル・本文・未解決の数え方だけ）に共通化されている。
 `app.codescan.issue_management.file_github_issues`はこの共通処理へ、Issueタイトル
 `"🔎 自アプリのコード脆弱性が検出されました (CODESCAN)"`（DEPSCANの
 `"🚨 依存ライブラリの脆弱性が検出されました (DEPSCAN)"`と混同しないための固定文字列）と
