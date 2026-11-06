@@ -490,11 +490,11 @@ def test_parse_item_valid():
     assert result["affected_products"][0]["cpe"] == "cpe:/a:test:product"
 
 
-def test_fetch_page_returns_none_on_http_error(monkeypatch):
-    """HTTP エラー時は None を返すこと。"""
+def test_fetch_page_raises_on_http_error(monkeypatch):
+    """HTTP エラー時は JvnFetchError を送出すること（空の成功にしない）。"""
     import httpx
 
-    from app.jvn.crawler import _fetch_page
+    from app.jvn.crawler import JvnFetchError, _fetch_page
 
     def mock_get(*args, **kwargs):
         raise httpx.ConnectError("connection refused")
@@ -504,18 +504,90 @@ def test_fetch_page_returns_none_on_http_error(monkeypatch):
         __exit__=lambda s, *a: None,
     ))
 
-    result = _fetch_page("2026-06-01", 1)
-    assert result is None
+    with pytest.raises(JvnFetchError, match="start=1"):
+        _fetch_page("2026-06-01", 1)
 
 
-def test_fetch_all_entries_returns_empty_on_none(monkeypatch):
-    """_fetch_page が None を返した場合は空リストになること。"""
-    monkeypatch.setattr("app.jvn.crawler._fetch_page", lambda *a: None)
+def test_fetch_page_raises_on_503_after_retries(monkeypatch):
+    """503 が続く（リトライしても復旧しない）場合も JvnFetchError になること。"""
+    import httpx
 
-    from app.jvn.crawler import _fetch_all_entries
+    from app.jvn.crawler import JvnFetchError, _fetch_page
 
-    result = _fetch_all_entries("2026-06-01")
-    assert result == []
+    def always_503(_call):
+        request = httpx.Request("GET", "https://jvndb.jvn.jp/myjvn")
+        response = httpx.Response(503, request=request)
+        raise httpx.HTTPStatusError("503 Service Unavailable", request=request, response=response)
+
+    monkeypatch.setattr("app.jvn.crawler.request_with_retry", always_503)
+    with pytest.raises(JvnFetchError, match="503"):
+        _fetch_page("2026-06-01", 1)
+
+
+def test_fetch_page_raises_on_unparseable_body(monkeypatch):
+    """XML として解析できない応答（404の本文など）も JvnFetchError になること。"""
+    from app.jvn.crawler import JvnFetchError, _fetch_page
+
+    resp = MagicMock(text="Not Found")
+    monkeypatch.setattr("app.jvn.crawler.request_with_retry", lambda _call: resp)
+    with pytest.raises(JvnFetchError):
+        _fetch_page("2026-06-01", 1)
+
+
+def test_fetch_all_entries_propagates_first_page_failure(monkeypatch):
+    """1ページ目の取得失敗は握りつぶさず伝播すること（0件の成功にしない）。"""
+    from app.jvn.crawler import JvnFetchError, _fetch_all_entries
+
+    def boom(*_a):
+        raise JvnFetchError("down")
+
+    monkeypatch.setattr("app.jvn.crawler._fetch_page", boom)
+    with pytest.raises(JvnFetchError):
+        _fetch_all_entries("2026-06-01")
+
+
+def test_fetch_all_entries_propagates_later_page_failure(monkeypatch):
+    """2ページ目以降の失敗も伝播すること（一部だけ取り込んだ成功にしない）。"""
+    import xml.etree.ElementTree as ET
+
+    from app.jvn.crawler import JvnFetchError, _fetch_all_entries
+
+    first = ET.fromstring(
+        '<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"'
+        ' xmlns:status="http://jvndb.jvn.jp/myjvn/Status"><status:Status totalRes="120"/></rdf:RDF>'
+    )
+
+    def pages(_cutoff, start):
+        if start == 1:
+            return first
+        raise JvnFetchError("page 2 down")
+
+    monkeypatch.setattr("app.jvn.crawler._fetch_page", pages)
+    monkeypatch.setattr("app.jvn.crawler.time.sleep", lambda _s: None)
+    with pytest.raises(JvnFetchError):
+        _fetch_all_entries("2026-06-01")
+
+
+def test_fetch_and_store_jvn_records_error_and_notifies_on_fetch_failure(monkeypatch):
+    """取得失敗は status=error で記録・通知され、成功として扱われないこと。"""
+    from app.jvn.crawler import JvnFetchError, fetch_and_store_jvn
+
+    def boom(_cutoff):
+        raise JvnFetchError("MyJVN 503")
+
+    logs: list[dict] = []
+    notified: list[tuple] = []
+    monkeypatch.setattr("app.jvn.crawler._fetch_all_entries", boom)
+    monkeypatch.setattr("app.core.crawler_runner.write_crawler_log", lambda **kw: logs.append(kw))
+    monkeypatch.setattr("app.core.crawler_runner.notify_error", lambda *a: notified.append(a))
+    monkeypatch.setattr("app.core.crawler_runner.already_succeeded_recently", lambda _t: False)
+
+    with pytest.raises(JvnFetchError):
+        fetch_and_store_jvn()
+
+    assert [log["status"] for log in logs] == ["error"]
+    assert "MyJVN 503" in logs[0]["error_message"]
+    assert notified == [("JVN", "MyJVN 503")]
 
 
 # ── _fetch_page 成功パス ─────────────────────────────────────────
@@ -721,44 +793,6 @@ def test_fetch_all_entries_invalid_total_res(monkeypatch):
     # totalRes=0 なので 1 ページ目の item は処理される（while ループ内）が
     # 次ページには進まない
     assert len(result) == 1
-
-
-def test_fetch_all_entries_second_page_returns_none(monkeypatch):
-    """2 ページ目が None を返した場合はそこでループ終了すること。"""
-    import defusedxml.ElementTree as ET
-
-    from app.jvn.crawler import _fetch_all_entries
-
-    rdf_xml = """<rdf:RDF
-        xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-        xmlns="http://purl.org/rss/1.0/"
-        xmlns:dc="http://purl.org/dc/elements/1.1/"
-        xmlns:dcterms="http://purl.org/dc/terms/"
-        xmlns:sec="http://jvn.jp/rss/mod_sec/3.0/"
-        xmlns:status="http://jvndb.jvn.jp/myjvn/Status">
-        <status:Status totalRes="100" />
-        <item>
-            <title>Test</title>
-            <link>https://jvndb.jvn.jp/ja/contents/2026/JVNDB-2026-000001.html</link>
-            <sec:identifier>JVNDB-2026-000001</sec:identifier>
-            <dc:date>2026-06-18T00:00:00+09:00</dc:date>
-            <dcterms:modified>2026-06-18T00:00:00+09:00</dcterms:modified>
-        </item>
-    </rdf:RDF>"""
-    root = ET.fromstring(rdf_xml)
-    call_count = [0]
-
-    def mock_fetch_page(cutoff_date, start_item):
-        call_count[0] += 1
-        # 1 ページ目のみ返し、2 ページ目は None
-        return root if call_count[0] == 1 else None
-
-    monkeypatch.setattr("app.jvn.crawler._fetch_page", mock_fetch_page)
-    monkeypatch.setattr("app.jvn.crawler.time.sleep", lambda s: None)
-
-    result = _fetch_all_entries("2026-06-01")
-    assert len(result) == 1
-    assert call_count[0] == 2
 
 
 # ── _upsert_jvn エッジケース ─────────────────────────────────────
