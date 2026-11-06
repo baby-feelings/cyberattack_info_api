@@ -291,7 +291,7 @@ function RuntimesDialog({ onClose, authToken }: { onClose: () => void; authToken
 }
 
 // 使っている言語・実行環境の版と、サポート期限から判定した状態を、アプリごとに閲覧する全画面モーダル。
-// DEPSCAN タブ内のボタンから開く（依存パッケージ・Dependabot 運用状況と同じ設計。5つ目の固定タブにはしない）。
+// DEPSCAN タブ内のボタンから開く（依存パッケージ・Dependabot 運用状況と同じ設計。追加の固定タブにはしない）。
 // 開いたときにだけ内側を組み立てるため、閉じている間は取得しない。
 export function RuntimesModal({
   open, onClose, authToken,

@@ -9,7 +9,7 @@ REST API の読み取り系 GET をツール化した薄い層で、REST と挙�
 | 認証 | 方法 | 見えるもの |
 |------|------|-----------|
 | 運用者（admin） | `X-API-KEY: <API_KEY>` | すべて |
-| 公開用の鍵（public） | `X-API-KEY: <PUBLIC_API_KEY>` | KEV / OSV / JVN の公開情報のみ |
+| 公開用の鍵（public） | `X-API-KEY: <PUBLIC_API_KEY>` | KEV / OSV の公開情報のみ |
 | ユーザー（user） | `Authorization: Bearer <MCPトークン>` | 公開情報 + **自分が所有するリポジトリ**の DEPSCAN / CODESCAN |
 
 - **他の人に自分のリポジトリを見せない**: DEPSCAN / CODESCAN は、MCP トークンに紐づく GitHub ユーザーが
@@ -50,7 +50,6 @@ claude mcp add --transport http cyberattack-info https://<API のドメイン>/m
 | `get_recent_kev` | 直近 N 日に追加された KEV | 全員 |
 | `get_kev` | CVE ID で KEV を1件取得 | 全員 |
 | `search_osv` | OSV を検索（エコシステム・重要度・期間） | 全員 |
-| `search_jvn` | JVN を検索（重要度・期間） | 全員 |
 | `list_depscan_findings` | 依存ライブラリの脆弱性（DEPSCAN） | user / admin |
 | `get_depscan_stats` | DEPSCAN の件数（リポジトリ別・重要度別） | user / admin |
 | `search_dependencies` | どのリポジトリが、どのパッケージのどの版を使っているか（影響範囲の確認） | user / admin |
@@ -70,7 +69,7 @@ claude mcp add --transport http cyberattack-info https://<API のドメイン>/m
 
 ## 設計メモ
 
-- **実装**: `app/mcp_server/`（`server.py` = サーバーの組み立て、`tools/` = ツール〈`public`=KEV/OSV/JVN・
+- **実装**: `app/mcp_server/`（`server.py` = サーバーの組み立て、`tools/` = ツール〈`public`=KEV/OSV・
   `private`=DEPSCAN/CODESCAN・`identity`=whoami〉、`gateway.py` = REST への窓口〈`RestGateway`。認証ヘッダーの
   決定・パラメータ整形・応答の所有者検証〉、`auth.py` = 認証）。ツールはアプリ自身の REST を
   プロセス内（ASGI）で呼ぶ。検索・検証・所有者による絞り込みのロジックを複製しない。ツールを足すときは

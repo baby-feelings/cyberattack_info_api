@@ -16,7 +16,7 @@ code-review-graph watch
 ---
 
 ## プロジェクト概要
-米 CISA の KEV・OSV・JVN を毎日自動収集し、REST API として配信するサービス。
+米 CISA の KEV・OSV を毎日自動収集し、REST API として配信するサービス。
 
 | 項目 | 内容 |
 |------|------|
@@ -67,7 +67,7 @@ pip-audit -r requirements.txt --desc                   # 依存脆弱性確認�
 ---
 
 ## プロジェクト構成
-`app/` はドメイン（KEV / OSV / JVN / DEPSCAN / CODESCAN / DEPSOPS / MCP / クローラーログ / 横断共通処理）単位の
+`app/` はドメイン（KEV / OSV / DEPSCAN / CODESCAN / DEPSOPS / MCP / クローラーログ / 横断共通処理）単位の
 パッケージ。各ドメインは `models.py`（ORM）・`schemas.py`（Pydantic）・`crawler.py`・`router.py`を
 1フォルダにまとめ高凝集を保つ。`app/main.py`はルーターinclude・lifespanのみに専念。
 
@@ -83,9 +83,9 @@ app/
 │                 #   crawler_runner=`CrawlJob`・notifications=`Notifier`（いずれもTemplate Method）
 ├── jobs/         # 各ドメインを束ねる定期実行・一括実行: scheduler_jobs（定期ジョブ定義）/repo_cleanup/
 │                 #   user_crawl_runner（登録済み他ユーザー向け）/各管理API
-├── taxii/        # STIX/TAXII 2.1 配信（KEV/OSV/JVN。router.py）
+├── taxii/        # STIX/TAXII 2.1 配信（KEV/OSV。router.py）
 ├── kev/          # CISA KEV（models/schemas/crawler/stix/router）
-├── osv/ jvn/     # OSV（10エコシステム対応、+packages.py）/ JVN（MyJVN API / RDF-RSS）
+├── osv/          # OSV（10エコシステム対応、+packages.py）
 ├── depscan/      # 依存ライブラリ脆弱性スキャン（crawler=ジョブ組み立て+manifests/inventory/〈依存の全量の保存・検索・API〉/finding_builder/
 │                 #   reachability_scan/repository+issue_management/priority/sbom/user_scan/source_files/parsers/）
 ├── depsops/      # Dependabot PR 自動運用（runner/pr_judge/pr_log_repository/classify/github_client〈PR操作〉/user_scan）
@@ -100,7 +100,7 @@ app/
 └── crawler_logs/ # クローラー実行ログ
 
 tests/        # app/ と同じドメイン構成でミラーリング
-dashboard/    # Vercel デプロイの React ダッシュボード（KEV/OSV/JVN/DEPSCAN/CODESCAN の5タブ切替。e2e/にPlaywright）
+dashboard/    # Vercel デプロイの React ダッシュボード（KEV/OSV/DEPSCAN/CODESCAN の4タブ切替。e2e/にPlaywright）
 alembic/ docs/  # DBマイグレーション（env.py に新規モデルimportが必須）/ 詳細ドキュメント（API一覧・環境変数・デプロイ手順等）
 .github/workflows/  # ci.yml / deploy.yml / daily-crawl.yml / osv-scanner-*.yml / pip-audit.yml / zap-scan.yml / gitleaks.yml / semgrep.yml / migration-check.yml
 deploy/       # OCIデプロイ関連（deploy_to_oci.ps1・docker-compose.yml・Caddyfile・grafana/）
@@ -112,7 +112,7 @@ deploy/       # OCIデプロイ関連（deploy_to_oci.ps1・docker-compose.yml�
 | スキル | 内容 |
 |--------|------|
 | `api-usage` | 本番APIの使い方（curl例・MCPサーバー）・フィールド定義・エラーレスポンス |
-| `crawler-internals` | KEV/OSV/JVN共通基盤（retry/notifications/pagination等）・STIX/TAXII・Alembic |
+| `crawler-internals` | KEV/OSV共通基盤（retry/notifications/pagination等）・STIX/TAXII・Alembic |
 | `depscan-depsops` | DEPSCAN/DEPSOPSの検知・優先度推薦・悪意あるパッケージ・対応状況（SLA/MTTR）・SBOM・自動マージ判定・GitHub OAuth・ユーザー別Slack通知登録 |
 | `runtimes` | 言語・実行環境のバージョン監視（RUNTIME）: 設定ファイルからの検出・最新版/EOLの取得元・状態判定 |
 | `security-posture` | 検知の例外（受容・VEX）・GitHubセキュリティアラートの取り込み・リポジトリ設定の監査（スコア） |

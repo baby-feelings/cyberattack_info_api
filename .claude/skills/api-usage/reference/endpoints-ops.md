@@ -1,6 +1,6 @@
 # API エンドポイント詳細 2/2: DEPSOPS・CODESCAN・運用系・活用パターン
 
-各エンドポイントの詳細なcurl例・パラメータ表・レスポンス例。KEV/OSV/JVN/DEPSCANは reference/endpoints-feeds.md 参照。
+各エンドポイントの詳細なcurl例・パラメータ表・レスポンス例。KEV/OSV/DEPSCANは reference/endpoints-feeds.md 参照。
 
 ---
 
@@ -154,16 +154,16 @@ DEPSCAN スキャンが実行され（直近24時間以内にスキャン済み�
 
 ### スキル 14: クローラーの実行ログを確認する
 
-**用途:** KEV / OSV / JVN / DEPSCAN クローラーが正常に動作しているか、最新の実行結果（件数・所要時間・エラー）を確認する。
+**用途:** KEV / OSV / DEPSCAN クローラーが正常に動作しているか、最新の実行結果（件数・所要時間・エラー）を確認する。
 
 ```bash
 # 直近 10 件の実行ログを取得
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
   "https://168.138.213.240.nip.io/api/crawler-logs?limit=10"
 
-# JVN のみ絞り込み
+# OSV のみ絞り込み
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://168.138.213.240.nip.io/api/crawler-logs?crawler_type=JVN"
+  "https://168.138.213.240.nip.io/api/crawler-logs?crawler_type=OSV"
 
 # エラーのみ確認
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
@@ -172,7 +172,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 | パラメータ | 型 | 説明 |
 |-----------|-----|------|
-| `crawler_type` | string | `KEV` / `OSV` / `JVN` / `DEPSCAN` / `DEPSOPS`（省略時は全種別） |
+| `crawler_type` | string | `KEV` / `OSV` / `DEPSCAN` / `DEPSOPS`（省略時は全種別） |
 | `status` | string | `success` / `error`（省略時は両方） |
 | `limit` | int | 取得件数（デフォルト: 30、最大: 100） |
 
@@ -181,7 +181,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 [
   {
     "id": 42,
-    "crawler_type": "JVN",
+    "crawler_type": "OSV",
     "status": "success",
     "started_at": "2026-06-18T21:05:03+00:00",
     "finished_at": "2026-06-18T21:05:18+00:00",
@@ -217,7 +217,7 @@ curl -s "https://168.138.213.240.nip.io/health"
 
 ### スキル 16: 運用監視ダッシュボード（Grafana）を確認する
 
-**用途:** クローラー（KEV/OSV/JVN/DEPSCAN/DEPSOPS）が実際に成功し続けているか、OCIホストの
+**用途:** クローラー（KEV/OSV/DEPSCAN/DEPSOPS）が実際に成功し続けているか、OCIホストの
 CPU/メモリ/ディスク使用率を可視化されたダッシュボードで確認する。`curl`ではなくブラウザで
 アクセスする（ログイン必須）。
 
@@ -237,17 +237,17 @@ $METRICS_API_KEY`で保護、未設定時は503）から直接取得すること
 
 ---
 
-### スキル 17: KEV/OSV/JVNデータをTAXII 2.1で購読する（Issue #134）
+### スキル 17: KEV/OSVデータをTAXII 2.1で購読する（Issue #134）
 
-**用途:** MISP等の既存CTI共有基盤・SIEM/TIPからKEV/OSV/JVNデータを継続的に購読する
-（最小構成のTAXII 2.1サーバー。単一API root配下にKEV/OSV/JVNの3コレクションを持つ）。
+**用途:** MISP等の既存CTI共有基盤・SIEM/TIPからKEV/OSVデータを継続的に購読する
+（最小構成のTAXII 2.1サーバー。単一API root配下にKEV/OSVの3コレクションを持つ）。
 
 ```bash
 # Discovery（利用可能なAPI rootを確認）
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
   "https://168.138.213.240.nip.io/taxii2/"
 
-# コレクション一覧（KEV/OSV/JVNの3件が返る）
+# コレクション一覧（KEV/OSVの3件が返る）
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
   "https://168.138.213.240.nip.io/taxii2/cyberattack-info-api/collections/"
 
@@ -266,7 +266,6 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 |---------|----------------|
 | CISA KEV | `d4d8f0c0-3f5f-5b1e-9c1a-6f6f6a6b6a6a` |
 | OSV | `84be1117-7e69-58ed-a0dc-d2f2bb7f60ca` |
-| JVN | `1c34f413-fd30-56cc-bf87-daf79113b5a8` |
 
 > 認証はTAXII固有の方式ではなく、既存APIと同じ`X-API-KEY`/`Authorization: Bearer
 > <PUBLIC_API_KEY>`を使う。manifestエンドポイント・フルのTAXIIページネーション
@@ -293,9 +292,9 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 - name: Check crawler health
   run: |
     RESULT=$(curl -s -H "X-API-KEY: ${{ secrets.CYBERATTACK_API_KEY }}" \
-      "https://168.138.213.240.nip.io/api/crawler-logs?limit=3&crawler_type=JVN")
+      "https://168.138.213.240.nip.io/api/crawler-logs?limit=3&crawler_type=OSV")
     STATUS=$(echo "$RESULT" | python -c "import sys,json; d=json.load(sys.stdin); print(d[0]['status'] if d else 'no_log')")
-    echo "最新 JVN クロール: $STATUS"
+    echo "最新 OSV クロール: $STATUS"
     if [ "$STATUS" = "error" ]; then
       echo "クローラーエラーを検知"
       exit 1
@@ -319,15 +318,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
                影響があれば修正バージョンを教えてください"
 ```
 
-### パターン 5: JVN で国内脆弱性の最新動向を把握する
-
-```bash
-curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://168.138.213.240.nip.io/api/jvn?severity=High&sort_by=cvss" \
-  | claude -p "直近の高重要度 JVN 脆弱性を整理し、対処優先度を教えてください"
-```
-
-### パターン 6: 自作アプリ群の未対応脆弱性を棚卸しする（DEPSCAN）
+### パターン 5: 自作アプリ群の未対応脆弱性を棚卸しする（DEPSCAN）
 
 ```bash
 curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \

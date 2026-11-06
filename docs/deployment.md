@@ -91,24 +91,24 @@ DEPSCAN・CODESCAN の手動実行（`?force=true`）で、起動とクローラ
 
 | タイミング | 処理 |
 |----------|------|
-| 毎日 JST 04:05（UTC 19:05）| GitHub Actions 単一 cron で KEV → OSV → JVN → DEPSCAN → CODESCAN → DEPSOPS を順次実行 |
+| 毎日 JST 04:05（UTC 19:05）| GitHub Actions 単一 cron で KEV → OSV → DEPSCAN → CODESCAN → DEPSOPS を順次実行 |
 | アプリ起動時 | DB テーブルの自動作成 |
 | `POST /admin/*-crawl` 実行時 | 各クローラーをバックグラウンド取得（詳細は [api-reference.md](api-reference.md)） |
 
 > **Note:** APScheduler（アプリ内スケジューラ）が主経路（OCIは常時稼働のためスリープしない）。実行時刻（UTC。
 > 既定値で、`*_CRON_HOUR_UTC`・`*_CRON_MINUTE_UTC` で変えられる）は次のとおり:
-> 19:00 KEV / 20:00 OSV / 21:00 JVN / 22:00 DEPSCAN / 22:20 コミット監視 / 22:30 CODESCAN / 22:35 外形監視 /
+> 19:00 KEV / 20:00 OSV / 22:00 DEPSCAN / 22:20 コミット監視 / 22:30 CODESCAN / 22:35 外形監視 /
 > 22:40 リポジトリ設定の監査 / 22:45 RUNTIME / 22:50 GitHubアラート / 22:55 例外の期限確認 / 23:00 DEPSOPS /
 > 23:15 削除済みリポジトリ掃除 / 23:30 登録済み他ユーザー向け実行・PROJSYNC（GitHub Projects への追加）/
 > 23:40 API キー等の更新期限の通知 / 23:45 MCP トークンの期限前通知 / 23:50 OAuth の掃除 /
 > 毎週月曜 00:00 対応状況（SLA）の週次まとめ。
 > GitHub Actions の単一 cron（KEV〜DEPSOPSのみ）は、ネットワーク障害等で APScheduler が不発火だった
 > 場合の二重バックアップとして維持している（削除済みリポジトリ掃除・登録済み他ユーザー向け実行は
-> APScheduler側のみ）。KEV/OSV/JVN/DEPSCAN/CODESCAN/DEPSOPSは直近12時間（UTC日付の区切りではない）に成功実行済みなら
+> APScheduler側のみ）。KEV/OSV/DEPSCAN/CODESCAN/DEPSOPSは直近12時間（UTC日付の区切りではない）に成功実行済みなら
 > 2回目の実行を自動的にスキップするため、この二重トリガー自体は無害（Issue #239）。
 
 ### CODESCAN などを単独で再スキャンする
-`gh workflow run daily-crawl.yml -f target=codescan`（`target` は kev / osv / jvn / depscan / codescan /
+`gh workflow run daily-crawl.yml -f target=codescan`（`target` は kev / osv / depscan / codescan /
 dependabot-ops / all）。同じUTC日に成功済みの種別は、既定では2回目がスキップされる。確実に再実行するには
 管理API `POST /admin/codescan-crawl?force=true`（`X-API-KEY` 必須）を使う。DEPSCAN・DEPSOPSも同様
 （`/admin/depscan-crawl?force=true`・`/admin/dependabot-ops?force=true`。202で開始し、完了は

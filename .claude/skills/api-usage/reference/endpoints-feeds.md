@@ -1,4 +1,4 @@
-# API エンドポイント詳細 1/2: KEV・OSV・JVN・DEPSCAN（curl例・パラメータ一覧）
+# API エンドポイント詳細 1/2: KEV・OSV・DEPSCAN（curl例・パラメータ一覧）
 
 各エンドポイントの詳細なcurl例・パラメータ表・レスポンス例。SKILL.mdから分離（500行制限対応）。DEPSOPS/CODESCAN以降は reference/endpoints-ops.md 参照。
 
@@ -170,71 +170,6 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
   ],
   "monthly_trend": [
     { "year_month": "2026-06", "count": 120 }
-  ]
-}
-```
-
----
-
-### スキル 7: JVN 脆弱性を検索する
-
-**用途:** JVN (Japan Vulnerability Notes) から日本国内の脆弱性情報を検索する（ダッシュボードは過去 6 ヶ月表示）。  
-MyJVN API（jvndb.jvn.jp）から取得した JVNDB 登録脆弱性を対象とする。
-
-```bash
-# High 重要度の脆弱性を取得
-curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://168.138.213.240.nip.io/api/jvn?severity=High"
-
-# キーワードで検索
-curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://168.138.213.240.nip.io/api/jvn?search=Apache"
-
-# CVSS スコア降順で取得
-curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://168.138.213.240.nip.io/api/jvn?sort_by=cvss"
-```
-
-| パラメータ | 型 | 説明 |
-|-----------|-----|------|
-| `page` | int | ページ番号（デフォルト: 1） |
-| `per_page` | int | 件数（デフォルト: 50、最大: 500） |
-| `severity` | string | 重要度（`High` / `Medium` / `Low`） |
-| `search` | string | JVNDB ID・タイトル・概要の部分一致 |
-| `sort_by` | string | ソート基準（`modified`（デフォルト） / `cvss`） |
-| `days` | int | 取得対象の直近日数（デフォルト: 30） |
-| `updated_since` | string (ISO 8601) | この日時以降に内容が更新されたレコードのみ返す（差分取得・増分同期用） |
-
-JVNDB IDを直接指定して1件取得することもできる。`?format=stix`を付けるとSTIX 2.1の
-Vulnerability SDO形式で返す（Issue #134）:
-
-```bash
-curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://168.138.213.240.nip.io/api/jvn/JVNDB-2026-000001?format=stix"
-```
-
----
-
-### スキル 8: JVN 統計情報を取得する
-
-**用途:** 重要度別の JVN 脆弱性件数や月別トレンドを把握する。
-
-```bash
-curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
-  "https://168.138.213.240.nip.io/api/jvn/stats"
-```
-
-**レスポンス例:**
-```json
-{
-  "total": 129,
-  "severities": [
-    { "severity": "High", "count": 45 },
-    { "severity": "Medium", "count": 62 },
-    { "severity": "Low", "count": 22 }
-  ],
-  "monthly_trend": [
-    { "year_month": "2026-06", "count": 129 }
   ]
 }
 ```

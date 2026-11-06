@@ -4,7 +4,7 @@ export interface PeriodOption {
   label: string
 }
 
-// KEV・OSV・JVN 共通の期間切り替え（直近 N 日）。新しく出た脆弱性を先に見られるようにする
+// KEV・OSV 共通の期間切り替え（直近 N 日）。新しく出た脆弱性を先に見られるようにする
 export function PeriodFilter({
   value, options, onChange,
 }: {

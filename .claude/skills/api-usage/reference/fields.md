@@ -40,24 +40,6 @@
 | `withdrawn_at` | string (ISO 8601) \| null | 撤回日時。設定されていればソース側（OSV）で撤回済み |
 | `fetched_at` | string (ISO 8601) \| null | このレコードを最後に OSV API で存在確認した日時（内容変更が無くても毎回のクロールで更新される） |
 
-### JvnVulnerabilityOut（JVN 脆弱性情報）
-
-| フィールド | 型 | 説明 |
-|-----------|-----|------|
-| `jvndb_id` | string | JVNDB 識別子（例: `JVNDB-2026-020172`） |
-| `title` | string | 脆弱性のタイトル |
-| `overview` | string | 概要説明 |
-| `cve_ids` | string[] | 関連 CVE ID リスト |
-| `severity` | string \| null | 重要度（`High` / `Medium` / `Low`） |
-| `cvss_score` | float \| null | CVSS スコア |
-| `cvss_vector` | string \| null | CVSS ベクター文字列 |
-| `affected_products` | object[] | 影響製品（`vendor` / `product` / `cpe` を含む） |
-| `references` | object[] | 参考情報 |
-| `jvn_url` | string | JVN 詳細ページ URL |
-| `date_published` | string (ISO 8601) | 公開日時 |
-| `date_last_modified` | string (ISO 8601) | 最終更新日時 |
-| `fetched_at` | string (ISO 8601) \| null | このレコードを最後に MyJVN API で存在確認した日時（内容変更が無くても毎回のクロールで更新される） |
-
 ### DependencyFindingOut（DEPSCAN 検知結果）
 
 | フィールド | 型 | 説明 |
@@ -118,13 +100,13 @@
 | フィールド | 型 | 説明 |
 |-----------|-----|------|
 | `id` | int | ログ ID |
-| `crawler_type` | string | クローラー種別（`KEV` / `OSV` / `JVN` / `DEPSCAN` / `DEPSOPS` / `CODESCAN`） |
+| `crawler_type` | string | クローラー種別（`KEV` / `OSV` / `DEPSCAN` / `DEPSOPS` / `CODESCAN`） |
 | `status` | string | 実行結果（`success` / `error`） |
 | `started_at` | string (ISO 8601) | 開始日時 |
 | `finished_at` | string (ISO 8601) | 終了日時 |
 | `duration_seconds` | float | 所要時間（秒） |
 | `inserted` | int | 新規挿入件数 |
-| `updated` | int | 更新件数（KEV/OSV/JVN）。DEPSCAN/CODESCAN では保持期間超過による削除件数を表す |
-| `deleted` | int | 削除件数（KEV/OSV/JVN）。DEPSCAN/CODESCAN では解決済みにした件数を表す |
+| `updated` | int | 更新件数（KEV/OSV）。DEPSCAN/CODESCAN では保持期間超過による削除件数を表す |
+| `deleted` | int | 削除件数（KEV/OSV）。DEPSCAN/CODESCAN では解決済みにした件数を表す |
 | `error_message` | string \| null | エラーメッセージ（エラー時のみ） |
 

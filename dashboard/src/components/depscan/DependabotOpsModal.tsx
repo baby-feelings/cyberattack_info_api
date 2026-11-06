@@ -70,7 +70,7 @@ function CompatibilityScoreBadge({ badgeUrl }: { badgeUrl: string | null }) {
 }
 
 // Dependabot PR 自動運用（DEPSOPS）の判定履歴を表示する全画面モーダル。
-// DEPSCAN タブ内のボタンから開く（5つ目の固定タブにはしない設計判断。詳細はCLAUDE.md参照）。
+// DEPSCAN タブ内のボタンから開く（追加の固定タブにはしない設計判断。詳細はCLAUDE.md参照）。
 export function DependabotOpsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [action, setAction] = useState<'ALL' | 'merged' | 'flagged'>('ALL')
   // 初期表示は運用中のみ（運用停止中のアプリのPRに埋もれず、運用中のものを見やすくするため）

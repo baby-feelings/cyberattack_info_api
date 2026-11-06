@@ -1,5 +1,5 @@
 // API クライアント共通部分: BASE_URL・認証ヘッダー付与・共通型・共通エラー型。
-// KEV/OSV/JVN/DEPSCAN/DEPSOPS の各ドメインモジュール（kev.ts 等）から利用する。
+// KEV/OSV/DEPSCAN/DEPSOPS の各ドメインモジュール（kev.ts 等）から利用する。
 
 // API の向き先。環境変数（VITE_API_BASE_URL）で決める。
 // - 開発（vite dev）・単体テストで未設定なら、ローカルの API
@@ -17,7 +17,7 @@ export const BASE_URL = resolveBaseUrl()
 // 一覧 API の1ページあたりの既定の件数（各ドメインの API クライアントが共通で使う）
 export const DEFAULT_PER_PAGE = 50
 // このダッシュボードはブラウザに配信される公開資産のため、/admin/* も保護する
-// 管理者用キーではなく、読み取り専用エンドポイント（KEV/OSV/JVN/crawler-logs）にしか
+// 管理者用キーではなく、読み取り専用エンドポイント（KEV/OSV/crawler-logs）にしか
 // 通用しない PUBLIC_API_KEY を埋め込む（バックエンド側は require_public_api_key で受理）。
 export const API_KEY = import.meta.env.VITE_PUBLIC_API_KEY || ''
 
@@ -57,7 +57,7 @@ export async function apiFetch<T>(path: string, authToken?: string): Promise<T> 
   return res.json() as Promise<T>
 }
 
-// KEV/OSV/JVN 共通の月別統計エントリ
+// KEV/OSV 共通の月別統計エントリ
 export interface MonthlyStat {
   year_month: string
   count: number

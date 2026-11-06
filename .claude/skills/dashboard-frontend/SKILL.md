@@ -1,6 +1,6 @@
 ---
 name: dashboard-frontend
-description: Reactダッシュボード（dashboard/）のアーキテクチャ設計判断。タブ切り替えUI、KEV/OSV/JVN/DEPSCAN/CODESCAN共通パーツ（VulnPanelParts）、DepscanPanelの集約・オーナーフィルター、DEPSCAN/CODESCAN共有GitHubログイン（useGithubSession）、ハンバーガーメニューからのユーザー別Slack通知登録画面（SettingsPanel、Issue #227）、CSSカスケードレイヤーの注意点、環境表示の日本語化を扱う。dashboard/配下のコンポーネント変更時に読む。
+description: Reactダッシュボード（dashboard/）のアーキテクチャ設計判断。タブ切り替えUI、KEV/OSV/DEPSCAN/CODESCAN共通パーツ（VulnPanelParts）、DepscanPanelの集約・オーナーフィルター、DEPSCAN/CODESCAN共有GitHubログイン（useGithubSession）、ハンバーガーメニューからのユーザー別Slack通知登録画面（SettingsPanel、Issue #227）、CSSカスケードレイヤーの注意点、環境表示の日本語化を扱う。dashboard/配下のコンポーネント変更時に読む。
 ---
 
 # ダッシュボード（React）内部実装リファレンス
@@ -13,7 +13,7 @@ description: Reactダッシュボード（dashboard/）のアーキテクチャ�
 テスト用の`jsonResponse`は`src/test/http.ts`（カバレッジの対象外）。
 
 ## タブ切り替え UI（App.tsx）
-KEV / OSV / JVN / DEPSCAN / CODESCAN の 5 データソースは、画面下部固定のタブバーで切り替え
+KEV / OSV / DEPSCAN / CODESCAN の 5 データソースは、画面下部固定のタブバーで切り替え
 表示する構成（縦並び表示ではない）。DEPSOPS（Dependabot 運用状況）に専用タブは作らず、DEPSCAN
 タブ内のボタンから開く全画面モーダルとして統合している。「依存パッケージ」
 （`DependenciesModal.tsx`。`GET /api/depscan/dependencies`）も同じ作りで、左のアプリ一覧（`RepoRail`）で
@@ -37,30 +37,30 @@ DEPSCANパネルのヘッダーは、1段目をタイトルと再読み込み、
 サーバー稼働状況（`HealthStatus`）とエラーバナーは全タブ共通で常に表示する。
 タブには `role="tablist"/"tab"/"tabpanel"` と `aria-selected`/`aria-controls`/`aria-labelledby` を付与済み。
 
-## KevPanel/OsvPanel/JvnPanel の共通パーツと分割構成
+## KevPanel/OsvPanel の共通パーツと分割構成
 `dashboard/src/components/shared/` に、各パネルで共通の`Badge.tsx`（`SeverityBadge`）・
 `ChartParts.tsx`（`ChartCard`/`SeverityPieChart`/`MonthlyBarChart`）・
 `TableControls.tsx`（`TableLoadingSkeleton`/`EmptyState`/`Pagination`/
 `SeverityFilterButtons`/`SearchBox`/`SortSelector`）に切り出し済み
 （`VulnPanelParts.tsx`は元々これら全てを持つ単一ファイルだったが、責務分割のため
 3ファイルに分割した。既存のexport名・props型は変えていない）。
-`Pagination`は6画面（KEV/OSV/JVN/DEPSCAN/CODESCAN/DEPSOPSモーダル）で共通で、「« 最初」「← 前へ」
+`Pagination`は6画面（KEV/OSV/DEPSCAN/CODESCAN/DEPSOPSモーダル）で共通で、「« 最初」「← 前へ」
 「次へ →」「最後 »」の4ボタンとページ番号の直接入力（入力欄+「移動」。Enter可・範囲外は1〜最終ページに
 丸める・数字以外は入力不可）を持つ。既存のボタン名（`← 前へ`/`次へ →`）と`1 / 3`の表示テキストは
 E2Eのロケーターが依存しているため変えないこと。スマホ幅（sm未満）では最初/最後を記号のみ（`«`/`»`、
 アクセシブルネームは`最初のページへ`/`最後のページへ`）にし、現在位置・件数・入力欄を2段目へ折り返す
 （ボタンは`whitespace-nowrap`で折り返さない）。
-深刻度の値・配色（OSV: CRITICAL/HIGH/MEDIUM/LOW、JVN: High/Medium/Low、CODESCAN:
+深刻度の値・配色（OSV: CRITICAL/HIGH/MEDIUM/LOW、CODESCAN:
 ERROR/WARNING/INFO）はドメイン固有のため `classMap`/`colorMap` として呼び出し側から渡す。
 `SeverityBadge`/`SeverityFilterButtons`には任意の`labels`propsも追加済みで、値そのもの
 （フィルタでAPIに送る値・データ本体）は変えずに表示テキストだけ上書きできる。CODESCANの
 ERROR/WARNING/INFOは「ERRORがシステムエラーのように見えて紛らわしい」という指摘を受け、
 CODESCANの呼び出し側だけで`labels={{ ERROR: '重大', WARNING: '警告', INFO: '情報' }}`を
-渡して日本語表示にしている（DEPSCAN/OSV/JVN/KEVは`labels`未指定のまま、既存の英語表示を維持）。
+渡して日本語表示にしている（DEPSCAN/OSV/KEVは`labels`未指定のまま、既存の英語表示を維持）。
 
-行コンポーネント（`KevRow`/`OsvRow`/`JvnRow`）とグラフコンポーネント
+行コンポーネント（`KevRow`/`OsvRow`）とグラフコンポーネント
 （`VendorBarChart`/`EcosystemBarChart`）はドメイン固有のため、`DepscanGroupRow`/`RepoBarChart`
-（`components/depscan/`）に倣い `components/{kev,osv,jvn}/` 配下に切り出している。深刻度バッジの
+（`components/depscan/`）に倣い `components/{kev,osv}/` 配下に切り出している。深刻度バッジの
 配色（`SEVERITY_CLS`）は各 Panel の重要度フィルターボタンでも使うため Panel 側に残し、Row
 コンポーネントには `severityClassMap` として props で渡す。Recharts の Tooltip `formatter` は
 jsdom 上でホバーをシミュレートしてもテストから呼び出されないため、
@@ -125,9 +125,9 @@ CODESCAN追加後もキー名はあえて変更せず両ドメインで共有す
 上限（有効10個）超過の409だけはサーバーの説明文をそのまま表示し、他のエラーは固定文言（詳細を漏らさない）。
 一覧の日付ごとの区切り行は、全一覧で共通の`shared/DateDividerRow`（行の`aria-label`は「〜の区切り」、`data-divider`付き）と、
 日を比べる`shared/dateDay`（`isNewDay`。行に表示する日付と同じ`toLocaleDateString('ja-JP')`基準）を使う。区切りを出す条件:
-KEV=追加日順（常時）・OSV/JVN=**更新日順のときだけ**（CVSS順は日付が混ざるため出さない）・CODESCAN=検知日の新しい順（API側の並び。常時）・
+KEV=追加日順（常時）・OSV=**更新日順のときだけ**（CVSS順は日付が混ざるため出さない）・CODESCAN=検知日の新しい順（API側の並び。常時）・
 DEPSCAN=並び順を「検知日」にしたときだけ（`depscan/DepscanSortSelector`。既定は重要度順で、対応が必要なものが上）。
-E2Eで行数・位置を見るときは、区切りを除く`dataRows(table)`（`e2e/support/test.ts`）を使う（OSV-13・JVN-12・DEP-30・COD-16・KEV-13）。
+E2Eで行数・位置を見るときは、区切りを除く`dataRows(table)`（`e2e/support/test.ts`）を使う（OSV-13・DEP-30・COD-16・KEV-13）。
 画面全体のモーダル（依存パッケージ・言語・対応状況・Dependabot運用状況）は、`shared/FullScreenModal`（dialog・ヘッダー・閉じるボタン・Escで閉じる）を使う。
 DEPSCAN・CODESCANの一覧は、初期表示で例外（受容・影響なし・誤検知）を隠し（`include_excepted=false`で取得）、`shared/ExceptedToggle`（「例外を含む」）で表示する。
 件数・グラフ・左のアプリ一覧は従来どおり例外を除き、CODESCANは灰色の「+N」で例外を併記する。
@@ -141,20 +141,20 @@ DEPSCANは取得済みの検知を`depscan/repoSummary`でアプリ別に集計�
 アプリを選ぶと表のリポジトリ列を隠す（`showRepo`）。グラフ（重要度別・リポジトリ別）は**従来どおり画面の上部（ヘッダーの直下）に、
 最初から表示**し、見出しを押すと閉じられる（`shared/CollapsibleSection`。閉じている間は描画しない＝開いたとき大きさ0でグラフが崩れるのを避ける。
 開閉は画面を開いている間だけ。統計は運用状態で絞られる）。
-KEV・OSV・JVNは「新しく出たものを先に」の構成: `shared/PeriodFilter`（期間。初期は直近30日。KEVは7/30/90日＋すべて、OSV・JVNは7/30/90/180日。
-OSV・JVNは一覧・統計APIの`days`、KEVは新着API`/recent`で期間内の全件を取得し、検索・ページ分割は画面側〈同じ期間なら取り直さない。
-「すべて」だけサーバー側のページ分割〉）、`shared/StatBand`（期間内の件数と、注目すべき件数＝KEVはEPSS10%以上〈`min_epss`〉・OSVはCRITICAL・HIGH・JVNはHigh）、
+KEV・OSVは「新しく出たものを先に」の構成: `shared/PeriodFilter`（期間。初期は直近30日。KEVは7/30/90日＋すべて、OSVは7/30/90/180日。
+OSVは一覧・統計APIの`days`、KEVは新着API`/recent`で期間内の全件を取得し、検索・ページ分割は画面側〈同じ期間なら取り直さない。
+「すべて」だけサーバー側のページ分割〉）、`shared/StatBand`（期間内の件数と、注目すべき件数＝KEVはEPSS10%以上〈`min_epss`〉・OSVはCRITICAL・HIGH）、
 `shared/WatchKeywords`（自分のスタックのキーワードごとの該当件数のチップ。0件は緑。押すと検索語に入れて絞る。キーワードは
 `hooks/useWatchKeywords`でlocalStorageに保存〈最大10個・端末ごと〉、件数は`shared/useKeywordCounts`で取得し、条件が変わったら古い件数を捨てる）。
 KEVの表は追加日ごとに区切り、EPSSに小さな棒を添える。グラフは5画面とも上部に最初から表示し、`CollapsibleSection`で閉じられる。月別トレンドは3画面とも直近6ヶ月で統一
-（OSV・JVNは、選んだ期間に関わらず180日分の統計を別に取得して使う〈期間を絞ると月が2つしか出ないため。期間を切り替えても取り直さず、
-再読み込みでは取り直す〉。KEVは全期間の月別から`kev/trend`の`recentMonths`で直近6ヶ月を切り出す）。KEVのデータ取得は`kev/useKevData`、JVNは`jvn/useJvnData`。
+（OSVは、選んだ期間に関わらず180日分の統計を別に取得して使う〈期間を絞ると月が2つしか出ないため。期間を切り替えても取り直さず、
+再読み込みでは取り直す〉。KEVは全期間の月別から`kev/trend`の`recentMonths`で直近6ヶ月を切り出す）。KEVのデータ取得は`kev/useKevData`。
 OSVの「詳細」はGitHub Advisory由来のマークダウンのため、`shared/Markdown`（解析は`shared/parseMarkdown.ts`）で整えて表示する
 （見出し・段落・箇条書き・表・コード・強調・リンク・引用・区切り線。外部ライブラリは足さず、React要素へ直接変換＝HTMLを埋め込まないのでXSSが起きない。
 リンクはhttp(s)のみ、画像は読み込まない）。**ファイル名は大文字小文字だけが違う組（`Markdown.tsx`と`markdown.ts`）にしない**（Windowsで同じ名前になり、
 自分自身をimportしてしまう）。展開行が表の最小幅（700px）で横に長くなり、スマホで右が切れて見えるのは、横スクロールで見る設計。
 本番の`vercel.json`のCSPは外部のオリジン（API・DEPSOPSのバッジ画像）を許可する必要があり、`src/csp.test.ts`が
-抜けを検査する（E2Eは同一オリジンのモックで動くため気づけない）。外部データ（JVN・OSVの参照URL）は`safeHttpUrl`（`shared/safeUrl.ts`）で
+抜けを検査する（E2Eは同一オリジンのモックで動くため気づけない）。外部データ（OSVの参照URL）は`safeHttpUrl`（`shared/safeUrl.ts`）で
 http(s)のみリンクにする（`javascript:`等を弾くXSS対策）。
 セッション（7日・利用で延長。ログインから30日で再認証）が切れていると401→「再ログインしてください」を表示する
 設定画面の並びは**OAuth欄が先、MCPトークン欄が後**（`SettingsPanel.tsx`。OAuthが推奨の接続方法で、トークンは「OAuth非対応のクライアント向け」）。`OAuthConnectionsSection.tsx`は、OAuth 2.1の登録コマンド（`claude mcp add --scope user --transport http ...`、トークン不要）を**接続が0件でも常に表示**し、接続中のアプリの一覧と「接続解除」を出す（`listOAuthConnections`・`disconnectOAuthClient`。一度も使われない接続は「未使用」と強調し、7日で自動解除される旨を添える=サーバーの`oauth/cleanup`ジョブ。アプリ名は登録時の自己申告のため、必ずReactのテキストとして出す）。`McpTokenSection.tsx`は失効済み・期限切れを折りたたみ、標準では有効なトークンだけを表示する（切替ボタン「失効済み・期限切れを表示（N件）」）。E2Eは`SET-13`・`SET-15`〜`SET-17`（GitHubログインをやり直してから発行）。一覧の初回取得は`setTimeout`経由で呼び、effect内の同期setStateによるESLint警告を増やさない。
@@ -185,7 +185,7 @@ http(s)のみリンクにする（`javascript:`等を弾くXSS対策）。
 
 ## APIクライアントの分割構成（dashboard/src/api/）
 `client.ts`（元は451行の単一ファイル）は、ドメインごとに `shared.ts`/`kev.ts`/`osv.ts`/
-`jvn.ts`/`depscan.ts`/`depsops.ts`/`codescan.ts`/`crawlerLogs.ts`/`auth/`（`session`・`notifications`・`mcpTokens`・`oauthConnections`の4モジュール+共通の`request.ts`）に分割し、
+`depscan.ts`/`depsops.ts`/`codescan.ts`/`crawlerLogs.ts`/`auth/`（`session`・`notifications`・`mcpTokens`・`oauthConnections`の4モジュール+共通の`request.ts`）に分割し、
 `client.ts`自体はバーレル（re-export）として残している。既存の`import { xxx } from
 '../api/client'`は全て動き続ける。新しいAPI呼び出し関数を追加する場合は対応ドメインの
 ファイルに追加すること。

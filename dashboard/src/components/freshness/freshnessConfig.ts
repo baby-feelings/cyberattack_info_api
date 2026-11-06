@@ -1,7 +1,7 @@
 // 「最終取得」表示の設定。しきい値・文言・色・更新間隔を、ここに1か所だけ置く（コンポーネントに直書きしない）。
 
 // 取得状況を表示するクローラーの種別（バックエンドの crawler_logs.crawler_type と同じ値）
-export type FetchedCrawlerType = 'KEV' | 'OSV' | 'JVN' | 'DEPSCAN' | 'CODESCAN' | 'DEPSOPS' | 'RUNTIME'
+export type FetchedCrawlerType = 'KEV' | 'OSV' | 'DEPSCAN' | 'CODESCAN' | 'DEPSOPS' | 'RUNTIME'
 
 // 状態。fresh=最新、stale=更新が遅れている、failed=直近の実行が失敗、unknown=実行記録を取得できない
 // モーダル画面ごとの取得元。画面側に種別を直書きせず、ここに1か所だけ置く。

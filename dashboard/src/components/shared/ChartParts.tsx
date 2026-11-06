@@ -4,7 +4,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from 'recharts'
 
-// OsvPanel・JvnPanel で共有する、脆弱性一覧パネルのチャート系パーツ群
+// OsvPanel で共有する、脆弱性一覧パネルのチャート系パーツ群
 // （チャートカードの外枠・重要度別円グラフ・月別トレンド棒グラフ）。
 // 深刻度の値・配色などドメイン固有の情報は呼び出し側から props で渡す。
 

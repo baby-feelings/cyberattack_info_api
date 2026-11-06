@@ -1,8 +1,8 @@
-"""drop jvn_vulnerabilities table (JVN 廃止)
+"""drop jvn_vulnerabilities table and JVN crawler logs (JVN 廃止)
 
 JVN は、MyJVN API が 404 を返し続け、このアプリの用途にもほとんど関係しないため廃止した。
-クローラー・API・MCP・TAXII を削除したのに合わせて、テーブルも削除する。
-downgrade は、テーブルの構造だけを戻す（削除したデータは戻らない）。
+クローラー・API・MCP・TAXII を削除したのに合わせて、テーブルと、実行履歴（crawler_logs）の
+JVN の行も削除する。downgrade は、テーブルの構造だけを戻す（削除したデータは戻らない）。
 
 Revision ID: b3e8f4a1c697
 Revises: a7d2c91e5f08
@@ -24,6 +24,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
+    # 実行履歴の JVN の行（廃止したため、一覧に出し続けない）
+    op.execute("DELETE FROM crawler_logs WHERE crawler_type = 'JVN'")
     op.drop_table('jvn_vulnerabilities')
 
 

@@ -10,12 +10,11 @@ scenario('APP-01', '初期表示でヘッダー・KEVタブ・フッターが表
   await expect(page.getByText('毎日 JST 04:00〜07:45 に自動更新')).toBeVisible()
 })
 
-scenario('APP-02', '5つのタブが切り替わり対応するタブパネルが表示される', async ({ page }) => {
+scenario('APP-02', '4つのタブが切り替わり対応するタブパネルが表示される', async ({ page }) => {
   await page.goto('/')
 
   const expectations = [
     { tab: 'OSV', heading: /OSV — Open Source Vulnerabilities/ },
-    { tab: 'JVN', heading: /JVN — Japan Vulnerability Notes/ },
     { tab: 'DEPSCAN', heading: /DEPSCAN — 自作アプリの依存ライブラリ脆弱性/ },
     { tab: 'CODESCAN', heading: /CODESCAN — 自アプリのコード脆弱性診断/ },
     { tab: 'KEV', heading: /CISA KEV — Known Exploited Vulnerabilities/ },
@@ -85,23 +84,21 @@ scenario('APP-06', 'アクセシビリティツリー（ARIAスナップショ�
     - tablist:
       - tab "KEV" [selected]
       - tab "OSV"
-      - tab "JVN"
       - tab "DEPSCAN"
       - tab "CODESCAN"
   `)
-  await openTab(page, 'JVN')
+  await openTab(page, 'OSV')
   await expect(page.getByRole('tablist')).toMatchAriaSnapshot(`
     - tablist:
       - tab "KEV"
-      - tab "OSV"
-      - tab "JVN" [selected]
+      - tab "OSV" [selected]
       - tab "DEPSCAN"
       - tab "CODESCAN"
   `)
 
   // タブとタブパネルは aria-controls / aria-labelledby で相互に関連付けられている
-  await expect(page.getByRole('tab', { name: 'JVN', exact: true })).toHaveAttribute('aria-controls', 'tabpanel-jvn')
-  await expect(page.getByRole('tabpanel', { name: 'JVN' })).toHaveAttribute('id', 'tabpanel-jvn')
+  await expect(page.getByRole('tab', { name: 'OSV', exact: true })).toHaveAttribute('aria-controls', 'tabpanel-osv')
+  await expect(page.getByRole('tabpanel', { name: 'OSV' })).toHaveAttribute('id', 'tabpanel-osv')
   await expect(page.getByRole('banner')).toBeVisible()
   await expect(page.getByRole('main')).toBeVisible()
   await expect(page.getByRole('contentinfo')).toBeVisible()

@@ -33,7 +33,7 @@ export function scenario(
 
 export { expect }
 
-// 表の「データ行」（日付の区切り行を除く）。区切りが入る一覧（KEV・OSV・JVN・CODESCAN）で行数や位置を見るときに使う
+// 表の「データ行」（日付の区切り行を除く）。区切りが入る一覧（KEV・OSV・CODESCAN）で行数や位置を見るときに使う
 export const dataRows = (table: Locator) => table.locator('tr:not([data-divider])')
 export type { Page }
 
@@ -50,7 +50,7 @@ export async function seedSession(
 }
 
 // 下部固定タブバーのタブを選択する（タブは role=tab・名前＝タブ名）
-export async function openTab(page: Page, name: 'KEV' | 'OSV' | 'JVN' | 'DEPSCAN' | 'CODESCAN') {
+export async function openTab(page: Page, name: 'KEV' | 'OSV' | 'DEPSCAN' | 'CODESCAN') {
   await page.getByRole('tab', { name, exact: true }).click()
   await expect(page.getByRole('tab', { name, exact: true })).toHaveAttribute('aria-selected', 'true')
 }

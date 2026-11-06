@@ -12,9 +12,6 @@ vi.mock('./components/KevPanel', () => ({
 vi.mock('./components/OsvPanel', () => ({
   OsvPanel: () => <div data-testid="osv-panel" />,
 }))
-vi.mock('./components/JvnPanel', () => ({
-  JvnPanel: () => <div data-testid="jvn-panel" />,
-}))
 vi.mock('./components/DepscanAuthGate', () => ({
   DepscanAuthGate: () => <div data-testid="depscan-auth-gate" />,
 }))
@@ -59,9 +56,6 @@ describe('App', () => {
     await user.click(screen.getByRole('tab', { name: /OSV/ }))
     expect(screen.getByTestId('osv-panel')).toBeInTheDocument()
     expect(screen.queryByTestId('kev-panel')).not.toBeInTheDocument()
-
-    await user.click(screen.getByRole('tab', { name: /JVN/ }))
-    expect(screen.getByTestId('jvn-panel')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: /DEPSCAN/ }))
     expect(screen.getByTestId('depscan-auth-gate')).toBeInTheDocument()

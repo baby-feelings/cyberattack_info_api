@@ -73,7 +73,7 @@ FastAPIのOpenAPIに載らない`/mcp`・OAuth 2.1のルートは、ZAP専用の
 
 ## 毎日クロール（daily-crawl.yml）
 「ネットワーク障害等でAPSchedulerが不発火だった場合の二重バックアップ」として維持。
-**単一 cron（`5 19 * * *` / JST 翌 04:05）で KEV → OSV → JVN → DEPSCAN → CODESCAN → DEPSOPS
+**単一 cron（`5 19 * * *` / JST 翌 04:05）で KEV → OSV → DEPSCAN → CODESCAN → DEPSOPS
 を順次実行**（GitHub Actions 無料プランでは複数 cron の発火が不安定なため単一 cron に統合）。
 
 | 実行順 | ジョブ | 対象 |
@@ -81,19 +81,18 @@ FastAPIのOpenAPIに載らない`/mcp`・OAuth 2.1のルートは、ZAP専用の
 | 1 | `wake-up` | ヘルスチェック |
 | 2 | `crawl-kev` | `POST /admin/crawl` |
 | 3 | `crawl-osv` | `POST /admin/osv-crawl`（timeout 600s） |
-| 4 | `crawl-jvn` | `POST /admin/jvn-crawl`（timeout 600s） |
-| 5 | `crawl-depscan` | `POST /admin/depscan-crawl`（timeout 600s） |
-| 6 | `crawl-codescan` | `POST /admin/codescan-crawl`（timeout 600s） |
-| 7 | `dependabot-ops` | `POST /admin/dependabot-ops` |
+| 4 | `crawl-depscan` | `POST /admin/depscan-crawl`（timeout 600s） |
+| 5 | `crawl-codescan` | `POST /admin/codescan-crawl`（timeout 600s） |
+| 6 | `dependabot-ops` | `POST /admin/dependabot-ops` |
 
 各ジョブは `always()` で前段の失敗に関わらず実行。`workflow_dispatch` で手動実行可能
-（`target: kev / osv / jvn / depscan / codescan / dependabot-ops / all`）。`API_BASE_URL`は
+（`target: kev / osv / depscan / codescan / dependabot-ops / all`）。`API_BASE_URL`は
 OCIインスタンスのドメイン（インスタンスを作り直した場合はここも更新）。GitHub Secretsに
 `API_KEY`の設定が必要。
 
 **重複実行の防止（Issue #239。直近12時間の成功記録で判定）**: 「二重バックアップ」という設計意図どおり、この
 daily-crawl.ymlは無条件に毎日発火する。OCI移行後はAPSchedulerが確実に動作するため、
-実質的にバックアップではなく常に二重実行（1日2回）になっていた。KEV/OSV/JVN/DEPSCAN/
+実質的にバックアップではなく常に二重実行（1日2回）になっていた。KEV/OSV/DEPSCAN/
 CODESCANはUpsertのため二重実行の実害は薄いが、DEPSOPSは実行ごとに1PRにつき1行追記する
 ログ設計のため件数が二重に膨れ上がっていた（本番で総件数2388件中約半数が重複）。
 `app.core.crawler_runner.already_succeeded_recently`（全クローラーが共通の
