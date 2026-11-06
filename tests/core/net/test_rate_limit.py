@@ -1,4 +1,4 @@
-"""app.core.rate_limit（レート制限・ロックアウト・クライアントの識別。Issue #406）のテスト。"""
+"""app.core.net.rate_limit（レート制限・ロックアウト・クライアントの識別。Issue #406）のテスト。"""
 # ruff: noqa: E501 - 試験データの表（1行に1件）を、読みやすい形で並べるため
 import os
 
@@ -11,8 +11,8 @@ from unittest.mock import patch  # noqa: E402
 from fastapi import FastAPI, HTTPException  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app.core import rate_limit  # noqa: E402
-from app.core.rate_limit import RateLimiter, RateLimitMiddleware, client_id, is_limited_path  # noqa: E402
+from app.core.net import rate_limit  # noqa: E402
+from app.core.net.rate_limit import RateLimiter, RateLimitMiddleware, client_id, is_limited_path  # noqa: E402
 
 
 class _Clock:

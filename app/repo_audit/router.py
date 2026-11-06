@@ -14,8 +14,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.auth.api_key import require_api_key, require_api_key_or_session
-from app.core.background import run_in_background
 from app.core.database import get_db
+from app.core.runner.background import run_in_background
 from app.repo_audit.checks import NG
 from app.repo_audit.crawler import fetch_and_audit_repos
 from app.repo_audit.models import RepoAudit

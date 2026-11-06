@@ -19,8 +19,8 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.crawler_runner import CrawlCounters, CrawlJob
 from app.core.notifications.crawler import notify_error
+from app.core.runner.crawler_runner import CrawlCounters, CrawlJob
 from app.depscan.finding_builder import build_findings
 from app.depscan.inventory import RepoDependencyRepository
 from app.depscan.issue_management import close_resolved_repo_issues, file_github_issues

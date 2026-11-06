@@ -21,7 +21,7 @@ from app.codescan.issue_management import close_resolved_repo_issues  # noqa: E4
 from app.codescan.models import CodeFinding  # noqa: E402
 from app.codescan.repository import CodeFindingRepository  # noqa: E402
 from app.codescan.user_scan import run_codescan_for_user  # noqa: E402
-from app.core.crawler_runner import CrawlCounters  # noqa: E402
+from app.core.runner.crawler_runner import CrawlCounters  # noqa: E402
 from app.finding_exceptions.models import FindingException  # noqa: E402
 from tests.codescan.support import make_finding  # noqa: E402
 

@@ -10,9 +10,9 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.crawler_runner import CrawlCounters, run_crawler
 from app.core.db_utils import now_utc
-from app.core.retry import HTTP_TIMEOUT_SECONDS, request_with_retry
+from app.core.net.retry import HTTP_TIMEOUT_SECONDS, request_with_retry
+from app.core.runner.crawler_runner import CrawlCounters, run_crawler
 from app.kev.models import Vulnerability
 
 logger = logging.getLogger(__name__)

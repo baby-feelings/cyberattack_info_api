@@ -86,7 +86,7 @@ class TestFindAlerts:
 
     def test_inactive_repos_are_ignored(self, db_session):
         _seed(db_session)
-        with patch("app.core.operating_status.settings.INACTIVE_REPOS", "alice/old"):
+        with patch("app.core.findings.operating_status.settings.INACTIVE_REPOS", "alice/old"):
             found = _by_kind(find_alerts(db_session, TODAY))
         assert ("eol", "python", "3.10") not in found
 

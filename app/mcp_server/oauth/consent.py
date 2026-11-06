@@ -11,7 +11,7 @@
 - 認可リクエストIDは推測不能な値で、同意画面の URL にだけ載る。10 分で失効する
 - クライアント名は登録時の自己申告（未確認）なので、画面に出す文字列はすべてエスケープし、
   戻り先のホストも併記して判断材料にする
-- フレーム埋め込みは全レスポンスの `X-Frame-Options: DENY`（core/security_headers）で防ぐ
+- フレーム埋め込みは全レスポンスの `X-Frame-Options: DENY`（core/net/security_headers）で防ぐ
 - フォームの本文は urlencoded で、依存を増やさないため手で解析する（小さな上限付き）
 """
 import base64

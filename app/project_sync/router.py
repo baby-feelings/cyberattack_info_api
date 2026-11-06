@@ -5,7 +5,7 @@ POST /admin/project-sync-crawl – 手動実行（バックグラウンド。X-A
 from fastapi import APIRouter, Query, Security
 
 from app.auth.api_key import require_api_key
-from app.core.background import run_in_background
+from app.core.runner.background import run_in_background
 from app.project_sync.crawler import sync_project_items
 
 admin_router = APIRouter(tags=["admin"])

@@ -9,7 +9,7 @@ from app.audit.models import AuditLog
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.db_utils import now_utc
-from app.core.rate_limit import is_limited_path
+from app.core.net.rate_limit import is_limited_path
 
 logger = logging.getLogger(__name__)
 

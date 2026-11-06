@@ -29,10 +29,10 @@ from app.codescan.schemas import (
     CodescanCrawlResponse,
     RepoStat,
 )
-from app.core.background import run_in_background
 from app.core.database import get_db
-from app.core.operating_status import OperatingQuery, apply_operating_status
+from app.core.findings.operating_status import OperatingQuery, apply_operating_status
 from app.core.pagination import DEFAULT_PER_PAGE, MAX_PER_PAGE, paginate
+from app.core.runner.background import run_in_background
 from app.core.schemas import SeverityStat
 from app.finding_exceptions.matching import exception_map, key_of_finding, not_excepted
 from app.finding_exceptions.models import KIND_CODE

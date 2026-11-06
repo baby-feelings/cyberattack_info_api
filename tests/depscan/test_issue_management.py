@@ -62,7 +62,7 @@ class TestFileGithubIssues:
         return base
 
     # 実際の GitHub API 呼び出し（find_open_issue/create_issue/add_issue_comment）は
-    # 共通処理として app.core.issue_filing に切り出されているため、モックはそちら側を
+    # 共通処理として app.core.findings.issue_filing に切り出されているため、モックはそちら側を
     # 対象にする（app.depscan.issue_management はドメイン固有のタイトル・本文整形の
     # みを担い、呼び出しは file_or_update_repo_issues 経由になったため）
 

@@ -15,8 +15,8 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from app.auth.api_key import require_api_key, require_api_key_or_session
-from app.core.background import run_in_background
 from app.core.database import get_db
+from app.core.runner.background import run_in_background
 from app.github_alerts.crawler import fetch_and_store_github_alerts
 from app.github_alerts.models import SOURCE_UNAVAILABLE, GithubAlert, GithubAlertSource
 from app.github_alerts.repository import dependabot_vs_depscan

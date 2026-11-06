@@ -9,7 +9,7 @@ from typing import Any
 
 import httpx
 
-from app.core.retry import HTTP_BULK_TIMEOUT_SECONDS, HTTP_TIMEOUT_SECONDS, request_with_retry
+from app.core.net.retry import HTTP_BULK_TIMEOUT_SECONDS, HTTP_TIMEOUT_SECONDS, request_with_retry
 
 # OSV REST API ベース URL
 OSV_API_BASE = "https://api.osv.dev/v1"

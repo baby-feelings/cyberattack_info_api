@@ -128,7 +128,7 @@ class TestListOpenDependabotPrs:
         mock_client = _mock_httpx_client()
         mock_client.get = MagicMock(side_effect=[rate_limited, _mock_response(prs)])
         with patch("httpx.Client", return_value=mock_client), \
-             patch("app.core.retry.time.sleep"):
+             patch("app.core.net.retry.time.sleep"):
             result = list_open_dependabot_prs(GitHubRepo("owner", "repo", "token"))
         assert [pr["number"] for pr in result] == [1]
         assert mock_client.get.call_count == 2
@@ -220,7 +220,7 @@ class TestHasCiWorkflows:
         mock_client = _mock_httpx_client()
         mock_client.get = MagicMock(side_effect=[transient, success])
         with patch("httpx.Client", return_value=mock_client), \
-             patch("app.core.retry.time.sleep"):
+             patch("app.core.net.retry.time.sleep"):
             assert has_ci_workflows(GitHubRepo("owner", "repo", "token")) is True
         assert mock_client.get.call_count == 2
 
@@ -545,7 +545,7 @@ class TestRunDependabotOps:
         import pytest
         with patch(
             "app.depsops.runner.list_target_repos", side_effect=RuntimeError("GitHub API down"),
-        ), patch("app.core.crawler_runner.notify_error") as mock_notify_error:
+        ), patch("app.core.runner.crawler_runner.notify_error") as mock_notify_error:
             with pytest.raises(RuntimeError):
                 run_dependabot_ops()
         mock_notify_error.assert_called_once()

@@ -20,7 +20,7 @@ from app.codescan.notifier import notify_code_findings
 from app.codescan.repository import CodeFindingRepository
 from app.core.database import SessionLocal
 from app.core.github.accounts import list_target_repos
-from app.core.user_scan import UserScanJob
+from app.core.runner.user_scan import UserScanJob
 
 logger = logging.getLogger(__name__)
 

@@ -91,7 +91,9 @@ class TestListRuntimes:
 
     def test_operating_filter(self, client, db_session):
         _seed(db_session)
-        with _today(), patch("app.core.operating_status.settings.INACTIVE_REPOS", "bob/app"):
+        with _today(), patch(
+            "app.core.findings.operating_status.settings.INACTIVE_REPOS", "bob/app",
+        ):
             active = client.get("/api/runtimes?operating=active", headers=HEADERS)
             inactive = client.get("/api/runtimes?operating=inactive", headers=HEADERS)
         assert "bob/app" not in {r["repo_full_name"] for r in active.json()["data"]}

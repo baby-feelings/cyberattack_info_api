@@ -15,12 +15,12 @@ cyberattack_info_api/
 │   │                           # github_router〈ログイン・交換コード〉・account_router〈スキャン進捗・通知設定〉を束ねる。
 │   │                           # external_login は、ログインの戻りを別機能（MCP の OAuth）が引き受ける登録口
 │   │                           # （auth は mcp_server を知らない。依存は mcp_server → auth の一方向）
-│   ├── core/                   # 横断的インフラ（個別のドメインを知らない。config・database・background・crawler_runner・
-│   │                           # crypto〈トークン暗号化〉・db_utils・notifications/〈slack・recipients・base・共通の crawler/webhook_test。ドメイン固有の通知は各ドメインの notifier.py〉・pagination・
-│   │                           # osv_client・stix・github/〈api=`GitHubApi`・repo=`GitHubRepo`〈1リポジトリへの共通操作〉・
-│   │                           # accounts=所有リポジトリ一覧〉・issue_filing〈DEPSCAN/CODESCAN/ZAPのIssue起票共通処理〉・
-│   │                           # list_filters〈一覧APIの絞り込み条件の基底クラス〉・security_headers・共通 schemas。
-│   │                           # crawler_runnerは`CrawlJob`、notificationsは`Notifier`の Template Method）
+│   ├── core/                   # 横断的インフラ（個別のドメインを知らない）。config・database・crypto〈トークン暗号化〉・db_utils・pagination・osv_client・stix・共通 schemas
+│   │                           # net/〈retry・http_metrics・rate_limit・security_headers〉
+│   │                           # findings/〈finding_format・list_filters〈一覧APIの絞り込み条件の基底クラス〉・owner_scope・operating_status・issue_filing=`IssueReporter`〈DEPSCAN/CODESCANのIssue起票・クローズ〉〉
+│   │                           # runner/〈crawler_runner=`CrawlJob`・user_scan=`UserScanJob`〈ユーザー別スキャンの骨格〉・background〉
+│   │                           # notifications/〈slack・recipients・base・共通の crawler/webhook_test。ドメイン固有の通知は各ドメインの notifier.py〉・github/〈api=`GitHubApi`・repo=`GitHubRepo`・accounts=所有リポジトリ一覧〉
+│   │                           # CrawlJob・UserScanJob・IssueReporter・Notifier は Template Method
 │   ├── jobs/                   # 各ドメインを束ねる定期実行・一括実行（scheduler_jobs〈定期ジョブの定義と登録〉・
 │   │                           # repo_cleanup〈削除済みリポジトリのデータ削除、Issue #228〉・
 │   │                           # user_crawl_runner〈登録済み他ユーザー向け定期実行、Issue #227〉・各管理API）

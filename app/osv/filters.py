@@ -5,7 +5,7 @@ from typing import Any, Literal
 from fastapi import Query
 from sqlalchemy.orm import Query as SaQuery
 
-from app.core.list_filters import FeedListFilter
+from app.core.findings.list_filters import FeedListFilter
 from app.core.pagination import MAX_DAYS
 from app.osv.models import OsvVulnerability
 

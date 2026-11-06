@@ -20,8 +20,8 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Query as SaQuery
 
 from app.core.db_utils import now_utc
-from app.core.operating_status import OperatingStatus, apply_operating_status
-from app.core.owner_scope import is_owned_by
+from app.core.findings.operating_status import OperatingStatus, apply_operating_status
+from app.core.findings.owner_scope import is_owned_by
 
 
 class FeedListFilter:

@@ -1,10 +1,10 @@
-"""app.core.retry（外部API呼び出し共通のリトライ・指数バックオフ）のテスト。"""
+"""app.core.net.retry（外部API呼び出し共通のリトライ・指数バックオフ）のテスト。"""
 from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
 
-from app.core.retry import external_api_retry_total, request_with_retry
+from app.core.net.retry import external_api_retry_total, request_with_retry
 
 
 def _response(status_code: int, headers: dict[str, str] | None = None) -> httpx.Response:
@@ -21,7 +21,7 @@ class TestRequestWithRetrySuccess:
 
     def test_does_not_sleep_on_first_success(self):
         request_func = MagicMock(return_value=_response(200))
-        with patch("app.core.retry.time.sleep") as mock_sleep:
+        with patch("app.core.net.retry.time.sleep") as mock_sleep:
             request_with_retry(request_func)
         mock_sleep.assert_not_called()
 
@@ -29,7 +29,7 @@ class TestRequestWithRetrySuccess:
 class TestRequestWithRetryTransientErrors:
     def test_retries_on_503_then_succeeds(self):
         request_func = MagicMock(side_effect=[_response(503), _response(200)])
-        with patch("app.core.retry.time.sleep") as mock_sleep:
+        with patch("app.core.net.retry.time.sleep") as mock_sleep:
             result = request_with_retry(request_func, max_attempts=3, base_delay=1.0)
         assert result.status_code == 200
         assert request_func.call_count == 2
@@ -39,13 +39,13 @@ class TestRequestWithRetryTransientErrors:
         request_func = MagicMock(
             side_effect=[_response(500), _response(500), _response(200)],
         )
-        with patch("app.core.retry.time.sleep") as mock_sleep:
+        with patch("app.core.net.retry.time.sleep") as mock_sleep:
             request_with_retry(request_func, max_attempts=3, base_delay=2.0)
         assert mock_sleep.call_args_list == [((2.0,),), ((4.0,),)]
 
     def test_raises_after_exhausting_max_attempts(self):
         request_func = MagicMock(return_value=_response(502))
-        with patch("app.core.retry.time.sleep"):
+        with patch("app.core.net.retry.time.sleep"):
             with pytest.raises(httpx.HTTPStatusError):
                 request_with_retry(request_func, max_attempts=3)
         assert request_func.call_count == 3
@@ -55,7 +55,7 @@ class TestRequestWithRetryTransientErrors:
             side_effect=[httpx.ConnectError("boom", request=httpx.Request("GET", "https://x")),
                          _response(200)],
         )
-        with patch("app.core.retry.time.sleep"):
+        with patch("app.core.net.retry.time.sleep"):
             result = request_with_retry(request_func, max_attempts=3)
         assert result.status_code == 200
 
@@ -63,7 +63,7 @@ class TestRequestWithRetryTransientErrors:
         request_func = MagicMock(
             side_effect=httpx.ConnectError("boom", request=httpx.Request("GET", "https://x")),
         )
-        with patch("app.core.retry.time.sleep"):
+        with patch("app.core.net.retry.time.sleep"):
             with pytest.raises(httpx.ConnectError):
                 request_with_retry(request_func, max_attempts=2)
         assert request_func.call_count == 2
@@ -95,7 +95,7 @@ class TestRequestWithRetryRateLimit403:
         request_func = MagicMock(
             side_effect=[_response(403, {"Retry-After": "0"}), _response(200)],
         )
-        with patch("app.core.retry.time.sleep") as mock_sleep:
+        with patch("app.core.net.retry.time.sleep") as mock_sleep:
             result = request_with_retry(request_func, max_attempts=3)
         assert result.status_code == 200
         mock_sleep.assert_called_once_with(0.0)
@@ -107,7 +107,7 @@ class TestRequestWithRetryRateLimit403:
                 _response(200),
             ],
         )
-        with patch("app.core.retry.time.sleep"):
+        with patch("app.core.net.retry.time.sleep"):
             result = request_with_retry(request_func, max_attempts=3)
         assert result.status_code == 200
 
@@ -116,7 +116,7 @@ class TestRetryMetrics:
     def test_increments_transient_error_counter(self):
         before = external_api_retry_total.labels(reason="transient_error")._value.get()
         request_func = MagicMock(side_effect=[_response(503), _response(200)])
-        with patch("app.core.retry.time.sleep"):
+        with patch("app.core.net.retry.time.sleep"):
             request_with_retry(request_func, max_attempts=3)
         after = external_api_retry_total.labels(reason="transient_error")._value.get()
         assert after == before + 1
@@ -124,7 +124,7 @@ class TestRetryMetrics:
     def test_increments_rate_limited_counter(self):
         before = external_api_retry_total.labels(reason="rate_limited")._value.get()
         request_func = MagicMock(side_effect=[_response(429), _response(200)])
-        with patch("app.core.retry.time.sleep"):
+        with patch("app.core.net.retry.time.sleep"):
             request_with_retry(request_func, max_attempts=3)
         after = external_api_retry_total.labels(reason="rate_limited")._value.get()
         assert after == before + 1
@@ -143,7 +143,7 @@ class TestRetryDelayCalculation:
         request_func = MagicMock(
             side_effect=[_response(429, {"Retry-After": "5"}), _response(200)],
         )
-        with patch("app.core.retry.time.sleep") as mock_sleep:
+        with patch("app.core.net.retry.time.sleep") as mock_sleep:
             request_with_retry(request_func, max_attempts=3, base_delay=1.0)
         mock_sleep.assert_called_once_with(5.0)
 
@@ -155,7 +155,7 @@ class TestRetryDelayCalculation:
         request_func = MagicMock(
             side_effect=[_response(429, headers), _response(200)],
         )
-        with patch("app.core.retry.time.sleep") as mock_sleep:
+        with patch("app.core.net.retry.time.sleep") as mock_sleep:
             request_with_retry(request_func, max_attempts=3, base_delay=1.0)
         # 上限 (300秒) でキャップされること
         assert mock_sleep.call_args_list[0][0][0] == 300.0
@@ -163,7 +163,7 @@ class TestRetryDelayCalculation:
     def test_invalid_rate_limit_reset_falls_back_to_exponential_backoff(self):
         headers = {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "not-a-number"}
         request_func = MagicMock(side_effect=[_response(429, headers), _response(200)])
-        with patch("app.core.retry.time.sleep") as mock_sleep:
+        with patch("app.core.net.retry.time.sleep") as mock_sleep:
             request_with_retry(request_func, max_attempts=3, base_delay=1.0)
         mock_sleep.assert_called_once_with(1.0)
 
@@ -171,6 +171,6 @@ class TestRetryDelayCalculation:
         request_func = MagicMock(
             side_effect=[_response(503, {"Retry-After": "not-a-number"}), _response(200)],
         )
-        with patch("app.core.retry.time.sleep") as mock_sleep:
+        with patch("app.core.net.retry.time.sleep") as mock_sleep:
             request_with_retry(request_func, max_attempts=3, base_delay=1.0)
         mock_sleep.assert_called_once_with(1.0)

@@ -7,7 +7,7 @@
 
 | 項目 | 状況 | 内容・理由 |
 |---|---|---|
-| 管理 API・認証系のレート制限 | **実施** | `app/core/rate_limit.py`。`/admin/*`・`/auth/*`・OAuth の入口を、クライアントごとに 1 分あたり `RATE_LIMIT_PER_MINUTE`（60）回まで。超えたら 429（`Retry-After` つき） |
+| 管理 API・認証系のレート制限 | **実施** | `app/core/net/rate_limit.py`。`/admin/*`・`/auth/*`・OAuth の入口を、クライアントごとに 1 分あたり `RATE_LIMIT_PER_MINUTE`（60）回まで。超えたら 429（`Retry-After` つき） |
 | 認証失敗の連続による一時ロック | **実施** | 401・403 が 10 分に `RATE_LIMIT_LOCKOUT_FAILURES`（10）回で、`RATE_LIMIT_LOCKOUT_MINUTES`（15）分、すべて拒否。API キーの総当たりを止める |
 | 監査ログ（管理操作・認証・MCP トークン） | **実施** | `app/audit/`。誰が（api-key／session／ユーザー名）・いつ・何を・結果。**IP・ヘッダーの値・クエリ・本文は記録しない**。MCP トークンの発行・失効は、ユーザー名と ID（値は記録しない）。保持 `AUDIT_RETENTION_DAYS`（180）日。`GET /api/audit-logs`（管理者用 API キー） |
 | 鍵の更新期限の通知 | **実施** | `API_KEY_EXPIRES_ON`・`GITHUB_TOKEN_EXPIRES_ON`（YYYY-MM-DD）を設定すると、`SECRETS_EXPIRY_NOTICE_DAYS`（14）日前から、毎日、管理者の Slack に通知（更新の手順つき）。形式の誤りは、起動時に失敗させる |

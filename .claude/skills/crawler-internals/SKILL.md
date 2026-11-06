@@ -8,7 +8,7 @@ description: KEV/OSVクローラーおよびその共通基盤（app/core/配下
 `app/kev/` `app/osv/` および共通基盤 `app/core/` の設計判断集。
 
 ## 外部API呼び出しの耐障害性（Issue #130）
-CISA KEVフィード・OSV API・GitHub APIへの呼び出しは、`app.core.retry.
+CISA KEVフィード・OSV API・GitHub APIへの呼び出しは、`app.core.net.retry.
 request_with_retry` で指数バックオフ付きリトライを行う。一時的な障害（429・5xx・
 接続断）のみリトライ対象とし、恒久的なエラー（401/404、権限不足の403等）は即座に
 呼び出し元へ伝播させる（無駄なリトライで失敗までの時間を延ばさないため）。GitHub
@@ -97,7 +97,7 @@ crawler_typeに関わらず常に管理者（`GITHUB_USERNAME`）自身の登録
 ## クローラー実行の共通オーケストレーション（crawler_runner.py）
 KEV/OSV/DEPSCAN/CODESCAN/DEPSOPS の各エントリポイントが個別に持っていた「重複実行スキップ →
 started_at計測 → DBセッション生成 → 本体処理 → crawler_logs記録 → Slack通知 → DBセッション
-クローズ」という定型処理を、`app.core.crawler_runner.CrawlJob`（Template Method の抽象クラス）に
+クローズ」という定型処理を、`app.core.runner.crawler_runner.CrawlJob`（Template Method の抽象クラス）に
 一元化している。`CrawlJob.run(force=)`が共通の流れを担い、サブクラスは`execute`（本体）・
 `after_success`（成功後の通知。DBセッションを閉じた後・例外を握りつぶさず呼ばれる。既定は
 `notify_success`）・`result`（戻り値。既定は(inserted, updated, deleted)）・`skipped_result`
@@ -129,7 +129,7 @@ DEPSCAN/DEPSOPSも同じ`CrawlJob`経由で判定する（詳細は`depscan-deps
 `/admin/crawl`（KEV）・`/admin/osv-crawl`・`/admin/depscan-crawl`・
 `/admin/codescan-crawl`・`/admin/dependabot-ops`・`/admin/repo-cleanup`（Issue #228）・
 `/admin/user-crawl`（Issue #227）は即座に 202 Accepted を返し、
-`app.core.background.run_in_background`（daemon スレッドで実行し、例外はログに記録するだけで
+`app.core.runner.background.run_in_background`（daemon スレッドで実行し、例外はログに記録するだけで
 呼び出し元へは伝播させない共通ヘルパー）でバックグラウンド実行する。結果は
 `/api/crawler-logs` で確認する（`repo-cleanup`は`crawler_type="CLEANUP"`で記録し、
 `deleted`フィールドにパージしたリポジトリ数を格納する。`user-crawl`はユーザー単位の
@@ -162,7 +162,7 @@ datetime 型の属性だけ自動変換する。`OsvVulnerabilityOut`/
 「`query.count()` → offset算出 → `order_by`/`offset`/`limit` を適用して取得」という定型処理を
 `app.core.pagination.paginate(query, page, per_page, order_by)` に一元化している。
 
-**絞り込み条件は「検索条件オブジェクト」にまとめる（`app.core.list_filters`＋各ドメインの`filters.py`）**:
+**絞り込み条件は「検索条件オブジェクト」にまとめる（`app.core.findings.list_filters`＋各ドメインの`filters.py`）**:
 各`list_*`が8〜9個のクエリパラメータを引数で受け取りフィルターを組み立てていたため、
 ルーターは`page`/`per_page`と`flt: XxxListFilter = Depends()`だけを受け取り、`flt.apply(query)`を
 呼ぶ形にした。FastAPIは`Depends()`のクラスの`__init__`引数をクエリパラメータに展開するため、
@@ -304,7 +304,7 @@ Upsert前にリスト内の重複を除去。`OSV_RETENTION_DAYS`（既定180日
 `downgrade -1`→`upgrade head`→`alembic check`（差分なし）をローカルのSQLiteで確認する（`python -m alembic`で実行。
 `alembic`コマンド単体だとカレントが`sys.path`に入らず`app`をimportできない）。
 
-## セキュリティヘッダー（app/core/security_headers.py）
+## セキュリティヘッダー（app/core/net/security_headers.py）
 `SecurityHeadersMiddleware`（`app/main.py`で`add_middleware`）が全レスポンスに`X-Content-Type-Options: nosniff`・
 `X-Frame-Options: DENY`・`Referrer-Policy: no-referrer`を付与する（OWASP ZAPの`X-Content-Type-Options
 Header Missing`指摘への対応）。ハンドラ側で設定済みの値は`setdefault`で上書きしない。本APIはJSONのみを返し、

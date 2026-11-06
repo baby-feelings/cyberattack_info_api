@@ -558,7 +558,7 @@ class TestFetchAndStoreOsv:
                 "app.osv.crawler.fetch_vuln_by_id",
                 return_value=vuln,
             ):
-                with patch("app.core.crawler_runner.SessionLocal", return_value=db_session):
+                with patch("app.core.runner.crawler_runner.SessionLocal", return_value=db_session):
                     db_session.close = MagicMock()
                     inserted, updated, deleted = fetch_and_store_osv()
 
@@ -577,7 +577,7 @@ class TestFetchAndStoreOsv:
             return []
 
         with patch("app.osv.crawler.query_packages_batch", side_effect=batch_side_effect):
-            with patch("app.core.crawler_runner.SessionLocal") as mock_sl:
+            with patch("app.core.runner.crawler_runner.SessionLocal") as mock_sl:
                 mock_db = MagicMock()
                 mock_db.query.return_value.filter.return_value.first.return_value = None
                 mock_sl.return_value = mock_db
@@ -597,7 +597,7 @@ class TestFetchAndStoreOsv:
             return []
 
         with patch("app.osv.crawler.query_packages_batch", side_effect=batch_side_effect):
-            with patch("app.core.crawler_runner.SessionLocal") as mock_sl:
+            with patch("app.core.runner.crawler_runner.SessionLocal") as mock_sl:
                 mock_db = MagicMock()
                 mock_db.query.return_value.filter.return_value.first.return_value = None
                 mock_sl.return_value = mock_db
@@ -612,7 +612,7 @@ class TestFetchAndStoreOsv:
 
         with patch("app.osv.crawler.query_packages_batch", return_value=[old_ref]):
             with patch("app.osv.crawler.fetch_vuln_by_id") as mock_fetch:
-                with patch("app.core.crawler_runner.SessionLocal", return_value=db_session):
+                with patch("app.core.runner.crawler_runner.SessionLocal", return_value=db_session):
                     db_session.close = MagicMock()
                     inserted, updated, deleted = fetch_and_store_osv()
 
@@ -630,7 +630,7 @@ class TestFetchAndStoreOsv:
                 "app.osv.crawler.fetch_vuln_by_id",
                 side_effect=httpx.HTTPError("timeout"),
             ):
-                with patch("app.core.crawler_runner.SessionLocal", return_value=db_session):
+                with patch("app.core.runner.crawler_runner.SessionLocal", return_value=db_session):
                     db_session.close = MagicMock()
                     inserted, updated, deleted = fetch_and_store_osv()
 
@@ -804,7 +804,7 @@ class TestFetchAndStoreOsvAdditional:
 
         with patch("app.osv.crawler.query_packages_batch", return_value=[bad_ref]):
             with patch("app.osv.crawler.fetch_vuln_by_id") as mock_fetch:
-                with patch("app.core.crawler_runner.SessionLocal", return_value=db_session):
+                with patch("app.core.runner.crawler_runner.SessionLocal", return_value=db_session):
                     db_session.close = MagicMock()
                     inserted, updated, deleted = fetch_and_store_osv()
 
@@ -819,7 +819,7 @@ class TestFetchAndStoreOsvAdditional:
                 "app.osv.crawler._delete_old_osv_records",
                 side_effect=Exception("delete failed"),
             ):
-                with patch("app.core.crawler_runner.SessionLocal", return_value=db_session):
+                with patch("app.core.runner.crawler_runner.SessionLocal", return_value=db_session):
                     db_session.close = MagicMock()
                     # 例外が外に漏れないことを確認
                     inserted, updated, deleted = fetch_and_store_osv()
@@ -835,11 +835,12 @@ class TestFetchAndStoreOsvAdditional:
                 raise RuntimeError("outer error")
 
         with patch("app.osv.crawler.POPULAR_PACKAGES", BadPackages()):
-            with patch("app.core.crawler_runner.notify_error") as mock_notify:
-                with patch("app.core.crawler_runner.SessionLocal") as mock_sl:
+            with patch("app.core.runner.crawler_runner.notify_error") as mock_notify:
+                with patch("app.core.runner.crawler_runner.SessionLocal") as mock_sl:
                     mock_sl.return_value = MagicMock()
                     with patch(
-                        "app.core.crawler_runner.already_succeeded_recently", return_value=False,
+                        "app.core.runner.crawler_runner.already_succeeded_recently",
+                        return_value=False,
                     ):
                         with _pytest.raises(RuntimeError, match="outer error"):
                             fetch_and_store_osv()

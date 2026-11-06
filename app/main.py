@@ -22,11 +22,11 @@ from app.codescan.router import router as codescan_router
 from app.commit_watch.router import admin_router as commit_watch_admin_router
 from app.core.config import settings
 from app.core.database import Base, engine, get_db
-from app.core.http_metrics import HttpMetricsMiddleware
 from app.core.metrics import router as metrics_router
-from app.core.rate_limit import RateLimitMiddleware
+from app.core.net.http_metrics import HttpMetricsMiddleware
+from app.core.net.rate_limit import RateLimitMiddleware
+from app.core.net.security_headers import SecurityHeadersMiddleware
 from app.core.schemas import HealthResponse
-from app.core.security_headers import SecurityHeadersMiddleware
 from app.crawler_logs.router import router as crawler_logs_router
 from app.depscan.inventory.router import router as depscan_inventory_router
 from app.depscan.router import admin_router as depscan_admin_router

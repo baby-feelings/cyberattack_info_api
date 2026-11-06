@@ -20,10 +20,10 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.crawler_runner import CrawlCounters, CrawlJob
 from app.core.github.accounts import list_target_repos
 from app.core.github.repo import GitHubRepo
 from app.core.github.tree_paths import VENDORED_DIR_SEGMENTS, is_under_excluded_dir
+from app.core.runner.crawler_runner import CrawlCounters, CrawlJob
 from app.runtimes.alerts import send_runtime_alerts
 from app.runtimes.detector import DetectedRuntime, detect_runtimes, is_candidate
 from app.runtimes.eol_client import fetch_all_releases

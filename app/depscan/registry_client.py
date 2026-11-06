@@ -17,7 +17,7 @@ from urllib.parse import quote
 
 import httpx
 
-from app.core.retry import request_with_retry
+from app.core.net.retry import request_with_retry
 
 logger = logging.getLogger(__name__)
 

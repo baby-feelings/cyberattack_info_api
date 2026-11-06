@@ -89,7 +89,7 @@ CVSS 7.0以上はダッシュボード（`CodescanRow.tsx`のCvssBadge）で赤�
 
 ## オーケストレーションは `CrawlJob` のサブクラス（`_CodescanJob`）で、通知はリポジトリ別の概要
 本体処理`_run_codescan_body(db, counters, new_snapshots)`は、新規検知のスナップショットを
-呼び出し側のリストに集める。`_CodescanJob`（`app.core.crawler_runner.CrawlJob`のサブクラス）が
+呼び出し側のリストに集める。`_CodescanJob`（`app.core.runner.crawler_runner.CrawlJob`のサブクラス）が
 それを受け、成功後の通知を、件数だけの汎用通知（`notify_success`）ではなく、
 `app.codescan.notifier.notify_code_findings`（**リポジトリごとに、重要度別・ツール別の件数だけの
 概要の1通**。個別の内容はダッシュボードとIssueで確認。新規検知がなければ送らない。例外の検知は対象外）
@@ -102,12 +102,12 @@ CVSS 7.0以上はダッシュボード（`CodescanRow.tsx`のCvssBadge）で赤�
 ## GitHub Issue自動起票はDEPSCANと共通処理を共有、タイトルと本文整形のみ分離
 「リポジトリ単位でグルーピング→Open Issue検索→追記または新規作成→API失敗は
 握りつぶす」という手順自体はDEPSCANの`app.depscan.issue_management`と完全に
-同一のため、`app.core.issue_filing.file_or_update_repo_issues`に共通化されている。
+同一のため、`app.core.findings.issue_filing.file_or_update_repo_issues`に共通化されている。
 `app.codescan.issue_management.file_github_issues`はこの共通処理へ、Issueタイトル
 `"🔎 自アプリのコード脆弱性が検出されました (CODESCAN)"`（DEPSCANの
 `"🚨 依存ライブラリの脆弱性が検出されました (DEPSCAN)"`と混同しないための固定文字列）と
 本文整形関数`_format_finding_lines`（severity降順→ファイルパス順）を渡すだけの
-薄い実装になっている。本文整形をDEPSCANの`app.core.finding_format.format_package_lines`
+薄い実装になっている。本文整形をDEPSCANの`app.core.findings.finding_format.format_package_lines`
 と共有しないのは、検知の粒度（パッケージ単位 vs ファイル:行単位）が異なるため。
 **自動クローズ**（`close_resolved_repo_issues`）: スキャンのたびに、**全ツールの検査に成功した**
 リポジトリで、「未解決で、例外（受容・誤検知・影響なし）でない検知が0件」なら、Open なIssueへコメント

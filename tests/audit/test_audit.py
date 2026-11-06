@@ -92,8 +92,8 @@ class TestMiddleware:
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
 
-        from app.core import rate_limit
-        from app.core.rate_limit import RateLimiter, RateLimitMiddleware
+        from app.core.net import rate_limit
+        from app.core.net.rate_limit import RateLimiter, RateLimitMiddleware
 
         app = FastAPI()
         app.add_middleware(RateLimitMiddleware, limiter=RateLimiter(1, 5, 60.0))

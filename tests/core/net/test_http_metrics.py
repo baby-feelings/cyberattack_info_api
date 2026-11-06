@@ -1,4 +1,4 @@
-"""app.core.http_metrics（HTTP リクエストの運用監視メトリクス）と、レート制限の指標のテスト。"""
+"""app.core.net.http_metrics（HTTP リクエストの運用監視メトリクス）と、レート制限の指標のテスト。"""
 import os
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
@@ -9,7 +9,7 @@ from unittest.mock import patch  # noqa: E402
 
 from prometheus_client import REGISTRY  # noqa: E402
 
-from app.core.rate_limit import RateLimiter  # noqa: E402
+from app.core.net.rate_limit import RateLimiter  # noqa: E402
 
 
 def _value(name: str, labels: dict[str, str] | None = None) -> float:
@@ -39,7 +39,7 @@ class TestHttpMetrics:
     def test_an_unhandled_error_is_counted_as_5xx(self):
         import asyncio
 
-        from app.core.http_metrics import HttpMetricsMiddleware
+        from app.core.net.http_metrics import HttpMetricsMiddleware
 
         async def failing_app(scope, receive, send):
             raise RuntimeError("boom")
@@ -55,7 +55,7 @@ class TestHttpMetrics:
     def test_non_http_scopes_pass_through(self):
         import asyncio
 
-        from app.core.http_metrics import HttpMetricsMiddleware
+        from app.core.net.http_metrics import HttpMetricsMiddleware
 
         called = []
 
@@ -71,12 +71,12 @@ class TestRateLimitMetrics:
         rejected = _value("rate_limit_rejected_total")
         lockouts = _value("auth_lockouts_total")
         limiter = RateLimiter(per_minute=1, lockout_failures=2, lockout_seconds=60.0)
-        with patch("app.core.rate_limit.build_limiter", return_value=limiter), \
-                patch("app.core.rate_limit.settings.RATE_LIMIT_ENABLED", True):
+        with patch("app.core.net.rate_limit.build_limiter", return_value=limiter), \
+                patch("app.core.net.rate_limit.settings.RATE_LIMIT_ENABLED", True):
             from fastapi import FastAPI
             from fastapi.testclient import TestClient
 
-            from app.core.rate_limit import RateLimitMiddleware
+            from app.core.net.rate_limit import RateLimitMiddleware
 
             app = FastAPI()
             app.add_middleware(RateLimitMiddleware, limiter=limiter)
@@ -92,11 +92,11 @@ class TestRateLimitMetrics:
         assert _value("rate_limit_rejected_total") == rejected + 1
         # 認証の失敗の連続によるロックアウトは、失敗2回で発動する
         limiter2 = RateLimiter(per_minute=100, lockout_failures=2, lockout_seconds=60.0)
-        with patch("app.core.rate_limit.settings.RATE_LIMIT_ENABLED", True):
+        with patch("app.core.net.rate_limit.settings.RATE_LIMIT_ENABLED", True):
             from fastapi import FastAPI, HTTPException
             from fastapi.testclient import TestClient
 
-            from app.core.rate_limit import RateLimitMiddleware
+            from app.core.net.rate_limit import RateLimitMiddleware
 
             app2 = FastAPI()
             app2.add_middleware(RateLimitMiddleware, limiter=limiter2)

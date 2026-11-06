@@ -48,7 +48,7 @@ class TestRunSlaDigest:
 
     def test_excludes_inactive_repos(self, db_session):
         admin = settings.GITHUB_USERNAME
-        with patch("app.core.operating_status.settings.INACTIVE_REPOS", f"{admin}/old"):
+        with patch("app.core.findings.operating_status.settings.INACTIVE_REPOS", f"{admin}/old"):
             sent, mock_send = _run(db_session, [
                 _finding(f"{admin}/old", "x", detected_days_ago=50),
                 _finding(f"{admin}/live", "y", detected_days_ago=50),

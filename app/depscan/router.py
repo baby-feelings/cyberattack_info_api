@@ -15,11 +15,11 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.auth.api_key import require_api_key, require_api_key_or_session, require_public_api_key
-from app.core.background import run_in_background
 from app.core.database import get_db
-from app.core.operating_status import OperatingQuery, apply_operating_status
-from app.core.owner_scope import is_owned_by
+from app.core.findings.operating_status import OperatingQuery, apply_operating_status
+from app.core.findings.owner_scope import is_owned_by
 from app.core.pagination import DEFAULT_PER_PAGE, MAX_PER_PAGE, paginate
+from app.core.runner.background import run_in_background
 from app.core.schemas import SeverityStat
 from app.depscan.crawler import fetch_and_scan_dependencies
 from app.depscan.filters import DepscanListFilter

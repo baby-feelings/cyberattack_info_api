@@ -31,7 +31,7 @@ CORE_EXCEPTIONS: dict[tuple[str, str], str] = {
     # 通知の送信先（登録ユーザーの Webhook）の解決に、アカウントの保存先を使う（遅延 import）
     ("app/core/notifications/recipients.py", "app.auth"): "送信先は登録ユーザーから解決する",
     # クローラーの実行結果を crawler_logs に記録する（実行基盤と記録は一体）
-    ("app/core/crawler_runner.py", "app.crawler_logs"): "実行基盤は実行ログを記録する",
+    ("app/core/runner/crawler_runner.py", "app.crawler_logs"): "実行基盤は実行ログを記録する",
 }
 
 

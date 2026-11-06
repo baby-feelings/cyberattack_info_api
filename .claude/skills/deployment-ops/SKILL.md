@@ -95,7 +95,7 @@ daily-crawl.ymlは無条件に毎日発火する。OCI移行後はAPSchedulerが
 実質的にバックアップではなく常に二重実行（1日2回）になっていた。KEV/OSV/DEPSCAN/
 CODESCANはUpsertのため二重実行の実害は薄いが、DEPSOPSは実行ごとに1PRにつき1行追記する
 ログ設計のため件数が二重に膨れ上がっていた（本番で総件数2388件中約半数が重複）。
-`app.core.crawler_runner.already_succeeded_recently`（全クローラーが共通の
+`app.core.runner.crawler_runner.already_succeeded_recently`（全クローラーが共通の
 `CrawlJob.run`/`run_crawler`経由で呼ぶ）が、直近12時間
 （UTC日付の区切りではない）に成功実行済みなら2回目の実行を自動的にスキップする。動作確認等で
 明示的に再実行したい場合は、各`/admin/*`エンドポイントに`?force=true`を付与する
@@ -216,9 +216,9 @@ Issue #227でダッシュボードからのユーザー別登録方式（`UserAc
   `_deleted`（`crawler_logs`の種別ごとの最新の1行。`crawler_type`ラベル。新しいジョブも、実行記録を
   書けば、ダッシュボードに自動で出る）、`secret_expires_in_days`（`secret`ラベル。鍵の更新期限までの
   日数。設定から求め、DBは使わない）。
-- **`app/core/http_metrics.py`**（`HttpMetricsMiddleware`）: `http_requests_total`（`status_class`
+- **`app/core/net/http_metrics.py`**（`HttpMetricsMiddleware`）: `http_requests_total`（`status_class`
   ラベル=2xx〜5xx）・`http_request_duration_seconds`（Histogram）。パスはラベルにしない（種類が増え続ける
-  ため）。`/metrics`自身は数えない。`core/rate_limit.py`は`rate_limit_rejected_total`・`auth_lockouts_total`。
+  ため）。`/metrics`自身は数えない。`core/net/rate_limit.py`は`rate_limit_rejected_total`・`auth_lockouts_total`。
   いずれもメモリ上のCounterで、再起動で0に戻るが、`rate()`/`increase()`が吸収する
   - メモリ上のGaugeを更新する方式だった頃は、**API再起動（デプロイ）のたびに消え**、次のクロール
     まで「クローラー実行結果」等のパネルが空になっていた。DBから求めるので消えない

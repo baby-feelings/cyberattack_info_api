@@ -11,8 +11,8 @@ from typing import Any
 from sqlalchemy import exists
 from sqlalchemy.orm import Query
 
-from app.core.operating_status import OperatingStatus, apply_operating_status
-from app.core.owner_scope import restrict_to_owner
+from app.core.findings.operating_status import OperatingStatus, apply_operating_status
+from app.core.findings.owner_scope import restrict_to_owner
 from app.depscan.models import DependencyFinding, RepoDependency
 
 

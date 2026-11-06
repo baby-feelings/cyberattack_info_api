@@ -68,7 +68,7 @@ class TestRuntimeFilter:
 
     def test_operating_filter(self, db_session):
         _seed(db_session)
-        with patch("app.core.operating_status.settings.INACTIVE_REPOS", "bob/app"):
+        with patch("app.core.findings.operating_status.settings.INACTIVE_REPOS", "bob/app"):
             active = list_runtimes(db_session, RuntimeFilter(operating="active"), today=_TODAY)
             inactive = list_runtimes(db_session, RuntimeFilter(operating="inactive"), today=_TODAY)
         assert "bob/app" not in {r.repo_full_name for r, _ in active}

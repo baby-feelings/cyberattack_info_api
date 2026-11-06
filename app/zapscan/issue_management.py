@@ -1,7 +1,7 @@
 """OWASP ZAP スキャン結果（zap-report.json）の GitHub Issue 自動起票。
 
 DEPSCAN / CODESCAN と同じ「1リポジトリにつき常に1つの Open Issue に集約する」設計を
-踏襲し、共通処理 `app.core.issue_filing.file_or_update_repo_issues` を使う。
+踏襲し、共通処理 `app.core.findings.issue_filing.file_or_update_repo_issues` を使う。
 ZAP 専用の固定タイトルにして DEPSCAN / CODESCAN の Issue と混同しないようにする。
 
 ZAP は DB を持たず結果は JSON レポートのみのため、DEPSCAN のような「新規検知の判定」は
@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.config import settings
-from app.core.issue_filing import file_or_update_repo_issues
+from app.core.findings.issue_filing import file_or_update_repo_issues
 
 # GitHub Issue自動起票時のタイトル（Open Issue検索の一致キーも兼ねる）
 _ISSUE_TITLE = "🕷️ API の脆弱性が検出されました (OWASP ZAP)"

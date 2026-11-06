@@ -101,7 +101,7 @@ class TestFetchLatestVersion:
         client = _mock_client()
         client.get.side_effect = httpx.ConnectError("down")
         with patch("app.depscan.registry_client.httpx.Client", return_value=client), \
-                patch("app.core.retry.time.sleep"):
+                patch("app.core.net.retry.time.sleep"):
             assert fetch_latest_version("PyPI", "pkg") is None
 
     @pytest.mark.parametrize("body", [{}, {"info": {}}, None, {"info": {"version": None}},
