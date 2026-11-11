@@ -97,6 +97,8 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | `resolved` | bool | 解決状態で絞り込み（未指定なら全件） |
 | `min_cvss` | float | CVSS基本値の下限値で絞り込み（0〜10） |
 
+> **`total` と `open_total`:** `resolved` 未指定の一覧は、解決済みも含む全件を返す（`total`）。**対応が必要な件数**（未解決かつ例外でない。`repo`・`owner`・`severity` 等は反映し、`resolved`・`include_excepted` には影響されない。`/stats` の件数と同じ基準）は、応答の `open_total` にある。未解決だけを一覧にするなら `resolved=false`。
+
 **レスポンス例:**
 ```json
 {
