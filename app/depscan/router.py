@@ -127,7 +127,9 @@ def list_depscan(
             "purl": build_purl(item.ecosystem, item.package_name, item.installed_version),
         }))
 
-    return DependencyFindingListResponse(total=total, page=page, per_page=per_page, data=data)
+    return DependencyFindingListResponse(
+        total=total, page=page, per_page=per_page, open_total=flt.open_total(db), data=data,
+    )
 
 
 @router.get(

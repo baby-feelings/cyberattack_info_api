@@ -107,7 +107,9 @@ def list_codescan(
             "exception_key": exception_key,
             "exception": FindingExceptionSummary.model_validate(exception) if exception else None,
         }))
-    return CodeFindingListResponse(total=total, page=page, per_page=per_page, data=data)
+    return CodeFindingListResponse(
+        total=total, page=page, per_page=per_page, open_total=flt.open_total(db), data=data,
+    )
 
 
 def _count_by_repo(query: Any) -> dict[str, int]:

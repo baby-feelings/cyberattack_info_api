@@ -195,6 +195,51 @@ class TestListDepscanExcepted:
         assert body["data"][0]["osv_id"] == "GHSA-a"
 
 
+class TestListDepscanOpenTotal:
+    """open_total は、未解決かつ例外でない件数（total は、解決済み・例外を含む）。"""
+
+    def _setup(self, db_session):
+        from datetime import timedelta
+
+        from app.finding_exceptions.models import FindingException
+
+        repo = "baby-feelings/repo-a"
+        make_finding(db_session, repo_full_name=repo, osv_id="GHSA-open")
+        make_finding(db_session, repo_full_name=repo, osv_id="GHSA-excepted")
+        make_finding(db_session, repo_full_name=repo, osv_id="GHSA-resolved", resolved_at=_NOW)
+        make_finding(db_session, repo_full_name="baby-feelings/repo-b", osv_id="GHSA-other")
+        db_session.add(FindingException(
+            kind="dependency", repo_full_name=repo,
+            finding_key="PyPI|cryptography|GHSA-excepted", status="not_affected",
+            reason="意図的", approver="owner", expires_at=_NOW + timedelta(days=5),
+        ))
+        db_session.commit()
+
+    def test_counts_only_actionable_findings(self, client, db_session):
+        self._setup(db_session)
+        body = client.get("/api/depscan", headers=HEADERS).json()
+        assert body["total"] == 4  # 解決済み・例外を含む全件
+        assert body["open_total"] == 2  # GHSA-open と repo-b の GHSA-other
+
+    def test_follows_the_repo_filter(self, client, db_session):
+        self._setup(db_session)
+        body = client.get("/api/depscan?repo=baby-feelings/repo-a", headers=HEADERS).json()
+        assert body["total"] == 3
+        assert body["open_total"] == 1
+
+    def test_is_not_affected_by_resolved_or_include_excepted(self, client, db_session):
+        self._setup(db_session)
+        a = client.get("/api/depscan?resolved=true", headers=HEADERS).json()
+        b = client.get("/api/depscan?include_excepted=false", headers=HEADERS).json()
+        assert a["total"] == 1 and a["open_total"] == 2
+        assert b["total"] == 3 and b["open_total"] == 2  # 例外のみ除く（解決済みは含む）
+
+    def test_matches_the_stats_count(self, client, db_session):
+        self._setup(db_session)
+        stats = client.get("/api/depscan/stats", headers=HEADERS).json()
+        assert client.get("/api/depscan", headers=HEADERS).json()["open_total"] == stats["total"]
+
+
 class TestDepscanStats:
     def test_empty(self, client):
         res = client.get("/api/depscan/stats", headers=HEADERS)
