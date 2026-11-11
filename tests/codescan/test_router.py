@@ -159,6 +159,46 @@ class TestListCodescanExcepted:
         assert body["data"][0]["rule_id"] == "rule.a"
 
 
+class TestListCodescanOpenTotal:
+    """open_total は、未解決かつ例外でない件数（total は、解決済み・例外を含む）。"""
+
+    def _setup(self, db_session):
+        from datetime import timedelta
+
+        from app.finding_exceptions.models import FindingException
+
+        _make_finding(db_session, file_path="a.py", rule_id="rule.a")
+        _make_finding(db_session, file_path="b.py", rule_id="rule.b")  # 例外
+        _make_finding(db_session, file_path="c.py", rule_id="rule.c", resolved_at=_NOW)
+        _make_finding(db_session, repo_full_name="baby-feelings/other", file_path="d.py",
+                      rule_id="rule.d")
+        db_session.add(FindingException(
+            kind="code", repo_full_name="baby-feelings/baby_grow", finding_key="b.py|rule.b",
+            status="not_affected", reason="意図的", approver="owner",
+            expires_at=_NOW + timedelta(days=5),
+        ))
+        db_session.commit()
+
+    def test_counts_only_actionable_findings(self, client, db_session):
+        self._setup(db_session)
+        body = client.get("/api/codescan", headers=HEADERS).json()
+        assert body["total"] == 4
+        assert body["open_total"] == 2  # rule.a と other の rule.d
+
+    def test_follows_the_repo_filter_and_ignores_resolved_param(self, client, db_session):
+        self._setup(db_session)
+        body = client.get(
+            "/api/codescan?repo=baby-feelings/baby_grow&resolved=true", headers=HEADERS,
+        ).json()
+        assert body["total"] == 1
+        assert body["open_total"] == 1  # baby_grow の未解決で例外でないのは rule.a のみ
+
+    def test_matches_the_stats_count(self, client, db_session):
+        self._setup(db_session)
+        stats = client.get("/api/codescan/stats", headers=HEADERS).json()
+        assert client.get("/api/codescan", headers=HEADERS).json()["open_total"] == stats["total"]
+
+
 class TestCodescanStats:
     def test_requires_auth(self, client):
         resp = client.get("/api/codescan/stats")

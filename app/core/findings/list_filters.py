@@ -11,6 +11,7 @@ FastAPI は `Depends()` に渡したクラスの `__init__` 引数をクエリ�
 - `FeedListFilter`: OSV 共通（直近 N 日・重要度・キーワード・ソート・差分取得）
 - `RepoFindingFilter`: DEPSCAN / CODESCAN 共通（リポジトリ・オーナー・重要度・解決状態・運用状態）
 """
+import copy
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import Any, ClassVar, Literal
@@ -18,6 +19,7 @@ from typing import Any, ClassVar, Literal
 from fastapi import HTTPException, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Query as SaQuery
+from sqlalchemy.orm import Session
 
 from app.core.db_utils import now_utc
 from app.core.findings.operating_status import OperatingStatus, apply_operating_status
@@ -82,6 +84,8 @@ class RepoFindingFilter:
     """
 
     model: ClassVar[Any]
+    # 例外の検知を含めるか。例外を持つドメインのサブクラスが、クエリパラメータで上書きする
+    include_excepted: bool = True
 
     def __init__(
         self,
@@ -111,6 +115,18 @@ class RepoFindingFilter:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You can only query repositories you own.",
             )
+
+    def open_total(self, db: Session) -> int:
+        """今の絞り込み（リポジトリ・オーナー・重要度など）のうち、対応が必要な検知の件数。
+
+        「未解決」かつ「例外（受容・影響なし・誤検知）でない」検知の数で、統計 API（stats）の
+        件数と同じ基準。`resolved`・`include_excepted` の指定には影響されない（一覧の `total` が
+        解決済みや例外を含んでいても、いま何件対応が必要かを、一緒に返すため）。
+        """
+        scope = copy.copy(self)
+        scope.resolved = False
+        scope.include_excepted = False
+        return scope.apply(db.query(self.model)).count()
 
     def apply(self, query: SaQuery[Any]) -> SaQuery[Any]:
         """共通の各条件（リポジトリ・オーナー・重要度・解決状態）を適用する。"""

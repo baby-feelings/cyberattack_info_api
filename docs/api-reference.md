@@ -19,6 +19,7 @@
 | GET | `/api/depscan/stats` | DEPSCAN統計（リポジトリ別・重要度別） |
 | - | `operating=active\|inactive\|all` | 上の DEPSCAN・CODESCAN・DEPSOPS の一覧・統計共通の絞り込み。運用中／運用停止中（`INACTIVE_REPOS`）で分ける。未指定は `all`（全件） |
 | - | `include_excepted=true\|false` | DEPSCAN・CODESCAN の一覧（`/api/depscan`・`/api/codescan`）の絞り込み。`false` なら、例外（受容・影響なし・誤検知）にした検知を除く（ダッシュボードの初期表示）。未指定は `true`（従来どおり含める） |
+| - | `resolved`・`open_total` | DEPSCAN・CODESCAN の一覧（`/api/depscan`・`/api/codescan`）。`resolved` 未指定は**解決済みも含む全件**（`total`）。応答の `open_total` は、**対応が必要な件数**（未解決かつ例外でない。`repo`・`owner`・`severity` 等は反映し、`resolved`・`include_excepted` には影響されない。`stats` の件数と同じ基準）。未解決だけを一覧にするなら `resolved=false` |
 | GET | `/api/depscan/dependencies` | 使っている依存パッケージの閲覧・横断検索（`package`部分一致・`version`・`ecosystem`・`repo`・`vulnerable`・`operating`。各行に未解決の検知件数`open_vulnerabilities`。MCP: `search_dependencies`） |
 | GET | `/api/depscan/dependencies/repos` | リポジトリごとの依存の数と、未解決の検知がある依存の数（`operating`で絞り込み） |
 | GET | `/api/runtimes` | 使っている言語・実行環境（Python・Node.js・Flutter・Dart）の版と状態（`eol`/`eol_soon`/`update_available`/`latest`/`reference`。`repo`・`runtime`・`needs_action`・`operating`。Issue #373） |

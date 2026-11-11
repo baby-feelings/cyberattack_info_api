@@ -51,6 +51,10 @@ class CodeFindingListResponse(BaseModel):
     total: int = Field(description="総件数")
     page: int = Field(description="現在のページ番号")
     per_page: int = Field(description="1ページあたりの件数")
+    open_total: int = Field(
+        description="対応が必要な検知の件数（未解決かつ例外でない。repo・owner・severity等の絞り込みは反映し、"
+        "resolved・include_exceptedの指定には影響されない。statsの件数と同じ基準）",
+    )
     data: list[CodeFindingOut] = Field(description="コード脆弱性検知結果一覧")
 
 
