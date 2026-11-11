@@ -210,6 +210,8 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | `severity` | string | 重要度（`CRITICAL` / `HIGH` / `MEDIUM` / `LOW`） |
 | `resolved` | bool | 解決状態で絞り込み（省略時は全件） |
 
+> **`total` と `open_total`:** `resolved` 未指定の一覧は、解決済みも含む全件を返す（`total`）。**対応が必要な件数**（未解決かつ例外でない。`repo`・`owner`・`severity` 等は反映し、`resolved`・`include_excepted` には影響されない。`/stats` の件数と同じ基準）は、応答の `open_total` にある。未解決だけを一覧にするなら `resolved=false`。
+
 > **Note:** `X-API-KEY` での呼び出しは上記の通り絞り込みなしのフルアクセス（Claude Code
 > 等の既存クライアント向け）。React ダッシュボードの DEPSCAN タブは別途 GitHub ログイン
 > （`Authorization: Bearer <セッショントークン>`）を要求し、ログイン中のユーザー本人が
