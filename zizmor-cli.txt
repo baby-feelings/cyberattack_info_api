@@ -8,4 +8,4 @@
 # メジャーバージョンを、自動で取り込まないため（ZizmorScanner.parse は 1.x の形式を前提にする）。
 # なおファイル名を requirements*.txt にしないのは、pip-audit/OSV-Scanner の走査対象を
 # アプリ本体の依存（requirements.txt）に限定するため（semgrep-cli.txt と同じ方針）。
-zizmor~=1.31
+zizmor~=1.32
