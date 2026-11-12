@@ -37,8 +37,18 @@ class TestRuntimeAlertNotifier:
         assert "*Python 3.10* （2026-10-01 に終了）" in message
         assert "使っているアプリ: `alice/old`" in message
         assert "*Node.js 22* （2027-04-30 に終了。あと 156 日）" in message
-        assert "`alice/web`、`alice/api`" in message
+        assert "`alice/web`, `alice/api`" in message
         assert "*Python 3.15* （最新 3.15.2）" in message
+
+    def test_new_release_names_the_current_recommendation(self):
+        """公開直後の系列は推奨でないため、いまの推奨を併記する（ダッシュボードとの取り違えを防ぐ）。"""
+        new = {**_NEW, "cycle": "3.50", "latest_version": "3.50.0", "recommended_cycle": "3.41"}
+        message = RuntimeAlertNotifier([new]).build_message()
+        assert "（最新 3.50.0。いまの推奨は 3.41。公開から180日たつと推奨になります）" in message
+
+    def test_new_release_without_a_different_recommendation_has_no_note(self):
+        message = RuntimeAlertNotifier([_NEW]).build_message()
+        assert "いまの推奨" not in message
 
     def test_message_links_to_the_dashboard(self):
         assert runtime_alerts.DASHBOARD_URL in RuntimeAlertNotifier([_EOL]).build_message()

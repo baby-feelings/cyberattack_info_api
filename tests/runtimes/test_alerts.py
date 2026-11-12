@@ -72,6 +72,13 @@ class TestFindAlerts:
         assert found[("new_release", "python", "3.15")].repos == (
             "alice/floor", "alice/old", "alice/soon")
 
+    def test_new_release_carries_the_current_recommended_cycle(self, db_session):
+        """公開から18日の 3.15 は推奨でない。いまの推奨（公開から経った最新）を併記する。"""
+        _seed(db_session)
+        item = _by_kind(find_alerts(db_session, TODAY))[("new_release", "python", "3.15")]
+        assert item.recommended_cycle is not None and item.recommended_cycle != "3.15"
+        assert item.as_dict()["recommended_cycle"] == item.recommended_cycle
+
     def test_new_release_needs_a_repo_using_that_language(self, db_session):
         # Node.js の新しい系列は、Node.js を使うアプリがあるときだけ
         _seed(db_session)
@@ -105,7 +112,7 @@ class TestFindAlerts:
         assert d == {
             "kind": "eol_soon", "runtime_label": "Python", "cycle": "3.11",
             "latest_version": "3.11.16", "eol_date": "2027-04-01", "days_to_eol": 156,
-            "repos": ["alice/soon"],
+            "repos": ["alice/soon"], "recommended_cycle": None,
         }
 
 
