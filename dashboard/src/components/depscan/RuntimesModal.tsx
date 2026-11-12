@@ -110,6 +110,57 @@ function RecommendedStrip({ releases }: { releases: RuntimeReleaseOut[] }) {
   )
 }
 
+// 系列（"3.14"・"24"）の新旧の比較用。"3.9" < "3.14" になるよう、数として比べる
+function cycleKey(cycle: string): number[] {
+  return cycle.split('.').map(part => Number(part) || 0)
+}
+
+function isNewerCycle(a: string, b: string): boolean {
+  const ka = cycleKey(a)
+  const kb = cycleKey(b)
+  for (let i = 0; i < Math.max(ka.length, kb.length); i += 1) {
+    const diff = (ka[i] ?? 0) - (kb[i] ?? 0)
+    if (diff !== 0) return diff > 0
+  }
+  return false
+}
+
+// 公開から、この日数たつまで推奨にしない（バックエンドの RECOMMEND_MIN_AGE_DAYS と同じ値）
+const RECOMMEND_MIN_AGE_DAYS = 180
+
+// 言語ごとに、推奨より新しい系列（公開直後で、まだ推奨にならないもの）。Slack の「新しい版が
+// 公開されました」の通知と、「推奨の版」を、取り違えないために併記する
+function NewerSeriesNote({ releases }: { releases: RuntimeReleaseOut[] }) {
+  const newer = releases
+    .filter(r => r.recommended)
+    .flatMap(rec => {
+      const candidates = releases.filter(r =>
+        r.runtime === rec.runtime && !r.is_eol && (r.is_lts || r.runtime !== 'nodejs')
+        && isNewerCycle(r.cycle, rec.cycle))
+      const latest = candidates.reduce<RuntimeReleaseOut | null>(
+        (best, r) => (best === null || isNewerCycle(r.cycle, best.cycle) ? r : best), null)
+      return latest ? [latest] : []
+    })
+  if (newer.length === 0) return null
+  return (
+    <div className="space-y-0.5 text-xs text-slate-500" aria-label="公開済みの新しい系列">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 tabular-nums">
+        <span>新しい系列</span>
+        {newer.map(r => (
+          <span key={r.runtime}>
+            <span className="text-slate-400">{r.runtime_label} {r.cycle}</span>
+            <span>（最新 {r.latest_version}）</span>
+          </span>
+        ))}
+      </div>
+      <p className="text-[11px]">
+        公開から{RECOMMEND_MIN_AGE_DAYS}日たつまで、推奨にしません（公開直後は、ライブラリの対応が追いつかないため）。
+        Slack の「新しい版が公開されました」は、この新しい系列の通知です。
+      </p>
+    </div>
+  )
+}
+
 function RuntimesDialog({ onClose, authToken }: { onClose: () => void; authToken?: string }) {
   const [filters, setFilters] = useState<Filters>(INITIAL_FILTERS)
   const [list, setList] = useState<ListResult | null>(null)
@@ -181,6 +232,7 @@ function RuntimesDialog({ onClose, authToken }: { onClose: () => void; authToken
       <LastFetched crawlerType={SCREEN_FETCH_SOURCE.runtimes} />
 
       <RecommendedStrip releases={releases} />
+      <NewerSeriesNote releases={releases} />
 
       <div className="flex flex-wrap items-center gap-3">
         <OperatingFilter value={filters.operating} onChange={handleOperating} />

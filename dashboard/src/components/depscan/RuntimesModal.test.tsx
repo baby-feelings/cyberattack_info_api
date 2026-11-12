@@ -166,6 +166,34 @@ describe('RuntimesModal', () => {
     expect(strip).not.toHaveTextContent('3.15')
   })
 
+  it('shows the newer series that is not recommended yet, apart from the recommendation', async () => {
+    await renderOpen()
+    const note = await screen.findByLabelText('公開済みの新しい系列')
+    expect(note).toHaveTextContent('Python 3.15')
+    expect(note).toHaveTextContent('最新 3.15.2')
+    expect(note).toHaveTextContent('180日たつまで、推奨にしません')
+    // Node.js は、推奨（24）より新しい LTS が無いので出さない
+    expect(note).not.toHaveTextContent('Node.js')
+    // 推奨の欄には、混ぜない
+    expect(screen.getByLabelText('推奨の版')).not.toHaveTextContent('3.15')
+  })
+
+  it('compares series as numbers, so 3.9 is older than 3.14', async () => {
+    mockedReleases.mockResolvedValue({ data: [
+      { runtime: 'dart', runtime_label: 'Dart', cycle: '3.9', latest_version: '3.9.2', release_date: '2025-08-14', eol_date: null, is_eol: false, is_lts: false, recommended: true },
+      { runtime: 'dart', runtime_label: 'Dart', cycle: '3.14', latest_version: '3.14.0', release_date: '2026-11-11', eol_date: null, is_eol: false, is_lts: false, recommended: false },
+    ] })
+    await renderOpen()
+    expect(await screen.findByLabelText('公開済みの新しい系列')).toHaveTextContent('Dart 3.14')
+  })
+
+  it('shows no newer-series note when the recommendation is the newest', async () => {
+    mockedReleases.mockResolvedValue({ data: [RELEASES[0]] })
+    await renderOpen()
+    await screen.findByLabelText('推奨の版')
+    expect(screen.queryByLabelText('公開済みの新しい系列')).not.toBeInTheDocument()
+  })
+
   it('still lists the runtimes when the recommended versions cannot be fetched', async () => {
     mockedReleases.mockRejectedValue(new Error('boom'))
     await renderOpen()

@@ -9,6 +9,7 @@ from typing import Any
 from app.core.notifications import recipients as recipient_resolver
 from app.core.notifications.base import CRAWLER_LABELS, Notifier
 from app.core.notifications.slack import DASHBOARD_URL, truncate_for_slack
+from app.runtimes.status import RECOMMEND_MIN_AGE_DAYS
 
 # 通知の種類ごとの見出し（絵文字つき）。対応が急ぐものほど目立つ絵文字にする
 _HEADINGS = {
@@ -30,7 +31,15 @@ def _describe(alert: dict[str, Any]) -> str:
         detail = f"（{alert['eol_date']} に終了。あと {alert['days_to_eol']} 日）"
     else:
         detail = f"（最新 {alert['latest_version']}）"
-    repos = "、".join(f"`{r}`" for r in alert["repos"])
+        recommended = alert.get("recommended_cycle")
+        if recommended:
+            # 公開直後の系列は推奨にしない（ダッシュボードの「推奨の版」と同じ基準）。取り違えを防ぐ
+            detail = detail[:-1] + (
+                f"。いまの推奨は {recommended}。"
+                f"公開から{RECOMMEND_MIN_AGE_DAYS}日たつと推奨になります）"
+            )
+    # Slack のコード表記（`…`）は、直前が空白か ASCII の記号でないと効かない（「、」だと文字で出る）
+    repos = ", ".join(f"`{r}`" for r in alert["repos"])
     return f"• *{name}* {detail}" + (f"　使っているアプリ: {repos}" if repos else "")
 
 

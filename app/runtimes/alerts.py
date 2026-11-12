@@ -28,6 +28,7 @@ from app.runtimes.detector import RUNTIME_LABELS
 from app.runtimes.filters import RuntimeFilter
 from app.runtimes.models import RuntimeAlert, RuntimeRelease
 from app.runtimes.notifier import notify_runtime_alerts
+from app.runtimes.status import recommended_release
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,8 @@ class RuntimeAlertItem:
     eol_date: date | None
     days_to_eol: int | None
     repos: tuple[str, ...]  # 使っている（運用中の）アプリ
+    # 新しい系列の通知で、いまの推奨の系列（公開直後の系列は、推奨にならないため、併記する）
+    recommended_cycle: str | None = None
 
     @property
     def key(self) -> str:
@@ -66,6 +69,7 @@ class RuntimeAlertItem:
             "eol_date": self.eol_date.isoformat() if self.eol_date else None,
             "days_to_eol": self.days_to_eol,
             "repos": list(self.repos),
+            "recommended_cycle": self.recommended_cycle,
         }
 
 
@@ -106,10 +110,15 @@ def find_alerts(db: Session, today: date) -> list[RuntimeAlertItem]:
             continue
         repos = using_runtime[runtime]
         if release.release_date >= window_start:
+            recommended = recommended_release(runtime, list(releases.values()), today)
             alerts.append(RuntimeAlertItem(
                 kind="new_release", runtime=runtime, cycle=cycle,
                 latest_version=release.latest_version, eol_date=release.eol_date,
                 days_to_eol=None, repos=tuple(sorted(repos)),
+                # 通知した系列自身が推奨なら、併記しない
+                recommended_cycle=(
+                    recommended.cycle if recommended and recommended.cycle != cycle else None
+                ),
             ))
     return sorted(alerts, key=lambda a: (a.kind, a.runtime, a.cycle))
 
