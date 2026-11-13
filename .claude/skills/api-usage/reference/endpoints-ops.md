@@ -330,7 +330,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 ```
 
 > **実際の修正は Dependabot が担当。** DEPSCAN は検知・通知のみで、修正コードは生成しない。
-> `POST /admin/dependabot-ops`（DEPSOPS）が毎日JST 08:00に自動実行され、安全なPR
+> `POST /admin/dependabot-ops`（DEPSOPS）が毎日JST 01:10に自動実行され、安全なPR
 > （マイナー/パッチ・CIあり・コンフリクトなし）のみ自動マージし、それ以外はSlack通知で
 > 人の判断に委ねる（判定結果はスキル11の`GET /api/depsops`で確認できる）。
 

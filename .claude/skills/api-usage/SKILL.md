@@ -19,7 +19,7 @@ Claude Code や AI エージェントがこの API を「スキル（道具）�
 | **ベース URL（開発）** | `http://localhost:8000` |
 | **認証方式** | `X-API-KEY` リクエストヘッダー |
 | **レスポンス形式** | JSON |
-| **データソース** | CISA KEV／OSV API／DEPSCAN（GitHub API + OSV API）（毎日 JST 04:05 に一括順次実行） |
+| **データソース** | CISA KEV／OSV API／DEPSCAN（GitHub API + OSV API）（毎日 JST 00:05 に一括順次実行） |
 | **Swagger UI** | `https://168.138.213.240.nip.io/docs` |
 
 ---
@@ -143,7 +143,7 @@ DEPSCAN スキャンが実行され、`/api/depscan`・`/api/depscan/stats` は�
 
 | タイミング | 処理 |
 |----------|------|
-| 毎日 JST 04:05（UTC 19:05） | GitHub Actions 単一 cron で KEV → OSV → DEPSCAN → CODESCAN → DEPSOPS を順次実行（Upsert・古いレコード削除） |
+| 毎日 JST 00:05（UTC 15:05） | GitHub Actions 単一 cron で KEV → OSV → DEPSCAN → CODESCAN → DEPSOPS を順次実行（Upsert・古いレコード削除） |
 | アプリ起動時 | DB テーブルの自動作成 |
 | `POST /admin/*-crawl` 実行時 | 各クローラーをバックグラウンド取得（202 即時返却。KEV/OSV/DEPSCAN/CODESCAN/DEPSOPSは`?force=true`で重複実行スキップ（直近12時間）をバイパス可能、Issue #239） |
 
@@ -157,7 +157,7 @@ Upsertロジックの概要:
   GitHub Issue自動起票（未解決findingが0件になると自動クローズ）。実際の修正はDependabot
   が担当（DEPSCANは検知・通知のみ）
 - **DEPSOPS**: 安全なPR（マイナー/パッチ・CIあり・コンフリクトなし）のみ自動マージ、それ
-  以外はSlack通知のみで人の判断に委ねる。毎日JST 08:00に自動実行、手動実行も可能
+  以外はSlack通知のみで人の判断に委ねる。毎日JST 01:10に自動実行、手動実行も可能
 
 Upsertロジック・自動化の実装詳細（フィールド単位の判定条件・GitHub権限要件等）は
 `.claude/skills/crawler-internals/SKILL.md`・`.claude/skills/depscan-depsops/SKILL.md`を参照。

@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 from app.codescan.crawler import fetch_and_scan_code
 from app.commit_watch.crawler import fetch_and_watch_commits
-from app.core.config import settings
+from app.core.config import Settings, settings
 from app.depscan.crawler import fetch_and_scan_dependencies
 from app.depsops.runner import run_dependabot_ops
 from app.external_monitor.crawler import fetch_and_monitor_sites
@@ -41,13 +41,16 @@ class TestBuildScheduledJobs:
         expected = {
             "cisa_kev_crawler": (fetch_and_store_kev, settings.CRON_HOUR_UTC,
                                  settings.CRON_MINUTE_UTC),
-            "osv_crawler": (fetch_and_store_osv, settings.OSV_CRON_HOUR_UTC, 0),
-            "depscan_crawler": (fetch_and_scan_dependencies, settings.DEPSCAN_CRON_HOUR_UTC, 0),
+            "osv_crawler": (fetch_and_store_osv, settings.OSV_CRON_HOUR_UTC,
+                            settings.OSV_CRON_MINUTE_UTC),
+            "depscan_crawler": (fetch_and_scan_dependencies, settings.DEPSCAN_CRON_HOUR_UTC,
+                                settings.DEPSCAN_CRON_MINUTE_UTC),
             "codescan_crawler": (fetch_and_scan_code, settings.CODESCAN_CRON_HOUR_UTC,
                                  settings.CODESCAN_CRON_MINUTE_UTC),
             "runtime_crawler": (fetch_and_scan_runtimes, settings.RUNTIME_CRON_HOUR_UTC,
                                 settings.RUNTIME_CRON_MINUTE_UTC),
-            "dependabot_ops": (run_dependabot_ops, settings.DEPSOPS_CRON_HOUR_UTC, 0),
+            "dependabot_ops": (run_dependabot_ops, settings.DEPSOPS_CRON_HOUR_UTC,
+                               settings.DEPSOPS_CRON_MINUTE_UTC),
             "repo_cleanup": (run_repo_cleanup, settings.REPO_CLEANUP_CRON_HOUR_UTC,
                              settings.REPO_CLEANUP_CRON_MINUTE_UTC),
             "user_crawl": (run_user_crawls_for_all_accounts, settings.USER_CRAWL_CRON_HOUR_UTC,
@@ -88,6 +91,45 @@ class TestBuildScheduledJobs:
     def test_job_ids_are_unique(self):
         ids = [j.job_id for j in build_scheduled_jobs()]
         assert len(ids) == len(set(ids))
+
+
+def _default_utc(prefix: str) -> tuple[int, int]:
+    """設定の既定値（環境変数の上書きを受けない）から、ジョブの UTC の時・分を返す。"""
+    fields = Settings.model_fields
+    return (
+        fields[f"{prefix}CRON_HOUR_UTC"].default,
+        fields[f"{prefix}CRON_MINUTE_UTC"].default,
+    )
+
+
+class TestDefaultSchedule:
+    """既定の実行時刻（Issue #506: 毎日 JST 0:00 に開始し、早い時間帯に完了させる）。"""
+
+    def test_daily_update_starts_at_jst_midnight(self):
+        # JST 0:00 = UTC 15:00
+        assert _default_utc("") == (15, 0)
+
+    def test_kev_osv_depscan_run_five_minutes_apart(self):
+        assert _default_utc("OSV_") == (15, 5)
+        assert _default_utc("DEPSCAN_") == (15, 10)
+
+    def test_dependent_jobs_keep_their_order(self):
+        # KEV → OSV → DEPSCAN → CODESCAN → RUNTIME → DEPSOPS の順（前段の結果を後段が使う）
+        order = ["", "OSV_", "DEPSCAN_", "CODESCAN_", "RUNTIME_", "DEPSOPS_"]
+        times = [_default_utc(prefix) for prefix in order]
+        assert times == sorted(times)
+        assert len(set(times)) == len(times)
+
+    def test_all_daily_jobs_finish_by_jst_3am(self):
+        # 毎日のジョブはすべて UTC 15:00〜17:59（JST 0:00〜2:59）に収まる。週次の SLA は除く
+        prefixes = [
+            "", "OSV_", "DEPSCAN_", "CODESCAN_", "RUNTIME_", "DEPSOPS_", "REPO_CLEANUP_",
+            "USER_CRAWL_", "MCP_EXPIRY_NOTICE_", "OAUTH_CLEANUP_", "GHALERT_", "PROJSYNC_",
+            "REPOAUDIT_", "SECRET_EXPIRY_", "COMMITWATCH_", "EXTMON_", "EXCEPTION_",
+        ]
+        for prefix in prefixes:
+            hour, _ = _default_utc(prefix)
+            assert 15 <= hour <= 17, prefix
 
 
 class TestRegisterJobs:

@@ -73,7 +73,7 @@ FastAPIのOpenAPIに載らない`/mcp`・OAuth 2.1のルートは、ZAP専用の
 
 ## 毎日クロール（daily-crawl.yml）
 「ネットワーク障害等でAPSchedulerが不発火だった場合の二重バックアップ」として維持。
-**単一 cron（`5 19 * * *` / JST 翌 04:05）で KEV → OSV → DEPSCAN → CODESCAN → DEPSOPS
+**単一 cron（`5 15 * * *` / JST 0:05）で KEV → OSV → DEPSCAN → CODESCAN → DEPSOPS
 を順次実行**（GitHub Actions 無料プランでは複数 cron の発火が不安定なため単一 cron に統合）。
 
 | 実行順 | ジョブ | 対象 |

@@ -15,7 +15,7 @@ Claude Code や CI/CD ツールから「今まさに悪用されているサイ�
 
 | 機能 | 説明 |
 |------|------|
-| **KEV / OSV 自動クローラー** | アプリ内スケジューラが毎日 JST 04:00〜08:50 に KEV → OSV → DEPSCAN → CODESCAN などを順次実行（各フィード取得・Upsert）。GitHub Actions の cron（JST 04:05）は補完（詳細: [docs/deployment.md](docs/deployment.md)） |
+| **KEV / OSV 自動クローラー** | アプリ内スケジューラが毎日 JST 00:00〜02:00 に KEV → OSV → DEPSCAN → CODESCAN などを順次実行（各フィード取得・Upsert）。GitHub Actions の cron（JST 00:05）は補完（詳細: [docs/deployment.md](docs/deployment.md)） |
 | **言語・実行環境のバージョン監視（RUNTIME）** | 各リポジトリが使っている Python・Node.js・Flutter・Dart の版を設定ファイル（Dockerfile・CI・firebase.json 等）から検出し、最新版・サポート期限（endoflife.date・Flutter 公式）と突き合わせる。期限切れ・期限間近・新しい系列ありを、`GET /api/runtimes` とダッシュボードの「言語・実行環境」画面で見られ、変化があったとき（新しい系列の公開・サポート終了が近い・終了）は管理者の Slack に通知する（Issue #373） |
 | **依存ライブラリ脆弱性スキャン（DEPSCAN）** | GitHub 上の自作アプリ全リポジトリのロックファイルを OSV API とリアルタイム照合。新規検知はリポジトリへ GitHub Issue も自動起票し、解消を確認すると自動クローズ。悪意あるパッケージ（OSV `MAL-*`）は対応手順つきの緊急通知で区別する。重要度別の対応期限（CRITICAL 7日・HIGH 30日・KEV掲載7日）を超えた検知と平均対応日数（MTTR）を `GET /api/sla` とダッシュボードの「対応状況」で見られ、毎週月曜にSlackへまとめを送る |
 | **自アプリコード脆弱性診断（CODESCAN）** | GitHub 上の自作アプリ全リポジトリを、Semgrep（コード）・gitleaks（シークレット）・zizmor（GitHub Actions の設定）・インフラ設定（Firebase のルール・Dockerfile・docker-compose）で診断。CVSSはベストエフォート推定。解消を確認すると、起票した GitHub Issue も自動クローズ |

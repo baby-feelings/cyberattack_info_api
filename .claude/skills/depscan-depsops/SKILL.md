@@ -238,7 +238,7 @@ inserted=自動マージ・updated=要確認・deleted=解消済み。
 ## DEPSOPS（app/depsops/）: Dependabot PR の安全な自動マージ運用層
 DEPSCAN（検知）・Dependabot（修正PR作成）に続く3層目として、**安全性が高いPRだけを
 自動マージする**運用層。`POST /admin/dependabot-ops`から`run_dependabot_ops`を呼ぶ
-（`DEPSOPS_CRON_HOUR_UTC`＝既定UTC 23:00=JST 8:00、DEPSCANの後段で自動実行）。
+（`DEPSOPS_CRON_HOUR_UTC`＝既定UTC 16:10=JST 1:10、DEPSCANの後段で自動実行）。
 責務は3つに分離している: **`runner.py`**＝走査の組み立てのみ（`_DepsopsJob`〈`CrawlJob`〉・
 リポジトリ単位の`_process_repo`・全体走査の`scan_target_repos`）、**`pr_judge.py`**＝PR判定
 （`PrJudge`クラス。所有者・リポジトリ名・トークン・CI有無・alert名集合をインスタンスに保持し、

@@ -105,7 +105,7 @@ DEPSCAN と同じく `X-API-KEY` または GitHub ログインのセッション
 `operating=active|inactive|all` は DEPSCAN と共通（`INACTIVE_REPOS`）。
 
 ## 実行時刻
-`RUNTIME_CRON_HOUR_UTC` / `RUNTIME_CRON_MINUTE_UTC`（既定 UTC 22:45。CODESCAN の後段・DEPSOPS の前）。
+`RUNTIME_CRON_HOUR_UTC` / `RUNTIME_CRON_MINUTE_UTC`（既定 UTC 15:55。CODESCAN の後段・DEPSOPS の前）。
 強制実行は `POST /admin/runtime-crawl?force=true`、結果は `/api/crawler-logs?crawler_type=RUNTIME`。
 
 ## 削除済みリポジトリの掃除

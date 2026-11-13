@@ -27,9 +27,11 @@ class Settings(BaseSettings):
     )
 
     # クローラーの実行時刻（UTC）
-    CRON_HOUR_UTC: int = 19       # KEV: JST 4:00 = UTC 19:00
+    CRON_HOUR_UTC: int = 15       # KEV: JST 0:00 = UTC 15:00（毎日の更新の起点）
     CRON_MINUTE_UTC: int = 0
-    OSV_CRON_HOUR_UTC: int = 20   # OSV: JST 5:00 = UTC 20:00
+    # OSV: JST 0:05 = UTC 15:05（KEV の5分後）
+    OSV_CRON_HOUR_UTC: int = 15
+    OSV_CRON_MINUTE_UTC: int = 5
 
     # Slack 通知用 Webhook URL（未設定時は通知をスキップ）
     SLACK_WEBHOOK_URL: str = ""
@@ -54,16 +56,17 @@ class Settings(BaseSettings):
     # ようにする。
     # スキャンは止めない（止めるのは SCAN_EXCLUDE_REPOS）。載っていないリポジトリは運用中として扱う
     INACTIVE_REPOS: str = ""
-    # DEPSCAN: JST 7:00 = UTC 22:00（KEV→OSV の後段）
-    DEPSCAN_CRON_HOUR_UTC: int = 22
+    # DEPSCAN: JST 0:10 = UTC 15:10（KEV→OSV の後段）
+    DEPSCAN_CRON_HOUR_UTC: int = 15
+    DEPSCAN_CRON_MINUTE_UTC: int = 10
     # DEPSCAN データの保持期間（日数）: 解決済み（resolved_at 設定済み）のまま
     # この日数を超えて経過したレコードのみ定期削除する（未解決レコードは対象外）
     DEPSCAN_RETENTION_DAYS: int = 180
 
     # 自アプリコード脆弱性診断（CODESCAN）設定
-    # DEPSCAN の後段に配置: JST 7:30 = UTC 22:30
-    CODESCAN_CRON_HOUR_UTC: int = 22
-    CODESCAN_CRON_MINUTE_UTC: int = 30
+    # DEPSCAN の後段に配置: JST 0:40 = UTC 15:40
+    CODESCAN_CRON_HOUR_UTC: int = 15
+    CODESCAN_CRON_MINUTE_UTC: int = 40
     # CODESCAN データの保持期間（日数）: 解決済み（resolved_at 設定済み）のまま
     # この日数を超えて経過したレコードのみ定期削除する（未解決レコードは対象外）
     CODESCAN_RETENTION_DAYS: int = 180
@@ -75,20 +78,21 @@ class Settings(BaseSettings):
     DASHBOARD_URL: str = "http://localhost:5173"
 
     # 言語・実行環境のバージョン監視（RUNTIME）設定
-    # CODESCAN の後段・DEPSOPS の前に配置: JST 7:45 = UTC 22:45
-    RUNTIME_CRON_HOUR_UTC: int = 22
-    RUNTIME_CRON_MINUTE_UTC: int = 45
+    # CODESCAN の後段・DEPSOPS の前に配置: JST 0:55 = UTC 15:55
+    RUNTIME_CRON_HOUR_UTC: int = 15
+    RUNTIME_CRON_MINUTE_UTC: int = 55
 
     # Dependabot PR 自動運用（DEPSOPS）設定
-    # JST 8:00 = UTC 23:00（DEPSCAN の後段。Dependabot が新規検知に反応する時間を確保）
-    DEPSOPS_CRON_HOUR_UTC: int = 23
+    # JST 1:10 = UTC 16:10（DEPSCAN の後段。Dependabot が新規検知に反応する時間を確保）
+    DEPSOPS_CRON_HOUR_UTC: int = 16
+    DEPSOPS_CRON_MINUTE_UTC: int = 10
     # DEPSOPS データの保持期間（日数）: この日数より古い processed_at レコードを定期削除する
     DEPSOPS_RETENTION_DAYS: int = 180
 
     # 削除済みリポジトリのDEPSCAN/CODESCAN/DEPSOPSデータ削除（Issue #228）設定
-    # DEPSOPSの後段: JST 8:15 = UTC 23:15
-    REPO_CLEANUP_CRON_HOUR_UTC: int = 23
-    REPO_CLEANUP_CRON_MINUTE_UTC: int = 15
+    # DEPSOPSの後段: JST 1:25 = UTC 16:25
+    REPO_CLEANUP_CRON_HOUR_UTC: int = 16
+    REPO_CLEANUP_CRON_MINUTE_UTC: int = 25
 
     # GitHub ログイン（DEPSCAN ダッシュボードのアクセス制御）設定
     # OAuth App の Client ID / Secret（未設定時は /auth/github/* がエラーを返すのみで
@@ -119,15 +123,15 @@ class Settings(BaseSettings):
     # 登録済みユーザーの定期スキャン機能が動作しない）
     TOKEN_ENCRYPTION_KEY: str = ""
     # 登録済みユーザー（GITHUB_USERNAME以外）のリポジトリに対するDEPSCAN/CODESCAN/
-    # DEPSOPSの定期実行時刻（UTC）。DEPSOPSの後段: JST 8:30 = UTC 23:30
-    USER_CRAWL_CRON_HOUR_UTC: int = 23
-    USER_CRAWL_CRON_MINUTE_UTC: int = 30
-    # MCPトークンの期限前通知: 毎日 UTC 23:45（JST 翌日 8:45）
-    MCP_EXPIRY_NOTICE_CRON_HOUR_UTC: int = 23
-    MCP_EXPIRY_NOTICE_CRON_MINUTE_UTC: int = 45
-    # 使われない OAuth 接続・登録の自動整理: 毎日 UTC 23:50（JST 翌日 8:50）
-    OAUTH_CLEANUP_CRON_HOUR_UTC: int = 23
-    OAUTH_CLEANUP_CRON_MINUTE_UTC: int = 50
+    # DEPSOPSの定期実行時刻（UTC）。DEPSOPSの後段: JST 1:40 = UTC 16:40
+    USER_CRAWL_CRON_HOUR_UTC: int = 16
+    USER_CRAWL_CRON_MINUTE_UTC: int = 40
+    # MCPトークンの期限前通知: 毎日 UTC 16:55（JST 翌日 1:55）
+    MCP_EXPIRY_NOTICE_CRON_HOUR_UTC: int = 16
+    MCP_EXPIRY_NOTICE_CRON_MINUTE_UTC: int = 55
+    # 使われない OAuth 接続・登録の自動整理: 毎日 UTC 17:00（JST 翌日 2:00）
+    OAUTH_CLEANUP_CRON_HOUR_UTC: int = 17
+    OAUTH_CLEANUP_CRON_MINUTE_UTC: int = 0
 
     # 脆弱性への対応期限（SLA。Issue #404）。検知日から、この日数以内に解決することを目標にする。
     # LOW・重要度不明は期限なし。KEV 掲載済みは SLA_KEV_DAYS に短縮する（重要度が低くても）
@@ -142,20 +146,20 @@ class Settings(BaseSettings):
     SLA_DIGEST_CRON_HOUR_UTC: int = 0
     SLA_DIGEST_CRON_MINUTE_UTC: int = 0
 
-    # GitHub のセキュリティアラートの取り込み（Issue #402）: 毎日 UTC 22:50（言語監視の後）
-    GHALERT_CRON_HOUR_UTC: int = 22
-    GHALERT_CRON_MINUTE_UTC: int = 50
+    # GitHub のセキュリティアラートの取り込み（Issue #402）: 毎日 UTC 16:00（言語監視の後）
+    GHALERT_CRON_HOUR_UTC: int = 16
+    GHALERT_CRON_MINUTE_UTC: int = 0
 
-    # GitHub Projects への Issue・PR の自動追加（PROJSYNC）: 毎日 UTC 23:30。PROJSYNC_NUMBER は
+    # GitHub Projects への Issue・PR の自動追加（PROJSYNC）: 毎日 UTC 16:40。PROJSYNC_NUMBER は
     # GITHUB_USERNAME 所有の Project の番号（0 なら無効）。トークンに `project` 権限が必要
     PROJSYNC_NUMBER: int = 0
     PROJSYNC_MAX_ADD: int = 300  # 1回の実行で追加する最大件数（暴走防止）
-    PROJSYNC_CRON_HOUR_UTC: int = 23
-    PROJSYNC_CRON_MINUTE_UTC: int = 30
+    PROJSYNC_CRON_HOUR_UTC: int = 16
+    PROJSYNC_CRON_MINUTE_UTC: int = 40
 
-    # リポジトリの設定の監査（Issue #398）: 毎日 UTC 22:40（言語監視の前）
-    REPOAUDIT_CRON_HOUR_UTC: int = 22
-    REPOAUDIT_CRON_MINUTE_UTC: int = 40
+    # リポジトリの設定の監査（Issue #398）: 毎日 UTC 15:50（言語監視の前）
+    REPOAUDIT_CRON_HOUR_UTC: int = 15
+    REPOAUDIT_CRON_MINUTE_UTC: int = 50
 
     # 本アプリ自身の防御（Issue #406）
     # レート制限: 管理 API・認証系で、1分あたりの上限と、認証失敗の連続によるロックアウト
@@ -169,33 +173,33 @@ class Settings(BaseSettings):
     API_KEY_EXPIRES_ON: str = ""
     GITHUB_TOKEN_EXPIRES_ON: str = ""
     SECRETS_EXPIRY_NOTICE_DAYS: int = 14
-    # 鍵の更新期限の通知と、監査ログの掃除: 毎日 UTC 23:40
-    SECRET_EXPIRY_CRON_HOUR_UTC: int = 23
-    SECRET_EXPIRY_CRON_MINUTE_UTC: int = 40
+    # 鍵の更新期限の通知と、監査ログの掃除: 毎日 UTC 16:50
+    SECRET_EXPIRY_CRON_HOUR_UTC: int = 16
+    SECRET_EXPIRY_CRON_MINUTE_UTC: int = 50
 
-    # コミットの監視（Issue #405）: 毎日 UTC 22:20。信頼するコミッター（管理者・dependabot・
+    # コミットの監視（Issue #405）: 毎日 UTC 15:30。信頼するコミッター（管理者・dependabot・
     # github-actions 以外に足すユーザー。カンマ区切りの GitHub ログイン名）
     TRUSTED_COMMITTERS: str = ""
     # True にすると、信頼するユーザーでも、署名のないコミットを通知する（なりすまし対策。
     # 自分のコミットを、すべて署名している場合に使う）
     COMMITWATCH_REQUIRE_SIGNATURE: bool = False
-    COMMITWATCH_CRON_HOUR_UTC: int = 22
-    COMMITWATCH_CRON_MINUTE_UTC: int = 20
+    COMMITWATCH_CRON_HOUR_UTC: int = 15
+    COMMITWATCH_CRON_MINUTE_UTC: int = 30
 
-    # 公開サイトの外形監視（Issue #401）: 毎日 UTC 22:35。リポジトリの情報から自動検出するほかに、
+    # 公開サイトの外形監視（Issue #401）: 毎日 UTC 15:45。リポジトリの情報から自動検出するほかに、
     # 足りない URL（https）をカンマ区切りで追加できる（自分の所有するドメインのみ）
     EXTERNAL_MONITOR_URLS: str = ""
-    EXTMON_CRON_HOUR_UTC: int = 22
-    EXTMON_CRON_MINUTE_UTC: int = 35
+    EXTMON_CRON_HOUR_UTC: int = 15
+    EXTMON_CRON_MINUTE_UTC: int = 45
 
     # 検知の例外（受容・誤検知・影響なし。Issue #403）
     # 受容の期限の上限（日）。期限なしの受容は認めない（放置を防ぐ）
     EXCEPTION_MAX_DAYS: int = 365
     # 期限の何日前に再通知するか
     EXCEPTION_EXPIRY_NOTICE_DAYS: int = 7
-    # 期限切れ・修正版の公開の確認と通知: 毎日 UTC 22:55（DEPSCAN・CODESCAN・言語監視の後）
-    EXCEPTION_CRON_HOUR_UTC: int = 22
-    EXCEPTION_CRON_MINUTE_UTC: int = 55
+    # 期限切れ・修正版の公開の確認と通知: 毎日 UTC 16:05（DEPSCAN・CODESCAN・言語監視の後）
+    EXCEPTION_CRON_HOUR_UTC: int = 16
+    EXCEPTION_CRON_MINUTE_UTC: int = 5
 
     @field_validator("API_KEY_EXPIRES_ON", "GITHUB_TOKEN_EXPIRES_ON")
     @classmethod
