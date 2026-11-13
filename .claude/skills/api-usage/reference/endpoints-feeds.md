@@ -319,7 +319,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 | `resolved` | bool | 解決状態で絞り込み（未指定なら全件） |
 | `content` | string | `findings`=検知された依存のみ（デフォルト） / `inventory`=使っている依存の全量（脆弱性の無い依存も含む SBOM） |
 
-> 依存の全量は、DEPSCAN のスキャンごとに保存される（毎日 JST 04:xx の定期実行・ログイン時の
+> 依存の全量は、DEPSCAN のスキャンごとに保存される（毎日 JST 00:xx の定期実行・ログイン時の
 > オンデマンド）。デプロイ直後は、次回のスキャンが終わるまで `inventory` は空になる。
 >
 > `Content-Type`はSBOM専用のメディアタイプ（`application/vnd.cyclonedx+json` /

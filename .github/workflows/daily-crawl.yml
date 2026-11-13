@@ -4,11 +4,11 @@ name: Daily Crawl — KEV & OSV & DEPSCAN & CODESCAN & DEPSOPS
 permissions:
   contents: read
 
-# 毎日 UTC 19:05（JST 翌 04:05）に 1 回のみ発火し、KEV → OSV → DEPSCAN → DEPSOPS を順次実行する。
+# 毎日 UTC 15:05（JST 0:05）に 1 回のみ発火し、KEV → OSV → DEPSCAN → DEPSOPS を順次実行する。
 # GitHub Actions 無料プランでは複数 cron の発火が不安定なため、単一 cron に統合。
 on:
   schedule:
-    - cron: '5 19 * * *'   # JST 翌 04:05
+    - cron: '5 15 * * *'   # JST 0:05
   workflow_dispatch:
     inputs:
       target:

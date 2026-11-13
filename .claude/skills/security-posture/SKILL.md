@@ -44,7 +44,7 @@ DEPSCAN（`dependency`）とCODESCAN（`code`）の両方が対象。
 
   IssueはリポジトリごとなのでIssue単位でなくこの判定に乗せた。CODESCANも同じ判定で閉じる）/ CycloneDX SBOMの`analysis`
 
-- **毎日の`lifecycle.py`**（UTC 22:55）: 修正版が公開された受容（`fixed_versions`あり）を自動解除・期限切れを終了・期限の
+- **毎日の`lifecycle.py`**（UTC 16:05）: 修正版が公開された受容（`fixed_versions`あり）を自動解除・期限切れを終了・期限の
 
   `EXCEPTION_EXPIRY_NOTICE_DAYS`日前に1度だけ通知（`expiry_notified_at`）。解除・期限切れの検知は`issue_sync.refile_issues`でIssueに
 
@@ -92,7 +92,7 @@ tarball方式のCODESCANは現在のツリーしか見えないため、GitHub�
 
 - **通知**: 新規のsecret scanningだけ、管理者のWebhookへ（`github_alerts/notifier.py`。有効なものが先・無効化と再発行・
 
-  履歴の書き換えの手順つき）。毎日UTC 22:50（`GHALERT_*`）。クローラー種別は`GHALERT`
+  履歴の書き換えの手順つき）。毎日UTC 16:00（`GHALERT_*`）。クローラー種別は`GHALERT`
 
 - **トークン**: 現状は`repo`スコープの classic PAT（secret scanning・Dependabot・code scanningの読み取りを含む）。fine-grainedに
 
@@ -122,7 +122,7 @@ tarball方式のCODESCANは現在のツリーしか見えないため、GitHub�
 
   （全件が追加になり通知が溢れるため）。取得不可の種類は比べない。変化は管理者のSlackへ（乗っ取りの兆候の確認）
 
-- **保存**: `repo_audits`（リポジトリごとに最新の1行）。クローラー種別`REPOAUDIT`・毎日UTC 22:40（`REPOAUDIT_*`）
+- **保存**: `repo_audits`（リポジトリごとに最新の1行）。クローラー種別`REPOAUDIT`・毎日UTC 15:50（`REPOAUDIT_*`）
 
 - **トークン**: `repo`スコープのclassic PATで、所有リポジトリの設定を読める。fine-grainedにする場合は、Administration（読み取り）が要る。
 
@@ -158,7 +158,7 @@ tarball方式のCODESCANは現在のツリーしか見えないため、GitHub�
 
   （名前が解決できない・サービス側のリソースが無い表示=ERROR）・Firestore RESTの認証なし読み取り（WARNING。意図した公開範囲か確認）
 
-- **保存**: `site_checks`（URLごとに最新の1行）。クローラー種別`EXTMON`・毎日UTC 22:35（`EXTMON_*`）
+- **保存**: `site_checks`（URLごとに最新の1行）。クローラー種別`EXTMON`・毎日UTC 15:45（`EXTMON_*`）
 
 - **通知**（`external_monitor/notifier.py`）: **前回より増えた**ERROR・WARNING（INFOは一覧で確認）だけ、管理者のSlackへ。**初回は通知しない**
 
@@ -210,7 +210,7 @@ tarball方式のCODESCANは現在のツリーしか見えないため、GitHub�
 
   既定ブランチ以外へのpushも見ない
 
-- 毎日UTC 22:20（`COMMITWATCH_*`）。手動は`POST /admin/commit-watch-crawl`
+- 毎日UTC 15:30（`COMMITWATCH_*`）。手動は`POST /admin/commit-watch-crawl`
 
 
 
@@ -240,11 +240,11 @@ tarball方式のCODESCANは現在のツリーしか見えないため、GitHub�
 
 - **鍵の更新期限**（`jobs/secret_expiry.py`）: `API_KEY_EXPIRES_ON`・`GITHUB_TOKEN_EXPIRES_ON`を設定すると、期限の`SECRETS_EXPIRY_NOTICE_DAYS`日前から毎日、
 
-  管理者のSlackへ（鍵の値は扱わない）。毎日UTC 23:40に、保持期間を過ぎた監査ログの掃除も行う
+  管理者のSlackへ（鍵の値は扱わない）。毎日UTC 16:50に、保持期間を過ぎた監査ログの掃除も行う
 
 ## GitHub Projects への自動追加（PROJSYNC。`app/project_sync/`）
 
-全対象リポジトリのOpenのIssue・PRのうち、Projectにまだ無いものを毎日UTC 23:30に追加する（Projectの組み込みAuto-addは、リポジトリごとの画面設定が要るため、本アプリが同期する）。
+全対象リポジトリのOpenのIssue・PRのうち、Projectにまだ無いものを毎日UTC 16:40に追加する（Projectの組み込みAuto-addは、リポジトリごとの画面設定が要るため、本アプリが同期する）。
 `PROJSYNC_NUMBER`（`GITHUB_USERNAME`所有のProject番号。0=無効）。Projectの操作はGraphQLのみで、Issue・PRのノードID（RESTの`node_id`）で追加する。
 **トークンに`project`権限が必要**（無いとGraphQLが200のまま`INSUFFICIENT_SCOPES`を返す→`ProjectScopeError`でジョブを失敗にし、0件の同期と見なさない）。
 クローズ・マージで「Done」へ動かすのは、Projectの組み込みの設定。追加だけを行う（削除・状態の変更はしない）。クローラー種別は`PROJSYNC`（列が10文字までのため短くしている）。

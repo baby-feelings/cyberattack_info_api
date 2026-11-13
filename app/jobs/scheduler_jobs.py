@@ -53,16 +53,19 @@ class ScheduledJob:
 def _collection_jobs() -> list[ScheduledJob]:
     """脆弱性・依存・言語の情報を集めるジョブ（KEV/OSV → DEPSCAN → CODESCAN → …）。"""
     return [
-        # CISA KEV クローラー: 毎日 UTC 19:00（JST 翌日 4:00）
+        # CISA KEV クローラー: 毎日 UTC 15:00（JST 0:00）
         ScheduledJob(
             "cisa_kev_crawler", "KEV", fetch_and_store_kev,
             settings.CRON_HOUR_UTC, settings.CRON_MINUTE_UTC,
         ),
-        ScheduledJob("osv_crawler", "OSV", fetch_and_store_osv, settings.OSV_CRON_HOUR_UTC),
+        ScheduledJob(
+            "osv_crawler", "OSV", fetch_and_store_osv,
+            settings.OSV_CRON_HOUR_UTC, settings.OSV_CRON_MINUTE_UTC,
+        ),
         # 依存ライブラリ脆弱性スキャナー（DEPSCAN）
         ScheduledJob(
             "depscan_crawler", "DEPSCAN", fetch_and_scan_dependencies,
-            settings.DEPSCAN_CRON_HOUR_UTC,
+            settings.DEPSCAN_CRON_HOUR_UTC, settings.DEPSCAN_CRON_MINUTE_UTC,
         ),
         # 自アプリコード脆弱性診断（CODESCAN）: DEPSCAN の後段に配置
         ScheduledJob(
@@ -76,7 +79,8 @@ def _collection_jobs() -> list[ScheduledJob]:
         ),
         # Dependabot PR 自動運用（DEPSOPS）
         ScheduledJob(
-            "dependabot_ops", "DEPSOPS", run_dependabot_ops, settings.DEPSOPS_CRON_HOUR_UTC,
+            "dependabot_ops", "DEPSOPS", run_dependabot_ops,
+            settings.DEPSOPS_CRON_HOUR_UTC, settings.DEPSOPS_CRON_MINUTE_UTC,
         ),
     ]
 
