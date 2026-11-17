@@ -19,7 +19,11 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  workers: process.env.CI ? 2 : undefined,
+  // 並列数。E2E_WORKERS（数 or "50%"）で上書きできる。未指定: CIは4（GitHub標準ランナーの4 vCPU）、
+  // ローカルはPlaywright既定（論理コア数の半分）。テストは独立（共有状態なし）なので並列で安全
+  workers: process.env.E2E_WORKERS
+    ? (/^\d+$/.test(process.env.E2E_WORKERS) ? Number(process.env.E2E_WORKERS) : process.env.E2E_WORKERS)
+    : process.env.CI ? 4 : undefined,
   reporter: [
     ['list'],
     // HTMLレポート（playwright-report/index.html）。失敗時のトレース・スクリーンショット付き
