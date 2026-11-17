@@ -55,7 +55,7 @@ alembic upgrade head                                  # マイグレーション
 alembic revision --autogenerate -m "説明"               # マイグレーション生成
 uvicorn app.main:app --reload --env-file .env.development  # 開発サーバー起動
 pytest                                                 # テスト（カバレッジ付き）
-cd dashboard && npm run e2e                            # ダッシュボードE2E（Playwright。HTMLレポート付き）
+cd dashboard && npm run e2e                            # ダッシュボードE2E（Playwright。並列。`e2e:fast`/`e2e:serial`も可）
 ruff check app/ tests/                                 # Lint（`S`=bandit相当を含む）
 cd dashboard && npm run lint                           # ESLint（警告数の上限あり。package.json）
 deploy/zap/run_zap_scan.ps1                            # OWASP ZAP（Docker Desktop。docs/zap-scan.md）

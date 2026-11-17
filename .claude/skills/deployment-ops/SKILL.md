@@ -31,7 +31,7 @@ Vercelのプレビューは`dashboard/vercel.json`の`ignoreCommand`でダッシ
 
 **`dashboard-e2e`（Playwright のE2E、詳細は`dashboard-frontend`スキル）**
 `npm ci` → `npx playwright install --with-deps chromium` → `npm run e2e:typecheck` →
-`npm run e2e`（APIは全モック。シナリオ網羅率90%未満で失敗）。`dashboard/playwright-report/`
+`npm run e2e`（APIは全モック。4並列〔`E2E_WORKERS`で変更可〕。約3分。シナリオ網羅率90%未満で失敗）。`dashboard/playwright-report/`
 （`index.html`と`scenario-coverage.html`）を失敗時も含め Artifact として 30 日間保持。
 
 **`gitleaks.yml`**: PR（base..head）とmainのpushで、チェックサム検証済みの公式バイナリ（Dockerfileと同じ
