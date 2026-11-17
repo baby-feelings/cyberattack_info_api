@@ -90,6 +90,8 @@ deploy/zap/run_zap_scan.ps1           # OWASP ZAP の動的診断（Docker Deskt
 ダッシュボードのE2Eテスト（Playwright、API全モック）は `dashboard/` で `npm run e2e`。
 HTMLレポートは `npm run e2e:report`、画面・機能のシナリオ網羅率（90%未満で失敗）は
 `dashboard/playwright-report/scenario-coverage.html`。
+並列数は `E2E_WORKERS`（数 or `50%`）で指定でき、`npm run e2e:fast`（75%）・
+`npm run e2e:serial`（1。失敗の切り分け用）も使える。
 
 ---
 
