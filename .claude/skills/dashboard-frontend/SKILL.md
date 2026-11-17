@@ -205,6 +205,11 @@ http(s)のみリンクにする（`javascript:`等を弾くXSS対策）。
 `npm run e2e`（`dashboard/`で実行）。Vitest（`src/**/*.test.*`）とは別系統で、`vite.config.ts`の
 `test.include`を`src/`に限定してPlaywrightのspecを拾わないようにしている。
 
+- **並列実行**: `fullyParallel: true`（テストは独立。共有状態なし）。ワーカー数は`E2E_WORKERS`（数 or `50%`）で
+  上書き。既定はCI=4・ローカル=Playwright既定（論理コアの半分）。`npm run e2e:fast`（75%）・`e2e:serial`
+  （1。失敗の切り分け用）。**ジョブ分割（シャーディング）は未導入**: 網羅率レポーターが全結果を1か所で集計するため、
+  やるならblobレポーター＋マージジョブでレポーターを動かし直す必要がある（`ci-gate`の必須チェックも更新）。
+
 - **バックエンドAPIは全てモック**。`playwright.config.ts`の`webServer`が`VITE_API_BASE_URL`を
   同一オリジンの`/__api`に向けてviteを起動し、`e2e/support/mockApi.ts`が`page.route`で傍受する
   （CORSプリフライトなし・本番API/キー不要）。クエリ（検索・フィルター・ページ）に実際に反応する。

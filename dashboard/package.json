@@ -12,6 +12,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "e2e": "playwright test",
+    "e2e:fast": "playwright test --workers=75%",
+    "e2e:serial": "playwright test --workers=1",
     "e2e:ui": "playwright test --ui",
     "e2e:report": "playwright show-report",
     "e2e:typecheck": "tsc -p tsconfig.e2e.json"
