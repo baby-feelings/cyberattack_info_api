@@ -136,11 +136,11 @@ scenario('POS-08', '1つの取得が失敗しても、ほかは表示され、�
   await expect(page.getByRole('alert')).toHaveCount(0)
 })
 
-scenario('POS-09', '運用状態を切り替えると、3つのセクションが、運用中・運用停止中で絞り込まれる', async ({ page, api }) => {
+scenario('POS-09', '運用中と運用停止中が別の区画に分かれ、運用停止中は開いたときにだけ表示される', async ({ page, api }) => {
   api.state.inactiveRepos = [STOPPED]
   await openPosture(page)
 
-  // 既定は運用中。運用停止中のアプリは、どのセクションにも出ない。リポジトリに紐づかないサイトは、運用中に出る
+  // 運用中の区画: 運用停止中のアプリは、どのセクションにも出ない。リポジトリに紐づかないサイトは、運用中に出る
   await expect(matrix(page).getByRole('rowheader', { name: 'baby-feelings/app-two' })).toBeVisible()
   await expect(matrix(page).getByRole('rowheader', { name: STOPPED })).toHaveCount(0)
   await expect(alerts(page)).not.toContainText('停止中のアプリの指摘')
@@ -148,18 +148,25 @@ scenario('POS-09', '運用状態を切り替えると、3つのセクション�
   await expect(sites(page)).toContainText('config.example')
   expect(api.lastQuery('/api/repo-audit')?.get('operating')).toBe('active')
 
-  const filter = page.getByRole('group', { name: '運用状態フィルター' })
-  await filter.getByRole('button', { name: '運用停止中' }).click()
-  await expect(matrix(page).getByRole('rowheader')).toHaveText([STOPPED])
-  await expect(alerts(page)).toContainText('停止中のアプリの指摘')
-  await expect(sites(page)).toContainText('app-stopped.example')
-  await expect(sites(page)).not.toContainText('config.example')
+  // 運用停止中の区画は、閉じている間は取得しない
+  const toggle = page.getByRole('button', { name: /運用停止中/ })
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(matrix(page)).toHaveCount(1)
 
-  await filter.getByRole('button', { name: 'すべて' }).click()
-  await expect(matrix(page).getByRole('rowheader', { name: STOPPED })).toBeVisible()
-  await expect(matrix(page).getByRole('rowheader', { name: 'baby-feelings/app-two' })).toBeVisible()
-  // すべて＝ operating を付けない（従来どおり全件）
-  expect(api.lastQuery('/api/repo-audit')?.get('operating')).toBeNull()
+  // 開くと、運用停止中のアプリだけが、もう1組のセクションに出る
+  await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  await expect(matrix(page)).toHaveCount(2)
+  const stopped = page.getByRole('region', { name: '運用停止中' })
+  await expect(stopped.getByRole('rowheader')).toHaveText([STOPPED])
+  await expect(stopped).toContainText('停止中のアプリの指摘')
+  await expect(stopped).toContainText('app-stopped.example')
+  await expect(stopped).not.toContainText('config.example')
+  expect(api.lastQuery('/api/repo-audit')?.get('operating')).toBe('inactive')
+
+  // 閉じると、運用停止中の区画は消える（運用中の区画は残る）
+  await toggle.click()
+  await expect(matrix(page)).toHaveCount(1)
 })
 
 scenario('POS-10', 'スマホ幅でも、ページが横にはみ出さず、マトリクスが横スクロールし、リポジトリ名の列が固定される', async ({ page }) => {

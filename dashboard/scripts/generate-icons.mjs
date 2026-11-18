@@ -17,6 +17,8 @@ const maskableSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 16
 const targets = [
   ['favicon-96x96.png', svg, 96],
   ['apple-touch-icon.png', svg.replace(/rx="36"/, 'rx="0"'), 180], // iOS が角を丸めるため、角は付けない
+  ['web-app-icon-192x192.png', svg, 192], // purpose: any（タスクバー・ホーム画面など、切り抜かれない場所用）
+  ['web-app-icon-512x512.png', svg, 512],
   ['web-app-manifest-192x192.png', maskableSvg, 192],
   ['web-app-manifest-512x512.png', maskableSvg, 512],
 ]

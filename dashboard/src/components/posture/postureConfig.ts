@@ -25,6 +25,13 @@ export const POSTURE_TEXT = {
   loadFailed: '読み込めませんでした',
   loading: '読み込み中',
   all: 'すべて',
+  // 運用状態の区画（運用中は常に表示、運用停止中は折りたたみ。開いたときに初めて取得する）
+  groups: {
+    active: '運用中',
+    inactive: '運用停止中',
+    inactiveHint: '運用を止めたアプリ。開くと取得します',
+    close: '閉じる',
+  },
   summary: {
     openAlerts: 'アラート（未対応）',
     auditRate: '設定の達成率（%）',
