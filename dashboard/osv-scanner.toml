@@ -1,0 +1,8 @@
+# OSV-Scanner の例外（dashboard/package-lock.json に適用される）。
+# 修正版が公開されたら、この例外は外す（期限を過ぎると、自動で無効になる）。
+
+[[IgnoredVulns]]
+id = "GHSA-fc5q-39xc-vjpf"
+# 約3か月後に、再評価する（その時点でまだ修正版が無ければ、期限を延ばす）
+ignoreUntil = 2027-02-18
+reason = "picomatch 4.0.7 の ReDoS（CVE-2026-112366）。修正版が未公開（4.0.7 が最新）。開発用ツール（vite・vitest）だけが使う依存で、本番の配信物には入らない。細工した glob パターンを外部から受け取る処理は無い"
