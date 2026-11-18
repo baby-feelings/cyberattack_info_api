@@ -3,6 +3,7 @@ import {
   fetchCodescanList, fetchCodescanStats,
   type CodescanListResponse, type CodescanStatsResponse, type OperatingStatus,
 } from '../../api/client'
+import { useFindingFilters } from '../shared/useFindingFilters'
 
 const PER_PAGE = 30
 
@@ -12,15 +13,12 @@ const PER_PAGE = 30
 // authToken 指定時（GitHubログイン経由、Issue #219）は X-API-KEY の代わりに
 // Authorization: Bearer ヘッダーを送る（DepscanPanel の useDepscanData と同じパターン）。
 export function useCodescanData(authToken?: string) {
-  const [severity, setSeverity] = useState<string | null>(null)
+  // 絞り込み条件とページは、DEPSCAN と共通の部品。運用状態を切り替えたら、選んでいたアプリを戻す
+  const {
+    severity, showExcepted, operating, selectedRepo, page, setPage,
+    handleSev, handleOperating, handleRepo, toggleShowExcepted,
+  } = useFindingFilters({ resetRepoOnOperating: true })
   const [resolved, setResolved] = useState<boolean | null>(false)
-  // 例外（受容・影響なし・誤検知）にした検知を一覧に含めるか。初期は含めない（対応が必要なものだけを見せる）
-  const [showExcepted, setShowExcepted] = useState(false)
-  // 初期表示は運用中のみ（運用停止中のアプリの脆弱性に埋もれず、運用中のものを見やすくするため）
-  const [operating, setOperating] = useState<OperatingStatus>('active')
-  // 左のアプリ一覧で選んでいるリポジトリ（null = すべてのアプリ）。一覧APIの repo で絞り込む
-  const [selectedRepo, setSelectedRepo] = useState<string | null>(null)
-  const [page, setPage] = useState(1)
   const [result, setResult] = useState<CodescanListResponse | null>(null)
   const [stats, setStats] = useState<CodescanStatsResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -74,30 +72,8 @@ export function useCodescanData(authToken?: string) {
     loadStats(operating)
   }, [loadStats, operating])
 
-  function handleSev(sev: string) {
-    setSeverity(sev === 'ALL' ? null : sev)
-    setPage(1)
-  }
-
-  function handleOperating(op: OperatingStatus) {
-    setOperating(op)
-    // 運用状態を切り替えると、選んでいたアプリが一覧に無いことがあるため、選択を戻す
-    setSelectedRepo(null)
-    setPage(1)
-  }
-
-  function handleRepo(repo: string | null) {
-    setSelectedRepo(repo)
-    setPage(1)
-  }
-
   function handleResolvedToggle(value: boolean | null) {
     setResolved(value)
-    setPage(1)
-  }
-
-  function toggleShowExcepted() {
-    setShowExcepted(v => !v)
     setPage(1)
   }
 

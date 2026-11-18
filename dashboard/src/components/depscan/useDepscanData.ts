@@ -8,6 +8,7 @@ import {
 } from './grouping'
 import { summarizeRepos } from './repoSummary'
 import type { DepscanSort } from './DepscanSortSelector'
+import { useFindingFilters } from '../shared/useFindingFilters'
 
 const PER_PAGE = 30
 // 新しいDEPSCANクロールが完了していないかを確認する間隔（ミリ秒）
@@ -20,18 +21,15 @@ const UPDATE_CHECK_INTERVAL_MS = 120000
 // authToken 指定時（GitHubログイン経由）は、サーバー側でログインユーザー本人が
 // 所有するリポジトリのみに強制的に絞り込まれる（オーナーフィルターは実質不要になる）
 export function useDepscanData(authToken?: string) {
+  // 絞り込み条件とページは、CODESCAN と共通の部品
+  const {
+    severity, showExcepted, operating, selectedRepo, page, setPage,
+    handleSev, handleOperating, handleRepo, toggleShowExcepted,
+  } = useFindingFilters()
   const [owner, setOwner] = useState<string | null>(null)
-  const [severity, setSeverity] = useState<string | null>(null)
   const [showResolved, setShowResolved] = useState(false)
-  // 例外（受容・影響なし・誤検知）にした検知を含めるか。初期は含めない（対応が必要なものだけを見せる）
-  const [showExcepted, setShowExcepted] = useState(false)
-  // 初期表示は運用中のみ（運用停止中のアプリの脆弱性に埋もれず、運用中のものを見やすくするため）
-  const [operating, setOperating] = useState<OperatingStatus>('active')
-  // 左のアプリ一覧で選んでいるリポジトリ（null = すべてのアプリ）。絞り込みは取得済みの結果に対して行う
-  const [selectedRepo, setSelectedRepo] = useState<string | null>(null)
   // 並び順。既定は重要度順。検知日順のときは、検知日ごとの区切りを出す
   const [sortBy, setSortBy] = useState<DepscanSort>('severity')
-  const [page, setPage] = useState(1)
   const [findings, setFindings] = useState<DependencyFindingOut[]>([])
   const [stats, setStats] = useState<DepscanStatsResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -125,23 +123,8 @@ export function useDepscanData(authToken?: string) {
     return g
   }, [findings, activeRepo, sortBy])
 
-  function handleRepo(repo: string | null) {
-    setSelectedRepo(repo)
-    setPage(1)
-  }
-
   function handleOwner(o: string) {
     setOwner(o === 'ALL' ? null : o)
-    setPage(1)
-  }
-
-  function handleSev(sev: string) {
-    setSeverity(sev === 'ALL' ? null : sev)
-    setPage(1)
-  }
-
-  function handleOperating(op: OperatingStatus) {
-    setOperating(op)
     setPage(1)
   }
 
@@ -152,11 +135,6 @@ export function useDepscanData(authToken?: string) {
 
   function toggleShowResolved() {
     setShowResolved(v => !v)
-    setPage(1)
-  }
-
-  function toggleShowExcepted() {
-    setShowExcepted(v => !v)
     setPage(1)
   }
 
