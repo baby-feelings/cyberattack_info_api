@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Shield, Package, Bug, ScanSearch, ShieldCheck } from 'lucide-react'
+import { Shield, Bug, ScanSearch, ShieldCheck } from 'lucide-react'
 import { KevPanel } from '../KevPanel'
 import { OsvPanel } from '../OsvPanel'
 import { DepscanAuthGate } from '../DepscanAuthGate'
@@ -9,10 +9,20 @@ import { POSTURE_TAB } from '../posture/postureConfig'
 import type { FetchedCrawlerType } from '../freshness/freshnessConfig'
 
 // タブ種別
-export type TabKey = 'kev' | 'osv' | 'depscan' | 'codescan' | 'posture'
+export type TabKey = 'public' | 'depscan' | 'codescan' | 'posture'
 
 // 1つのタブの定義。タブバーのボタンと、タブパネルの見出し・本体を1か所で宣言する
 // （以前は App.tsx にタブ数×約20行の同じ構造が並んでいた）。新しいタブはここに1件足す。
+// 1つの小タブ（タブの中の切り替え）。見出し（title・subtitle）と最終取得は、指定があればタブのものより優先する
+export interface SubTabDefinition {
+  key: string
+  label: string
+  panel: ReactNode
+  crawlerType?: FetchedCrawlerType
+  title?: string
+  subtitle?: string
+}
+
 export interface TabDefinition {
   key: TabKey
   label: string
@@ -23,31 +33,43 @@ export interface TabDefinition {
   title: string
   subtitle: string
   borderColor: string
+  // 小タブが無いタブだけが使う
   panel: ReactNode
+  // 小タブ（あれば、先頭が初期表示）
+  subTabs?: SubTabDefinition[]
 }
 
 export const TAB_DEFINITIONS: TabDefinition[] = [
   {
-    key: 'kev',
-    label: 'KEV',
+    key: 'public',
+    label: '公開情報',
+    // 見出しの最終取得は、選択中の小タブのものを使う
     crawlerType: 'KEV',
     icon: (size) => <Shield size={size} className="text-blue-400" />,
-    title: 'CISA KEV — Known Exploited Vulnerabilities',
-    subtitle: '実際に悪用が確認された脆弱性（米 CISA 公式カタログ）',
+    title: '公開情報 — 世界の公開された脆弱性',
+    subtitle: 'CISA KEV（悪用が確認された脆弱性）と OSV（オープンソースの脆弱性）',
     borderColor: 'border-blue-800/40',
-    // KEV パネル（サマリー・チャート・一覧を内包。OSV と同じ構成）
-    panel: <KevPanel />,
-  },
-  {
-    key: 'osv',
-    label: 'OSV',
-    crawlerType: 'OSV',
-    icon: (size) => <Package size={size} className="text-emerald-400" />,
-    title: 'OSV — Open Source Vulnerabilities',
-    subtitle: 'オープンソースライブラリの脆弱性（過去 6 ヶ月）',
-    borderColor: 'border-emerald-800/40',
-    // OSV パネル（サマリーカード・チャート・一覧を内包）
-    panel: <OsvPanel />,
+    panel: null,
+    subTabs: [
+      {
+        key: 'kev',
+        label: 'KEV',
+        crawlerType: 'KEV',
+        title: 'CISA KEV — Known Exploited Vulnerabilities',
+        subtitle: '実際に悪用が確認された脆弱性（米 CISA 公式カタログ）',
+        // KEV パネル（サマリー・チャート・一覧を内包。OSV と同じ構成）
+        panel: <KevPanel />,
+      },
+      {
+        key: 'osv',
+        label: 'OSV',
+        crawlerType: 'OSV',
+        title: 'OSV — Open Source Vulnerabilities',
+        subtitle: 'オープンソースライブラリの脆弱性（過去 6 ヶ月）',
+        // OSV パネル（サマリーカード・チャート・一覧を内包）
+        panel: <OsvPanel />,
+      },
+    ],
   },
   {
     key: 'depscan',

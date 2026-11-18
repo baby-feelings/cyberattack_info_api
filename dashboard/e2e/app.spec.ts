@@ -1,33 +1,51 @@
-import { expect, openTab, scenario, seedSession } from './support/test'
+import { expect, openPublic, openTab, scenario, seedSession } from './support/test'
 
 scenario('APP-01', '初期表示でヘッダー・KEVタブ・フッターが表示される', async ({ page }) => {
   await page.goto('/')
 
   await expect(page.getByText('サイバー攻撃情報ダッシュボード')).toBeVisible()
+  // 最初のタブは「公開情報」で、その中の先頭の小タブは KEV
+  await expect(page.getByRole('tab', { name: '公開情報', exact: true })).toHaveAttribute('aria-selected', 'true')
   await expect(page.getByRole('tab', { name: 'KEV', exact: true })).toHaveAttribute('aria-selected', 'true')
   await expect(page.getByRole('tabpanel', { name: 'KEV' })).toBeVisible()
   await expect(page.getByRole('heading', { name: /CISA KEV/ })).toBeVisible()
   await expect(page.getByText('毎日 JST 00:00〜00:55 に自動更新')).toBeVisible()
 })
 
-scenario('APP-02', '5つのタブが切り替わり対応するタブパネルが表示される', async ({ page }) => {
+scenario('APP-02', '4つのタブが切り替わり対応するタブパネルが表示される', async ({ page }) => {
   await page.goto('/')
 
   const expectations = [
-    { tab: 'OSV', heading: /OSV — Open Source Vulnerabilities/ },
     { tab: 'DEPSCAN', heading: /DEPSCAN — 自作アプリの依存ライブラリ脆弱性/ },
     { tab: 'CODESCAN', heading: /CODESCAN — 自アプリのコード脆弱性診断/ },
-    { tab: 'KEV', heading: /CISA KEV — Known Exploited Vulnerabilities/ },
+    { tab: '公開情報', heading: /CISA KEV — Known Exploited Vulnerabilities/ },
     { tab: 'POSTURE', heading: /POSTURE — セキュリティ態勢/ },
   ] as const
 
   for (const { tab, heading } of expectations) {
     await openTab(page, tab)
-    // 表示中のタブパネルは常に1つだけで、アクティブなタブに対応する
-    await expect(page.getByRole('tabpanel')).toHaveCount(1)
-    await expect(page.getByRole('tabpanel', { name: tab })).toBeVisible()
+    // 表示中のタブパネル（タブバーに対応するもの）は常に1つだけで、アクティブなタブに対応する
+    await expect(page.locator('[role="tabpanel"][id^="tabpanel-"]')).toHaveCount(1)
+    await expect(page.getByRole('tabpanel', { name: tab, exact: true })).toBeVisible()
     await expect(page.getByRole('heading', { name: heading })).toBeVisible()
   }
+})
+
+scenario('APP-09', '公開情報の小タブ（KEV・OSV）を切り替えられ、他のタブへ移って戻っても選択が残る', async ({ page }) => {
+  await page.goto('/')
+
+  await openPublic(page, 'OSV')
+  await expect(page.getByRole('heading', { name: /OSV — Open Source Vulnerabilities/ })).toBeVisible()
+  await expect(page.getByRole('table', { name: 'OSV 脆弱性一覧' })).toBeVisible()
+
+  // 別のタブへ移って戻ると、直前の小タブ（OSV）が復元される
+  await openTab(page, 'DEPSCAN')
+  await openTab(page, '公開情報')
+  await expect(page.getByRole('tab', { name: 'OSV', exact: true })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('heading', { name: /OSV — Open Source Vulnerabilities/ })).toBeVisible()
+
+  await openPublic(page, 'KEV')
+  await expect(page.getByRole('heading', { name: /CISA KEV/ })).toBeVisible()
 })
 
 scenario('APP-03', 'ハンバーガーメニューの開閉（外側クリック・Escapeで閉じる）', async ({ page }) => {
@@ -81,25 +99,26 @@ scenario('APP-06', 'アクセシビリティツリー（ARIAスナップショ�
   await page.goto('/')
 
   // セマンティクス: タブバーは tablist/tab として公開され、選択状態が伝わる
-  await expect(page.getByRole('tablist')).toMatchAriaSnapshot(`
+  const mainTabs = page.locator('nav').getByRole('tablist')
+  await expect(mainTabs).toMatchAriaSnapshot(`
     - tablist:
-      - tab "KEV" [selected]
-      - tab "OSV"
+      - tab "公開情報" [selected]
       - tab "DEPSCAN"
       - tab "CODESCAN"
+      - tab "POSTURE"
   `)
-  await openTab(page, 'OSV')
-  await expect(page.getByRole('tablist')).toMatchAriaSnapshot(`
+  await openTab(page, 'DEPSCAN')
+  await expect(mainTabs).toMatchAriaSnapshot(`
     - tablist:
-      - tab "KEV"
-      - tab "OSV" [selected]
-      - tab "DEPSCAN"
+      - tab "公開情報"
+      - tab "DEPSCAN" [selected]
       - tab "CODESCAN"
+      - tab "POSTURE"
   `)
 
   // タブとタブパネルは aria-controls / aria-labelledby で相互に関連付けられている
-  await expect(page.getByRole('tab', { name: 'OSV', exact: true })).toHaveAttribute('aria-controls', 'tabpanel-osv')
-  await expect(page.getByRole('tabpanel', { name: 'OSV' })).toHaveAttribute('id', 'tabpanel-osv')
+  await expect(page.getByRole('tab', { name: 'DEPSCAN', exact: true })).toHaveAttribute('aria-controls', 'tabpanel-depscan')
+  await expect(page.getByRole('tabpanel', { name: 'DEPSCAN' })).toHaveAttribute('id', 'tabpanel-depscan')
   await expect(page.getByRole('banner')).toBeVisible()
   await expect(page.getByRole('main')).toBeVisible()
   await expect(page.getByRole('contentinfo')).toBeVisible()
@@ -110,7 +129,7 @@ scenario('APP-07', 'モバイル幅でもタブバーとコンテンツが操作
   await page.setViewportSize({ width: 375, height: 812 })
   await page.goto('/')
 
-  await expect(page.getByRole('tab', { name: 'KEV', exact: true })).toBeVisible()
+  await expect(page.getByRole('tab', { name: '公開情報', exact: true })).toBeVisible()
   await openTab(page, 'CODESCAN')
   await expect(page.getByRole('tabpanel', { name: 'CODESCAN' })).toBeVisible()
 
@@ -124,9 +143,10 @@ scenario('APP-07', 'モバイル幅でもタブバーとコンテンツが操作
 scenario('APP-08', '下部のタブの横幅が均等で、タブバー全体を使い切る', async ({ page }) => {
   await page.goto('/')
 
-  const tabs = page.getByRole('tablist').getByRole('tab')
+  const mainTabs = page.locator('nav').getByRole('tablist')
+  const tabs = mainTabs.getByRole('tab')
   const boxes = await tabs.evaluateAll((els) => els.map((el) => el.getBoundingClientRect()))
-  const list = await page.getByRole('tablist').evaluate((el) => el.getBoundingClientRect().width)
+  const list = await mainTabs.evaluate((el) => el.getBoundingClientRect().width)
 
   // 幅がそろっている（小数の丸めを許す）
   const widths = boxes.map((b) => b.width)

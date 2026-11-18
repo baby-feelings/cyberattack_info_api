@@ -1,4 +1,4 @@
-import { dataRows, expect, openTab, scenario, type Page } from './support/test'
+import { dataRows, expect, openPublic, scenario, type Page } from './support/test'
 import { OSV_TOTAL, osvItems } from './support/mockData'
 
 const PER_PAGE = 30
@@ -6,7 +6,7 @@ const count = (pred: (v: (typeof osvItems)[number]) => boolean) => osvItems.filt
 
 async function openOsv(page: Page) {
   await page.goto('/')
-  await openTab(page, 'OSV')
+  await openPublic(page, 'OSV')
   await expect(page.getByRole('table', { name: 'OSV 脆弱性一覧' })).toBeVisible()
   return page.getByRole('table', { name: 'OSV 脆弱性一覧' })
 }
@@ -155,7 +155,7 @@ scenario('OSV-07', 'ページ送り', async ({ page, api }) => {
 scenario('OSV-08', '該当なしのとき空状態メッセージが表示される', async ({ page, api }) => {
   api.override('GET', '/api/osv', () => ({ body: { total: 0, page: 1, per_page: 30, data: [] } }))
   await page.goto('/')
-  await openTab(page, 'OSV')
+  await openPublic(page, 'OSV')
 
   await expect(page.getByText('該当する OSV 脆弱性はありません')).toBeVisible()
   await expect(page.getByRole('table', { name: 'OSV 脆弱性一覧' })).toHaveCount(0)
