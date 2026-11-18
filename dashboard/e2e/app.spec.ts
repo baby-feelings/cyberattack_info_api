@@ -10,7 +10,7 @@ scenario('APP-01', '初期表示でヘッダー・KEVタブ・フッターが表
   await expect(page.getByText('毎日 JST 00:00〜00:55 に自動更新')).toBeVisible()
 })
 
-scenario('APP-02', '4つのタブが切り替わり対応するタブパネルが表示される', async ({ page }) => {
+scenario('APP-02', '5つのタブが切り替わり対応するタブパネルが表示される', async ({ page }) => {
   await page.goto('/')
 
   const expectations = [
@@ -18,6 +18,7 @@ scenario('APP-02', '4つのタブが切り替わり対応するタブパネル�
     { tab: 'DEPSCAN', heading: /DEPSCAN — 自作アプリの依存ライブラリ脆弱性/ },
     { tab: 'CODESCAN', heading: /CODESCAN — 自アプリのコード脆弱性診断/ },
     { tab: 'KEV', heading: /CISA KEV — Known Exploited Vulnerabilities/ },
+    { tab: 'POSTURE', heading: /POSTURE — セキュリティ態勢/ },
   ] as const
 
   for (const { tab, heading } of expectations) {

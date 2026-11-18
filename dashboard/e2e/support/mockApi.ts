@@ -1,8 +1,9 @@
 import type { Page, Route } from '@playwright/test'
 import {
   codescanItems, codescanStats, depscanFindings, depscanStats, depsopsItems,
-  kevItems, kevStats, osvItems, osvStats, repoDependencies, repoRuntimes,
-  runtimeReleases, slaOverdue, slaPolicy, slaRepos,
+  githubAlertItems, githubAlertUnavailable, kevItems, kevStats, osvItems, osvStats,
+  repoAuditItems, repoDependencies, repoRuntimes, runtimeReleases, siteMonitorItems,
+  slaOverdue, slaPolicy, slaRepos,
 } from './mockData'
 
 // バックエンドAPIのモック。全リクエストは `/__api` 配下（playwright.config.ts の
@@ -324,6 +325,35 @@ function defaultResponse(req: RecordedRequest, state: MockState): MockResponse {
           duration_seconds: 60, inserted: 1, updated: 0, deleted: 0, error_message: null,
         }],
       }
+    }
+
+    // ── 態勢（設定の監査・GitHub アラート・外形監視）──
+    case 'GET /api/repo-audit': {
+      const keep = operatingKeep(query, state)
+      const rows = repoAuditItems.filter((r) => (
+        keep(r.repo_full_name) && (query.get('only_issues') !== 'true' || r.issues > 0)
+      ))
+      return { body: { total: rows.length, repos_with_issues: rows.filter((r) => r.issues > 0).length, data: rows } }
+    }
+    case 'GET /api/github-alerts': {
+      const keep = operatingKeep(query, state)
+      const kind = query.get('kind')
+      const withResolved = query.get('resolved') === 'true'
+      const rows = githubAlertItems.filter((a) => (
+        keep(a.repo_full_name) && (!kind || a.kind === kind) && (withResolved || !a.resolved_at)
+      ))
+      const unavailable = githubAlertUnavailable.filter((u) => keep(u.repo_full_name) && (!kind || u.kind === kind))
+      return { body: { total: rows.length, data: rows, unavailable } }
+    }
+    case 'GET /api/site-monitor': {
+      const keep = operatingKeep(query, state)
+      const operating = query.get('operating') ?? 'all'
+      // リポジトリに紐づかないサイトは、運用中として扱う（実 API と同じ）
+      const rows = siteMonitorItems.filter((s) => (
+        (s.repo_full_name === null ? operating !== 'inactive' : keep(s.repo_full_name))
+        && (query.get('only_issues') !== 'true' || s.issues > 0)
+      ))
+      return { body: { total: rows.length, sites_with_issues: rows.filter((s) => s.issues > 0).length, data: rows } }
     }
 
     // ── CODESCAN ──

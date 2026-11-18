@@ -2,6 +2,9 @@ import type { AlertList } from './AlertList'
 import type { AuditMatrix } from './AuditMatrix'
 import type { SiteCheck } from './SiteCheck'
 
+// 3つの取得元の名前
+export type PostureSourceName = 'alerts' | 'audit' | 'sites'
+
 export interface PostureSources {
   alerts: AlertList | null
   audit: AuditMatrix | null
@@ -34,5 +37,14 @@ export class PostureSummary {
   // 外形監視の、問題（ERROR・WARNING）の合計
   siteIssues(): number | null {
     return this.sites ? this.sites.reduce((sum, site) => sum + site.issues, 0) : null
+  }
+
+  // 取得できなかった元（表示の順は、固定）
+  unknownSources(): PostureSourceName[] {
+    const unknown: PostureSourceName[] = []
+    if (this.alerts === null) unknown.push('alerts')
+    if (this.audit === null) unknown.push('audit')
+    if (this.sites === null) unknown.push('sites')
+    return unknown
   }
 }

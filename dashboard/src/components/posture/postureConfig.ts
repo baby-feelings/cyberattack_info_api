@@ -3,6 +3,74 @@
 
 import type { AuditStatusKind } from './model/AuditStatus'
 
+// ── タブ ───────────────────────────────────────────────────────
+
+// タブの表記。他のタブ（KEV・OSV・DEPSCAN・CODESCAN）と同じく、英語の名前＋日本語の説明にそろえる
+export const POSTURE_TAB = {
+  label: 'POSTURE',
+  title: 'POSTURE — セキュリティ態勢',
+  subtitle: 'GitHub のセキュリティアラート・リポジトリ設定の監査・公開サイトの外形監視（本人所有のリポジトリ）',
+}
+
+// ── 文言 ───────────────────────────────────────────────────────
+
+export const POSTURE_TEXT = {
+  // 取得に失敗したが、理由を読み取れないときの文言
+  fetchFailed: '取得できませんでした',
+  loginDescription: 'ログインすると、自分のリポジトリのアラート・設定の監査・外形監視の結果を閲覧できます',
+  retry: '再試行',
+  // セッションが無効・期限切れのとき。同じトークンで再試行しても失敗するため、再ログインを案内する
+  sessionExpired: 'ログインの有効期限が切れました。もう一度ログインしてください。',
+  relogin: 'GitHubで再ログイン',
+  loadFailed: '読み込めませんでした',
+  loading: '読み込み中',
+  all: 'すべて',
+  summary: {
+    openAlerts: 'アラート（未対応）',
+    auditRate: '設定の達成率（%）',
+    siteIssues: '外形監視の問題',
+    unknownPrefix: '取得できなかった項目:',
+  },
+  // 3つの取得元の名前（見出しの「取得できなかった項目」に出す）
+  sources: { alerts: 'アラート', audit: '設定の監査', sites: '外形監視' },
+  audit: {
+    title: 'リポジトリ × 点検項目',
+    repoColumn: 'リポジトリ',
+    onlyIssues: '改善が必要なものだけ',
+    search: 'リポジトリ名で検索',
+    empty: '点検の結果がありません。リポジトリ設定の監査は、毎日の取得のあとに表示されます。',
+    noIssues: '改善が必要なリポジトリはありません。',
+    noMatch: '該当するリポジトリがありません。',
+    legend: '項目を押すと、詳細と直し方が出ます',
+    detail: '詳細',
+    fix: '直し方',
+  },
+  alerts: {
+    title: 'GitHub のセキュリティアラート',
+    kind: '種類',
+    severity: '重要度',
+    empty: '未対応のアラートはありません。',
+    unavailableTitle: '取得できなかった項目（機能が無効・権限不足）',
+    unknownReason: '理由不明',
+    columns: { severity: '重要度', kind: '種類', repo: 'リポジトリ', title: 'タイトル', tool: '検知元' },
+    opensInNewTab: '（新しいタブで開く）',
+  },
+  sites: {
+    title: '公開サイトの外形監視',
+    empty: '外形監視の結果がありません。',
+    columns: { url: 'URL', source: '取得元', tls: 'TLS 残日数', findings: '指摘' },
+    tlsUnit: '日',
+    noFindings: '問題なし',
+  },
+}
+
+// 外形監視の指摘の、重要度ごとの表示（API の値）。色だけに頼らず、記号でも示す
+export const SITE_SEVERITY_VIEW: Record<string, { glyph: string; cls: string }> = {
+  ERROR: { glyph: '✕', cls: 'text-red-300' },
+  WARNING: { glyph: '▲', cls: 'text-amber-300' },
+  INFO: { glyph: '・', cls: 'text-slate-400' },
+}
+
 // ── アラートの種類 ──────────────────────────────────────────────
 
 // アイコンは、名前で持ち（lucide-react のコンポーネントを、ここで import しない）、描く側が対応づける
@@ -38,4 +106,10 @@ export const AUDIT_STATUS_VIEW: Record<AuditStatusKind, { label: string; glyph: 
   ng: { label: '不合格', glyph: '✕', cls: 'bg-red-950 text-red-300 border-red-800' },
   unavailable: { label: '取得不可', glyph: '－', cls: 'bg-slate-800 text-slate-400 border-slate-700' },
   not_enforceable: { label: '強制できない', glyph: '－', cls: 'bg-slate-800 text-slate-400 border-slate-700' },
+}
+
+// 外形監視の取得元（API の `source`）の表示名。未知の値は、そのまま出す
+export const SITE_SOURCE_LABELS: Record<string, string> = {
+  homepage: 'リポジトリのホームページ',
+  config: '設定で指定',
 }

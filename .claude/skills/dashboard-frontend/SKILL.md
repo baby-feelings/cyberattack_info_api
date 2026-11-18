@@ -1,6 +1,6 @@
 ---
 name: dashboard-frontend
-description: Reactダッシュボード（dashboard/）のアーキテクチャ設計判断。タブ切り替えUI、KEV/OSV/DEPSCAN/CODESCAN共通パーツ（VulnPanelParts）、DepscanPanelの集約・オーナーフィルター、DEPSCAN/CODESCAN共有GitHubログイン（useGithubSession）、ハンバーガーメニューからのユーザー別Slack通知登録画面（SettingsPanel、Issue #227）、CSSカスケードレイヤーの注意点、環境表示の日本語化を扱う。dashboard/配下のコンポーネント変更時に読む。
+description: Reactダッシュボード（dashboard/）のアーキテクチャ設計判断。タブ切り替えUI、態勢タブ（POSTURE。アラート・設定の監査・外形監視。components/posture/）、KEV/OSV/DEPSCAN/CODESCAN共通パーツ（VulnPanelParts）、DepscanPanelの集約・オーナーフィルター、DEPSCAN/CODESCAN共有GitHubログイン（useGithubSession）、ハンバーガーメニューからのユーザー別Slack通知登録画面（SettingsPanel、Issue #227）、CSSカスケードレイヤーの注意点、環境表示の日本語化を扱う。dashboard/配下のコンポーネント変更時に読む。
 ---
 
 # ダッシュボード（React）内部実装リファレンス
@@ -13,7 +13,7 @@ description: Reactダッシュボード（dashboard/）のアーキテクチャ�
 テスト用の`jsonResponse`は`src/test/http.ts`（カバレッジの対象外）。
 
 ## タブ切り替え UI（App.tsx）
-KEV / OSV / DEPSCAN / CODESCAN の 4 データソースは、画面下部固定のタブバーで切り替え
+KEV / OSV / DEPSCAN / CODESCAN / POSTURE の 5 つは、画面下部固定のタブバーで切り替え
 表示する構成（縦並び表示ではない）。DEPSOPS（Dependabot 運用状況）に専用タブは作らず、DEPSCAN
 タブ内のボタンから開く全画面モーダルとして統合している。「依存パッケージ」
 （`DependenciesModal.tsx`。`GET /api/depscan/dependencies`）も同じ作りで、左のアプリ一覧（`RepoRail`）で
@@ -184,6 +184,24 @@ http(s)のみリンクにする（`javascript:`等を弾くXSS対策）。
 `/health` の状態（OK／DEGRADED／UNREACHABLE）と「DB 接続」だけを表示する。**「実行環境」の行は表示しない**
 （本番では常に「本番環境」で情報にならず、常に緑のチェックが付いて稼働の判定と紛らわしかったため削除）。
 `HealthResponse.environment` は、API の応答の型として残している（画面では使わない）。
+
+## 態勢タブ（POSTURE。`components/posture/`。設計書: `docs/superpowers/specs/2026-11-18-posture-tab-design.md`）
+GitHub のセキュリティアラート（`/api/github-alerts`）・リポジトリ設定の監査（`/api/repo-audit`）・公開サイトの外形監視
+（`/api/site-monitor`）を、1タブで見る。DEPSCAN と同じ GitHub ログイン（共通部品`shared/GithubLoginGate`）。
+- **責務の分離**: 取得＝`api/posture.ts`と`usePostureData`（3つの取得元を**独立**に取り、`Source<T>`＝loading/ready/error。
+  1つ失敗しても、ほかは表示し、`reload(その元)`で再試行）／判断＝`model/`の小さな不変クラス（継承なし。`AuditMatrix`・
+  `RepoAudit`・`AuditCheck`・`AuditStatus`・`AlertList`・`GithubAlert`・`AlertKind`・`SiteCheck`・`PostureSummary`）／
+  画面＝セクション（`AuditMatrixSection`・`AlertsSection`・`SiteMonitorSection`）。画面はクラスの結果を描くだけ。
+- **ハードコードしない**: 文言・配色・順位は`postureConfig.ts`だけ。**点検項目の名前・直し方は、APIの`label`・`fix`**
+  （マトリクスの列は、全リポジトリの項目の和集合）。外形監視の判定は、APIの`findings`に従い、画面で再計算しない。
+- **0と不明を区別**: 取得できなかった元は`null`（`PostureSummary`）。見出しは、数字を出さず、名前で示す。
+- **見せ場はマトリクス**（リポジトリ×点検項目）: 状態は色と記号（✓ ✕ －）と文言。セルは`button`（名前＝リポジトリ・項目・状態）。
+  項目が無いリポジトリは「取得不可」（押せない）。初期は「改善が必要なものだけ」・運用中のみ（`operating`は、3つのAPIが対応）。
+- **落とし穴**: ①`tsconfig`の`erasableSyntaxOnly`のため、コンストラクタの引数でのプロパティ宣言（`constructor(private x)`）は不可。
+  ②横スクロールの入れ物（`overflow-x-auto`）には**`relative`を付ける**。付けないと、`sr-only`（絶対配置）の隠し文字が入れ物の外に
+  はみ出し、スマホ幅でページが横に広がる（E2E POS-10が検出）。③`useSource`は、取得の条件（key）を結果に添え、条件が変わった
+  直後は古い結果を出さない（効果内で同期的に`setState`せず、ESLintの警告を増やさない）。
+- **テスト**: クラスはVitestの単体テスト、画面はコンポーネントテスト（`testFixtures.ts`）、E2Eは`POS-01〜11`（`e2e/posture.spec.ts`）。
 
 ## APIクライアントの分割構成（dashboard/src/api/）
 `client.ts`（元は451行の単一ファイル）は、ドメインごとに `shared.ts`/`kev.ts`/`osv.ts`/

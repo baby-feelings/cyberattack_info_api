@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
+import { POSTURE_TAB } from './components/posture/postureConfig'
 
 vi.mock('./components/HealthStatus', () => ({
   HealthStatus: () => <div data-testid="health-status" />,
@@ -17,6 +18,9 @@ vi.mock('./components/DepscanAuthGate', () => ({
 }))
 vi.mock('./components/CodescanAuthGate', () => ({
   CodescanAuthGate: () => <div data-testid="codescan-auth-gate" />,
+}))
+vi.mock('./components/posture/PostureAuthGate', () => ({
+  PostureAuthGate: () => <div data-testid="posture-auth-gate" />,
 }))
 vi.mock('./components/SettingsPanel', () => ({
   SettingsPanel: ({ onClose }: { onClose: () => void }) => (
@@ -59,6 +63,9 @@ describe('App', () => {
 
     await user.click(screen.getByRole('tab', { name: /DEPSCAN/ }))
     expect(screen.getByTestId('depscan-auth-gate')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: new RegExp(POSTURE_TAB.label) }))
+    expect(screen.getByTestId('posture-auth-gate')).toBeInTheDocument()
   })
 
   it('always renders HealthStatus regardless of the active tab', async () => {

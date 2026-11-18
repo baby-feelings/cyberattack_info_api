@@ -50,7 +50,7 @@ export async function seedSession(
 }
 
 // 下部固定タブバーのタブを選択する（タブは role=tab・名前＝タブ名）
-export async function openTab(page: Page, name: 'KEV' | 'OSV' | 'DEPSCAN' | 'CODESCAN') {
+export async function openTab(page: Page, name: 'KEV' | 'OSV' | 'DEPSCAN' | 'CODESCAN' | 'POSTURE') {
   await page.getByRole('tab', { name, exact: true }).click()
   await expect(page.getByRole('tab', { name, exact: true })).toHaveAttribute('aria-selected', 'true')
 }

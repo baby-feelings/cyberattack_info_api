@@ -4,6 +4,7 @@ import { HeaderMenu } from './HeaderMenu'
 import { TabBar } from './TabBar'
 import { TabPanel } from './TabPanel'
 import { TAB_DEFINITIONS } from './tabs'
+import { POSTURE_TAB } from '../posture/postureConfig'
 import { fetchCrawlerLogs } from '../../api/crawlerLogs'
 
 // 「最終取得」の実行履歴の取得は、ダミーへ差し替える
@@ -13,15 +14,23 @@ vi.mock('../KevPanel', () => ({ KevPanel: () => <div>kev-panel</div> }))
 vi.mock('../OsvPanel', () => ({ OsvPanel: () => <div>osv-panel</div> }))
 vi.mock('../DepscanAuthGate', () => ({ DepscanAuthGate: () => <div>depscan-gate</div> }))
 vi.mock('../CodescanAuthGate', () => ({ CodescanAuthGate: () => <div>codescan-gate</div> }))
+vi.mock('../posture/PostureAuthGate', () => ({ PostureAuthGate: () => <div>posture-gate</div> }))
 
 describe('TAB_DEFINITIONS', () => {
-  it('defines the four tabs in display order with unique keys', () => {
-    expect(TAB_DEFINITIONS.map((t) => t.key)).toEqual(['kev', 'osv', 'depscan', 'codescan'])
-    expect(new Set(TAB_DEFINITIONS.map((t) => t.key)).size).toBe(4)
+  it('defines the five tabs in display order with unique keys', () => {
+    expect(TAB_DEFINITIONS.map((t) => t.key)).toEqual(['kev', 'osv', 'depscan', 'codescan', 'posture'])
+    expect(new Set(TAB_DEFINITIONS.map((t) => t.key)).size).toBe(5)
   })
 
   it('declares the crawler whose last fetch each tab shows', () => {
-    expect(TAB_DEFINITIONS.map((t) => t.crawlerType)).toEqual(['KEV', 'OSV', 'DEPSCAN', 'CODESCAN'])
+    expect(TAB_DEFINITIONS.map((t) => t.crawlerType)).toEqual(['KEV', 'OSV', 'DEPSCAN', 'CODESCAN', 'GHALERT'])
+  })
+
+  it('takes the label, title and subtitle of the posture tab from the posture config', () => {
+    const tab = TAB_DEFINITIONS.find((t) => t.key === 'posture')!
+    expect(tab.label).toBe(POSTURE_TAB.label)
+    expect(tab.title).toBe(POSTURE_TAB.title)
+    expect(tab.subtitle).toBe(POSTURE_TAB.subtitle)
   })
 })
 
@@ -29,7 +38,7 @@ describe('TabBar', () => {
   it('renders one tab per definition and marks only the active one as selected', () => {
     render(<TabBar activeTab="osv" onSelect={vi.fn()} />)
     const tabs = screen.getAllByRole('tab')
-    expect(tabs).toHaveLength(4)
+    expect(tabs).toHaveLength(5)
     expect(screen.getByRole('tab', { name: /OSV/ })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('tab', { name: /KEV/ })).toHaveAttribute('aria-selected', 'false')
   })

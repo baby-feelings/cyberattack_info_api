@@ -300,3 +300,72 @@ export const slaRepos = [
 export const slaPolicy = {
   critical_days: 7, high_days: 30, medium_days: 90, kev_days: 7, excluded_osv_ids: [] as string[],
 }
+
+
+// ── 態勢（GET /api/repo-audit・/api/github-alerts・/api/site-monitor）用 ─────────────
+
+const auditCheck = (key: string, label: string, status: string, detail = '', fix = '') =>
+  ({ key, label, status, weight: 1, detail, fix })
+
+// 設定の監査。app-two は不合格が1件、app-stopped（運用停止中にして使う）も不合格が1件。
+// 項目名・直し方は、API の値（画面は、これを、そのまま出す）
+export const repoAuditItems = [
+  {
+    repo_full_name: 'baby-feelings/app-one', score: 100, issues: 0, changes: [], audited_at: '2026-11-18T00:00:00Z',
+    checks: [
+      auditCheck('secret_scanning', 'シークレットスキャン', 'ok'),
+      auditCheck('push_protection', 'push 保護', 'ok'),
+      auditCheck('branch_protection', 'ブランチ保護', 'ok'),
+    ],
+  },
+  {
+    repo_full_name: 'baby-feelings/app-two', score: 50, issues: 1, changes: [], audited_at: '2026-11-18T00:00:00Z',
+    checks: [
+      auditCheck('secret_scanning', 'シークレットスキャン', 'ng', '無効になっています', '設定の「セキュリティ」で、シークレットスキャンを有効にする'),
+      auditCheck('push_protection', 'push 保護', 'ok'),
+      auditCheck('branch_protection', 'ブランチ保護', 'not_enforceable', '非公開の無料リポジトリです'),
+    ],
+  },
+  {
+    repo_full_name: 'baby-feelings/app-stopped', score: 40, issues: 1, changes: [], audited_at: '2026-11-18T00:00:00Z',
+    checks: [
+      auditCheck('secret_scanning', 'シークレットスキャン', 'ok'),
+      auditCheck('push_protection', 'push 保護', 'ng', '無効になっています', '設定で、push 保護を有効にする'),
+      auditCheck('branch_protection', 'ブランチ保護', 'unavailable', '取得できません（権限不足、またはプランの対象外）'),
+    ],
+  },
+]
+
+const alertBase = { detected_at: '2026-11-17T00:00:00Z', resolved_at: null as string | null }
+// GitHub のアラート。severity は、API と同じく大文字。解決済みのものは、既定では、一覧に出ない
+export const githubAlertItems = [
+  { ...alertBase, kind: 'secret', repo_full_name: 'baby-feelings/app-two', number: 1, severity: 'CRITICAL',
+    title: 'AWS のアクセスキー（有効）', html_url: 'https://github.com/baby-feelings/app-two/security/secret-scanning/1', detail: {} },
+  { ...alertBase, kind: 'code', repo_full_name: 'baby-feelings/app-one', number: 2, severity: 'HIGH',
+    title: 'XSS の可能性', html_url: 'https://github.com/baby-feelings/app-one/security/code-scanning/2', detail: { tool: 'CodeQL' } },
+  { ...alertBase, kind: 'dependabot', repo_full_name: 'baby-feelings/app-one', number: 3, severity: 'MEDIUM',
+    title: 'lodash の脆弱性', html_url: 'https://github.com/baby-feelings/app-one/security/dependabot/3', detail: {} },
+  { ...alertBase, kind: 'code', repo_full_name: 'baby-feelings/app-stopped', number: 4, severity: 'LOW',
+    title: '停止中のアプリの指摘', html_url: 'https://github.com/baby-feelings/app-stopped/security/code-scanning/4', detail: { tool: 'CodeQL' } },
+  { ...alertBase, kind: 'code', repo_full_name: 'baby-feelings/app-one', number: 5, severity: 'HIGH',
+    title: '解決済みの指摘', html_url: 'https://github.com/baby-feelings/app-one/security/code-scanning/5', detail: {},
+    resolved_at: '2026-11-16T00:00:00Z' },
+]
+
+// 取得できなかった項目（機能が無効・権限不足）
+export const githubAlertUnavailable = [
+  { kind: 'secret', repo_full_name: 'baby-feelings/app-web', reason: 'HTTP 404' },
+  { kind: 'code', repo_full_name: 'baby-feelings/app-stopped', reason: null as string | null },
+]
+
+// 外形監視。リポジトリに紐づかないサイト（repo_full_name が null）は、運用中として扱う
+export const siteMonitorItems = [
+  { url: 'https://app-two.example', source: 'homepage', repo_full_name: 'baby-feelings/app-two', tls_days_left: 3, issues: 1,
+    findings: [{ rule: 'tls-expiring', severity: 'ERROR', message: 'TLS 証明書の期限が、あと3日です' }],
+    checked_at: '2026-11-18T00:00:00Z' },
+  { url: 'https://config.example', source: 'config', repo_full_name: null, tls_days_left: 90, issues: 0, findings: [],
+    checked_at: '2026-11-18T00:00:00Z' },
+  { url: 'https://app-stopped.example', source: 'homepage', repo_full_name: 'baby-feelings/app-stopped', tls_days_left: 20, issues: 1,
+    findings: [{ rule: 'header-missing', severity: 'WARNING', message: 'Content-Security-Policy ヘッダーがありません' }],
+    checked_at: '2026-11-18T00:00:00Z' },
+]
