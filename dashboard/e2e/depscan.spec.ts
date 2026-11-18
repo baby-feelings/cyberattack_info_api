@@ -724,6 +724,8 @@ scenario('DEP-28', '検知を受容（理由・期限つき）にすると一覧
   await group.getByRole('button', { name: '解除' }).click()
   await expect.poll(() => api.requestsTo('/api/exceptions/1', 'DELETE')).toHaveLength(1)
   await expect.poll(() => api.requestsTo('/api/depscan').length).toBeGreaterThan(3)
+  // 読み直しが終わり、行が折りたたまれる（詳細が消えて、lodash が1つになる）のを待ってから開く
+  await expect(table.getByText('lodash')).toHaveCount(1)
   await table.getByText('lodash').click()
   await expect(page.getByRole('group', { name: '例外' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: '例外にする' }).first()).toBeVisible()
