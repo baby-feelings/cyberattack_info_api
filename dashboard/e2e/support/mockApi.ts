@@ -121,7 +121,7 @@ const HANDLERS: Record<string, Handler> = {
     const days = Number(query.get('days') ?? 30)
     return { body: kevItems.filter((_, i) => i <= days) }
   },
-  'GET /api/vulnerabilities/stats': (_req) => {
+  'GET /api/vulnerabilities/stats': () => {
     return { body: kevStats() }
   },
   'GET /api/vulnerabilities': (req) => {
@@ -135,7 +135,7 @@ const HANDLERS: Record<string, Handler> = {
     return { body: paginate(items, query, 50) }
   },
   // ── OSV ──
-  'GET /api/osv/stats': (_req) => {
+  'GET /api/osv/stats': () => {
     return { body: osvStats() }
   },
   'GET /api/osv': (req) => {
@@ -260,7 +260,7 @@ const HANDLERS: Record<string, Handler> = {
     const sorted = [...repos].sort(([a, x], [b, y]) => y.needs_action - x.needs_action || a.localeCompare(b))
     return { body: { repos: sorted.map(([repo_full_name, s]) => ({ repo_full_name, ...s })) } }
   },
-  'GET /api/runtimes/releases': (_req) => {
+  'GET /api/runtimes/releases': () => {
     return { body: { data: runtimeReleases } }
   },
   'GET /api/runtimes': (req, state) => {
