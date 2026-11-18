@@ -35,12 +35,6 @@ export function TabPanel({
     if (!subTabs || !activeSub) return resolve(tab.panel, ctx)
     return (
       <>
-        <SubTabBar
-          tabs={subTabs.map(({ key, label }) => ({ key, label }))}
-          active={activeSub.key}
-          onSelect={(key) => onSubTabChange?.(key)}
-          idPrefix={tab.key}
-        />
         <div id={`subtabpanel-${tab.key}`} role="tabpanel" aria-label={activeSub.label}>
           {resolve(activeSub.panel, ctx)}
         </div>
@@ -55,6 +49,15 @@ export function TabPanel({
       aria-labelledby={`tab-${tab.key}`}
       className="flex flex-col gap-4 sm:gap-6 lg:gap-8"
     >
+      {/* 小タブは見出しの上に置く。見出し（題名の長さ・最終取得の行数）が小タブごとに違っても、押したボタンの位置が動かない */}
+      {subTabs && activeSub && (
+        <SubTabBar
+          tabs={subTabs.map(({ key, label }) => ({ key, label }))}
+          active={activeSub.key}
+          onSelect={(key) => onSubTabChange?.(key)}
+          idPrefix={tab.key}
+        />
+      )}
       <div className={`flex flex-wrap items-center gap-x-3 gap-y-2 pb-4 border-b ${tab.borderColor}`}>
         <div>{tab.icon(18)}</div>
         <div>
