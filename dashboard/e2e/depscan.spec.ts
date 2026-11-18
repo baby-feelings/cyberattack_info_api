@@ -548,11 +548,13 @@ scenario('DEP-24', 'スマホ幅でも、小タブの文字が縦に崩れず、
 
   const tabs = page.getByRole('tablist', { name: '小タブ' }).getByRole('tab')
   await expect(tabs).toHaveCount(6)
-  // 小タブの文字は折り返されず、1行の高さに収まる（幅が足りなければ、小タブ単位で次の段に回る）
-  for (const box of await tabs.evaluateAll((els) => els.map((el) => el.getBoundingClientRect()))) {
+  // 小タブの文字は折り返されず、1行の高さに収まり、全部が同じ1行に並ぶ（入り切らない分は、横にスクロールする）
+  const boxes = await tabs.evaluateAll((els) => els.map((el) => el.getBoundingClientRect()))
+  for (const box of boxes) {
     expect(box.height).toBeLessThan(60)
     expect(box.width).toBeGreaterThan(40)
   }
+  expect(new Set(boxes.map((box) => Math.round(box.top))).size).toBe(1)
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
   expect(overflow).toBeLessThanOrEqual(1)
 })

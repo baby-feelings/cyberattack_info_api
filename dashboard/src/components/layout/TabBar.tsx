@@ -25,7 +25,7 @@ export function TabBar({
               aria-selected={isActive}
               aria-controls={`tabpanel-${tab.key}`}
               onClick={() => onSelect(tab.key)}
-              className={`flex flex-col items-center justify-center gap-1 py-2.5 text-xs font-medium transition-colors ${
+              className={`flex flex-col items-center justify-center gap-1 px-0.5 py-2.5 text-[10px] sm:text-xs whitespace-nowrap font-medium transition-colors ${
                 isActive ? 'text-white' : 'text-slate-500 hover:text-slate-300'
               }`}
             >

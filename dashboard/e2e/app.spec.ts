@@ -102,19 +102,19 @@ scenario('APP-06', 'アクセシビリティツリー（ARIAスナップショ�
   await expect(mainTabs).toMatchAriaSnapshot(`
     - tablist:
       - tab "概要" [selected]
-      - tab "公開情報"
       - tab "依存ライブラリ"
       - tab "コードと設定"
       - tab "運用"
+      - tab "公開情報"
   `)
   await openTab(page, '依存ライブラリ')
   await expect(mainTabs).toMatchAriaSnapshot(`
     - tablist:
       - tab "概要"
-      - tab "公開情報"
       - tab "依存ライブラリ" [selected]
       - tab "コードと設定"
       - tab "運用"
+      - tab "公開情報"
   `)
 
   // タブとタブパネルは aria-controls / aria-labelledby で相互に関連付けられている
@@ -131,6 +131,11 @@ scenario('APP-07', 'モバイル幅でもタブバーとコンテンツが操作
   await page.goto('/')
 
   await expect(page.getByRole('tab', { name: '公開情報', exact: true })).toBeVisible()
+  // 下部のタブは、ラベルが2行に割れず、すべて同じ高さ
+  const heights = await page.getByRole('tablist').last().getByRole('tab').evaluateAll(
+    (els) => els.map((el) => Math.round(el.getBoundingClientRect().height)),
+  )
+  expect(new Set(heights).size).toBe(1)
   await openTab(page, 'コードと設定')
   await expect(page.getByRole('tabpanel', { name: 'コードと設定', exact: true })).toBeVisible()
 
