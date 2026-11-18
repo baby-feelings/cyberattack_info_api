@@ -1,37 +1,38 @@
-import { useMemo, useState } from 'react'
-import type { OperatingStatus } from '../../api/client'
-import { OperatingFilter } from '../shared/OperatingFilter'
-import { AlertsSection } from './AlertsSection'
-import { AuditMatrixSection } from './AuditMatrixSection'
-import { PostureSummary } from './model/PostureSummary'
-import { PostureSummaryBand } from './PostureSummaryBand'
-import { SiteMonitorSection } from './SiteMonitorSection'
-import { usePostureData, type Source } from './usePostureData'
+import { useState } from 'react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
+import { PostureGroup } from './PostureGroup'
+import { POSTURE_TEXT } from './postureConfig'
 
-// 取得できていればその値、まだ・失敗なら null（見出しの集計は、null を「不明」として扱う）
-const valueOf = <T,>(source: Source<T>): T | null => (source.status === 'ready' ? source.value : null)
+const GROUP_TEXT = POSTURE_TEXT.groups
 
-// 「態勢」タブ。組み立てのみ（取得は usePostureData、判断は model/ のクラス、文言は postureConfig）。
+// 「態勢」タブ。運用中と運用停止中を、2つの区画に分けて同時に表示する。
+// 運用中は常に表示。運用停止中は折りたたみで、開いたときだけ取得する（運用中の確認に埋もれさせない）。
 export function PosturePanel({ authToken }: { authToken: string }) {
-  // 初期表示は運用中のみ（運用停止中のアプリに埋もれず、運用中のものを見やすくするため）
-  const [operating, setOperating] = useState<OperatingStatus>('active')
-  const { audit, alerts, sites, reload } = usePostureData(authToken, operating)
-
-  const summary = useMemo(
-    () => new PostureSummary({ alerts: valueOf(alerts), audit: valueOf(audit), sites: valueOf(sites) }),
-    [alerts, audit, sites],
-  )
-  const isLoading = [audit, alerts, sites].some((source) => source.status === 'loading')
+  const [inactiveOpen, setInactiveOpen] = useState(false)
+  const Chevron = inactiveOpen ? ChevronDown : ChevronRight
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <PostureSummaryBand summary={summary} loading={isLoading} />
-        <OperatingFilter value={operating} onChange={setOperating} />
-      </div>
-      <AuditMatrixSection source={audit} onRetry={() => reload('audit')} />
-      <AlertsSection source={alerts} onRetry={() => reload('alerts')} />
-      <SiteMonitorSection source={sites} onRetry={() => reload('sites')} />
+    <div className="flex flex-col gap-8">
+      <section aria-label={GROUP_TEXT.active} className="flex flex-col gap-3">
+        <h3 className="text-sm font-semibold text-white">{GROUP_TEXT.active}</h3>
+        <PostureGroup authToken={authToken} operating="active" />
+      </section>
+
+      <section aria-label={GROUP_TEXT.inactive} className="flex flex-col gap-3">
+        <button
+          type="button"
+          onClick={() => setInactiveOpen((open) => !open)}
+          aria-expanded={inactiveOpen}
+          className="flex items-center gap-2 text-left text-sm font-semibold text-slate-300 hover:text-white"
+        >
+          <Chevron size={16} aria-hidden="true" />
+          {GROUP_TEXT.inactive}
+          <span className="text-[11px] font-normal text-slate-500">
+            {inactiveOpen ? GROUP_TEXT.close : GROUP_TEXT.inactiveHint}
+          </span>
+        </button>
+        {inactiveOpen && <PostureGroup authToken={authToken} operating="inactive" />}
+      </section>
     </div>
   )
 }

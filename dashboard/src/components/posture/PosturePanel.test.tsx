@@ -38,16 +38,18 @@ describe('PosturePanel', () => {
     expect(screen.getByRole('group', { name: '件数の集計' })).toHaveTextContent(`50${POSTURE_TEXT.summary.auditRate}`)
   })
 
-  it('starts with the active apps, and asks the API again when the operating filter changes', async () => {
+  it('shows the active apps first, and fetches the stopped apps only when that section is opened', async () => {
     const user = userEvent.setup()
     render(<PosturePanel authToken="tok" />)
     await waitFor(() => expect(audit).toHaveBeenCalledWith({ operating: 'active', authToken: 'tok' }))
+    // 運用停止中は、開くまで取得しない
+    expect(audit).not.toHaveBeenCalledWith({ operating: 'inactive', authToken: 'tok' })
 
-    await user.click(screen.getByRole('button', { name: 'すべて' }))
+    await user.click(screen.getByRole('button', { name: new RegExp(POSTURE_TEXT.groups.inactive) }))
 
-    await waitFor(() => expect(audit).toHaveBeenLastCalledWith({ operating: 'all', authToken: 'tok' }))
-    expect(alerts).toHaveBeenLastCalledWith({ operating: 'all', authToken: 'tok' })
-    expect(sites).toHaveBeenLastCalledWith({ operating: 'all', authToken: 'tok' })
+    await waitFor(() => expect(audit).toHaveBeenCalledWith({ operating: 'inactive', authToken: 'tok' }))
+    expect(alerts).toHaveBeenCalledWith({ operating: 'inactive', authToken: 'tok' })
+    expect(sites).toHaveBeenCalledWith({ operating: 'inactive', authToken: 'tok' })
   })
 
   it('still shows the other sections when one source fails, and retries only that one', async () => {
