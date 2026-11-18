@@ -1,4 +1,4 @@
-import { FullScreenModal } from '../shared/FullScreenModal'
+import { PanelFrame } from '../shared/PanelFrame'
 import { LastFetched } from '../freshness/LastFetched'
 import { SCREEN_FETCH_SOURCE } from '../freshness/freshnessConfig'
 import { useCallback, useEffect, useState } from 'react'
@@ -69,9 +69,8 @@ function CompatibilityScoreBadge({ badgeUrl }: { badgeUrl: string | null }) {
   )
 }
 
-// Dependabot PR 自動運用（DEPSOPS）の判定履歴を表示する全画面モーダル。
-// DEPSCAN タブ内のボタンから開く（追加の固定タブにはしない設計判断。詳細はCLAUDE.md参照）。
-export function DependabotOpsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+// Dependabot PR 自動運用（DEPSOPS）の判定履歴を表示する画面（「依存ライブラリ」タブの小タブ）。
+export function DependabotOpsPanel() {
   const [action, setAction] = useState<'ALL' | 'merged' | 'flagged'>('ALL')
   // 初期表示は運用中のみ（運用停止中のアプリのPRに埋もれず、運用中のものを見やすくするため）
   const [operating, setOperating] = useState<OperatingStatus>('active')
@@ -109,18 +108,14 @@ export function DependabotOpsModal({ open, onClose }: { open: boolean; onClose: 
     }
   }, [])
 
-  // 開いたときのみ取得する（閉じている間は取得しない）
+  // 表示されたとき（と、条件が変わったとき）に取得する
   useEffect(() => {
-    if (open) {
-      loadTable(action, page, operating)
-    }
-  }, [open, loadTable, action, page, operating])
+    loadTable(action, page, operating)
+  }, [loadTable, action, page, operating])
 
   useEffect(() => {
-    if (open) {
-      loadStats(operating)
-    }
-  }, [open, loadStats, operating])
+    loadStats(operating)
+  }, [loadStats, operating])
 
   function handleOperating(op: OperatingStatus) {
     setOperating(op)
@@ -132,14 +127,12 @@ export function DependabotOpsModal({ open, onClose }: { open: boolean; onClose: 
     setPage(1)
   }
 
-  if (!open) return null
-
   const totalPages = Math.ceil(total / PER_PAGE)
 
   return (
-    <FullScreenModal
+    <PanelFrame
       label="Dependabot 運用状況" title="Dependabot 運用状況（DEPSOPS）"
-      icon={GitPullRequest} maxWidth="max-w-5xl" onClose={onClose}
+      icon={GitPullRequest} maxWidth="max-w-5xl"
     >
       <LastFetched crawlerType={SCREEN_FETCH_SOURCE.depsops} />
 
@@ -229,6 +222,6 @@ export function DependabotOpsModal({ open, onClose }: { open: boolean; onClose: 
           <Pagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} />
         </>
       )}
-    </FullScreenModal>
+    </PanelFrame>
   )
 }

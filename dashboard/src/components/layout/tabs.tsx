@@ -1,28 +1,43 @@
 import type { ReactNode } from 'react'
 import { Shield, Bug, ScanSearch, ShieldCheck } from 'lucide-react'
+import type { GithubSession } from '../../hooks/useGithubSession'
 import { KevPanel } from '../KevPanel'
 import { OsvPanel } from '../OsvPanel'
-import { DepscanAuthGate } from '../DepscanAuthGate'
+import { DepscanScanView } from '../DepscanScanView'
+import { SlaPanel } from '../depscan/SlaPanel'
+import { DependabotOpsPanel } from '../depscan/DependabotOpsPanel'
+import { DependenciesPanel } from '../depscan/DependenciesPanel'
+import { RuntimesPanel } from '../depscan/RuntimesPanel'
+import { AlertsTab } from '../posture/AlertsTab'
 import { CodescanAuthGate } from '../CodescanAuthGate'
 import { PostureAuthGate } from '../posture/PostureAuthGate'
-import { POSTURE_TAB } from '../posture/postureConfig'
+import { ALERT_KIND_GROUPS, POSTURE_TAB } from '../posture/postureConfig'
 import type { FetchedCrawlerType } from '../freshness/freshnessConfig'
 
 // タブ種別
-export type TabKey = 'public' | 'depscan' | 'codescan' | 'posture'
+export type TabKey = 'public' | 'dependencies' | 'codescan' | 'posture'
 
-// 1つのタブの定義。タブバーのボタンと、タブパネルの見出し・本体を1か所で宣言する
-// （以前は App.tsx にタブ数×約20行の同じ構造が並んでいた）。新しいタブはここに1件足す。
+// ログイン後に本体へ渡す文脈（セッションと、セッション失効時に呼ぶログアウト）
+export interface PanelContext {
+  session: GithubSession
+  logout: () => void
+}
+
+// 本体の定義: そのまま描ける中身、または、ログイン後の文脈を受け取る関数（login のあるタブだけが使える）
+export type PanelContent = ReactNode | ((ctx: PanelContext) => ReactNode)
+
 // 1つの小タブ（タブの中の切り替え）。見出し（title・subtitle）と最終取得は、指定があればタブのものより優先する
 export interface SubTabDefinition {
   key: string
   label: string
-  panel: ReactNode
+  panel: PanelContent
   crawlerType?: FetchedCrawlerType
   title?: string
   subtitle?: string
 }
 
+// 1つのタブの定義。タブバーのボタンと、タブパネルの見出し・本体を1か所で宣言する
+// （以前は App.tsx にタブ数×約20行の同じ構造が並んでいた）。新しいタブはここに1件足す。
 export interface TabDefinition {
   key: TabKey
   label: string
@@ -34,7 +49,9 @@ export interface TabDefinition {
   subtitle: string
   borderColor: string
   // 小タブが無いタブだけが使う
-  panel: ReactNode
+  panel: PanelContent
+  // GitHub ログインが要るタブ。本体を、ログインのゲートで包む（小タブすべてで、1回のログインを共有する）
+  login?: { description: string }
   // 小タブ（あれば、先頭が初期表示）
   subTabs?: SubTabDefinition[]
 }
@@ -72,15 +89,37 @@ export const TAB_DEFINITIONS: TabDefinition[] = [
     ],
   },
   {
-    key: 'depscan',
-    label: 'DEPSCAN',
+    key: 'dependencies',
+    label: '依存ライブラリ',
     crawlerType: 'DEPSCAN',
     icon: (size) => <Bug size={size} className="text-rose-400" />,
-    title: 'DEPSCAN — 自作アプリの依存ライブラリ脆弱性',
-    subtitle: 'GitHub上の自作リポジトリの依存関係を OSV と照合し、悪意あるパッケージ・言語のサポート期限・対応状況も監視',
+    title: '依存ライブラリ — 脆弱性・対応状況・言語のサポート期限',
+    subtitle: 'GitHub上の自作リポジトリの依存関係を OSV と照合し、悪意あるパッケージ・言語のサポート期限・対応状況・Dependabot も監視',
     borderColor: 'border-rose-800/40',
-    // GitHub ログイン後、本人所有リポジトリの DEPSCAN パネルを表示
-    panel: <DepscanAuthGate />,
+    panel: null,
+    // GitHub ログイン後、本人所有リポジトリの結果を、小タブで表示する
+    login: { description: 'ログインすると、あなた自身が所有する GitHub リポジトリの依存ライブラリ脆弱性を表示します' },
+    subTabs: [
+      {
+        key: 'scan',
+        label: '検知',
+        title: 'DEPSCAN — 自作アプリの依存ライブラリ脆弱性',
+        subtitle: 'GitHub上の自作リポジトリの依存関係を OSV と照合し、悪意あるパッケージ・言語のサポート期限・対応状況も監視',
+        panel: ({ session, logout }) => <DepscanScanView session={session} onSessionExpired={logout} />,
+      },
+      { key: 'sla', label: '対応状況', panel: ({ session }) => <SlaPanel authToken={session.token} /> },
+      { key: 'depsops', label: 'Dependabot運用', panel: () => <DependabotOpsPanel /> },
+      { key: 'deps', label: '依存パッケージ', panel: ({ session }) => <DependenciesPanel authToken={session.token} /> },
+      { key: 'runtimes', label: '言語・実行環境', panel: ({ session }) => <RuntimesPanel authToken={session.token} /> },
+      {
+        key: 'alerts',
+        label: 'アラート',
+        crawlerType: 'GHALERT',
+        title: '依存ライブラリのアラート — Dependabot',
+        subtitle: 'GitHub が検知した、依存ライブラリのセキュリティアラート',
+        panel: ({ session }) => <AlertsTab authToken={session.token} kinds={ALERT_KIND_GROUPS.dependencies} />,
+      },
+    ],
   },
   {
     key: 'codescan',

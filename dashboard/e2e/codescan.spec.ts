@@ -159,7 +159,7 @@ scenario('COD-08', 'ログアウトで未ログインに戻る', async ({ page }
   expect(await page.evaluate(() => localStorage.getItem('depscan_session_token'))).toBeNull()
 
   // セッションはDEPSCANと共有のため、DEPSCANタブでも未ログインになる
-  await openTab(page, 'DEPSCAN')
+  await openTab(page, '依存ライブラリ')
   await expect(page.getByText('GitHubアカウントでログインしてください')).toBeVisible()
 })
 

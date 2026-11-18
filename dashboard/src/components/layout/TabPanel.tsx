@@ -1,9 +1,19 @@
-import type { TabDefinition } from './tabs'
+import type { ReactNode } from 'react'
+import type { PanelContent, PanelContext, TabDefinition } from './tabs'
 import { LastFetched } from '../freshness/LastFetched'
+import { GithubLoginGate } from '../shared/GithubLoginGate'
 import { SubTabBar } from './SubTabBar'
 
+// 本体の定義（そのまま描ける中身、またはログイン後のセッションを受け取る関数）を、描ける形にする。
+// 関数は、ログインのゲートの中（ctx がある）でだけ呼べる
+function resolve(content: PanelContent, ctx: PanelContext | null): ReactNode {
+  if (typeof content !== 'function') return content
+  return ctx ? content(ctx) : null
+}
+
 // タブパネル（見出し＋本体）。aria 属性はタブバーのボタン（tab-<key>）と対応させる。
-// 小タブがあるタブは、小タブの切り替えを出し、見出し・最終取得・本体は選択中の小タブのものを使う
+// 小タブがあるタブは、小タブの切り替えを出し、見出し・最終取得・本体は選択中の小タブのものを使う。
+// login があるタブは、GitHub ログインのゲートで本体を包む（小タブすべてで1回のログインを共有する）
 export function TabPanel({
   tab, subTabKey, onSubTabChange,
 }: {
@@ -17,6 +27,23 @@ export function TabPanel({
   const title = activeSub?.title ?? tab.title
   const subtitle = activeSub?.subtitle ?? tab.subtitle
   const crawlerType = activeSub?.crawlerType ?? tab.crawlerType
+
+  const renderBody = (ctx: PanelContext | null): ReactNode => {
+    if (!subTabs || !activeSub) return resolve(tab.panel, ctx)
+    return (
+      <>
+        <SubTabBar
+          tabs={subTabs.map(({ key, label }) => ({ key, label }))}
+          active={activeSub.key}
+          onSelect={(key) => onSubTabChange?.(key)}
+          idPrefix={tab.key}
+        />
+        <div id={`subtabpanel-${tab.key}`} role="tabpanel" aria-label={activeSub.label}>
+          {resolve(activeSub.panel, ctx)}
+        </div>
+      </>
+    )
+  }
 
   return (
     <section
@@ -34,19 +61,11 @@ export function TabPanel({
         {/* データを最後に取得した日時（見出しの右。狭い画面では見出しの下に折り返す） */}
         <LastFetched crawlerType={crawlerType} />
       </div>
-      {subTabs && activeSub ? (
-        <>
-          <SubTabBar
-            tabs={subTabs.map(({ key, label }) => ({ key, label }))}
-            active={activeSub.key}
-            onSelect={(key) => onSubTabChange?.(key)}
-            idPrefix={tab.key}
-          />
-          <div id={`subtabpanel-${tab.key}`} role="tabpanel" aria-label={activeSub.label}>
-            {activeSub.panel}
-          </div>
-        </>
-      ) : tab.panel}
+      {tab.login ? (
+        <GithubLoginGate description={tab.login.description}>
+          {(session, { logout }) => renderBody({ session, logout })}
+        </GithubLoginGate>
+      ) : renderBody(null)}
     </section>
   )
 }

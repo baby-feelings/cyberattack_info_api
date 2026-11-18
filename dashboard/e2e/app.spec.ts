@@ -16,7 +16,7 @@ scenario('APP-02', '4つのタブが切り替わり対応するタブパネル�
   await page.goto('/')
 
   const expectations = [
-    { tab: 'DEPSCAN', heading: /DEPSCAN — 自作アプリの依存ライブラリ脆弱性/ },
+    { tab: '依存ライブラリ', heading: /DEPSCAN — 自作アプリの依存ライブラリ脆弱性/ },
     { tab: 'CODESCAN', heading: /CODESCAN — 自アプリのコード脆弱性診断/ },
     { tab: '公開情報', heading: /CISA KEV — Known Exploited Vulnerabilities/ },
     { tab: 'POSTURE', heading: /POSTURE — セキュリティ態勢/ },
@@ -39,7 +39,7 @@ scenario('APP-09', '公開情報の小タブ（KEV・OSV）を切り替えられ
   await expect(page.getByRole('table', { name: 'OSV 脆弱性一覧' })).toBeVisible()
 
   // 別のタブへ移って戻ると、直前の小タブ（OSV）が復元される
-  await openTab(page, 'DEPSCAN')
+  await openTab(page, '依存ライブラリ')
   await openTab(page, '公開情報')
   await expect(page.getByRole('tab', { name: 'OSV', exact: true })).toHaveAttribute('aria-selected', 'true')
   await expect(page.getByRole('heading', { name: /OSV — Open Source Vulnerabilities/ })).toBeVisible()
@@ -69,10 +69,10 @@ scenario('APP-03', 'ハンバーガーメニューの開閉（外側クリック
   await expect(menuButton).toHaveAttribute('aria-expanded', 'false')
 })
 
-scenario('APP-04', 'OAuthコールバック（?depscan_code）でDEPSCANタブが自動選択されログインされる', async ({ page, api }) => {
+scenario('APP-04', 'OAuthコールバック（?depscan_code）で依存ライブラリタブが自動選択されログインされる', async ({ page, api }) => {
   await page.goto('/?depscan_code=one-time-code')
 
-  await expect(page.getByRole('tab', { name: 'DEPSCAN', exact: true })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('tab', { name: '依存ライブラリ', exact: true })).toHaveAttribute('aria-selected', 'true')
   await expect(page.getByText('ログイン中:')).toBeVisible()
   await expect(page.getByText('octocat', { exact: true })).toBeVisible()
 
@@ -90,7 +90,7 @@ scenario('APP-05', 'OAuth交換コードが無効ならログイン画面のま�
   api.override('POST', '/auth/exchange', () => ({ status: 400, body: { detail: 'invalid code' } }))
   await page.goto('/?depscan_code=expired-code')
 
-  await expect(page.getByRole('tab', { name: 'DEPSCAN', exact: true })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('tab', { name: '依存ライブラリ', exact: true })).toHaveAttribute('aria-selected', 'true')
   await expect(page.getByText('GitHubアカウントでログインしてください')).toBeVisible()
   expect(await page.evaluate(() => localStorage.getItem('depscan_session_token'))).toBeNull()
 })
@@ -103,22 +103,22 @@ scenario('APP-06', 'アクセシビリティツリー（ARIAスナップショ�
   await expect(mainTabs).toMatchAriaSnapshot(`
     - tablist:
       - tab "公開情報" [selected]
-      - tab "DEPSCAN"
+      - tab "依存ライブラリ"
       - tab "CODESCAN"
       - tab "POSTURE"
   `)
-  await openTab(page, 'DEPSCAN')
+  await openTab(page, '依存ライブラリ')
   await expect(mainTabs).toMatchAriaSnapshot(`
     - tablist:
       - tab "公開情報"
-      - tab "DEPSCAN" [selected]
+      - tab "依存ライブラリ" [selected]
       - tab "CODESCAN"
       - tab "POSTURE"
   `)
 
   // タブとタブパネルは aria-controls / aria-labelledby で相互に関連付けられている
-  await expect(page.getByRole('tab', { name: 'DEPSCAN', exact: true })).toHaveAttribute('aria-controls', 'tabpanel-depscan')
-  await expect(page.getByRole('tabpanel', { name: 'DEPSCAN' })).toHaveAttribute('id', 'tabpanel-depscan')
+  await expect(page.getByRole('tab', { name: '依存ライブラリ', exact: true })).toHaveAttribute('aria-controls', 'tabpanel-dependencies')
+  await expect(page.getByRole('tabpanel', { name: '依存ライブラリ', exact: true })).toHaveAttribute('id', 'tabpanel-dependencies')
   await expect(page.getByRole('banner')).toBeVisible()
   await expect(page.getByRole('main')).toBeVisible()
   await expect(page.getByRole('contentinfo')).toBeVisible()

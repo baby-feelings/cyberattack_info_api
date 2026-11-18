@@ -31,6 +31,14 @@ export class AlertList {
     return new AlertList(kept, this.unavailable)
   }
 
+  // 指定した種別のアラートと、取得できなかった項目だけに絞った新しい集合を返す（画面ごとに、扱う種別を分けるため）
+  onlyKinds(kinds: readonly string[]): AlertList {
+    return new AlertList(
+      this.alerts.filter((alert) => kinds.includes(alert.kind.kind)),
+      this.unavailable.filter((u) => kinds.includes(u.kind)),
+    )
+  }
+
   // 重要度の順位（重大なものが先）、次にリポジトリ名、次に番号
   sorted(): GithubAlert[] {
     return [...this.alerts].sort((a, b) => (

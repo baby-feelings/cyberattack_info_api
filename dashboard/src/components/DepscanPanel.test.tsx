@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { DepscanPanel } from './DepscanPanel'
 import {
   fetchAllDepscanFindings, fetchDepscanStats, fetchCrawlerLogs,
-  fetchDepsOpsList, fetchDepsOpsStats, fetchRepoDependencies, fetchRepoDependencyRepos,
+  fetchDepsOpsList, fetchDepsOpsStats,
   type DependencyFindingOut, type DepscanStatsResponse,
 } from '../api/client'
 
@@ -17,8 +17,6 @@ vi.mock('../api/client', async () => {
     fetchCrawlerLogs: vi.fn(),
     fetchDepsOpsList: vi.fn(),
     fetchDepsOpsStats: vi.fn(),
-    fetchRepoDependencies: vi.fn(),
-    fetchRepoDependencyRepos: vi.fn(),
   }
 })
 
@@ -83,40 +81,6 @@ describe('DepscanPanel', () => {
 
     render(<DepscanPanel />)
     await waitFor(() => expect(screen.getByText('該当する依存ライブラリ脆弱性はありません')).toBeInTheDocument())
-  })
-
-  it('opens the Dependabot ops modal when its button is clicked, and closes it', async () => {
-    mockedFindings.mockResolvedValue([])
-    mockedStats.mockResolvedValue(EMPTY_STATS)
-
-    render(<DepscanPanel />)
-    await waitFor(() => expect(screen.getByText('該当する依存ライブラリ脆弱性はありません')).toBeInTheDocument())
-
-    await userEvent.click(screen.getByText('Dependabot運用状況'))
-    await waitFor(() => {
-      expect(screen.getByText('Dependabot 運用状況（DEPSOPS）')).toBeInTheDocument()
-    })
-
-    await userEvent.click(screen.getByLabelText('閉じる'))
-    await waitFor(() => {
-      expect(screen.queryByText('Dependabot 運用状況（DEPSOPS）')).not.toBeInTheDocument()
-    })
-  })
-
-  it('opens the dependencies modal when its button is clicked, and closes it', async () => {
-    mockedFindings.mockResolvedValue([])
-    mockedStats.mockResolvedValue(EMPTY_STATS)
-    vi.mocked(fetchRepoDependencies).mockResolvedValue({ total: 0, page: 1, per_page: 20, data: [] })
-    vi.mocked(fetchRepoDependencyRepos).mockResolvedValue({ repos: [] })
-
-    render(<DepscanPanel />)
-    await waitFor(() => expect(screen.getByText('該当する依存ライブラリ脆弱性はありません')).toBeInTheDocument())
-
-    await userEvent.click(screen.getByRole('button', { name: '依存パッケージ' }))
-    expect(screen.getByRole('dialog', { name: '依存パッケージ' })).toBeInTheDocument()
-
-    await userEvent.click(screen.getByLabelText('閉じる'))
-    expect(screen.queryByRole('dialog', { name: '依存パッケージ' })).not.toBeInTheDocument()
   })
 
   it('reloads the data when the manual refresh button is clicked', async () => {

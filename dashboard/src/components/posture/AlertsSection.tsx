@@ -10,7 +10,12 @@ import { PostureSection } from './PostureSection'
 import type { Source } from './usePostureData'
 
 // GitHub のセキュリティアラート（シークレット・Dependabot・コードスキャン）の一覧。
-export function AlertsSection({ source, onRetry }: { source: Source<AlertList>; onRetry: () => void }) {
+// kinds を指定すると、その種別のアラートだけを扱う（省略で全種別）
+export function AlertsSection({ source, onRetry, kinds }: {
+  source: Source<AlertList>
+  onRetry: () => void
+  kinds?: readonly string[]
+}) {
   return (
     <PostureSection
       title={POSTURE_TEXT.alerts.title}
@@ -18,7 +23,7 @@ export function AlertsSection({ source, onRetry }: { source: Source<AlertList>; 
       source={source}
       onRetry={onRetry}
     >
-      {(list) => <AlertsView list={list} />}
+      {(list) => <AlertsView list={kinds ? list.onlyKinds(kinds) : list} />}
     </PostureSection>
   )
 }

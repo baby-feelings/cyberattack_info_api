@@ -1,4 +1,4 @@
-import { FullScreenModal } from '../shared/FullScreenModal'
+import { PanelFrame } from '../shared/PanelFrame'
 import { LastFetched } from '../freshness/LastFetched'
 import { SCREEN_FETCH_SOURCE } from '../freshness/freshnessConfig'
 import { useEffect, useState } from 'react'
@@ -161,7 +161,8 @@ function NewerSeriesNote({ releases }: { releases: RuntimeReleaseOut[] }) {
   )
 }
 
-function RuntimesDialog({ onClose, authToken }: { onClose: () => void; authToken?: string }) {
+// 使っている画面（タブの中の小タブ）。取得は、表示されたときに始まる
+export function RuntimesPanel({ authToken }: { authToken?: string }) {
   const [filters, setFilters] = useState<Filters>(INITIAL_FILTERS)
   const [list, setList] = useState<ListResult | null>(null)
   const [repoList, setRepoList] = useState<{ operating: OperatingStatus; repos: RepoRuntimeRepoStat[] } | null>(null)
@@ -219,9 +220,9 @@ function RuntimesDialog({ onClose, authToken }: { onClose: () => void; authToken
   const repos = repoList?.operating === filters.operating ? repoList.repos : []
 
   return (
-    <FullScreenModal
+    <PanelFrame
       label="言語・実行環境"
-      icon={Cpu} onClose={onClose}
+      icon={Cpu}
     >
       <p className="text-xs text-slate-500">
         各アプリが使っている Python・Node.js・Flutter・Dart の版と、サポート期限です。
@@ -338,16 +339,6 @@ function RuntimesDialog({ onClose, authToken }: { onClose: () => void; authToken
           )}
         </div>
       </div>
-    </FullScreenModal>
+    </PanelFrame>
   )
-}
-
-// 使っている言語・実行環境の版と、サポート期限から判定した状態を、アプリごとに閲覧する全画面モーダル。
-// DEPSCAN タブ内のボタンから開く（依存パッケージ・Dependabot 運用状況と同じ設計。追加の固定タブにはしない）。
-// 開いたときにだけ内側を組み立てるため、閉じている間は取得しない。
-export function RuntimesModal({
-  open, onClose, authToken,
-}: { open: boolean; onClose: () => void; authToken?: string }) {
-  if (!open) return null
-  return <RuntimesDialog onClose={onClose} authToken={authToken} />
 }
