@@ -1,10 +1,8 @@
-import { Fragment } from 'react'
-import { Shield, RefreshCw, Search, X, BarChart2 } from 'lucide-react'
+import { Shield, Search, X, BarChart2 } from 'lucide-react'
 import {
   MonthlyBarChart,
   TableLoadingSkeleton, EmptyState, Pagination, SearchBox,
 } from './shared/VulnPanelParts'
-import { KevRow } from './kev/KevRow'
 import { VendorBarChart } from './kev/VendorBarChart'
 import { useKevData, KEV_PERIODS } from './kev/useKevData'
 import { recentMonths } from './kev/trend'
@@ -12,8 +10,8 @@ import { PeriodFilter } from './shared/PeriodFilter'
 import { StatBand } from './shared/StatBand'
 import { WatchKeywords } from './shared/WatchKeywords'
 import { CollapsibleSection } from './shared/CollapsibleSection'
-import { DateDividerRow } from './shared/DateDividerRow'
-import { isNewDay } from './shared/dateDay'
+import { KEV_TEXT as T } from './kev/kevPanelConfig'
+import { KevHeader, KevTable } from './kev/KevSections'
 
 export function KevPanel() {
   const {
@@ -24,36 +22,19 @@ export function KevPanel() {
     load, handleSearch, handlePeriod,
   } = useKevData()
 
-  const periodLabel = period === null ? '登録済み' : `直近${period}日に追加`
+  const periodLabel = T.periodLabel(period)
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg flex flex-col gap-5">
-
-      {/* ヘッダー */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Shield size={16} className="text-slate-400" />
-          <span className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
-            CISA KEV — 悪用が確認された脆弱性
-          </span>
-        </div>
-        <button
-          onClick={() => load(search, page, period)}
-          disabled={loading || statsLoading}
-          className="text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40 p-1 rounded"
-          title="再読み込み"
-        >
-          <RefreshCw size={13} className={loading || statsLoading ? 'animate-spin' : ''} />
-        </button>
-      </div>
+      <KevHeader busy={loading || statsLoading} onReload={() => load(search, page, period)} />
 
       {/* グラフ。最初は表示し、見出しを押すと閉じられる */}
-      <CollapsibleSection summary="グラフ（ベンダー別・月別トレンド）">
+      <CollapsibleSection summary={T.charts}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <VendorBarChart stats={stats} loading={statsLoading} />
           <MonthlyBarChart
             icon={<BarChart2 size={13} className="text-slate-400" />}
-            title="月別 CVE 追加数トレンド（6ヶ月）"
+            title={T.monthlyTitle}
             data={recentMonths(stats?.monthly_trend ?? [])}
             barColor="#7c3aed"
             height={160}
@@ -69,7 +50,7 @@ export function KevPanel() {
           value={search}
           onChange={handleSearch}
           onClear={() => handleSearch('')}
-          placeholder="ベンダー名・製品名"
+          placeholder={T.searchPlaceholder}
           searchIcon={<Search size={11} className="text-slate-500 shrink-0" />}
           clearIcon={<X size={10} />}
         />
@@ -79,8 +60,8 @@ export function KevPanel() {
       <StatBand
         loading={periodTotal === null && (loading || statsLoading)}
         items={[
-          { value: periodTotal, label: `件が${periodLabel}`, tone: 'sky' },
-          { value: epssHigh, label: '件は悪用されやすい（EPSS 10%以上）', tone: 'red' },
+          { value: periodTotal, label: T.addedInPeriod(periodLabel), tone: 'sky' },
+          { value: epssHigh, label: T.epssHigh, tone: 'red' },
         ]}
       />
 
@@ -95,49 +76,17 @@ export function KevPanel() {
         onRemove={removeKeyword}
       />
 
-      {/* ローディング */}
       {loading ? (
         <TableLoadingSkeleton columnWidths={['w-28', 'w-28', 'w-28', 'flex-1']} />
-
-      /* データなし */
       ) : total === 0 ? (
-        <EmptyState icon={<Shield size={28} />} message="該当する CVE はありません" />
-
-      /* テーブル（追加日の新しい順。日ごとに区切る） */
+        <EmptyState icon={<Shield size={28} />} message={T.empty} />
       ) : total !== null && (
         <>
           <Pagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} position="top" />
-
-          <div className="overflow-x-auto -mx-1 px-1">
-            <table aria-label="KEV 脆弱性一覧" className="w-full text-sm min-w-[700px]">
-              <thead>
-                <tr className="border-b border-slate-800">
-                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-36">CVE ID</th>
-                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-28">EPSS</th>
-                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-40">ベンダー</th>
-                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-40">製品</th>
-                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3">脆弱性名</th>
-                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-24">追加日</th>
-                  <th className="w-5" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {rows.map((item, i) => (
-                  <Fragment key={item.cve_id}>
-                    {isNewDay(rows[i - 1]?.date_added, item.date_added) && (
-                      <DateDividerRow date={item.date_added} colSpan={7} />
-                    )}
-                    <KevRow item={item} />
-                  </Fragment>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
+          <KevTable rows={rows} />
           <Pagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} />
         </>
       )}
-
     </div>
   )
 }
