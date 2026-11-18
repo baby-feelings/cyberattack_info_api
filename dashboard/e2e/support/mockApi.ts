@@ -108,10 +108,316 @@ function withException<T extends object>(
   }
 }
 
-function defaultResponse(req: RecordedRequest, state: MockState): MockResponse {
-  const { path, query, method } = req
+// エンドポイントごとの、既定のモック応答（キー＝`<メソッド> <パス>`）。新しい API は、ここに1件足す。
+type Handler = (req: RecordedRequest, state: MockState) => MockResponse
+const HANDLERS: Record<string, Handler> = {
+  'GET /health': (_req, state) => {
+    return { body: state.health }
+  },
+  // ── KEV ──
+  'GET /api/vulnerabilities/recent': (req) => {
+    const { query } = req
+    // 実APIと同じく、過去 days 日以内に追加されたもの（モックは1日1件ずつ追加されている）
+    const days = Number(query.get('days') ?? 30)
+    return { body: kevItems.filter((_, i) => i <= days) }
+  },
+  'GET /api/vulnerabilities/stats': (_req) => {
+    return { body: kevStats() }
+  },
+  'GET /api/vulnerabilities': (req) => {
+    const { query } = req
+    const search = query.get('search')
+    const minEpss = query.get('min_epss')
+    const items = kevItems.filter((v) =>
+      (!search || includesCI(v.vendor_project, search) || includesCI(v.product, search)
+        || includesCI(v.cve_id, search))
+      && (minEpss === null || (v.epss_score ?? -1) >= Number(minEpss)))
+    return { body: paginate(items, query, 50) }
+  },
+  // ── OSV ──
+  'GET /api/osv/stats': (_req) => {
+    return { body: osvStats() }
+  },
+  'GET /api/osv': (req) => {
+    const { query } = req
+    const eco = query.get('ecosystem')
+    const sev = query.get('severity')
+    const search = query.get('search')
+    let items = osvItems.filter((v) =>
+      (!eco || v.ecosystem === eco)
+      && (!sev || v.severity === sev)
+      && (!search || includesCI(v.osv_id, search) || includesCI(v.package_name, search)
+        || includesCI(v.summary, search)))
+    if (query.get('sort_by') === 'cvss') {
+      items = [...items].sort((a, b) => (b.cvss_score ?? -1) - (a.cvss_score ?? -1))
+    }
+    return { body: paginate(items, query, 50) }
+  },
+  // ── DEPSCAN ──
+  'GET /api/depscan/stats': (req, state) => {
+    const { query } = req
+    return { body: depscanStats(operatingKeep(query, state)) }
+  },
+  'GET /api/depscan': (req, state) => {
+    const { query } = req
+    const owner = query.get('owner')
+    const sev = query.get('severity')
+    const resolved = query.get('resolved')
+    const keep = operatingKeep(query, state)
+    const items = depscanFindings.filter((f) =>
+      keep(f.repo_full_name)
+      && (!owner || f.repo_full_name.startsWith(`${owner}/`))
+      && (!sev || f.severity === sev)
+      && (resolved === null || (resolved === 'true') === !!f.resolved_at))
+    const data = items.map((f) => withException(
+      state, 'dependency', f, `${f.ecosystem}|${f.package_name}|${f.osv_id}`,
+    ))
+    // include_excepted=false なら、実 API と同じく、有効な例外のある検知を除く
+    const shown = query.get('include_excepted') === 'false' ? data.filter((f) => !f.exception) : data
+    return { body: paginate(shown, query, 50) }
+  },
+  'POST /api/exceptions': (req, state) => {
+    const body = req.body as Omit<MockState['exceptions'][number], 'id' | 'approver'>
+    if (body.status === 'accepted' && !body.expires_at) {
+      return { status: 422, body: { detail: '受容には、期限が必要です。' } }
+    }
+    const row = { ...body, id: state.exceptions.length + 1, approver: state.username }
+    state.exceptions.push(row)
+    return { status: 201, body: row }
+  },
+  'GET /api/depscan/dependencies/repos': (req, state) => {
+    const { query } = req
+    const keep = operatingKeep(query, state)
+    const repos = new Map<string, { total: number; vulnerable: number }>()
+    for (const d of repoDependencies.filter((x) => keep(x.repo_full_name))) {
+      const stat = repos.get(d.repo_full_name) ?? { total: 0, vulnerable: 0 }
+      stat.total += 1
+      if (d.open_vulnerabilities > 0) stat.vulnerable += 1
+      repos.set(d.repo_full_name, stat)
+    }
+    // 実APIと同じく、検知がある（対応が必要な）アプリを先頭に、同数ならアプリ名順
+    const sorted = [...repos].sort(([a, x], [b, y]) => y.vulnerable - x.vulnerable || a.localeCompare(b))
+    return { body: { repos: sorted.map(([repo_full_name, s]) => ({ repo_full_name, ...s })) } }
+  },
+  'GET /api/depscan/dependencies': (req, state) => {
+    const { query } = req
+    const pkg = query.get('package')
+    const version = query.get('version')
+    const ecosystem = query.get('ecosystem')
+    const repo = query.get('repo')
+    const vulnerable = query.get('vulnerable') === 'true'
+    const keep = operatingKeep(query, state)
+    const items = repoDependencies.filter((d) =>
+      keep(d.repo_full_name)
+      && (!pkg || includesCI(d.package_name, pkg))
+      && (!version || d.version === version)
+      && (!ecosystem || d.ecosystem === ecosystem)
+      && (!repo || d.repo_full_name === repo)
+      && (!vulnerable || d.open_vulnerabilities > 0))
+    return { body: paginate(items, query, 50) }
+  },
+  // ── SLA（脆弱性への対応状況。期限超過・平均対応日数）──
+  'GET /api/sla': (req, state) => {
+    const { query } = req
+    const keep = operatingKeep(query, state)
+    const overdue = slaOverdue.filter((i) => keep(i.repo_full_name))
+    const repos = slaRepos.filter((r) => keep(r.repo_full_name))
+    const resolved = repos.reduce((n, r) => n + r.resolved, 0)
+    return {
+      body: {
+        generated_at: '2026-10-10T00:00:00+00:00',
+        mttr_window_days: 90,
+        policy: slaPolicy,
+        summary: {
+          open_with_deadline: repos.reduce((n, r) => n + r.open, 0),
+          overdue: overdue.length,
+          resolved,
+          mttr_days: resolved > 0 ? 7.2 : null,
+        },
+        by_severity: [
+          { severity: 'CRITICAL', deadline_days: 7, open: 1, overdue: 1, resolved: 0, mttr_days: null },
+          { severity: 'HIGH', deadline_days: 30, open: 2, overdue: 1, resolved: 4, mttr_days: 7.2 },
+          { severity: 'LOW', deadline_days: null, open: 1, overdue: 0, resolved: 0, mttr_days: null },
+        ],
+        by_repo: repos,
+        overdue,
+      },
+    }
+  },
+  // ── RUNTIME（言語・実行環境のバージョン監視）──
+  'GET /api/runtimes/repos': (req, state) => {
+    const { query } = req
+    const keep = operatingKeep(query, state)
+    const actionable = new Set(['eol', 'eol_soon', 'update_available'])
+    const repos = new Map<string, { total: number; needs_action: number }>()
+    for (const r of repoRuntimes.filter((x) => keep(x.repo_full_name))) {
+      const stat = repos.get(r.repo_full_name) ?? { total: 0, needs_action: 0 }
+      stat.total += 1
+      if (actionable.has(r.state)) stat.needs_action += 1
+      repos.set(r.repo_full_name, stat)
+    }
+    // 実APIと同じく、対応が必要な数が多いアプリを先頭に、同数ならアプリ名順
+    const sorted = [...repos].sort(([a, x], [b, y]) => y.needs_action - x.needs_action || a.localeCompare(b))
+    return { body: { repos: sorted.map(([repo_full_name, s]) => ({ repo_full_name, ...s })) } }
+  },
+  'GET /api/runtimes/releases': (_req) => {
+    return { body: { data: runtimeReleases } }
+  },
+  'GET /api/runtimes': (req, state) => {
+    const { query } = req
+    const repo = query.get('repo')
+    const runtime = query.get('runtime')
+    const needsAction = query.get('needs_action') === 'true'
+    const actionable = new Set(['eol', 'eol_soon', 'update_available'])
+    const keep = operatingKeep(query, state)
+    const items = repoRuntimes.filter((r) =>
+      keep(r.repo_full_name)
+      && (!repo || r.repo_full_name === repo)
+      && (!runtime || r.runtime === runtime)
+      && (!needsAction || actionable.has(r.state)))
+    return { body: { total: items.length, data: items } }
+  },
+  // ── DEPSOPS ──
+  'GET /api/depsops/stats': (req, state) => {
+    const { query } = req
+    const repos = new Map<string, number>()
+    const keep = operatingKeep(query, state)
+    for (const i of depsopsItems.filter((d) => d.action === 'flagged' && keep(d.repo_full_name))) {
+      repos.set(i.repo_full_name, (repos.get(i.repo_full_name) ?? 0) + 1)
+    }
+    return { body: { repos: [...repos].map(([repo_full_name, count]) => ({ repo_full_name, count })) } }
+  },
+  'GET /api/depsops': (req, state) => {
+    const { query } = req
+    const action = query.get('action')
+    const keep = operatingKeep(query, state)
+    const items = depsopsItems.filter((d) => keep(d.repo_full_name) && (!action || d.action === action))
+    return { body: paginate(items, query, 50) }
+  },
+  // ── クローラーログ ──
+  'GET /api/crawler-logs': (req, state) => {
+    const { query } = req
+    // 種別ごとに、数時間前に成功した実行を返す（「最終取得」が「最新」の状態になる）。
+    // 遅れ・失敗などの状態は、各テストが override で差し替える
+    const finished = new Date(Date.now() - RECENT_CRAWL_HOURS_AGO * 3_600_000).toISOString()
+    return {
+      body: [{
+        id: state.crawlerLogId, crawler_type: query.get('crawler_type') ?? 'DEPSCAN',
+        status: 'success', started_at: finished, finished_at: finished,
+        duration_seconds: 60, inserted: 1, updated: 0, deleted: 0, error_message: null,
+      }],
+    }
+  },
+  // ── 態勢（設定の監査・GitHub アラート・外形監視）──
+  'GET /api/repo-audit': (req, state) => {
+    const { query } = req
+    const keep = operatingKeep(query, state)
+    const rows = repoAuditItems.filter((r) => (
+      keep(r.repo_full_name) && (query.get('only_issues') !== 'true' || r.issues > 0)
+    ))
+    return { body: { total: rows.length, repos_with_issues: rows.filter((r) => r.issues > 0).length, data: rows } }
+  },
+  'GET /api/github-alerts': (req, state) => {
+    const { query } = req
+    const keep = operatingKeep(query, state)
+    const kind = query.get('kind')
+    const withResolved = query.get('resolved') === 'true'
+    const rows = githubAlertItems.filter((a) => (
+      keep(a.repo_full_name) && (!kind || a.kind === kind) && (withResolved || !a.resolved_at)
+    ))
+    const unavailable = githubAlertUnavailable.filter((u) => keep(u.repo_full_name) && (!kind || u.kind === kind))
+    return { body: { total: rows.length, data: rows, unavailable } }
+  },
+  'GET /api/site-monitor': (req, state) => {
+    const { query } = req
+    const keep = operatingKeep(query, state)
+    const operating = query.get('operating') ?? 'all'
+    // リポジトリに紐づかないサイトは、運用中として扱う（実 API と同じ）
+    const rows = siteMonitorItems.filter((s) => (
+      (s.repo_full_name === null ? operating !== 'inactive' : keep(s.repo_full_name))
+      && (query.get('only_issues') !== 'true' || s.issues > 0)
+    ))
+    return { body: { total: rows.length, sites_with_issues: rows.filter((s) => s.issues > 0).length, data: rows } }
+  },
+  // ── CODESCAN ──
+  'GET /api/codescan/stats': (req, state) => {
+    const { query } = req
+    return { body: codescanStats(operatingKeep(query, state)) }
+  },
+  'GET /api/codescan': (req, state) => {
+    const { query } = req
+    const sev = query.get('severity')
+    const repo = query.get('repo')
+    const resolved = query.get('resolved')
+    const keep = operatingKeep(query, state)
+    const items = codescanItems.filter((f) =>
+      keep(f.repo_full_name)
+      && (!repo || f.repo_full_name === repo)
+      && (!sev || f.severity === sev)
+      && (resolved === null || (resolved === 'true') === !!f.resolved_at))
+    const data = items.map((f) => withException(
+      state, 'code', f, `${f.file_path}|${f.rule_id}`,
+    ))
+    // include_excepted=false なら、実 API と同じく、有効な例外のある検知を除く
+    const shown = query.get('include_excepted') === 'false' ? data.filter((f) => !f.exception) : data
+    return { body: paginate(shown, query, 30) }
+  },
+  // ── 認証・設定 ──
+  'GET /auth/scan-status': (_req, state) => {
+    const next = state.scanStatuses.length > 1
+      ? state.scanStatuses.shift()!
+      : state.scanStatuses[0]
+    return { body: next }
+  },
+  'POST /auth/exchange': (_req, state) => {
+    return { body: { token: 'exchanged-token', username: state.username } }
+  },
+  'POST /auth/refresh': (req, state) => {
+    // 実サーバーは新しいJWTを返すが、他のシナリオが Bearer の値を検証しているため、
+    // 受け取ったトークンをそのまま返す（延長されたことの検証は専用シナリオで上書きする）
+    return {
+      body: {
+        token: (req.headers['authorization'] ?? '').replace(/^Bearer /i, ''),
+        username: state.username,
+      },
+    }
+  },
+  'GET /auth/notification-settings': (_req, state) => {
+    return { body: state.notification }
+  },
+  'PUT /auth/notification-settings': (req, state) => {
+    const url = (req.body as { slack_webhook_url: string }).slack_webhook_url
+    state.notification = { slack_webhook_url: url, notifications_enabled: true }
+    return { body: state.notification }
+  },
+  'POST /auth/mcp-token': (req, state) => {
+    const days = (req.body as { days?: number } | null)?.days ?? 30
+    const row = {
+      id: `tok-${state.mcpTokens.length + 1}-aaaa-bbbb`,
+      created_at: '2026-10-10T00:00:00+00:00',
+      // 7日=2026-10-17 / 30日=2026-11-09 / 90日=2027-01-08（テストで期限選択を判別できる値）
+      expires_at: { 7: '2026-10-17', 30: '2026-11-09', 90: '2027-01-08' }[days] + 'T00:00:00+00:00',
+      revoked_at: null, last_used_at: null, status: 'active' as const,
+    }
+    state.mcpTokens.unshift(row)
+    return { body: { ...row, token: 'mcp-test-token', username: state.username } }
+  },
+  'GET /auth/mcp-tokens': (_req, state) => {
+    return { body: { tokens: state.mcpTokens } }
+  },
+  'GET /auth/oauth-connections': (_req, state) => {
+    return { body: { connections: state.oauthConnections } }
+  },
+  'DELETE /auth/notification-settings': (_req, state) => {
+    state.notification = { slack_webhook_url: null, notifications_enabled: false }
+    return { body: state.notification }
+  },
+}
 
-  // 例外の解除（パスに ID を含むため、switch の前で処理する）
+function defaultResponse(req: RecordedRequest, state: MockState): MockResponse {
+  const { path, method } = req
+
+  // 例外の解除（パスに ID を含むため、表の前で処理する）
   if (method === 'DELETE' && path.startsWith('/api/exceptions/')) {
     const id = Number(path.split('/').pop())
     const index = state.exceptions.findIndex((e) => e.id === id)
@@ -120,7 +426,7 @@ function defaultResponse(req: RecordedRequest, state: MockState): MockResponse {
     return { body: { ...removed, ended_reason: 'revoked' } }
   }
 
-  // パスに可変部分（トークンID）を含むため、switch の前で処理する
+  // パスに可変部分（トークンID）を含むため、表の前で処理する
   if (method === 'DELETE' && path.startsWith('/auth/mcp-tokens/')) {
     const row = state.mcpTokens.find((t) => t.id === decodeURIComponent(path.split('/').pop()!))
     if (!row) return { status: 404, body: { detail: 'Token not found.' } }
@@ -137,294 +443,8 @@ function defaultResponse(req: RecordedRequest, state: MockState): MockResponse {
     return { body: { client_id: id, disconnected: true } }
   }
 
-  switch (`${method} ${path}`) {
-    case 'GET /health':
-      return { body: state.health }
-
-    // ── KEV ──
-    case 'GET /api/vulnerabilities/recent': {
-      // 実APIと同じく、過去 days 日以内に追加されたもの（モックは1日1件ずつ追加されている）
-      const days = Number(query.get('days') ?? 30)
-      return { body: kevItems.filter((_, i) => i <= days) }
-    }
-    case 'GET /api/vulnerabilities/stats':
-      return { body: kevStats() }
-    case 'GET /api/vulnerabilities': {
-      const search = query.get('search')
-      const minEpss = query.get('min_epss')
-      const items = kevItems.filter((v) =>
-        (!search || includesCI(v.vendor_project, search) || includesCI(v.product, search)
-          || includesCI(v.cve_id, search))
-        && (minEpss === null || (v.epss_score ?? -1) >= Number(minEpss)))
-      return { body: paginate(items, query, 50) }
-    }
-
-    // ── OSV ──
-    case 'GET /api/osv/stats':
-      return { body: osvStats() }
-    case 'GET /api/osv': {
-      const eco = query.get('ecosystem')
-      const sev = query.get('severity')
-      const search = query.get('search')
-      let items = osvItems.filter((v) =>
-        (!eco || v.ecosystem === eco)
-        && (!sev || v.severity === sev)
-        && (!search || includesCI(v.osv_id, search) || includesCI(v.package_name, search)
-          || includesCI(v.summary, search)))
-      if (query.get('sort_by') === 'cvss') {
-        items = [...items].sort((a, b) => (b.cvss_score ?? -1) - (a.cvss_score ?? -1))
-      }
-      return { body: paginate(items, query, 50) }
-    }
-
-    // ── DEPSCAN ──
-    case 'GET /api/depscan/stats':
-      return { body: depscanStats(operatingKeep(query, state)) }
-    case 'GET /api/depscan': {
-      const owner = query.get('owner')
-      const sev = query.get('severity')
-      const resolved = query.get('resolved')
-      const keep = operatingKeep(query, state)
-      const items = depscanFindings.filter((f) =>
-        keep(f.repo_full_name)
-        && (!owner || f.repo_full_name.startsWith(`${owner}/`))
-        && (!sev || f.severity === sev)
-        && (resolved === null || (resolved === 'true') === !!f.resolved_at))
-      const data = items.map((f) => withException(
-        state, 'dependency', f, `${f.ecosystem}|${f.package_name}|${f.osv_id}`,
-      ))
-      // include_excepted=false なら、実 API と同じく、有効な例外のある検知を除く
-      const shown = query.get('include_excepted') === 'false' ? data.filter((f) => !f.exception) : data
-      return { body: paginate(shown, query, 50) }
-    }
-
-    case 'POST /api/exceptions': {
-      const body = req.body as Omit<MockState['exceptions'][number], 'id' | 'approver'>
-      if (body.status === 'accepted' && !body.expires_at) {
-        return { status: 422, body: { detail: '受容には、期限が必要です。' } }
-      }
-      const row = { ...body, id: state.exceptions.length + 1, approver: state.username }
-      state.exceptions.push(row)
-      return { status: 201, body: row }
-    }
-
-    case 'GET /api/depscan/dependencies/repos': {
-      const keep = operatingKeep(query, state)
-      const repos = new Map<string, { total: number; vulnerable: number }>()
-      for (const d of repoDependencies.filter((x) => keep(x.repo_full_name))) {
-        const stat = repos.get(d.repo_full_name) ?? { total: 0, vulnerable: 0 }
-        stat.total += 1
-        if (d.open_vulnerabilities > 0) stat.vulnerable += 1
-        repos.set(d.repo_full_name, stat)
-      }
-      // 実APIと同じく、検知がある（対応が必要な）アプリを先頭に、同数ならアプリ名順
-      const sorted = [...repos].sort(([a, x], [b, y]) => y.vulnerable - x.vulnerable || a.localeCompare(b))
-      return { body: { repos: sorted.map(([repo_full_name, s]) => ({ repo_full_name, ...s })) } }
-    }
-    case 'GET /api/depscan/dependencies': {
-      const pkg = query.get('package')
-      const version = query.get('version')
-      const ecosystem = query.get('ecosystem')
-      const repo = query.get('repo')
-      const vulnerable = query.get('vulnerable') === 'true'
-      const keep = operatingKeep(query, state)
-      const items = repoDependencies.filter((d) =>
-        keep(d.repo_full_name)
-        && (!pkg || includesCI(d.package_name, pkg))
-        && (!version || d.version === version)
-        && (!ecosystem || d.ecosystem === ecosystem)
-        && (!repo || d.repo_full_name === repo)
-        && (!vulnerable || d.open_vulnerabilities > 0))
-      return { body: paginate(items, query, 50) }
-    }
-
-    // ── SLA（脆弱性への対応状況。期限超過・平均対応日数）──
-    case 'GET /api/sla': {
-      const keep = operatingKeep(query, state)
-      const overdue = slaOverdue.filter((i) => keep(i.repo_full_name))
-      const repos = slaRepos.filter((r) => keep(r.repo_full_name))
-      const resolved = repos.reduce((n, r) => n + r.resolved, 0)
-      return {
-        body: {
-          generated_at: '2026-10-10T00:00:00+00:00',
-          mttr_window_days: 90,
-          policy: slaPolicy,
-          summary: {
-            open_with_deadline: repos.reduce((n, r) => n + r.open, 0),
-            overdue: overdue.length,
-            resolved,
-            mttr_days: resolved > 0 ? 7.2 : null,
-          },
-          by_severity: [
-            { severity: 'CRITICAL', deadline_days: 7, open: 1, overdue: 1, resolved: 0, mttr_days: null },
-            { severity: 'HIGH', deadline_days: 30, open: 2, overdue: 1, resolved: 4, mttr_days: 7.2 },
-            { severity: 'LOW', deadline_days: null, open: 1, overdue: 0, resolved: 0, mttr_days: null },
-          ],
-          by_repo: repos,
-          overdue,
-        },
-      }
-    }
-
-    // ── RUNTIME（言語・実行環境のバージョン監視）──
-    case 'GET /api/runtimes/repos': {
-      const keep = operatingKeep(query, state)
-      const actionable = new Set(['eol', 'eol_soon', 'update_available'])
-      const repos = new Map<string, { total: number; needs_action: number }>()
-      for (const r of repoRuntimes.filter((x) => keep(x.repo_full_name))) {
-        const stat = repos.get(r.repo_full_name) ?? { total: 0, needs_action: 0 }
-        stat.total += 1
-        if (actionable.has(r.state)) stat.needs_action += 1
-        repos.set(r.repo_full_name, stat)
-      }
-      // 実APIと同じく、対応が必要な数が多いアプリを先頭に、同数ならアプリ名順
-      const sorted = [...repos].sort(([a, x], [b, y]) => y.needs_action - x.needs_action || a.localeCompare(b))
-      return { body: { repos: sorted.map(([repo_full_name, s]) => ({ repo_full_name, ...s })) } }
-    }
-    case 'GET /api/runtimes/releases':
-      return { body: { data: runtimeReleases } }
-    case 'GET /api/runtimes': {
-      const repo = query.get('repo')
-      const runtime = query.get('runtime')
-      const needsAction = query.get('needs_action') === 'true'
-      const actionable = new Set(['eol', 'eol_soon', 'update_available'])
-      const keep = operatingKeep(query, state)
-      const items = repoRuntimes.filter((r) =>
-        keep(r.repo_full_name)
-        && (!repo || r.repo_full_name === repo)
-        && (!runtime || r.runtime === runtime)
-        && (!needsAction || actionable.has(r.state)))
-      return { body: { total: items.length, data: items } }
-    }
-
-    // ── DEPSOPS ──
-    case 'GET /api/depsops/stats': {
-      const repos = new Map<string, number>()
-      const keep = operatingKeep(query, state)
-      for (const i of depsopsItems.filter((d) => d.action === 'flagged' && keep(d.repo_full_name))) {
-        repos.set(i.repo_full_name, (repos.get(i.repo_full_name) ?? 0) + 1)
-      }
-      return { body: { repos: [...repos].map(([repo_full_name, count]) => ({ repo_full_name, count })) } }
-    }
-    case 'GET /api/depsops': {
-      const action = query.get('action')
-      const keep = operatingKeep(query, state)
-      const items = depsopsItems.filter((d) => keep(d.repo_full_name) && (!action || d.action === action))
-      return { body: paginate(items, query, 50) }
-    }
-
-    // ── クローラーログ ──
-    case 'GET /api/crawler-logs': {
-      // 種別ごとに、数時間前に成功した実行を返す（「最終取得」が「最新」の状態になる）。
-      // 遅れ・失敗などの状態は、各テストが override で差し替える
-      const finished = new Date(Date.now() - RECENT_CRAWL_HOURS_AGO * 3_600_000).toISOString()
-      return {
-        body: [{
-          id: state.crawlerLogId, crawler_type: query.get('crawler_type') ?? 'DEPSCAN',
-          status: 'success', started_at: finished, finished_at: finished,
-          duration_seconds: 60, inserted: 1, updated: 0, deleted: 0, error_message: null,
-        }],
-      }
-    }
-
-    // ── 態勢（設定の監査・GitHub アラート・外形監視）──
-    case 'GET /api/repo-audit': {
-      const keep = operatingKeep(query, state)
-      const rows = repoAuditItems.filter((r) => (
-        keep(r.repo_full_name) && (query.get('only_issues') !== 'true' || r.issues > 0)
-      ))
-      return { body: { total: rows.length, repos_with_issues: rows.filter((r) => r.issues > 0).length, data: rows } }
-    }
-    case 'GET /api/github-alerts': {
-      const keep = operatingKeep(query, state)
-      const kind = query.get('kind')
-      const withResolved = query.get('resolved') === 'true'
-      const rows = githubAlertItems.filter((a) => (
-        keep(a.repo_full_name) && (!kind || a.kind === kind) && (withResolved || !a.resolved_at)
-      ))
-      const unavailable = githubAlertUnavailable.filter((u) => keep(u.repo_full_name) && (!kind || u.kind === kind))
-      return { body: { total: rows.length, data: rows, unavailable } }
-    }
-    case 'GET /api/site-monitor': {
-      const keep = operatingKeep(query, state)
-      const operating = query.get('operating') ?? 'all'
-      // リポジトリに紐づかないサイトは、運用中として扱う（実 API と同じ）
-      const rows = siteMonitorItems.filter((s) => (
-        (s.repo_full_name === null ? operating !== 'inactive' : keep(s.repo_full_name))
-        && (query.get('only_issues') !== 'true' || s.issues > 0)
-      ))
-      return { body: { total: rows.length, sites_with_issues: rows.filter((s) => s.issues > 0).length, data: rows } }
-    }
-
-    // ── CODESCAN ──
-    case 'GET /api/codescan/stats':
-      return { body: codescanStats(operatingKeep(query, state)) }
-    case 'GET /api/codescan': {
-      const sev = query.get('severity')
-      const repo = query.get('repo')
-      const resolved = query.get('resolved')
-      const keep = operatingKeep(query, state)
-      const items = codescanItems.filter((f) =>
-        keep(f.repo_full_name)
-        && (!repo || f.repo_full_name === repo)
-        && (!sev || f.severity === sev)
-        && (resolved === null || (resolved === 'true') === !!f.resolved_at))
-      const data = items.map((f) => withException(
-        state, 'code', f, `${f.file_path}|${f.rule_id}`,
-      ))
-      // include_excepted=false なら、実 API と同じく、有効な例外のある検知を除く
-      const shown = query.get('include_excepted') === 'false' ? data.filter((f) => !f.exception) : data
-      return { body: paginate(shown, query, 30) }
-    }
-
-    // ── 認証・設定 ──
-    case 'GET /auth/scan-status': {
-      const next = state.scanStatuses.length > 1
-        ? state.scanStatuses.shift()!
-        : state.scanStatuses[0]
-      return { body: next }
-    }
-    case 'POST /auth/exchange':
-      return { body: { token: 'exchanged-token', username: state.username } }
-    case 'POST /auth/refresh':
-      // 実サーバーは新しいJWTを返すが、他のシナリオが Bearer の値を検証しているため、
-      // 受け取ったトークンをそのまま返す（延長されたことの検証は専用シナリオで上書きする）
-      return {
-        body: {
-          token: (req.headers['authorization'] ?? '').replace(/^Bearer /i, ''),
-          username: state.username,
-        },
-      }
-    case 'GET /auth/notification-settings':
-      return { body: state.notification }
-    case 'PUT /auth/notification-settings': {
-      const url = (req.body as { slack_webhook_url: string }).slack_webhook_url
-      state.notification = { slack_webhook_url: url, notifications_enabled: true }
-      return { body: state.notification }
-    }
-    case 'POST /auth/mcp-token': {
-      const days = (req.body as { days?: number } | null)?.days ?? 30
-      const row = {
-        id: `tok-${state.mcpTokens.length + 1}-aaaa-bbbb`,
-        created_at: '2026-10-10T00:00:00+00:00',
-        // 7日=2026-10-17 / 30日=2026-11-09 / 90日=2027-01-08（テストで期限選択を判別できる値）
-        expires_at: { 7: '2026-10-17', 30: '2026-11-09', 90: '2027-01-08' }[days] + 'T00:00:00+00:00',
-        revoked_at: null, last_used_at: null, status: 'active' as const,
-      }
-      state.mcpTokens.unshift(row)
-      return { body: { ...row, token: 'mcp-test-token', username: state.username } }
-    }
-    case 'GET /auth/mcp-tokens':
-      return { body: { tokens: state.mcpTokens } }
-    case 'GET /auth/oauth-connections':
-      return { body: { connections: state.oauthConnections } }
-    case 'DELETE /auth/notification-settings':
-      state.notification = { slack_webhook_url: null, notifications_enabled: false }
-      return { body: state.notification }
-
-    default:
-      return { status: 404, body: { detail: `unmocked: ${method} ${path}` } }
-  }
+  const handler = HANDLERS[`${method} ${path}`]
+  return handler ? handler(req, state) : { status: 404, body: { detail: `unmocked: ${method} ${path}` } }
 }
 
 export async function installMockApi(page: Page): Promise<MockApi> {
