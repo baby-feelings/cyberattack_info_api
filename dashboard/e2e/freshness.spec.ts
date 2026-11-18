@@ -1,5 +1,5 @@
 import { RECENT_CRAWL_HOURS_AGO } from './support/mockApi'
-import { expect, openTab, scenario, seedSession } from './support/test'
+import { expect, openPublic, openTab, scenario, seedSession } from './support/test'
 
 // 現在時刻の hoursAgo 時間前に終わった実行（モックの実行履歴 1 件分）
 function crawlerLog(status: string, hoursAgo: number, inserted = 0) {
@@ -20,7 +20,8 @@ scenario('FRS-01', '各タブの見出しに、そのタブのクローラーの
     ['KEV', 'KEV'], ['OSV', 'OSV'], ['DEPSCAN', 'DEPSCAN'], ['CODESCAN', 'CODESCAN'],
   ] as const
   for (const [tab, crawlerType] of tabs) {
-    await openTab(page, tab)
+    if (tab === 'KEV' || tab === 'OSV') await openPublic(page, tab)
+    else await openTab(page, tab)
     // 見出しは、ログイン前でも表示される（ログインが要るのは、見出しの下の本体だけ）
     await expect(lastFetched(page)).toBeVisible()
     await expect.poll(() => api.requestsTo('/api/crawler-logs')
