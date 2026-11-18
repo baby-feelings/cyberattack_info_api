@@ -140,7 +140,7 @@ tarball方式のCODESCANは現在のツリーしか見えないため、GitHub�
 
 
 
-- **対象URL**（`targets.py`）: リポジトリのHomepage欄・Firebase（`.firebaserc`のプロジェクトID→`https://<id>.web.app`。Firestoreの確認先も）・
+- **対象URL**（`targets.py`）: リポジトリのHomepage欄・Firebase（`.firebaserc`の**全環境**〈開発・本番など。既定が先頭〉のプロジェクトID→`https://<id>.web.app`。既定の1つだけだと本番用のサイトが漏れる。Firestoreの確認先も）・
 
   GitHub Pages（`has_pages`→`https://<owner>.github.io`）を自動検出し、`EXTERNAL_MONITOR_URLS`（https・カンマ区切り）で追加できる。
 
@@ -150,7 +150,7 @@ tarball方式のCODESCANは現在のツリーしか見えないため、GitHub�
 
   解決されるホスト（1つでも）は、点検しない。リポジトリのHomepage等は外部入力のため、点検の直前に毎回検査する
 
-- **点検**（`probes.py`。判定は純粋な`evaluate_*`・`looks_like_exposure`）: TLS証明書の残り日数（30日以内=WARNING・7日以内/期限切れ/検証失敗=ERROR）・
+- **点検**（`probes.py`。判定は純粋な`evaluate_*`・`looks_like_exposure`）: TLS証明書の残り日数（30日以内=WARNING・7日以内/期限切れ/検証失敗=ERROR。接続はTLS 1.2以上に固定）・
 
   セキュリティヘッダー（CSP・HSTSが無い=WARNING、nosniff・frame・Referrer-Policyは INFO）・露出ファイル（`/.env`・`/.git/HEAD`・`/.git/config`・
 

@@ -57,7 +57,7 @@ GET・PUT（`merge_pull_request`）・PATCH（`close_issue`）等の冪等な操
    非冪等なGitHub API呼び出し（Issue作成等）が重複実行されるリスクが増す
 
 ## 通知の構成（`app/core/notifications/` パッケージ）
-`slack`（送信`send_slack`・Webhook URL検証・`truncate_for_slack`）・`recipients`（送信先の解決）・
+`slack`（送信`send_slack`・Webhook URL検証〈登録時と、送信の直前の両方。Slack以外へは送らず、リダイレクトも追わない〉・`truncate_for_slack`）・`recipients`（送信先の解決）・
 `base`（`Notifier`と`CRAWLER_LABELS`）・全クローラー共通の`crawler`/`webhook_test`だけが`core`に残る。
 **ドメイン固有の通知は各ドメインの`notifier.py`**（`depscan`=依存の検知・`depsops`=Dependabot運用・
 `mcp_server`=トークンの期限前通知、ほか`sla`/`runtimes`/`finding_exceptions`/`github_alerts`/`repo_audit`/
