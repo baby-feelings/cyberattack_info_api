@@ -37,7 +37,7 @@ class TestNotifyCodeFindings:
         assert "重要度: ERROR 2・INFO 1" in message
         assert "ツール: Gitleaks 1・Semgrep 1・Zizmor 1" in message
         assert "重要度: WARNING 1" in message and "ツール: Zizmor 1" in message
-        assert "ダッシュボード" in message
+        assert "?tab=code&sub=scan" in message
 
     def test_unknown_tool_and_severity_do_not_break(self):
         with patch("app.core.notifications.slack.send_slack") as mock_send:

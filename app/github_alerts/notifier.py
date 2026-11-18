@@ -8,7 +8,8 @@ from typing import Any
 
 from app.core.notifications import recipients as recipient_resolver
 from app.core.notifications.base import Notifier
-from app.core.notifications.slack import DASHBOARD_URL, truncate_for_slack
+from app.core.notifications.dashboard_links import CODE_ALERTS
+from app.core.notifications.slack import truncate_for_slack
 
 # Slack に出す最大件数（残りは件数だけ示す）
 _MAX_ITEMS = 10
@@ -54,6 +55,6 @@ class GithubAlertNotifier(Notifier):
             "履歴から読み取れます）　②新しい値を、環境変数・シークレット管理で渡す　"
             "③履歴に残っている場合は、履歴の書き換え（`git filter-repo` 等）も検討する"
             "（無効化が先です）",
-            f">一覧: {DASHBOARD_URL}",
+            f">一覧: {CODE_ALERTS.url()}",
         ]
         return truncate_for_slack("\n".join(lines))

@@ -21,7 +21,11 @@ description: Reactダッシュボード（dashboard/）のアーキテクチャ�
 （`shared/PanelFrame`）として小タブの中身になった（以下の「モーダル」の記述は、パネルと読み替える）。
 **概要タブ**（`components/overview/`）: `OverviewMetric`（値・単位・状態。nullは「不明」で0と区別）・`overviewConfig`
 （指標の一覧・文言・色・移動先。ハードコードはここだけ）・`useOverviewData`（指標ごとに独立取得。運用中のみ）・`OverviewPanel`
-（カードを押すと`navigate`で該当のタブ・小タブへ）。以下は旧構成の経緯。「依存パッケージ」
+（カードを押すと`navigate`で該当のタブ・小タブへ）。
+**直接リンク**: URL の `?tab=<タブのキー>&sub=<小タブのキー>` で、該当のタブ・小タブを開く（`layout/deepLink.ts`の`parseDeepLink`。
+知らない値は無視して概要）。Slack通知・Issueのリンクは、バックエンドの`app/core/notifications/dashboard_links.py`
+（`DashboardTarget`）が作る。**タブ・小タブのキーを変えたら、両方を合わせる**。OAuth復帰（`?depscan_code`）が優先。
+小タブは`sticky top-14`でヘッダーの下に固定（スクロール位置の補正で、画面内の位置が動くのを防ぐ）。以下は旧構成の経緯。「依存パッケージ」
 （`DependenciesModal.tsx`。`GET /api/depscan/dependencies`）も同じ作りで、左のアプリ一覧（`RepoRail`）で
 アプリごとに閲覧し、パッケージ名・版は「検索」ボタン／Enterで確定する（入力のたびには取得しない）。
 取得は`useEffect`の中で非同期に行い、`setState`は完了時（`.then`）だけにする（効果内で同期的に

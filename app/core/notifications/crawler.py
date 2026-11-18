@@ -3,7 +3,7 @@ import re
 
 from app.core.notifications import recipients as recipient_resolver
 from app.core.notifications.base import CRAWLER_LABELS, Notifier
-from app.core.notifications.slack import DASHBOARD_URL
+from app.core.notifications.dashboard_links import crawler_link
 from app.core.types import CrawlerType
 
 # 接続文字列パターン（postgresql:// / sqlite:// 等）をマスク
@@ -44,7 +44,7 @@ class CrawlerSuccessNotifier(Notifier):
             f"{emoji} *{label}更新通知*",
             f">新規追加: *{self._inserted} 件*　更新: {self._updated} 件"
             + (f"　削除: {self._deleted} 件" if self._deleted else ""),
-            f">詳細: {DASHBOARD_URL}",
+            f">詳細: {crawler_link(self._crawler_type)}",
         ]
         return "\n".join(lines)
 

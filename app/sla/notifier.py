@@ -9,7 +9,8 @@ from typing import Any
 
 from app.core.notifications import recipients as recipient_resolver
 from app.core.notifications.base import Notifier
-from app.core.notifications.slack import DASHBOARD_URL, truncate_for_slack
+from app.core.notifications.dashboard_links import DEPS_SLA
+from app.core.notifications.slack import truncate_for_slack
 
 # Slack に出す、期限超過の検知・リポジトリの最大件数（多いと読まれなくなるため。残りは件数だけ示す）
 _MAX_OVERDUE_ITEMS = 10
@@ -74,5 +75,5 @@ class SlaDigestNotifier(Notifier):
             lines += ["", "*リポジトリ別の期限超過*"]
             lines += [f"• `{r['repo_full_name']}`: {r['overdue']}件" for r in repos]
 
-        lines += ["", f">詳細（「依存ライブラリ」タブの「対応状況」）: {DASHBOARD_URL}"]
+        lines += ["", f">詳細（「依存ライブラリ」タブの「対応状況」）: {DEPS_SLA.url()}"]
         return truncate_for_slack("\n".join(lines))

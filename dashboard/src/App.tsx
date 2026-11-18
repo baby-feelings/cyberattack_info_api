@@ -7,14 +7,21 @@ import { TabBar } from './components/layout/TabBar'
 import { TabPanel } from './components/layout/TabPanel'
 import { TAB_DEFINITIONS, type TabKey } from './components/layout/tabs'
 import type { NavTarget } from './components/overview/overviewConfig'
+import { parseDeepLink } from './components/layout/deepLink'
 
 export default function App() {
   // GitHub OAuth コールバックからの復帰（?depscan_code=...）時は DEPSCAN タブを自動選択する
-  const [activeTab, setActiveTab] = useState<TabKey>(() => (
-    new URLSearchParams(window.location.search).has('depscan_code') ? 'dependencies' : 'overview'
-  ))
+  const [initial] = useState(() => {
+    const search = window.location.search
+    // OAuth 復帰は依存ライブラリ。それ以外で URL に ?tab=…&sub=…（Slack 通知などのリンク）があれば、そこを開く
+    if (new URLSearchParams(search).has('depscan_code')) return { tab: 'dependencies' as TabKey, subTab: undefined }
+    return parseDeepLink(search, TAB_DEFINITIONS) ?? { tab: 'overview' as TabKey, subTab: undefined }
+  })
+  const [activeTab, setActiveTab] = useState<TabKey>(initial.tab)
   // タブごとの選択中の小タブ。タブを離れて戻ったときに、直前の小タブへ戻すため、App で持つ（未選択は先頭）
-  const [subTabKeys, setSubTabKeys] = useState<Partial<Record<TabKey, string>>>({})
+  const [subTabKeys, setSubTabKeys] = useState<Partial<Record<TabKey, string>>>(
+    initial.subTab ? { [initial.tab]: initial.subTab } : {},
+  )
   const [settingsOpen, setSettingsOpen] = useState(false)
   // 概要のカードから、該当のタブ・小タブへ移る
   const navigate = ({ tab, subTab }: NavTarget) => {
