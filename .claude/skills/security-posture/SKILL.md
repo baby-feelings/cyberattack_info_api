@@ -142,7 +142,7 @@ tarball方式のCODESCANは現在のツリーしか見えないため、GitHub�
 
 - **対象URL**（`targets.py`）: リポジトリのHomepage欄・Firebase（`.firebaserc`の**全環境**〈開発・本番など。既定が先頭〉のプロジェクトID→`https://<id>.web.app`。既定の1つだけだと本番用のサイトが漏れる。Firestoreの確認先も）・
 
-  GitHub Pages（`has_pages`→`https://<owner>.github.io`）を自動検出し、`EXTERNAL_MONITOR_URLS`（https・カンマ区切り）で追加できる。
+  GitHub Pages（`has_pages`→`https://<owner>.github.io`）を自動検出し、`EXTERNAL_MONITOR_URLS`（https・カンマ区切り。`URL=owner/repo`で所有リポジトリに紐づけると、運用画面にも出る。`.web.app`はFirestoreの確認先も付く）で追加できる（`.firebaserc`に無い本番・このAPI自体・Grafanaなど）。
 
   URLは`normalize_url`でスキーム＋ホストに整える。**自分の所有するドメインのみ**（リポジトリの情報由来か、明示した設定）
 

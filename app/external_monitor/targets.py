@@ -7,11 +7,13 @@
    Firestore の確認先
 3. GitHub Pages（`has_pages` のリポジトリ → `https://<owner>.github.io[/<repo>]`）
 
-設定 `EXTERNAL_MONITOR_URLS`（カンマ区切り）で、足りないものを明示的に追加できる。
+設定 `EXTERNAL_MONITOR_URLS`（カンマ区切り。`URL=owner/repo` で所有リポジトリに紐づけられる）で、
+足りないものを明示的に追加できる。
 https 以外・IP アドレスの直接指定・内部アドレスは、`probes.is_safe_target` が、点検の直前に除く。
 """
 import json
 import logging
+import re
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
@@ -51,9 +53,32 @@ def normalize_url(url: str) -> str | None:
     return f"https://{parts.netloc}"
 
 
-def configured_urls() -> list[str]:
-    """設定 `EXTERNAL_MONITOR_URLS`（カンマ区切り）の URL。"""
-    return [u.strip() for u in settings.EXTERNAL_MONITOR_URLS.split(",") if u.strip()]
+@dataclass(frozen=True)
+class ConfiguredEntry:
+    """設定 `EXTERNAL_MONITOR_URLS` の1件（URL と、紐づける所有リポジトリ〈無ければ None〉）。"""
+
+    url: str
+    repo_full_name: str | None = None
+
+
+_REPO_FULL_NAME = re.compile(r"^[\w.-]+/[\w.-]+$")
+
+
+def parse_configured(raw: str) -> list[ConfiguredEntry]:
+    """設定 `EXTERNAL_MONITOR_URLS`（カンマ区切り）を読む。
+
+    各項目は `URL` または `URL=owner/repo`。リポジトリを付けると、そのリポジトリの所有者の画面
+    （運用画面）に出る（付けないと、管理者の API キーでしか見えない）。形式が違うリポジトリは、
+    付けない（URL だけ、点検する）。
+    """
+    entries: list[ConfiguredEntry] = []
+    for item in raw.split(","):
+        url, _, repo = item.strip().partition("=")
+        url, repo = url.strip(), repo.strip()
+        if not url:
+            continue
+        entries.append(ConfiguredEntry(url, repo if _REPO_FULL_NAME.match(repo) else None))
+    return entries
 
 
 def firebase_project_ids(firebaserc_text: str) -> list[str]:
@@ -101,8 +126,11 @@ def discover_targets(repos: list[dict[str, Any]], token: str) -> list[Target]:
             add(Target(f"https://{owner}.github.io", SOURCE_PAGES, full_name))
         for project in _firebase_projects(GitHubRepo.from_full_name(full_name, token)):
             add(Target(f"https://{project}.web.app", SOURCE_FIREBASE, full_name, project))
-    for url in configured_urls():
-        add(Target(url, SOURCE_CONFIG))
+    for entry in parse_configured(settings.EXTERNAL_MONITOR_URLS):
+        # `<id>.web.app` は Firebase Hosting。Firestore の確認先（プロジェクト ID）も付ける
+        host = urlsplit(entry.url).hostname or ""
+        site_project = host.removesuffix(".web.app") if host.endswith(".web.app") else None
+        add(Target(entry.url, SOURCE_CONFIG, entry.repo_full_name, site_project))
     return list(targets.values())
 
 

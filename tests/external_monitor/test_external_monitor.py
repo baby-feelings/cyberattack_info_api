@@ -387,6 +387,27 @@ class TestTargets:
         assert targets.firebase_project_ids("not json") == []
         assert targets.firebase_project_ids("[]") == []
 
+    def test_parse_configured_entries_with_repository(self):
+        """`URL=owner/repo` で、サイトを所有リポジトリに対応づける（無ければ紐づけない）。"""
+        entries = targets.parse_configured(
+            "https://a.example, https://b.example=u/app, https://c.web.app=u/app,"
+            " https://d.example=bad, ,https://e.example=",
+        )
+        assert [(e.url, e.repo_full_name) for e in entries] == [
+            ("https://a.example", None), ("https://b.example", "u/app"), ("https://c.web.app", "u/app"),
+            ("https://d.example", None), ("https://e.example", None),
+        ]
+
+    def test_configured_web_app_sites_get_the_firestore_check_and_repository(self):
+        with patch("app.external_monitor.targets.GitHubRepo.file_content", side_effect=httpx.HTTPError("404")),              patch("app.external_monitor.targets.settings.EXTERNAL_MONITOR_URLS",
+                   "https://my-proj.web.app=u/app, https://api.example=u/app"):
+            found = {t.url: t for t in targets.discover_targets([], "tok")}
+
+        site = found["https://my-proj.web.app"]
+        assert (site.source, site.repo_full_name, site.firebase_project) == ("config", "u/app", "my-proj")
+        assert found["https://api.example"].repo_full_name == "u/app"
+        assert found["https://api.example"].firebase_project is None
+
     def test_discovers_every_firebase_project_of_a_repository(self):
         repos = [{"full_name": "u/app", "homepage": "", "has_pages": False}]
 
