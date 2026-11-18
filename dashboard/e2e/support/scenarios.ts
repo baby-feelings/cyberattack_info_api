@@ -11,6 +11,8 @@ export const SCENARIOS = [
   { id: 'APP-02', area: 'アプリ全体', title: '5つのタブが切り替わり対応するタブパネルが表示される' },
   { id: 'APP-03', area: 'アプリ全体', title: 'ハンバーガーメニューの開閉（外側クリック・Escapeで閉じる）' },
   { id: 'APP-04', area: 'アプリ全体', title: 'OAuthコールバック（?depscan_code）でDEPSCANタブが自動選択されログインされる' },
+  { id: 'APP-10', area: 'アプリ全体', title: 'URLの ?tab=…&sub=… で、該当のタブ・小タブが直接開く（知らない値は概要）' },
+  { id: 'APP-11', area: 'アプリ全体', title: 'スクロールした状態で小タブ・タブを切り替えても、小タブの画面内の位置が動かない' },
   { id: 'APP-05', area: 'アプリ全体', title: 'OAuth交換コードが無効ならログイン画面のまま' },
   { id: 'APP-06', area: 'アプリ全体', title: 'アクセシビリティツリー（ARIAスナップショット）がタブUIの意味構造を表す' },
   { id: 'APP-09', area: 'アプリ全体', title: '公開情報の小タブ（KEV・OSV）を切り替えられ、他のタブへ移って戻っても選択が残る' },

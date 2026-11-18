@@ -4,6 +4,7 @@ from typing import Any
 
 from app.core.notifications import recipients as recipient_resolver
 from app.core.notifications.base import CRAWLER_LABELS, Notifier
+from app.core.notifications.dashboard_links import DEPS_DEPENDABOT_OPS
 from app.core.notifications.slack import truncate_for_slack
 
 
@@ -47,7 +48,9 @@ class DependabotOpsNotifier(Notifier):
             by_reason = Counter(item["reason"] for item in self._flagged)
             lines.append(f"⚠️ *要確認（{len(self._flagged)}件・{len(by_repo)}リポジトリ）*")
             lines.extend(f"• {reason} {count}件" for reason, count in by_reason.most_common())
-            lines.append("詳細はダッシュボードの「依存ライブラリ」タブの「Dependabot運用」を確認してください。")
+            lines.append(
+                f">詳細（「依存ライブラリ」タブの「Dependabot運用」）: {DEPS_DEPENDABOT_OPS.url()}",
+            )
         return truncate_for_slack("\n".join(lines).rstrip())
 
 

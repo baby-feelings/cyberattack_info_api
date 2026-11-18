@@ -5,7 +5,8 @@
 """
 from app.core.notifications import recipients as recipient_resolver
 from app.core.notifications.base import Notifier
-from app.core.notifications.slack import DASHBOARD_URL, escape_mrkdwn, truncate_for_slack
+from app.core.notifications.dashboard_links import CODE_AUDIT
+from app.core.notifications.slack import escape_mrkdwn, truncate_for_slack
 
 _KIND_LABELS = {"keys": "デプロイキー", "hooks": "Webhook", "collaborators": "共同編集者"}
 _CHANGE_LABELS = {"added": "追加", "removed": "削除"}
@@ -53,5 +54,5 @@ class RepoAuditChangeNotifier(Notifier):
                 )
         if total > shown:
             lines.append(f"…ほか {total - shown}件")
-        lines += ["", f">詳細: {DASHBOARD_URL}"]
+        lines += ["", f">詳細: {CODE_AUDIT.url()}"]
         return truncate_for_slack("\n".join(lines))

@@ -4,6 +4,7 @@ from typing import Any
 
 from app.core.notifications import recipients as recipient_resolver
 from app.core.notifications.base import CRAWLER_LABELS, Notifier
+from app.core.notifications.dashboard_links import CODE_SCAN
 from app.core.notifications.slack import truncate_for_slack
 
 # 重い順（通知の表示順）。ここに無い重要度は末尾に出す
@@ -63,7 +64,7 @@ class CodeFindingsNotifier(Notifier):
             lines.append(f"• 重要度: {_counts_text(severities, _SEVERITY_ORDER)}")
             lines.append(f"• ツール: {_counts_text(tools)}")
             lines.append("")
-        lines.append("詳細はダッシュボードの「コードと設定」タブの「検知」を確認してください。")
+        lines.append(f">詳細（「コードと設定」タブの「検知」）: {CODE_SCAN.url()}")
         return truncate_for_slack("\n".join(lines).rstrip())
 
 

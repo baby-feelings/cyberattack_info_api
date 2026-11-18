@@ -18,7 +18,7 @@ from app.core.findings.finding_format import (
     split_malicious,
 )
 from app.core.findings.issue_filing import IssueReporter
-from app.core.notifications.slack import DASHBOARD_URL
+from app.core.notifications.dashboard_links import DEPS_SCAN
 from app.depscan.models import DependencyFinding
 from app.finding_exceptions.matching import not_excepted
 from app.finding_exceptions.models import KIND_DEPENDENCY
@@ -44,7 +44,7 @@ class DepscanIssueReporter(IssueReporter):
             f"DEPSCAN が依存ライブラリの脆弱性を検知しました（{timestamp}）。\n\n"
             + malicious_section
             + "\n".join(format_package_lines(others))
-            + f"\n\n---\n詳細: {DASHBOARD_URL}"
+            + f"\n\n---\n詳細: {DEPS_SCAN.url()}"
         )
 
     def unresolved_count(self, db: Session, full_name: str) -> int:

@@ -8,7 +8,8 @@ from typing import Any
 
 from app.core.notifications import recipients as recipient_resolver
 from app.core.notifications.base import Notifier
-from app.core.notifications.slack import DASHBOARD_URL, escape_mrkdwn, truncate_for_slack
+from app.core.notifications.dashboard_links import OPS_SITES
+from app.core.notifications.slack import escape_mrkdwn, truncate_for_slack
 
 # Slack に出す最大件数（残りは件数だけ示す）
 _MAX_ITEMS = 15
@@ -45,5 +46,5 @@ class SiteAlertNotifier(Notifier):
             lines.append(f"{icon} `{escape_mrkdwn(item['url'])}` {escape_mrkdwn(item['message'])}")
         if len(ordered) > _MAX_ITEMS:
             lines.append(f"…ほか {len(ordered) - _MAX_ITEMS}件")
-        lines += ["", f">一覧: {DASHBOARD_URL}"]
+        lines += ["", f">一覧: {OPS_SITES.url()}"]
         return truncate_for_slack("\n".join(lines))

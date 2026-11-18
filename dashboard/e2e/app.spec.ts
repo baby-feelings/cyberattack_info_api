@@ -160,3 +160,38 @@ scenario('APP-08', '下部のタブの横幅が均等で、タブバー全体を
   // 隙間なく並び、タブの合計がタブバーの幅に一致する（右側が空かない）
   expect(widths.reduce((sum, w) => sum + w, 0)).toBeCloseTo(list, 0)
 })
+
+scenario('APP-10', 'URLの ?tab=…&sub=… で、該当のタブ・小タブが直接開く（知らない値は概要）', async ({ page }) => {
+  await seedSession(page)
+  await page.goto('/?tab=dependencies&sub=sla')
+  await expect(page.getByRole('tab', { name: '依存ライブラリ', exact: true })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('tab', { name: '対応状況', exact: true })).toHaveAttribute('aria-selected', 'true')
+
+  await page.goto('/?tab=public&sub=osv')
+  await expect(page.getByRole('tab', { name: 'OSV', exact: true })).toHaveAttribute('aria-selected', 'true')
+
+  // 知らないタブは、無視して概要を開く
+  await page.goto('/?tab=nope&sub=sla')
+  await expect(page.getByRole('tab', { name: '概要', exact: true })).toHaveAttribute('aria-selected', 'true')
+})
+
+scenario('APP-11', 'スクロールした状態で小タブ・タブを切り替えても、小タブの画面内の位置が動かない', async ({ page }) => {
+  await seedSession(page)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/?tab=dependencies')
+  await expect(page.getByRole('tab', { name: '検知', exact: true })).toBeVisible()
+
+  const bar = page.getByRole('tablist', { name: '小タブ' })
+  const top = async () => Math.round((await bar.boundingBox())!.y)
+  await page.evaluate(() => window.scrollTo(0, 600))
+  const before = await top()
+
+  await page.getByRole('tab', { name: '対応状況', exact: true }).click()
+  await expect(page.getByRole('tab', { name: '対応状況', exact: true })).toHaveAttribute('aria-selected', 'true')
+  expect(await top()).toBe(before)
+
+  // 別のタブへ移っても、小タブはヘッダーの下に固定されている
+  await openTab(page, 'コードと設定')
+  await expect(page.getByRole('tab', { name: '設定の監査', exact: true })).toBeVisible()
+  expect(await top()).toBe(before)
+})

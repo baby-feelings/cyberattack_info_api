@@ -8,7 +8,8 @@ from typing import Any
 
 from app.core.notifications import recipients as recipient_resolver
 from app.core.notifications.base import CRAWLER_LABELS, Notifier
-from app.core.notifications.slack import DASHBOARD_URL, truncate_for_slack
+from app.core.notifications.dashboard_links import DEPS_RUNTIMES
+from app.core.notifications.slack import truncate_for_slack
 from app.runtimes.status import RECOMMEND_MIN_AGE_DAYS
 
 # 通知の種類ごとの見出し（絵文字つき）。対応が急ぐものほど目立つ絵文字にする
@@ -72,7 +73,7 @@ class RuntimeAlertNotifier(Notifier):
             lines.append(_HEADINGS[kind])
             lines.extend(_describe(a) for a in group)
             lines.append("")
-        lines.append(f">詳細（「依存ライブラリ」タブの「言語・実行環境」）: {DASHBOARD_URL}")
+        lines.append(f">詳細（「依存ライブラリ」タブの「言語・実行環境」）: {DEPS_RUNTIMES.url()}")
         return truncate_for_slack("\n".join(lines))
 
 

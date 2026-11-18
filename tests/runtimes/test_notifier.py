@@ -1,7 +1,6 @@
 """app.runtimes.notifier（言語・実行環境のバージョンの通知）のテスト。"""
 from unittest.mock import patch
 
-from app.runtimes import notifier as runtime_alerts
 from app.runtimes.notifier import RuntimeAlertNotifier, notify_runtime_alerts
 
 _EOL = {
@@ -51,7 +50,8 @@ class TestRuntimeAlertNotifier:
         assert "いまの推奨" not in message
 
     def test_message_links_to_the_dashboard(self):
-        assert runtime_alerts.DASHBOARD_URL in RuntimeAlertNotifier([_EOL]).build_message()
+        # 言語・実行環境の小タブへ、直接開くリンク
+        assert "?tab=dependencies&sub=runtimes" in RuntimeAlertNotifier([_EOL]).build_message()
 
     def test_only_present_kinds_get_a_heading(self):
         message = RuntimeAlertNotifier([_EOL]).build_message()

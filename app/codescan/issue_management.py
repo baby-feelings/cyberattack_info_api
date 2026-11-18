@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.codescan.models import CodeFinding
 from app.core.findings.issue_filing import IssueReporter
-from app.core.notifications.slack import DASHBOARD_URL
+from app.core.notifications.dashboard_links import CODE_SCAN
 from app.finding_exceptions.matching import not_excepted
 from app.finding_exceptions.models import KIND_CODE
 
@@ -64,7 +64,7 @@ class CodescanIssueReporter(IssueReporter):
             f"CODESCAN（Semgrep静的解析）が自アプリのコード脆弱性を検知しました"
             f"（{timestamp}）。\n\n"
             + "\n".join(_format_finding_lines(findings))
-            + f"\n\n---\n詳細: {DASHBOARD_URL}"
+            + f"\n\n---\n詳細: {CODE_SCAN.url()}"
         )
 
     def unresolved_count(self, db: Session, full_name: str) -> int:
