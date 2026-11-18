@@ -1,12 +1,14 @@
 import { expect, scenario } from './support/test'
 
-scenario('HLT-01', '正常時に OK・DB接続正常・本番環境が表示される', async ({ page }) => {
+scenario('HLT-01', '正常時に OK・DB接続正常が表示され、実行環境の行は表示されない', async ({ page }) => {
   await page.goto('/')
 
   await expect(page.getByText('サーバー稼働状況')).toBeVisible()
   await expect(page.getByText('OK', { exact: true })).toBeVisible()
   await expect(page.getByText('正常', { exact: true })).toBeVisible()
-  await expect(page.getByText('本番環境')).toBeVisible()
+  // フッターの「言語・実行環境」に部分一致しないよう、完全一致で確認する
+  await expect(page.getByText('実行環境', { exact: true })).toHaveCount(0)
+  await expect(page.getByText('本番環境', { exact: true })).toHaveCount(0)
   await expect(page.getByText(/最終確認:/)).toBeVisible()
 })
 
@@ -39,11 +41,4 @@ scenario('HLT-04', '再確認ボタンで /health を再取得し状態が更新
 
   await expect(page.getByText('OK', { exact: true })).toBeVisible()
   expect(api.requestsTo('/health')).toHaveLength(callsBeforeRecheck + 1)
-})
-
-scenario('HLT-05', '開発環境の表記（development）が日本語化される', async ({ page, api }) => {
-  api.state.health = { status: 'ok', environment: 'development', db_connected: true }
-  await page.goto('/')
-
-  await expect(page.getByText('開発環境')).toBeVisible()
 })

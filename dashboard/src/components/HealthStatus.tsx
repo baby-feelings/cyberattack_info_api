@@ -1,12 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Activity, Database, Server, RefreshCw, CheckCircle, XCircle } from 'lucide-react'
+import { Activity, Database, RefreshCw, CheckCircle, XCircle } from 'lucide-react'
 import { fetchHealth, type HealthResponse } from '../api/client'
-
-// バックエンドの environment 値（production/development）を日本語表記に変換する
-const ENVIRONMENT_LABELS: Record<string, string> = {
-  production: '本番環境',
-  development: '開発環境',
-}
 
 export function HealthStatus() {
   const [data, setData] = useState<HealthResponse | null>(null)
@@ -30,6 +24,7 @@ export function HealthStatus() {
   useEffect(() => { load() }, [])
 
   const isOk = !error && data?.status === 'ok'
+  const isDbConnected = data?.db_connected ?? false
 
   return (
     <div className="h-full rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg flex flex-col gap-4">
@@ -67,45 +62,27 @@ export function HealthStatus() {
         </span>
       </div>
 
-      {/* 詳細項目 */}
+      {/* 詳細項目（DB 接続） */}
       <div className="flex flex-col gap-2 flex-1">
-        {[
-          {
-            icon: Database,
-            label: 'DB 接続',
-            ok: data?.db_connected ?? false,
-            okText: '正常',
-            ngText: 'エラー',
-          },
-          {
-            icon: Server,
-            label: '実行環境',
-            ok: true,
-            okText: loading ? '—' : (ENVIRONMENT_LABELS[data?.environment ?? ''] ?? data?.environment ?? '—'),
-            ngText: '—',
-          },
-        ].map(({ icon: Icon, label, ok, okText, ngText }) => (
-          <div key={label} className="flex items-center justify-between rounded-xl bg-slate-800/60 px-3 py-2.5">
-            <div className="flex items-center gap-2">
-              <Icon size={14} className="text-slate-500" />
-              <span className="text-sm text-slate-400">{label}</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              {!loading && (
-                ok
-                  ? <CheckCircle size={14} className="text-emerald-400" />
-                  : <XCircle size={14} className="text-red-400" />
-              )}
-              <span className={`text-sm font-medium ${
-                loading ? 'text-slate-600' :
-                label === '実行環境' ? 'text-slate-300' :
-                ok ? 'text-emerald-400' : 'text-red-400'
-              }`}>
-                {loading ? '—' : ok ? okText : ngText}
-              </span>
-            </div>
+        <div className="flex items-center justify-between rounded-xl bg-slate-800/60 px-3 py-2.5">
+          <div className="flex items-center gap-2">
+            <Database size={14} className="text-slate-500" />
+            <span className="text-sm text-slate-400">DB 接続</span>
           </div>
-        ))}
+          <div className="flex items-center gap-1.5">
+            {!loading && (
+              isDbConnected
+                ? <CheckCircle size={14} className="text-emerald-400" />
+                : <XCircle size={14} className="text-red-400" />
+            )}
+            <span className={`text-sm font-medium ${
+              loading ? 'text-slate-600' :
+              isDbConnected ? 'text-emerald-400' : 'text-red-400'
+            }`}>
+              {loading ? '—' : isDbConnected ? '正常' : 'エラー'}
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* 最終確認時刻 */}
