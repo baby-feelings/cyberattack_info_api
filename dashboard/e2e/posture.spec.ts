@@ -77,7 +77,18 @@ scenario('POS-04', 'セルを押すと、その場で、詳細と直し方が開
   await expect(detail).toContainText('無効になっています')
   await expect(detail).toContainText('設定の「セキュリティ」で、シークレットスキャンを有効にする')
 
+  // 詳細は、押したセルの行の、すぐ下に出る（表の下ではない）
+  const cellBox = (await cell.boundingBox())!
+  const detailBox = (await detail.boundingBox())!
+  expect(detailBox.y).toBeGreaterThan(cellBox.y)
+  expect(detailBox.y - cellBox.y).toBeLessThan(120)
+
   await cell.click()
+  await expect(detail).toHaveCount(0)
+
+  // 「閉じる」でも閉じる
+  await cell.click()
+  await detail.getByRole('button', { name: '閉じる' }).click()
   await expect(detail).toHaveCount(0)
 })
 

@@ -42,6 +42,7 @@ export const POSTURE_TEXT = {
     legend: '項目を押すと、詳細と直し方が出ます',
     detail: '詳細',
     fix: '直し方',
+    close: '閉じる',
   },
   alerts: {
     title: 'GitHub のセキュリティアラート',
