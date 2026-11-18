@@ -4,7 +4,6 @@ import { HeaderMenu } from './HeaderMenu'
 import { TabBar } from './TabBar'
 import { TabPanel } from './TabPanel'
 import { TAB_DEFINITIONS } from './tabs'
-import { POSTURE_TAB } from '../posture/postureConfig'
 import { fetchCrawlerLogs } from '../../api/crawlerLogs'
 
 // 「最終取得」の実行履歴の取得は、ダミーへ差し替える
@@ -26,24 +25,24 @@ vi.mock('../depscan/RuntimesPanel', () => ({ RuntimesPanel: () => <div>runtimes-
 vi.mock('../posture/AlertsTab', () => ({
   AlertsTab: ({ kinds }: { kinds: string[] }) => <div>alerts-tab {kinds.join(',')}</div>,
 }))
-vi.mock('../CodescanAuthGate', () => ({ CodescanAuthGate: () => <div>codescan-gate</div> }))
-vi.mock('../posture/PostureAuthGate', () => ({ PostureAuthGate: () => <div>posture-gate</div> }))
+vi.mock('../CodescanPanel', () => ({ CodescanPanel: () => <div>codescan-panel</div> }))
+vi.mock('../posture/SourceTabs', () => ({
+  AuditTab: () => <div>audit-tab</div>,
+  SitesTab: () => <div>sites-tab</div>,
+}))
 
 describe('TAB_DEFINITIONS', () => {
   it('defines the four tabs in display order with unique keys', () => {
-    expect(TAB_DEFINITIONS.map((t) => t.key)).toEqual(['public', 'dependencies', 'codescan', 'posture'])
+    expect(TAB_DEFINITIONS.map((t) => t.key)).toEqual(['public', 'dependencies', 'code', 'ops'])
     expect(new Set(TAB_DEFINITIONS.map((t) => t.key)).size).toBe(4)
   })
 
   it('declares the crawler whose last fetch each tab shows', () => {
-    expect(TAB_DEFINITIONS.map((t) => t.crawlerType)).toEqual(['KEV', 'DEPSCAN', 'CODESCAN', 'GHALERT'])
+    expect(TAB_DEFINITIONS.map((t) => t.crawlerType)).toEqual(['KEV', 'DEPSCAN', 'CODESCAN', 'EXTMON'])
   })
 
-  it('takes the label, title and subtitle of the posture tab from the posture config', () => {
-    const tab = TAB_DEFINITIONS.find((t) => t.key === 'posture')!
-    expect(tab.label).toBe(POSTURE_TAB.label)
-    expect(tab.title).toBe(POSTURE_TAB.title)
-    expect(tab.subtitle).toBe(POSTURE_TAB.subtitle)
+  it('puts the logged-in tabs behind a GitHub login, and the public tab in front of none', () => {
+    expect(TAB_DEFINITIONS.filter((t) => t.login).map((t) => t.key)).toEqual(['dependencies', 'code', 'ops'])
   })
 })
 
@@ -124,6 +123,32 @@ describe('TabPanel', () => {
     expect(screen.getByRole('heading', { name: /DEPSCAN/ })).toBeInTheDocument()
     expect(screen.getByText(/OSV と照合し、悪意あるパッケージ/)).toBeInTheDocument()
     expect(screen.getByText('depscan-scan-view')).toBeInTheDocument()
+  })
+
+  describe('the code and settings tab', () => {
+    const tab = () => TAB_DEFINITIONS.find((t) => t.key === 'code')!
+
+    it('has three sub tabs, and each one shows its own heading and last fetch', () => {
+      const { rerender } = render(<TabPanel tab={tab()} />)
+      expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['検知', 'アラート', '設定の監査'])
+      expect(screen.getByText('codescan-panel')).toBeInTheDocument()
+
+      rerender(<TabPanel tab={tab()} subTabKey="audit" />)
+      expect(screen.getByText('audit-tab')).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: /リポジトリ設定の監査/ })).toBeInTheDocument()
+    })
+
+    it('shows only code and secret alerts in the alerts sub tab', () => {
+      render(<TabPanel tab={tab()} subTabKey="alerts" />)
+      expect(screen.getByText('alerts-tab code,secret')).toBeInTheDocument()
+    })
+  })
+
+  it('shows the external monitoring directly in the ops tab (no sub tabs)', () => {
+    const ops = TAB_DEFINITIONS.find((t) => t.key === 'ops')!
+    render(<TabPanel tab={ops} />)
+    expect(screen.getByText('sites-tab')).toBeInTheDocument()
+    expect(screen.queryByRole('tablist', { name: '小タブ' })).not.toBeInTheDocument()
   })
 
   describe('the dependencies tab (behind the GitHub login gate)', () => {

@@ -17,7 +17,7 @@ scenario('FRS-01', '各タブの見出しに、そのタブのクローラーの
   await page.goto('/')
   await expect(lastFetched(page)).toBeVisible()
   const tabs = [
-    ['KEV', 'KEV'], ['OSV', 'OSV'], ['依存ライブラリ', 'DEPSCAN'], ['CODESCAN', 'CODESCAN'],
+    ['KEV', 'KEV'], ['OSV', 'OSV'], ['依存ライブラリ', 'DEPSCAN'], ['コードと設定', 'CODESCAN'], ['運用', 'EXTMON'],
   ] as const
   for (const [tab, crawlerType] of tabs) {
     if (tab === 'KEV' || tab === 'OSV') await openPublic(page, tab)

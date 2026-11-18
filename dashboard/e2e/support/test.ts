@@ -50,7 +50,7 @@ export async function seedSession(
 }
 
 // 下部固定タブバーのタブを選択する（タブは role=tab・名前＝タブ名）
-export async function openTab(page: Page, name: '公開情報' | '依存ライブラリ' | 'CODESCAN' | 'POSTURE') {
+export async function openTab(page: Page, name: '公開情報' | '依存ライブラリ' | 'コードと設定' | '運用') {
   await page.getByRole('tab', { name, exact: true }).click()
   await expect(page.getByRole('tab', { name, exact: true })).toHaveAttribute('aria-selected', 'true')
 }
@@ -67,6 +67,16 @@ export async function openPublic(page: Page, sub: 'KEV' | 'OSV') {
 export type DependenciesSubTab = '検知' | '対応状況' | 'Dependabot運用' | '依存パッケージ' | '言語・実行環境' | 'アラート'
 export async function openDependencies(page: Page, sub?: DependenciesSubTab) {
   await openTab(page, '依存ライブラリ')
+  if (!sub) return
+  const subTab = page.getByRole('tablist', { name: '小タブ' }).getByRole('tab', { name: sub, exact: true })
+  await subTab.click()
+  await expect(subTab).toHaveAttribute('aria-selected', 'true')
+}
+
+// 「コードと設定」タブを開き、小タブを選ぶ（省略は、先頭の「検知」のまま）
+export type CodeSubTab = '検知' | 'アラート' | '設定の監査'
+export async function openCode(page: Page, sub?: CodeSubTab) {
+  await openTab(page, 'コードと設定')
   if (!sub) return
   const subTab = page.getByRole('tablist', { name: '小タブ' }).getByRole('tab', { name: sub, exact: true })
   await subTab.click()
