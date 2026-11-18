@@ -10,7 +10,7 @@ const bySeverity = (severity: string) => open.filter((f) => f.severity === sever
 async function openCodescan(page: Page) {
   await seedSession(page)
   await page.goto('/')
-  await openTab(page, 'CODESCAN')
+  await openTab(page, 'コードと設定')
   const table = page.getByRole('table', { name: TABLE })
   await expect(table).toBeVisible()
   return table
@@ -18,10 +18,10 @@ async function openCodescan(page: Page) {
 
 scenario('COD-01', '未ログイン時はGitHubログイン案内が表示される', async ({ page, api }) => {
   await page.goto('/')
-  await openTab(page, 'CODESCAN')
+  await openTab(page, 'コードと設定')
 
   await expect(page.getByText('GitHubアカウントでログインしてください')).toBeVisible()
-  await expect(page.getByText('ログインすると、自アプリのコード・ワークフローの診断結果を閲覧できます')).toBeVisible()
+  await expect(page.getByText('ログインすると、自アプリのコード・設定の診断結果と、GitHub のアラート・リポジトリ設定の監査を閲覧できます')).toBeVisible()
   await expect(page.getByRole('link', { name: 'GitHubでログイン' }))
     .toHaveAttribute('href', `${new URL(page.url()).origin}${API_PREFIX}/auth/github/login`)
   expect(api.requestsTo('/api/codescan')).toHaveLength(0)
@@ -130,7 +130,7 @@ scenario('COD-06', '該当なしのとき空状態メッセージが表示され
   api.override('GET', '/api/codescan', () => ({ body: { total: 0, page: 1, per_page: 30, data: [] } }))
   await seedSession(page)
   await page.goto('/')
-  await openTab(page, 'CODESCAN')
+  await openTab(page, 'コードと設定')
 
   await expect(page.getByText('該当するコード脆弱性はありません')).toBeVisible()
   await expect(page.getByRole('table', { name: TABLE })).toHaveCount(0)
@@ -142,7 +142,7 @@ scenario('COD-07', 'DEPSCANとCODESCANでログインセッションが共有さ
   await expect(page.getByText('ログイン中:')).toBeVisible()
 
   // CODESCANタブに切り替えるだけで、再ログインなしに閲覧できる
-  await openTab(page, 'CODESCAN')
+  await openTab(page, 'コードと設定')
   await expect(page.getByText('ログイン中:')).toBeVisible()
   await expect(page.getByRole('table', { name: TABLE })).toBeVisible()
   expect(api.requestsTo('/api/codescan')[0].headers['authorization']).toBe('Bearer exchanged-token')

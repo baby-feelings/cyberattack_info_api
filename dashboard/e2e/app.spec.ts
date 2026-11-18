@@ -17,9 +17,9 @@ scenario('APP-02', '4つのタブが切り替わり対応するタブパネル�
 
   const expectations = [
     { tab: '依存ライブラリ', heading: /DEPSCAN — 自作アプリの依存ライブラリ脆弱性/ },
-    { tab: 'CODESCAN', heading: /CODESCAN — 自アプリのコード脆弱性診断/ },
+    { tab: 'コードと設定', heading: /CODESCAN — 自アプリのコード脆弱性診断/ },
     { tab: '公開情報', heading: /CISA KEV — Known Exploited Vulnerabilities/ },
-    { tab: 'POSTURE', heading: /POSTURE — セキュリティ態勢/ },
+    { tab: '運用', heading: /運用 — 公開サイトの外形監視/ },
   ] as const
 
   for (const { tab, heading } of expectations) {
@@ -104,16 +104,16 @@ scenario('APP-06', 'アクセシビリティツリー（ARIAスナップショ�
     - tablist:
       - tab "公開情報" [selected]
       - tab "依存ライブラリ"
-      - tab "CODESCAN"
-      - tab "POSTURE"
+      - tab "コードと設定"
+      - tab "運用"
   `)
   await openTab(page, '依存ライブラリ')
   await expect(mainTabs).toMatchAriaSnapshot(`
     - tablist:
       - tab "公開情報"
       - tab "依存ライブラリ" [selected]
-      - tab "CODESCAN"
-      - tab "POSTURE"
+      - tab "コードと設定"
+      - tab "運用"
   `)
 
   // タブとタブパネルは aria-controls / aria-labelledby で相互に関連付けられている
@@ -130,8 +130,8 @@ scenario('APP-07', 'モバイル幅でもタブバーとコンテンツが操作
   await page.goto('/')
 
   await expect(page.getByRole('tab', { name: '公開情報', exact: true })).toBeVisible()
-  await openTab(page, 'CODESCAN')
-  await expect(page.getByRole('tabpanel', { name: 'CODESCAN' })).toBeVisible()
+  await openTab(page, 'コードと設定')
+  await expect(page.getByRole('tabpanel', { name: 'コードと設定', exact: true })).toBeVisible()
 
   // 横スクロールがページ全体に発生しない（テーブルは自身のコンテナ内でスクロールする）
   const overflow = await page.evaluate(

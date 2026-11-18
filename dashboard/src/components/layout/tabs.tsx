@@ -3,19 +3,19 @@ import { Shield, Bug, ScanSearch, ShieldCheck } from 'lucide-react'
 import type { GithubSession } from '../../hooks/useGithubSession'
 import { KevPanel } from '../KevPanel'
 import { OsvPanel } from '../OsvPanel'
+import { CodescanPanel } from '../CodescanPanel'
 import { DepscanScanView } from '../DepscanScanView'
 import { SlaPanel } from '../depscan/SlaPanel'
 import { DependabotOpsPanel } from '../depscan/DependabotOpsPanel'
 import { DependenciesPanel } from '../depscan/DependenciesPanel'
 import { RuntimesPanel } from '../depscan/RuntimesPanel'
 import { AlertsTab } from '../posture/AlertsTab'
-import { CodescanAuthGate } from '../CodescanAuthGate'
-import { PostureAuthGate } from '../posture/PostureAuthGate'
-import { ALERT_KIND_GROUPS, POSTURE_TAB } from '../posture/postureConfig'
+import { AuditTab, SitesTab } from '../posture/SourceTabs'
+import { ALERT_KIND_GROUPS } from '../posture/postureConfig'
 import type { FetchedCrawlerType } from '../freshness/freshnessConfig'
 
 // タブ種別
-export type TabKey = 'public' | 'dependencies' | 'codescan' | 'posture'
+export type TabKey = 'public' | 'dependencies' | 'code' | 'ops'
 
 // ログイン後に本体へ渡す文脈（セッションと、セッション失効時に呼ぶログアウト）
 export interface PanelContext {
@@ -122,26 +122,51 @@ export const TAB_DEFINITIONS: TabDefinition[] = [
     ],
   },
   {
-    key: 'codescan',
-    label: 'CODESCAN',
+    key: 'code',
+    label: 'コードと設定',
     crawlerType: 'CODESCAN',
     icon: (size) => <ScanSearch size={size} className="text-cyan-400" />,
-    title: 'CODESCAN — 自アプリのコード脆弱性診断',
-    subtitle: 'GitHub上の自作リポジトリのソースコードを静的解析し、GitHub Actions・Firebase・Dockerの設定も診断',
+    title: 'コードと設定 — コードの診断・GitHub のアラート・リポジトリ設定の監査',
+    subtitle: 'GitHub上の自作リポジトリのソースコード・設定を診断し、GitHub のセキュリティアラートとリポジトリ設定の監査も確認',
     borderColor: 'border-cyan-800/40',
-    // GitHub ログイン後、CODESCAN パネル（サマリー・一覧を内包）を表示
-    panel: <CodescanAuthGate />,
+    panel: null,
+    login: { description: 'ログインすると、自アプリのコード・設定の診断結果と、GitHub のアラート・リポジトリ設定の監査を閲覧できます' },
+    subTabs: [
+      {
+        key: 'scan',
+        label: '検知',
+        crawlerType: 'CODESCAN',
+        title: 'CODESCAN — 自アプリのコード脆弱性診断',
+        subtitle: 'GitHub上の自作リポジトリのソースコードを静的解析し、GitHub Actions・Firebase・Dockerの設定も診断',
+        panel: ({ session }) => <CodescanPanel authToken={session.token} />,
+      },
+      {
+        key: 'alerts',
+        label: 'アラート',
+        crawlerType: 'GHALERT',
+        title: 'コードのアラート — コードスキャン・シークレット',
+        subtitle: 'GitHub が検知した、コードの脆弱性と、漏えいしたシークレットのアラート',
+        panel: ({ session }) => <AlertsTab authToken={session.token} kinds={ALERT_KIND_GROUPS.code} />,
+      },
+      {
+        key: 'audit',
+        label: '設定の監査',
+        crawlerType: 'REPOAUDIT',
+        title: 'リポジトリ設定の監査',
+        subtitle: 'リポジトリ × 点検項目。項目を押すと、詳細と直し方が出ます',
+        panel: ({ session }) => <AuditTab authToken={session.token} />,
+      },
+    ],
   },
   {
-    key: 'posture',
-    label: POSTURE_TAB.label,
-    // 見出しの「最終取得」は、アラートの取り込み。設定の監査・外形監視は、各セクションに出す
-    crawlerType: 'GHALERT',
+    key: 'ops',
+    label: '運用',
+    crawlerType: 'EXTMON',
     icon: (size) => <ShieldCheck size={size} className="text-violet-400" />,
-    title: POSTURE_TAB.title,
-    subtitle: POSTURE_TAB.subtitle,
+    title: '運用 — 公開サイトの外形監視',
+    subtitle: '公開サイトの TLS 証明書の期限・セキュリティヘッダー・露出ファイルなどを監視（本人所有のリポジトリ）',
     borderColor: 'border-violet-800/40',
-    // GitHub ログイン後、アラート・設定の監査・外形監視を表示
-    panel: <PostureAuthGate />,
+    login: { description: 'ログインすると、自分のリポジトリの公開サイトの外形監視の結果を閲覧できます' },
+    panel: ({ session }) => <SitesTab authToken={session.token} />,
   },
 ]

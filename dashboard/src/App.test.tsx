@@ -2,7 +2,6 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
-import { POSTURE_TAB } from './components/posture/postureConfig'
 
 vi.mock('./components/HealthStatus', () => ({
   HealthStatus: () => <div data-testid="health-status" />,
@@ -21,11 +20,15 @@ vi.mock('./components/shared/GithubLoginGate', () => ({
 vi.mock('./components/DepscanScanView', () => ({
   DepscanScanView: () => <div data-testid="depscan-auth-gate" />,
 }))
-vi.mock('./components/CodescanAuthGate', () => ({
-  CodescanAuthGate: () => <div data-testid="codescan-auth-gate" />,
+vi.mock('./components/CodescanPanel', () => ({
+  CodescanPanel: () => <div data-testid="codescan-panel" />,
 }))
-vi.mock('./components/posture/PostureAuthGate', () => ({
-  PostureAuthGate: () => <div data-testid="posture-auth-gate" />,
+vi.mock('./components/posture/SourceTabs', () => ({
+  AuditTab: () => <div data-testid="audit-tab" />,
+  SitesTab: () => <div data-testid="sites-tab" />,
+}))
+vi.mock('./components/posture/AlertsTab', () => ({
+  AlertsTab: () => <div data-testid="alerts-tab" />,
 }))
 vi.mock('./components/SettingsPanel', () => ({
   SettingsPanel: ({ onClose }: { onClose: () => void }) => (
@@ -69,8 +72,11 @@ describe('App', () => {
     await user.click(screen.getByRole('tab', { name: /依存ライブラリ/ }))
     expect(screen.getByTestId('depscan-auth-gate')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('tab', { name: new RegExp(POSTURE_TAB.label) }))
-    expect(screen.getByTestId('posture-auth-gate')).toBeInTheDocument()
+    await user.click(screen.getByRole('tab', { name: /コードと設定/ }))
+    expect(screen.getByTestId('codescan-panel')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: /^運用$/ }))
+    expect(screen.getByTestId('sites-tab')).toBeInTheDocument()
   })
 
   it('always renders HealthStatus regardless of the active tab', async () => {

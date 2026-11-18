@@ -3,15 +3,6 @@
 
 import type { AuditStatusKind } from './model/AuditStatus'
 
-// ── タブ ───────────────────────────────────────────────────────
-
-// タブの表記。他のタブ（KEV・OSV・DEPSCAN・CODESCAN）と同じく、英語の名前＋日本語の説明にそろえる
-export const POSTURE_TAB = {
-  label: 'POSTURE',
-  title: 'POSTURE — セキュリティ態勢',
-  subtitle: 'GitHub のセキュリティアラート・リポジトリ設定の監査・公開サイトの外形監視（本人所有のリポジトリ）',
-}
-
 // ── 文言 ───────────────────────────────────────────────────────
 
 export const POSTURE_TEXT = {
