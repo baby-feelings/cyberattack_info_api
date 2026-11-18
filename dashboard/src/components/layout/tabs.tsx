@@ -73,37 +73,6 @@ export const TAB_DEFINITIONS: TabDefinition[] = [
     panel: ({ session, navigate }) => <OverviewPanel authToken={session.token} onNavigate={navigate} />,
   },
   {
-    key: 'public',
-    label: '公開情報',
-    // 見出しの最終取得は、選択中の小タブのものを使う
-    crawlerType: 'KEV',
-    icon: (size) => <Shield size={size} className="text-blue-400" />,
-    title: '公開情報 — 世界の公開された脆弱性',
-    subtitle: 'CISA KEV（悪用が確認された脆弱性）と OSV（オープンソースの脆弱性）',
-    borderColor: 'border-blue-800/40',
-    panel: null,
-    subTabs: [
-      {
-        key: 'kev',
-        label: 'KEV',
-        crawlerType: 'KEV',
-        title: 'CISA KEV — Known Exploited Vulnerabilities',
-        subtitle: '実際に悪用が確認された脆弱性（米 CISA 公式カタログ）',
-        // KEV パネル（サマリー・チャート・一覧を内包。OSV と同じ構成）
-        panel: <KevPanel />,
-      },
-      {
-        key: 'osv',
-        label: 'OSV',
-        crawlerType: 'OSV',
-        title: 'OSV — Open Source Vulnerabilities',
-        subtitle: 'オープンソースライブラリの脆弱性（過去 6 ヶ月）',
-        // OSV パネル（サマリーカード・チャート・一覧を内包）
-        panel: <OsvPanel />,
-      },
-    ],
-  },
-  {
     key: 'dependencies',
     label: '依存ライブラリ',
     crawlerType: 'DEPSCAN',
@@ -183,5 +152,36 @@ export const TAB_DEFINITIONS: TabDefinition[] = [
     borderColor: 'border-violet-800/40',
     login: { description: 'ログインすると、自分のリポジトリの公開サイトの外形監視の結果を閲覧できます' },
     panel: ({ session }) => <SitesTab authToken={session.token} />,
+  },
+  {
+    key: 'public',
+    label: '公開情報',
+    // 見出しの最終取得は、選択中の小タブのものを使う
+    crawlerType: 'KEV',
+    icon: (size) => <Shield size={size} className="text-blue-400" />,
+    title: '公開情報 — 世界の公開された脆弱性',
+    subtitle: 'CISA KEV（悪用が確認された脆弱性）と OSV（オープンソースの脆弱性）',
+    borderColor: 'border-blue-800/40',
+    panel: null,
+    subTabs: [
+      {
+        key: 'kev',
+        label: 'KEV',
+        crawlerType: 'KEV',
+        title: 'CISA KEV — Known Exploited Vulnerabilities',
+        subtitle: '実際に悪用が確認された脆弱性（米 CISA 公式カタログ）',
+        // KEV パネル（サマリー・チャート・一覧を内包。OSV と同じ構成）
+        panel: <KevPanel />,
+      },
+      {
+        key: 'osv',
+        label: 'OSV',
+        crawlerType: 'OSV',
+        title: 'OSV — Open Source Vulnerabilities',
+        subtitle: 'オープンソースライブラリの脆弱性（過去 6 ヶ月）',
+        // OSV パネル（サマリーカード・チャート・一覧を内包）
+        panel: <OsvPanel />,
+      },
+    ],
   },
 ]

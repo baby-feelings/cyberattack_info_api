@@ -33,12 +33,12 @@ vi.mock('../posture/SourceTabs', () => ({
 
 describe('TAB_DEFINITIONS', () => {
   it('defines the five tabs in display order with unique keys', () => {
-    expect(TAB_DEFINITIONS.map((t) => t.key)).toEqual(['overview', 'public', 'dependencies', 'code', 'ops'])
+    expect(TAB_DEFINITIONS.map((t) => t.key)).toEqual(['overview', 'dependencies', 'code', 'ops', 'public'])
     expect(new Set(TAB_DEFINITIONS.map((t) => t.key)).size).toBe(5)
   })
 
   it('declares the crawler whose last fetch each tab shows', () => {
-    expect(TAB_DEFINITIONS.map((t) => t.crawlerType)).toEqual(['DEPSCAN', 'KEV', 'DEPSCAN', 'CODESCAN', 'EXTMON'])
+    expect(TAB_DEFINITIONS.map((t) => t.crawlerType)).toEqual(['DEPSCAN', 'DEPSCAN', 'CODESCAN', 'EXTMON', 'KEV'])
   })
 
   it('puts the logged-in tabs behind a GitHub login, and the public tab in front of none', () => {
