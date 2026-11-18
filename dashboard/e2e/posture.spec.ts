@@ -40,6 +40,8 @@ scenario('POS-02', '見出しに、未対応のアラート・設定の達成率
   await expect(statValue(page, 'アラート（未対応）')).toContainText(String(openAlerts))
   await expect(statValue(page, '設定の達成率（%）')).toContainText(String(rate))
   await expect(statValue(page, '外形監視の問題')).toContainText(String(siteIssues))
+  // 外形監視の表には、取得元の列がある
+  await expect(sites(page).getByRole('columnheader', { name: '取得元' })).toBeVisible()
 })
 
 scenario('POS-03', 'マトリクスの列の見出しが、APIの点検項目名で、状態が記号と文言で示される', async ({ page }) => {
@@ -120,7 +122,8 @@ scenario('POS-08', '1つの取得が失敗しても、ほかは表示され、�
   api.override('GET', '/api/github-alerts', () => (down ? { status: 500, body: null } : undefined))
   await openPosture(page)
 
-  await expect(page.getByRole('alert')).toContainText('API error 500')
+  await expect(page.getByRole('alert')).toContainText('読み込めませんでした')
+  await expect(page.getByRole('alert')).not.toContainText('API error')
   await expect(matrix(page)).toBeVisible()
   await expect(sites(page)).toBeVisible()
   // 取得できなかった元は、0 ではなく、名前で示す

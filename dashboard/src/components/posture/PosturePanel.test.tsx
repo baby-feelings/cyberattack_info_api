@@ -55,7 +55,7 @@ describe('PosturePanel', () => {
     alerts.mockRejectedValueOnce(new Error('API error 500: /api/github-alerts'))
     render(<PosturePanel authToken="tok" />)
 
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('API error 500: /api/github-alerts'))
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(POSTURE_TEXT.loadFailed))
     expect(screen.getByRole('table', { name: POSTURE_TEXT.audit.title })).toBeInTheDocument()
     // 取得できなかった元は、集計の帯の下に、名前で示す（0 件とは、区別する）
     expect(screen.getByText(`${POSTURE_TEXT.summary.unknownPrefix} ${POSTURE_TEXT.sources.alerts}`)).toBeInTheDocument()

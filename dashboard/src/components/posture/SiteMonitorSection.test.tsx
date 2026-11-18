@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { POSTURE_TEXT } from './postureConfig'
+import { POSTURE_TEXT, SITE_SOURCE_LABELS } from './postureConfig'
 import { SiteMonitorSection } from './SiteMonitorSection'
 import { failed, loading, ready, sites } from './testFixtures'
 
@@ -21,6 +21,18 @@ describe('SiteMonitorSection', () => {
     expect(ok).toHaveTextContent(POSTURE_TEXT.sites.noFindings)
   })
 
+  it('shows where each site came from, with an unknown source shown as it is', () => {
+    const [site] = sites()
+    const other = Object.assign(Object.create(Object.getPrototypeOf(site)), site, { url: 'https://x.example', source: 'new-source' })
+    render(<SiteMonitorSection source={ready([site, other])} onRetry={vi.fn()} />)
+
+    expect(within(table()).getByRole('columnheader', { name: POSTURE_TEXT.sites.columns.source })).toBeInTheDocument()
+    const first = within(table()).getByText('https://bad.example').closest('tr') as HTMLElement
+    expect(first).toHaveTextContent(SITE_SOURCE_LABELS.homepage)
+    const second = within(table()).getByText('https://x.example').closest('tr') as HTMLElement
+    expect(second).toHaveTextContent('new-source')
+  })
+
   it('shows a dash when the TLS days could not be read', () => {
     const [site] = sites()
     const unknown = Object.assign(Object.create(Object.getPrototypeOf(site)), site, { tlsDaysLeft: null })
@@ -38,7 +50,8 @@ describe('SiteMonitorSection', () => {
     const user = userEvent.setup()
     const onRetry = vi.fn()
     render(<SiteMonitorSection source={failed('API error 500: /api/site-monitor')} onRetry={onRetry} />)
-    expect(screen.getByRole('alert')).toHaveTextContent('API error 500: /api/site-monitor')
+    expect(screen.getByRole('alert')).toHaveTextContent(POSTURE_TEXT.loadFailed)
+    expect(screen.getByRole('alert')).not.toHaveTextContent('API error')
     await user.click(screen.getByRole('button', { name: POSTURE_TEXT.retry }))
     expect(onRetry).toHaveBeenCalledTimes(1)
   })

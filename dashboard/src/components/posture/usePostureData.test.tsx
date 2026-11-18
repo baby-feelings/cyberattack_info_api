@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, waitFor, act } from '@testing-library/react'
-import { fetchGithubAlerts, fetchRepoAudit, fetchSiteMonitor } from '../../api/client'
+import { fetchGithubAlerts, fetchRepoAudit, fetchSiteMonitor, UnauthorizedError } from '../../api/client'
 import { AlertList } from './model/AlertList'
 import { AuditMatrix } from './model/AuditMatrix'
 import { SiteCheck } from './model/SiteCheck'
@@ -53,9 +53,19 @@ describe('usePostureData', () => {
     const { result } = renderHook(() => usePostureData('tok', 'active'))
 
     await waitFor(() => expect(result.current.alerts.status).toBe('error'))
-    expect(result.current.alerts).toEqual({ status: 'error', message: 'API error 500: /api/github-alerts' })
+    expect(result.current.alerts).toEqual({
+      status: 'error', message: 'API error 500: /api/github-alerts', unauthorized: false,
+    })
     await waitFor(() => expect(result.current.audit.status).toBe('ready'))
     expect(result.current.sites.status).toBe('ready')
+  })
+
+  it('tells an expired or revoked session (401) apart from other failures', async () => {
+    audit.mockRejectedValue(new UnauthorizedError('Session token is invalid or expired'))
+    const { result } = renderHook(() => usePostureData('tok', 'active'))
+
+    await waitFor(() => expect(result.current.audit.status).toBe('error'))
+    expect(result.current.audit).toMatchObject({ status: 'error', unauthorized: true })
   })
 
   it('reloads only the requested source', async () => {

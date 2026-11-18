@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
-  fetchGithubAlerts, fetchRepoAudit, fetchSiteMonitor, type OperatingStatus,
+  fetchGithubAlerts, fetchRepoAudit, fetchSiteMonitor, UnauthorizedError, type OperatingStatus,
 } from '../../api/client'
 import { AlertList } from './model/AlertList'
 import { AuditMatrix } from './model/AuditMatrix'
@@ -11,7 +11,8 @@ import { POSTURE_TEXT } from './postureConfig'
 export type Source<T> =
   | { status: 'loading' }
   | { status: 'ready'; value: T }
-  | { status: 'error'; message: string }
+  // message は、API のエラー文（画面には出さず、詳細として添える）。unauthorized は、セッションが無効・期限切れ（401）
+  | { status: 'error'; message: string; unauthorized: boolean }
 
 export type PostureSourceKey = 'audit' | 'alerts' | 'sites'
 
@@ -40,7 +41,8 @@ function useSource<T>(load: Loader<T>, authToken: string, operating: OperatingSt
       .then((value) => { if (!cancelled) setResult({ key, source: { status: 'ready', value } }) })
       .catch((error: unknown) => {
         const message = error instanceof Error ? error.message : POSTURE_TEXT.fetchFailed
-        if (!cancelled) setResult({ key, source: { status: 'error', message } })
+        const unauthorized = error instanceof UnauthorizedError
+        if (!cancelled) setResult({ key, source: { status: 'error', message, unauthorized } })
       })
     return () => { cancelled = true }
   }, [load, authToken, operating, key])

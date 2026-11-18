@@ -9,7 +9,11 @@ import type { Source } from './usePostureData'
 
 export const ready = <T,>(value: T): Source<T> => ({ status: 'ready', value })
 export const loading = <T,>(): Source<T> => ({ status: 'loading' })
-export const failed = <T,>(message = 'API error 500'): Source<T> => ({ status: 'error', message })
+export const failed = <T,>(message = 'API error 500'): Source<T> =>
+  ({ status: 'error', message, unauthorized: false })
+// セッションが無効・期限切れ（401）で、取得できなかった
+export const unauthorized = <T,>(): Source<T> =>
+  ({ status: 'error', message: 'Session token is invalid or expired', unauthorized: true })
 
 const check = (key: string, label: string, status: string, detail = '', fix = ''): AuditCheckOut =>
   ({ key, label, status, weight: 1, detail, fix })

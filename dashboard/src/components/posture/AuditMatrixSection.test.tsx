@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { AuditMatrixSection } from './AuditMatrixSection'
 import { AUDIT_STATUS_VIEW, POSTURE_TEXT } from './postureConfig'
 import { AuditMatrix } from './model/AuditMatrix'
-import { auditMatrix, failed, loading, ready } from './testFixtures'
+import { auditMatrix, failed, loading, ready, unauthorized } from './testFixtures'
 
 // 最終取得は、API（クローラーのログ）を読むため、ここでは、描かない
 vi.mock('../freshness/LastFetched', () => ({ LastFetched: () => null }))
@@ -91,14 +91,26 @@ describe('AuditMatrixSection', () => {
     expect(within(table()).getByText('owner/alpha')).toBeInTheDocument()
   })
 
-  it('shows the reason and a retry button when loading failed', async () => {
+  it('shows a message from the config and a retry button when loading failed, without the raw error text', async () => {
     const user = userEvent.setup()
     const onRetry = vi.fn()
     render(<AuditMatrixSection source={failed('API error 500: /api/repo-audit')} onRetry={onRetry} />)
 
-    expect(screen.getByRole('alert')).toHaveTextContent('API error 500: /api/repo-audit')
+    const alert = screen.getByRole('alert')
+    expect(alert).toHaveTextContent(POSTURE_TEXT.loadFailed)
+    expect(alert).not.toHaveTextContent('API error')           // 内部のパスを、画面に出さない
+    expect(alert).toHaveAttribute('title', 'API error 500: /api/repo-audit')   // 詳細は、ホバーで読める
     await user.click(screen.getByRole('button', { name: POSTURE_TEXT.retry }))
     expect(onRetry).toHaveBeenCalledTimes(1)
+  })
+
+  it('asks to log in again, with no retry button, when the session is invalid or expired', () => {
+    render(<AuditMatrixSection source={unauthorized()} onRetry={vi.fn()} />)
+
+    expect(screen.getByRole('alert')).toHaveTextContent(POSTURE_TEXT.sessionExpired)
+    expect(screen.getByRole('link', { name: POSTURE_TEXT.relogin })).toHaveAttribute('href')
+    // 同じ（無効な）トークンで、再試行しても、必ず失敗するため、再試行は出さない
+    expect(screen.queryByRole('button', { name: POSTURE_TEXT.retry })).not.toBeInTheDocument()
   })
 
   it('shows a loading state', () => {

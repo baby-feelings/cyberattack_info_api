@@ -1,4 +1,5 @@
 import { useId, type ReactNode } from 'react'
+import { githubLoginUrl } from '../../api/client'
 import { LastFetched } from '../freshness/LastFetched'
 import type { FetchedCrawlerType } from '../freshness/freshnessConfig'
 import { POSTURE_TEXT } from './postureConfig'
@@ -27,14 +28,30 @@ export function PostureSection<T>({ title, crawlerType, source, onRetry, childre
       )}
 
       {source.status === 'error' && (
-        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">
-          <span>{POSTURE_TEXT.loadFailed}: {source.message}</span>
-          <button
-            onClick={onRetry}
-            className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors"
-          >
-            {POSTURE_TEXT.retry}
-          </button>
+        // 詳細（API のパスなど）は、画面に出さず、ホバーで読めるよう title に置く
+        <div role="alert" title={source.message} className="flex flex-wrap items-center gap-3 rounded-lg border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">
+          {source.unauthorized ? (
+            // セッションが無効・期限切れ: 同じトークンでの再試行は、必ず失敗するため、再ログインを案内する
+            <>
+              <span>{POSTURE_TEXT.sessionExpired}</span>
+              <a
+                href={githubLoginUrl()}
+                className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors"
+              >
+                {POSTURE_TEXT.relogin}
+              </a>
+            </>
+          ) : (
+            <>
+              <span>{POSTURE_TEXT.loadFailed}</span>
+              <button
+                onClick={onRetry}
+                className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors"
+              >
+                {POSTURE_TEXT.retry}
+              </button>
+            </>
+          )}
         </div>
       )}
 

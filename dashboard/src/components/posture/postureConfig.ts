@@ -19,6 +19,9 @@ export const POSTURE_TEXT = {
   fetchFailed: '取得できませんでした',
   loginDescription: 'ログインすると、自分のリポジトリのアラート・設定の監査・外形監視の結果を閲覧できます',
   retry: '再試行',
+  // セッションが無効・期限切れのとき。同じトークンで再試行しても失敗するため、再ログインを案内する
+  sessionExpired: 'ログインの有効期限が切れました。もう一度ログインしてください。',
+  relogin: 'GitHubで再ログイン',
   loadFailed: '読み込めませんでした',
   loading: '読み込み中',
   all: 'すべて',
@@ -55,7 +58,7 @@ export const POSTURE_TEXT = {
   sites: {
     title: '公開サイトの外形監視',
     empty: '外形監視の結果がありません。',
-    columns: { url: 'URL', tls: 'TLS 残日数', findings: '指摘' },
+    columns: { url: 'URL', source: '取得元', tls: 'TLS 残日数', findings: '指摘' },
     tlsUnit: '日',
     noFindings: '問題なし',
   },
@@ -103,4 +106,10 @@ export const AUDIT_STATUS_VIEW: Record<AuditStatusKind, { label: string; glyph: 
   ng: { label: '不合格', glyph: '✕', cls: 'bg-red-950 text-red-300 border-red-800' },
   unavailable: { label: '取得不可', glyph: '－', cls: 'bg-slate-800 text-slate-400 border-slate-700' },
   not_enforceable: { label: '強制できない', glyph: '－', cls: 'bg-slate-800 text-slate-400 border-slate-700' },
+}
+
+// 外形監視の取得元（API の `source`）の表示名。未知の値は、そのまま出す
+export const SITE_SOURCE_LABELS: Record<string, string> = {
+  homepage: 'リポジトリのホームページ',
+  config: '設定で指定',
 }
