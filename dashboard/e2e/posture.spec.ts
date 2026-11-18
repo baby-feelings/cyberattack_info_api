@@ -105,7 +105,7 @@ scenario('POS-05', '「改善が必要なものだけ」の切り替えと、リ
   await expect(matrix(page).getByRole('rowheader', { name: 'baby-feelings/app-one' })).toBeVisible()
 
   await page.getByRole('searchbox', { name: 'リポジトリ名で検索' }).fill('STOPPED')
-  await expect(matrix(page).getByRole('rowheader')).toHaveText([STOPPED])
+  await expect(matrix(page).getByRole('rowheader')).toHaveText([STOPPED], { useInnerText: true })
 })
 
 scenario('POS-06', 'コードのアラートを、重要度の順に並べ、種類で絞り込める（Dependabot は、依存ライブラリのタブに出る）', async ({ page }) => {
@@ -177,7 +177,7 @@ scenario('POS-09', '運用中と運用停止中が別の区画に分かれ、運
   await expect(toggle).toHaveAttribute('aria-expanded', 'true')
   await expect(matrix(page)).toHaveCount(2)
   const stopped = page.getByRole('region', { name: '運用停止中' })
-  await expect(stopped.getByRole('rowheader')).toHaveText([STOPPED])
+  await expect(stopped.getByRole('rowheader')).toHaveText([STOPPED], { useInnerText: true })
   expect(api.lastQuery('/api/repo-audit')?.get('operating')).toBe('inactive')
 
   // 閉じると、運用停止中の区画は消える（運用中の区画は残る）
@@ -192,7 +192,7 @@ scenario('POS-09', '運用中と運用停止中が別の区画に分かれ、運
   await expect(page.getByRole('region', { name: '運用停止中' })).toContainText('app-stopped.example')
 })
 
-scenario('POS-10', 'スマホ幅でも、ページが横にはみ出さず、マトリクスが横スクロールし、リポジトリ名の列が固定される', async ({ page }) => {
+scenario('POS-10', 'スマホ幅でも、ページが横にはみ出さず、マトリクスが横スクロールし、リポジトリ名の列は固定されない（他の項目が隠れるため）', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 })
   await openCodeLoggedIn(page, '設定の監査')
   await expect(matrix(page)).toBeVisible()
@@ -206,9 +206,9 @@ scenario('POS-10', 'スマホ幅でも、ページが横にはみ出さず、マ
   const overflows = await scroller.evaluate((el) => el.scrollWidth > el.clientWidth)
   expect(overflows).toBe(true)
 
-  // リポジトリ名の列は、横にスクロールしても、固定される
+  // スマホ幅では、リポジトリ名の列を固定しない（広すぎて、他の項目が見えなくなるため）
   const rowHeader = matrix(page).getByRole('rowheader').first()
-  await expect(rowHeader).toHaveCSS('position', 'sticky')
+  await expect(rowHeader).toHaveCSS('position', 'static')
 })
 
 scenario('POS-11', 'データが0件のとき、次の行動つきの空の状態が表示される', async ({ page, api }) => {

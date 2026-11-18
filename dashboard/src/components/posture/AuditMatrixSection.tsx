@@ -67,12 +67,12 @@ function AuditMatrixView({ matrix }: { matrix: AuditMatrix }) {
           {onlyIssues && !query.trim() ? POSTURE_TEXT.audit.noIssues : POSTURE_TEXT.audit.noMatch}
         </p>
       ) : (
-        // スマホ幅では、表を横にスクロールし、リポジトリ名の列を固定する
+        // 表は横にスクロールできる。リポジトリ名の列の固定は、PC 幅（sm 以上）だけ（スマホ幅では他の項目が隠れるため）
         <div className="relative overflow-x-auto">
           <table aria-label={POSTURE_TEXT.audit.title} className="min-w-full text-sm border-separate border-spacing-0">
             <thead>
               <tr>
-                <th scope="col" className="sticky left-0 z-10 bg-slate-900 px-3 py-2 text-left text-xs font-medium text-slate-400 border-b border-slate-800">
+                <th scope="col" className="sm:sticky sm:left-0 sm:z-10 bg-slate-900 px-3 py-2 text-left text-xs font-medium text-slate-400 border-b border-slate-800">
                   {POSTURE_TEXT.audit.repoColumn}
                 </th>
                 {columns.map((column) => (
@@ -86,8 +86,10 @@ function AuditMatrixView({ matrix }: { matrix: AuditMatrix }) {
               {rows.map((audit) => (
                 <Fragment key={audit.repo}>
                 <tr>
-                  <th scope="row" className="sticky left-0 z-10 bg-slate-900 px-3 py-2 text-left font-medium text-slate-200 whitespace-nowrap border-b border-slate-800">
-                    {audit.repo}
+                  <th scope="row" aria-label={audit.repo} className="sm:sticky sm:left-0 sm:z-10 bg-slate-900 px-3 py-2 text-left font-medium text-slate-200 whitespace-nowrap border-b border-slate-800">
+                    {/* スマホ幅では所有者名を省き、列を狭くして他の項目を見やすくする */}
+                    <span className="sm:hidden" aria-hidden="true">{audit.repo.split('/')[1] ?? audit.repo}</span>
+                    <span className="hidden sm:inline" aria-hidden="true">{audit.repo}</span>
                   </th>
                   {columns.map((column) => {
                     const check = audit.checkOf(column.key)
