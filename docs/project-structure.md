@@ -61,7 +61,7 @@ cyberattack_info_api/
 │                           # TabBar/TabPanel/HeaderMenu は components/layout/、ページ送りは shared/TableControls）（KEV・OSV（Pub 含む 10 エコシステム）・
 │                           # DEPSCAN〈GitHub ログイン必須。Dependabot運用状況＝DEPSOPS の判定履歴も統合〉・
 │                           # CODESCAN〈GitHub ログイン必須。DEPSCANとセッション共有。CVSSベストエフォート
-│                           # 推定値・検知ツールバッジを表示〉を4つの固定タブで切り替え表示。ヘッダーの
+│                           # 推定値・検知ツールバッジを表示〉・POSTURE〈GitHub ログイン必須。GitHubアラート・設定の監査〈リポジトリ×点検項目〉・外形監視。components/posture/〉を5つの固定タブで切り替え表示。ヘッダーの
 │                           # ハンバーガーメニュー「設定」からSlack Webhook通知を登録可能、Issue #227。各タブの見出しに、
 │                           # crawler_logsから「最終取得」〈最新/遅れ/失敗〉を表示＝components/freshness/。
 │                           # 各タブと、依存パッケージ・対応状況・Dependabot運用状況・言語・実行環境の画面）

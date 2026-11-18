@@ -32,7 +32,7 @@ Claude Code や CI/CD ツールから「今まさに悪用されているサイ�
 | **品質・セキュリティ検査** | ruff（bandit 相当含む）・mypy・ESLint・pytest/Vitest/Playwright、gitleaks・OSV-Scanner・pip-audit、OWASP ZAP による動的診断を CI で実行 |
 | **運用監視** | Prometheus + Grafana による稼働状態（API・エラー率・応答時間・ジョブの成否・防御・鍵の期限・ホストリソース）の可視化（OCI上、任意） |
 | **一覧・統計・実行ログ API** | ページネーション・検索・フィルタリング対応（詳細: [docs/api-reference.md](docs/api-reference.md)） |
-| **React ダッシュボード** | KEV・OSV・DEPSCAN・CODESCANを画面下部固定タブで切り替え表示（Vercel デプロイ）。KEV・OSV は期間（初期は直近30日）と、使っている製品名のキーワード別の該当件数で、新しい脆弱性を先に確認できる。一覧は日付（追加日・更新日・検知日）ごとに区切って表示 |
+| **React ダッシュボード** | KEV・OSV・DEPSCAN・CODESCAN・POSTURE（GitHubアラート・設定の監査・外形監視）を画面下部固定タブで切り替え表示（Vercel デプロイ）。KEV・OSV は期間（初期は直近30日）と、使っている製品名のキーワード別の該当件数で、新しい脆弱性を先に確認できる。一覧は日付（追加日・更新日・検知日）ごとに区切って表示 |
 
 ---
 
@@ -84,8 +84,8 @@ cd dashboard && npm run lint          # ESLint（警告数の上限あり）
 deploy/zap/run_zap_scan.ps1           # OWASP ZAP の動的診断（Docker Desktop。docs/zap-scan.md）
 ```
 
-**テスト結果（最新）:** バックエンド 1945 テスト / カバレッジ 99%（Windows は、POSIXパス前提の1件をスキップ）、ダッシュボード 610 テスト
-（Vitest）/ カバレッジ 98%、E2E 110 シナリオ
+**テスト結果（最新）:** バックエンド 1950 テスト / カバレッジ 99%（Windows は、POSIXパス前提の1件をスキップ）、ダッシュボード 693 テスト
+（Vitest）/ カバレッジ 98%、E2E 120 シナリオ
 
 ダッシュボードのE2Eテスト（Playwright、API全モック）は `dashboard/` で `npm run e2e`。
 HTMLレポートは `npm run e2e:report`、画面・機能のシナリオ網羅率（90%未満で失敗）は
