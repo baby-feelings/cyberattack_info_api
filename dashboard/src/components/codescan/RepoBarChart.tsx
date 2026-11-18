@@ -1,67 +1,16 @@
-import { BarChart2 } from 'lucide-react'
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip as ReTooltip, XAxis, YAxis } from 'recharts'
-import { ChartCard } from '../shared/VulnPanelParts'
+import { RepoBarChart as SharedRepoBarChart } from '../shared/RepoBarChart'
 import type { CodescanStatsResponse } from '../../api/codescan'
 
-const REPO_CHART_COLORS = [
-  '#7c3aed', '#0ea5e9', '#22d3ee', '#f59e0b',
-  '#f43f5e', '#8b5cf6', '#f97316', '#6366f1',
-]
-
-// ツールチップの表示値フォーマッタ（テストで直接検証できるよう名前付き関数として切り出す）
-export function formatRepoTooltipValue(value: unknown, name: unknown): [string, string] {
-  return [String(value) + ' 件', String(name)]
-}
-
-// リポジトリ別件数の棒グラフ（上位8件）。対応が必要な件数に、例外にした件数を積み上げて表示する
+// CODESCAN のリポジトリ別件数。対応が必要な件数に、例外にした件数を積み上げて表示する
 // （例外だけのリポジトリも出して、下の一覧と食い違わないようにする）
 export function RepoBarChart({ stats, loading }: { stats: CodescanStatsResponse | null; loading: boolean }) {
-  const data = (stats?.repos ?? []).slice(0, 8).map(r => ({
-    // "owner/repo" だとラベルが長くなるため repo 名のみ表示
-    name: r.repo_full_name.split('/')[1] ?? r.repo_full_name,
-    count: r.count,
-    excepted: r.excepted_count,
-  }))
-
   return (
-    <ChartCard
-      icon={<BarChart2 size={13} className="text-slate-400" />}
-      title="リポジトリ別件数（未解決）"
+    <SharedRepoBarChart
+      data={stats?.repos ?? []}
       loading={loading}
-      isEmpty={data.length === 0}
-      height={160}
-    >
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-          <XAxis
-            dataKey="name"
-            tick={{ fill: '#475569', fontSize: 9 }}
-            tickLine={false}
-            axisLine={false}
-            interval={0}
-            angle={-30}
-            textAnchor="end"
-            height={40}
-          />
-          <YAxis
-            tick={{ fill: '#475569', fontSize: 10 }}
-            tickLine={false}
-            axisLine={false}
-            allowDecimals={false}
-          />
-          <ReTooltip
-            contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }}
-            formatter={formatRepoTooltipValue}
-          />
-          <Bar dataKey="count" name="対応が必要" stackId="repo">
-            {data.map((_entry, index) => (
-              <Cell key={`cell-${index}`} fill={REPO_CHART_COLORS[index % REPO_CHART_COLORS.length]} />
-            ))}
-          </Bar>
-          <Bar dataKey="excepted" name="例外（受容・影響なし など）" stackId="repo" fill="#475569" radius={[3, 3, 0, 0]} />
-        </BarChart>
-      </ResponsiveContainer>
-    </ChartCard>
+      title="リポジトリ別件数（未解決）"
+      countName="対応が必要"
+      exceptedName="例外（受容・影響なし など）"
+    />
   )
 }
