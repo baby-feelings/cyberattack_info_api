@@ -48,7 +48,7 @@ function AlertsView({ list }: { list: AlertList }) {
             </select>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
             <table aria-label={POSTURE_TEXT.alerts.title} className="min-w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-slate-400">

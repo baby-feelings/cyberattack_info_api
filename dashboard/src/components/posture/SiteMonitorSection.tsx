@@ -17,7 +17,7 @@ export function SiteMonitorSection({ source, onRetry }: { source: Source<SiteChe
       {(sites) => sites.length === 0 ? (
         <p className="text-sm text-slate-400">{POSTURE_TEXT.sites.empty}</p>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="relative overflow-x-auto">
           <table aria-label={POSTURE_TEXT.sites.title} className="min-w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-slate-400">

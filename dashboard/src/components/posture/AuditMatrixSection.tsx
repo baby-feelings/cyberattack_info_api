@@ -68,7 +68,7 @@ function AuditMatrixView({ matrix }: { matrix: AuditMatrix }) {
         </p>
       ) : (
         // スマホ幅では、表を横にスクロールし、リポジトリ名の列を固定する
-        <div className="overflow-x-auto">
+        <div className="relative overflow-x-auto">
           <table aria-label={POSTURE_TEXT.audit.title} className="min-w-full text-sm border-separate border-spacing-0">
             <thead>
               <tr>
