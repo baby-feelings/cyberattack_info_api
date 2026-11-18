@@ -103,7 +103,7 @@ curlの代わりに、リモートMCPサーバー（`https://168.138.213.240.nip
 
 ## 参考: GitHub ログイン API（DEPSCAN ダッシュボード用・ブラウザ専用）
 
-React ダッシュボードの DEPSCAN タブ向けの GitHub OAuth ログイン機能。ブラウザでの
+React ダッシュボードの 「依存ライブラリ」タブ（旧 DEPSCAN タブ）向けの GitHub OAuth ログイン機能。ブラウザでの
 インタラクティブな認可が前提のため、Claude Code や CI から `curl` で直接呼び出す
 スキルではない（詳細は `reference/endpoints-ops.md` 参照）。
 

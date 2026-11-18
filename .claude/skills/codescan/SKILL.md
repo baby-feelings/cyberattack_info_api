@@ -123,7 +123,7 @@ CVSS 7.0以上はダッシュボード（`CodescanRow.tsx`のCvssBadge）で赤�
 - テストは`tests/codescan/conftest.py`が`find_open_issue`を既定で差し替え、実GitHubに出ない
 
 ## API認証: ログイン必須かつ本人所有リポジトリのみ（Issue #219でログイン必須化、#289で絞り込み追加）
-ダッシュボードのDEPSCAN/CODESCANタブ間でセッションを共有し、CODESCANも読み取りにGitHubログインを
+ダッシュボードの「依存ライブラリ」「コードと設定」タブ間でセッションを共有し、CODESCANも読み取りにGitHubログインを
 必須にする（Issue #219）ため、`app.auth.api_key.require_api_key_or_session`（`X-API-KEY`または
 GitHubログインセッションJWTのいずれかを要求する共通認証。DEPSCANの`_resolve_access`と共通、DRY）で
 `GET /api/codescan`・`/stats`を保護する。
@@ -139,7 +139,7 @@ DEPSCANと同じ方式に揃えた（`repo`で他人のリポジトリを指定�
 フロントエンド側は`DepscanAuthGate.tsx`と共通の`useGithubSession`フック
 （`dashboard/src/hooks/useGithubSession.ts`）を使い、`localStorage`のキー
 （`depscan_session_token`/`depscan_session_user`）も共有する。これにより
-DEPSCAN/CODESCANのどちらのタブでログインしても両方閲覧できる。`CodescanAuthGate.tsx`
+「依存ライブラリ」「コードと設定」のどちらのタブでログインしても両方閲覧できる。`CodescanAuthGate.tsx`
 はDEPSCANと異なりオンデマンドスキャンの概念が無いため、スキャン進捗ポーリングUIを
 持たず、ログイン確認ができたら即座に`CodescanPanel`を表示するシンプルな構成。
 

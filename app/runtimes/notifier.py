@@ -72,7 +72,7 @@ class RuntimeAlertNotifier(Notifier):
             lines.append(_HEADINGS[kind])
             lines.extend(_describe(a) for a in group)
             lines.append("")
-        lines.append(f">詳細（「言語・実行環境」）: {DASHBOARD_URL}")
+        lines.append(f">詳細（「依存ライブラリ」タブの「言語・実行環境」）: {DASHBOARD_URL}")
         return truncate_for_slack("\n".join(lines))
 
 

@@ -149,7 +149,7 @@ OpenSSF malicious-packages 由来の勧告は、**脆弱性ではなくマルウ
 - 週次まとめ: `app/sla/digest.py`の`run_sla_digest`を、`ScheduledJob`の`day_of_week`（毎週月曜 UTC 0:00）で実行。
   **管理者（`GITHUB_USERNAME`）自身の運用中リポジトリだけ**を集計し、管理者のWebhookにだけ送る
   （`SlaDigestNotifier`。期限超過が0件でも送る）。登録済み他ユーザー向けは対象外
-- ダッシュボードは、DEPSCANタブの「対応状況」ボタン（`SlaModal`）。E2EはDEP-27
+- ダッシュボードは、「依存ライブラリ」タブの小タブ「対応状況」（`SlaPanel`）。E2EはDEP-27
 
 ## DEPSCAN のSBOMエクスポート（Issue #133：CycloneDX/SPDX、app/depscan/sbom.py）
 OWASP Top 10:2025「ソフトウェアサプライチェーンの失敗」対策。**対応範囲はエクスポート
@@ -210,7 +210,7 @@ OWASP Top 10:2025「ソフトウェアサプライチェーンの失敗」対策
   `RestGateway.enforce_owner`が再検証するため、応答は`data`配列に`repo_full_name`を持つ形を保つこと
 - **`RepoDependencyOut`の計算フィールド**（`purl`・`open_vulnerabilities`）は`| None`にする。
   `OrmDatetimeModel`はORMに無い属性を`None`で渡すため、`int`のままだと500になる（実際に踏んだ）
-- **ダッシュボード**: DEPSCANタブの「依存パッケージ」ボタン→全画面モーダル。左にアプリ一覧
+- **ダッシュボード**: 「依存ライブラリ」タブの小タブ「依存パッケージ」（旧・全画面モーダル）。左にアプリ一覧
   （検知がある依存の数を赤バッジ）、右に一覧と、パッケージ名・版・エコシステムの検索、「脆弱性ありのみ」
   （`components/depscan/DependenciesModal.tsx`。Dependabot運用状況と同じ作り）
 
@@ -260,7 +260,7 @@ DEPSCAN（検知）・Dependabot（修正PR作成）に続く3層目として、
 
 マージ・flaggedいずれも毎回Slack通知（0件同士のみスキップ）。判定結果は
 `DependabotPrLog`テーブルへ1PR1行で永続化し、`GET /api/depsops`で参照する。
-ダッシュボードにはDEPSOPS専用タブは作らず、DEPSCANタブ内のボタンから開く
+ダッシュボードにはDEPSOPS専用のタブは作らず、「依存ライブラリ」タブの小タブ「Dependabot運用」で開く
 全画面モーダル（`DependabotOpsModal.tsx`）として統合している。
 
 **リポジトリ別未解決PR件数は`GET /api/depsops/stats`で集計済みの値を返す**。
