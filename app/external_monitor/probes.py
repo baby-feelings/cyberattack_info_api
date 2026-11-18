@@ -101,6 +101,8 @@ def is_safe_target(url: str) -> bool:
 def check_tls(host: str, port: int = 443) -> tuple[int | None, list[dict[str, str]]]:
     """証明書の残り日数と、問題を返す。検証に失敗（期限切れ・不一致等）したら、ERROR を返す。"""
     context = ssl.create_default_context()
+    # 古い TLS（1.0・1.1）は許可しない。最低版を明示して、既定値の変更に左右されないようにする
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
     try:
         with socket.create_connection((host, port), timeout=_TIMEOUT) as sock, \
                 context.wrap_socket(sock, server_hostname=host) as tls:

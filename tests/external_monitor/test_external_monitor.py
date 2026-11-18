@@ -124,6 +124,19 @@ class TestTls:
         context.wrap_socket.return_value.__enter__.return_value = tls_object
         return patch("socket.create_connection", return_value=sock), patch("ssl.create_default_context", return_value=context)
 
+    def test_requires_tls_1_2_or_newer(self):
+        """古い TLS（1.0・1.1）を許可しない（最低版を明示する）。"""
+        tls = MagicMock()
+        tls.getpeercert.return_value = {"notAfter": "Jan  1 00:00:00 2030 GMT"}
+        sock = MagicMock()
+        sock.__enter__.return_value = sock
+        context = MagicMock()
+        context.wrap_socket.return_value.__enter__.return_value = tls
+        with patch("socket.create_connection", return_value=sock),              patch("ssl.create_default_context", return_value=context):
+            probes.check_tls("a.example")
+
+        assert context.minimum_version == ssl.TLSVersion.TLSv1_2
+
     def test_reads_the_days_left_from_the_certificate(self):
         tls = MagicMock()
         tls.getpeercert.return_value = {"notAfter": "Jan  1 00:00:00 2030 GMT"}

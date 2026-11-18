@@ -21,6 +21,15 @@ def test_send_slack_success():
     mock_client_cls.return_value.__enter__.return_value.post.assert_called_once()
 
 
+def test_send_slack_refuses_a_url_outside_slack_without_sending():
+    """送信の直前にも検証する（SSRF対策）。Slack 以外の URL には、リクエストを送らない。"""
+    for bad in ("http://hooks.slack.com/services/x", "https://evil.example/", "http://169.254.169.254/",
+                "https://hooks.slack.com.evil.example/services/x", ""):
+        with patch("httpx.Client") as mock_client_cls:
+            assert send_slack("msg", bad) is False
+        mock_client_cls.assert_not_called()
+
+
 def test_send_slack_http_error_does_not_raise():
     """Webhook 送信が HTTP エラーでも例外を外に伝播させない。"""
     with patch("httpx.Client") as mock_client_cls:
