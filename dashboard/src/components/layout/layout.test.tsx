@@ -17,13 +17,13 @@ vi.mock('../CodescanAuthGate', () => ({ CodescanAuthGate: () => <div>codescan-ga
 vi.mock('../posture/PostureAuthGate', () => ({ PostureAuthGate: () => <div>posture-gate</div> }))
 
 describe('TAB_DEFINITIONS', () => {
-  it('defines the five tabs in display order with unique keys', () => {
-    expect(TAB_DEFINITIONS.map((t) => t.key)).toEqual(['kev', 'osv', 'depscan', 'codescan', 'posture'])
-    expect(new Set(TAB_DEFINITIONS.map((t) => t.key)).size).toBe(5)
+  it('defines the four tabs in display order with unique keys', () => {
+    expect(TAB_DEFINITIONS.map((t) => t.key)).toEqual(['public', 'depscan', 'codescan', 'posture'])
+    expect(new Set(TAB_DEFINITIONS.map((t) => t.key)).size).toBe(4)
   })
 
   it('declares the crawler whose last fetch each tab shows', () => {
-    expect(TAB_DEFINITIONS.map((t) => t.crawlerType)).toEqual(['KEV', 'OSV', 'DEPSCAN', 'CODESCAN', 'GHALERT'])
+    expect(TAB_DEFINITIONS.map((t) => t.crawlerType)).toEqual(['KEV', 'DEPSCAN', 'CODESCAN', 'GHALERT'])
   })
 
   it('takes the label, title and subtitle of the posture tab from the posture config', () => {
@@ -36,15 +36,15 @@ describe('TAB_DEFINITIONS', () => {
 
 describe('TabBar', () => {
   it('renders one tab per definition and marks only the active one as selected', () => {
-    render(<TabBar activeTab="osv" onSelect={vi.fn()} />)
+    render(<TabBar activeTab="depscan" onSelect={vi.fn()} />)
     const tabs = screen.getAllByRole('tab')
-    expect(tabs).toHaveLength(5)
-    expect(screen.getByRole('tab', { name: /OSV/ })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByRole('tab', { name: /KEV/ })).toHaveAttribute('aria-selected', 'false')
+    expect(tabs).toHaveLength(4)
+    expect(screen.getByRole('tab', { name: /DEPSCAN/ })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: /公開情報/ })).toHaveAttribute('aria-selected', 'false')
   })
 
   it('splits the width evenly, with one column per tab', () => {
-    render(<TabBar activeTab="kev" onSelect={vi.fn()} />)
+    render(<TabBar activeTab="public" onSelect={vi.fn()} />)
     // 列数を固定値にすると、タブを増減したときに、右側が空く（JVN の廃止で実際に起きた）
     expect(screen.getByRole('tablist')).toHaveStyle(
       `grid-template-columns: repeat(${TAB_DEFINITIONS.length}, minmax(0, 1fr))`,
@@ -53,21 +53,52 @@ describe('TabBar', () => {
 
   it('links each tab to its panel via aria-controls and calls onSelect with the key', () => {
     const onSelect = vi.fn()
-    render(<TabBar activeTab="kev" onSelect={onSelect} />)
-    const osv = screen.getByRole('tab', { name: /OSV/ })
-    expect(osv).toHaveAttribute('id', 'tab-osv')
-    expect(osv).toHaveAttribute('aria-controls', 'tabpanel-osv')
-    fireEvent.click(osv)
-    expect(onSelect).toHaveBeenCalledWith('osv')
+    render(<TabBar activeTab="public" onSelect={onSelect} />)
+    const depscan = screen.getByRole('tab', { name: /DEPSCAN/ })
+    expect(depscan).toHaveAttribute('id', 'tab-depscan')
+    expect(depscan).toHaveAttribute('aria-controls', 'tabpanel-depscan')
+    fireEvent.click(depscan)
+    expect(onSelect).toHaveBeenCalledWith('depscan')
   })
 })
 
 describe('TabPanel', () => {
   it('shows the last fetch of the crawler the tab declares, next to the heading', async () => {
-    const tab = TAB_DEFINITIONS.find((t) => t.key === 'osv')!
+    const tab = TAB_DEFINITIONS.find((t) => t.key === 'depscan')!
     render(<TabPanel tab={tab} />)
     expect(await screen.findByTestId('last-fetched')).toBeInTheDocument()
-    expect(fetchCrawlerLogs).toHaveBeenCalledWith(expect.objectContaining({ crawlerType: 'OSV' }))
+    expect(fetchCrawlerLogs).toHaveBeenCalledWith(expect.objectContaining({ crawlerType: 'DEPSCAN' }))
+  })
+
+  describe('with sub tabs (the public tab)', () => {
+    const publicTab = () => TAB_DEFINITIONS.find((t) => t.key === 'public')!
+
+    it('shows the first sub tab by default, with its own heading and crawler', async () => {
+      render(<TabPanel tab={publicTab()} />)
+      expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['KEV', 'OSV'])
+      expect(screen.getByRole('tab', { name: 'KEV' })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.getByText('kev-panel')).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: /CISA KEV/ })).toBeInTheDocument()
+      expect(await screen.findByTestId('last-fetched')).toBeInTheDocument()
+      expect(fetchCrawlerLogs).toHaveBeenCalledWith(expect.objectContaining({ crawlerType: 'KEV' }))
+    })
+
+    it('shows the selected sub tab, and reports the key when another one is clicked', () => {
+      const onSubTabChange = vi.fn()
+      const { rerender } = render(<TabPanel tab={publicTab()} onSubTabChange={onSubTabChange} />)
+      fireEvent.click(screen.getByRole('tab', { name: 'OSV' }))
+      expect(onSubTabChange).toHaveBeenCalledWith('osv')
+
+      rerender(<TabPanel tab={publicTab()} subTabKey="osv" onSubTabChange={onSubTabChange} />)
+      expect(screen.getByText('osv-panel')).toBeInTheDocument()
+      expect(screen.queryByText('kev-panel')).not.toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: /OSV — Open Source/ })).toBeInTheDocument()
+    })
+
+    it('falls back to the first sub tab for an unknown key', () => {
+      render(<TabPanel tab={publicTab()} subTabKey="nope" />)
+      expect(screen.getByText('kev-panel')).toBeInTheDocument()
+    })
   })
 
   it('renders heading, subtitle and body with aria wiring back to the tab', () => {
