@@ -1,5 +1,5 @@
+import { AppLogo } from './components/AppLogo'
 import { useState } from 'react'
-import { ShieldAlert } from 'lucide-react'
 import { HealthStatus } from './components/HealthStatus'
 import { SettingsPanel } from './components/SettingsPanel'
 import { HeaderMenu } from './components/layout/HeaderMenu'
@@ -23,9 +23,7 @@ export default function App() {
         <div className="max-w-screen-xl mx-auto px-4 sm:px-8 lg:px-12 h-14 flex items-center justify-between gap-4">
 
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="shrink-0 bg-violet-600 rounded-lg p-1.5 shadow-lg shadow-violet-900/50">
-              <ShieldAlert size={18} className="text-white" />
-            </div>
+            <AppLogo size={32} />
             <div className="min-w-0">
               <p className="text-sm font-semibold text-white leading-tight truncate">
                 サイバー攻撃情報ダッシュボード
