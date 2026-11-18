@@ -1,225 +1,42 @@
 import { PanelFrame } from '../shared/PanelFrame'
 import { LastFetched } from '../freshness/LastFetched'
 import { SCREEN_FETCH_SOURCE } from '../freshness/freshnessConfig'
-import { useCallback, useEffect, useState } from 'react'
-import { GitPullRequest, ExternalLink } from 'lucide-react'
-import {
-  fetchDepsOpsList, fetchDepsOpsStats, type DependabotPrLogOut, type DepsOpsRepoStat,
-  type OperatingStatus,
-} from '../../api/client'
+import { GitPullRequest } from 'lucide-react'
 import { TableLoadingSkeleton, EmptyState, Pagination } from '../shared/VulnPanelParts'
 import { OperatingFilter } from '../shared/OperatingFilter'
-import { githubPullUrl } from '../shared/externalLinks'
-
 import { DepsOpsRepoBarChart } from './DepsOpsRepoBarChart'
-
-const PER_PAGE = 20
-
-const ACTIONS: { key: 'ALL' | 'merged' | 'flagged'; label: string }[] = [
-  { key: 'ALL', label: 'すべて' },
-  { key: 'merged', label: '自動マージ' },
-  { key: 'flagged', label: '要確認' },
-]
-
-// 解決済みのPR（DEPSOPS外の要因で解消）は履歴ごと削除されるため、一覧に出るのは
-// 自動マージ済みと要確認（未解決）のみ（app/depsops/runner.py の _record_pr_logs 参照）
-function ActionBadge({ action }: { action: 'merged' | 'flagged' }) {
-  if (action === 'merged') {
-    return (
-      <span className="inline-block px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-        自動マージ
-      </span>
-    )
-  }
-  return (
-    <span className="inline-block px-1.5 py-0.5 rounded text-xs font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30">
-      要確認
-    </span>
-  )
-}
-
-// GitHub Dependabot alert のパッケージ名とPRタイトルのヒューリスティックな
-// 照合結果（バックエンド側判定。あくまで参考情報）
-function SecurityUpdateBadge({ isSecurityUpdate }: { isSecurityUpdate: boolean | null }) {
-  if (isSecurityUpdate === null) {
-    return <span className="text-[10px] text-slate-600">不明</span>
-  }
-  return isSecurityUpdate ? (
-    <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-500/15 text-red-400 border border-red-500/30 whitespace-nowrap">
-      セキュリティ更新
-    </span>
-  ) : (
-    <span className="text-[10px] text-slate-600 whitespace-nowrap">バージョン更新</span>
-  )
-}
-
-// Dependabot が PR 本文に埋め込む Compatibility score バッジ（GitHub提供の画像）。
-// exact version bump のPRにのみ存在し、範囲指定の requirement 更新PR等には無い
-function CompatibilityScoreBadge({ badgeUrl }: { badgeUrl: string | null }) {
-  if (!badgeUrl) {
-    return <span className="text-[10px] text-slate-600">—</span>
-  }
-  return (
-    <img
-      src={badgeUrl}
-      alt="Dependabot compatibility score"
-      className="h-5 max-w-[160px]"
-      loading="lazy"
-    />
-  )
-}
+import { DEPSOPS_TEXT as T } from './dependabotOpsConfig'
+import { ActionFilterButtons, DependabotOpsTable } from './DependabotOpsSections'
+import { useDependabotOps } from './useDependabotOps'
 
 // Dependabot PR 自動運用（DEPSOPS）の判定履歴を表示する画面（「依存ライブラリ」タブの小タブ）。
 export function DependabotOpsPanel() {
-  const [action, setAction] = useState<'ALL' | 'merged' | 'flagged'>('ALL')
-  // 初期表示は運用中のみ（運用停止中のアプリのPRに埋もれず、運用中のものを見やすくするため）
-  const [operating, setOperating] = useState<OperatingStatus>('active')
-  const [page, setPage] = useState(1)
-  const [total, setTotal] = useState(0)
-  const [items, setItems] = useState<DependabotPrLogOut[]>([])
-  const [loading, setLoading] = useState(false)
-  const [repoStats, setRepoStats] = useState<DepsOpsRepoStat[]>([])
-  const [statsLoading, setStatsLoading] = useState(false)
-
-  const loadTable = useCallback(async (act: typeof action, p: number, op: OperatingStatus) => {
-    setLoading(true)
-    try {
-      const res = await fetchDepsOpsList({
-        page: p, perPage: PER_PAGE, action: act === 'ALL' ? null : act, operating: op,
-      })
-      setItems(res.data)
-      setTotal(res.total)
-    } catch {
-      // エラーは握りつぶし（データなし状態として扱う）
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  const loadStats = useCallback(async (op: OperatingStatus) => {
-    setStatsLoading(true)
-    try {
-      const res = await fetchDepsOpsStats(op)
-      setRepoStats(res.repos)
-    } catch {
-      // エラーは握りつぶし（データなし状態として扱う）
-    } finally {
-      setStatsLoading(false)
-    }
-  }, [])
-
-  // 表示されたとき（と、条件が変わったとき）に取得する
-  useEffect(() => {
-    loadTable(action, page, operating)
-  }, [loadTable, action, page, operating])
-
-  useEffect(() => {
-    loadStats(operating)
-  }, [loadStats, operating])
-
-  function handleOperating(op: OperatingStatus) {
-    setOperating(op)
-    setPage(1)
-  }
-
-  function handleAction(act: typeof action) {
-    setAction(act)
-    setPage(1)
-  }
-
-  const totalPages = Math.ceil(total / PER_PAGE)
+  const d = useDependabotOps()
 
   return (
     <PanelFrame
-      label="Dependabot 運用状況" title="Dependabot 運用状況（DEPSOPS）"
+      label={T.label} title={T.title}
       icon={GitPullRequest} maxWidth="max-w-5xl"
     >
       <LastFetched crawlerType={SCREEN_FETCH_SOURCE.depsops} />
 
-      <DepsOpsRepoBarChart stats={repoStats} loading={statsLoading} />
+      <DepsOpsRepoBarChart stats={d.repoStats} loading={d.statsLoading} />
 
       <div className="flex flex-wrap items-center gap-3">
-        <OperatingFilter value={operating} onChange={handleOperating} />
+        <OperatingFilter value={d.operating} onChange={d.handleOperating} />
       </div>
 
-      <div role="group" aria-label="判定フィルター" className="flex flex-wrap gap-1.5">
-        {ACTIONS.map(a => (
-          <button
-            key={a.key}
-            onClick={() => handleAction(a.key)}
-            aria-pressed={action === a.key}
-            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-              action === a.key
-                ? 'bg-violet-600 text-white shadow'
-                : 'bg-slate-800 text-slate-400 hover:text-slate-300 hover:bg-slate-700'
-            }`}
-          >
-            {a.label}
-          </button>
-        ))}
-      </div>
+      <ActionFilterButtons action={d.action} onChange={d.handleAction} />
 
-      {loading ? (
+      {d.loading ? (
         <TableLoadingSkeleton columnWidths={['w-40', 'w-24', 'w-16', 'flex-1', 'w-24']} />
-      ) : items.length === 0 ? (
-        <EmptyState icon={<GitPullRequest size={24} />} message="該当する PR はありません" />
+      ) : d.items.length === 0 ? (
+        <EmptyState icon={<GitPullRequest size={24} />} message={T.empty} />
       ) : (
         <>
-          <Pagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} position="top" />
-
-          <div className="overflow-x-auto -mx-1 px-1">
-            <table aria-label="Dependabot PR 判定履歴" className="w-full text-sm min-w-[860px]">
-              <thead>
-                <tr className="border-b border-slate-800">
-                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-48">リポジトリ</th>
-                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-40">互換性スコア</th>
-                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3">PR</th>
-                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-28">判定</th>
-                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-28">種別</th>
-                  <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider pb-2 pr-3 w-24">日時</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {items.map(item => (
-                  <tr key={`${item.repo_full_name}-${item.pr_number}-${item.processed_at}`}>
-                    <td className="py-2.5 pr-3">
-                      <p className="text-slate-300 text-xs truncate max-w-[220px]">{item.repo_full_name}</p>
-                    </td>
-                    <td className="py-2.5 pr-3">
-                      <CompatibilityScoreBadge badgeUrl={item.compatibility_badge_url} />
-                    </td>
-                    <td className="py-2.5 pr-3">
-                      <a
-                        href={githubPullUrl(item.repo_full_name, item.pr_number)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-violet-400 hover:text-violet-300 text-xs transition-colors"
-                      >
-                        #{item.pr_number} {item.title}
-                        <ExternalLink size={9} />
-                      </a>
-                      {item.reason && (
-                        <p className="text-[10px] text-slate-500 mt-0.5">{item.reason}</p>
-                      )}
-                    </td>
-                    <td className="py-2.5 pr-3">
-                      <ActionBadge action={item.action} />
-                    </td>
-                    <td className="py-2.5 pr-3">
-                      <SecurityUpdateBadge isSecurityUpdate={item.is_security_update} />
-                    </td>
-                    <td className="py-2.5 text-xs text-slate-600 tabular-nums whitespace-nowrap">
-                      {new Date(item.processed_at).toLocaleDateString('ja-JP', {
-                        year: 'numeric', month: 'short', day: 'numeric',
-                      })}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <Pagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} />
+          <Pagination page={d.page} totalPages={d.totalPages} total={d.total} onPageChange={d.setPage} position="top" />
+          <DependabotOpsTable items={d.items} />
+          <Pagination page={d.page} totalPages={d.totalPages} total={d.total} onPageChange={d.setPage} />
         </>
       )}
     </PanelFrame>
