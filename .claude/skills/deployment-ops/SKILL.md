@@ -11,7 +11,7 @@ PR 作成・main/develop へのプッシュで自動実行。先頭の`changes`�
 ダッシュボード=`dashboard/`、`ci.yml`自体の変更は両方）、該当しない3ジョブは**ジョブ単位で省略**する
 （ドキュメントのみの変更では何も動かない。省略はジョブ単位なので将来「必須チェック」にしても成功扱い）。
 `semgrep.yml`は`paths-ignore`（`*.md`・`docs/`・`.claude/skills/`）、`gitleaks.yml`・OSVは絞らない。
-Vercelのプレビューは`dashboard/vercel.json`の`ignoreCommand`でダッシュボードに差分が無ければスキップ。
+Vercelのプレビューは`dashboard/vercel.json`の`ignoreCommand`でダッシュボードに差分が無ければスキップ。Dependabotのブランチ（`dependabot/*`）は、プレビューも作らない（無料プランの1日100回のデプロイ上限に達した事故の再発防止。上限に達したら、24時間後に失敗したジョブを`gh run rerun`で再実行）。
 3つのジョブが並列に動く。ほかに`gitleaks.yml`（PR/mainで
 シークレット検出）と`zap-scan.yml`（ZAP、手動+毎週月曜）が別ワークフローで動く（下記）。
 
