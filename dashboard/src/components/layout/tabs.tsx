@@ -1,13 +1,15 @@
 import type { ReactNode } from 'react'
-import { Shield, Package, Bug, ScanSearch } from 'lucide-react'
+import { Shield, Package, Bug, ScanSearch, ShieldCheck } from 'lucide-react'
 import { KevPanel } from '../KevPanel'
 import { OsvPanel } from '../OsvPanel'
 import { DepscanAuthGate } from '../DepscanAuthGate'
 import { CodescanAuthGate } from '../CodescanAuthGate'
+import { PostureAuthGate } from '../posture/PostureAuthGate'
+import { POSTURE_TAB } from '../posture/postureConfig'
 import type { FetchedCrawlerType } from '../freshness/freshnessConfig'
 
 // タブ種別
-export type TabKey = 'kev' | 'osv' | 'depscan' | 'codescan'
+export type TabKey = 'kev' | 'osv' | 'depscan' | 'codescan' | 'posture'
 
 // 1つのタブの定義。タブバーのボタンと、タブパネルの見出し・本体を1か所で宣言する
 // （以前は App.tsx にタブ数×約20行の同じ構造が並んでいた）。新しいタブはここに1件足す。
@@ -68,5 +70,17 @@ export const TAB_DEFINITIONS: TabDefinition[] = [
     borderColor: 'border-cyan-800/40',
     // GitHub ログイン後、CODESCAN パネル（サマリー・一覧を内包）を表示
     panel: <CodescanAuthGate />,
+  },
+  {
+    key: 'posture',
+    label: POSTURE_TAB.label,
+    // 見出しの「最終取得」は、アラートの取り込み。設定の監査・外形監視は、各セクションに出す
+    crawlerType: 'GHALERT',
+    icon: (size) => <ShieldCheck size={size} className="text-violet-400" />,
+    title: POSTURE_TAB.title,
+    subtitle: POSTURE_TAB.subtitle,
+    borderColor: 'border-violet-800/40',
+    // GitHub ログイン後、アラート・設定の監査・外形監視を表示
+    panel: <PostureAuthGate />,
   },
 ]

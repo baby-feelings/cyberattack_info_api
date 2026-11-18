@@ -57,7 +57,7 @@ export default function App() {
       {/* フッター（下部固定タブバーに隠れないよう下部余白を確保） */}
       <footer className="w-full border-t border-slate-800/60 pb-20">
         <div className="max-w-screen-xl mx-auto px-4 sm:px-8 lg:px-12 py-5 flex flex-col sm:flex-row items-center justify-between gap-1 text-xs text-slate-600">
-          <span>データソース: CISA KEV / Open Source Vulnerabilities (OSV) / DEPSCAN / CODESCAN / 言語・実行環境（endoflife.date・Flutter 公式）</span>
+          <span>データソース: CISA KEV / Open Source Vulnerabilities (OSV) / DEPSCAN / CODESCAN / 言語・実行環境（endoflife.date・Flutter 公式）/ GitHub セキュリティ態勢（アラート・設定の監査・外形監視）</span>
           <span>毎日 JST 00:00〜00:55 に自動更新</span>
         </div>
       </footer>
