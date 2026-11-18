@@ -48,7 +48,7 @@ git push -u origin feature/your-feature-name
 変更で実行しない。**gitleaks・OSV-Scanner は絞らない**（ドキュメントや設定にもシークレット・依存が入りうる）。
 省略はワークフロー単位でなくジョブ単位（将来「必須チェック」を設定しても、省略されたジョブは成功扱い）。
 ダッシュボードの Vercel デプロイ（`deploy.yml`）は従来から `dashboard/**` の変更時のみ、Vercel のプレビュー
-ビルドは `dashboard/vercel.json` の `ignoreCommand` で、ダッシュボードに差分がなければスキップする。
+ビルドは `dashboard/vercel.json` の `ignoreCommand` で、ダッシュボードに差分がなければ（または Dependabot のブランチなら）スキップする。
 
 定期実行: pip-audit・OSV-Scanner（毎週）、OWASP ZAP（毎週月曜 03:00 JST。`docs/zap-scan.md`）、
 DEPSCAN/CODESCAN（毎日）。
