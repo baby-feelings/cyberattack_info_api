@@ -1,7 +1,7 @@
-import { expect, scenario, type Page } from './support/test'
+import { expect, openPublic, scenario, type Page } from './support/test'
 import { KEV_TOTAL, kevItems } from './support/mockData'
 
-// KEVタブ（初期表示タブ）のテスト。一覧は1ページ30件。
+// KEV（公開情報タブの先頭の小タブ）のテスト。一覧は1ページ30件。
 // 初期表示は「直近30日」で、期間内の全件を取得して画面側で検索・ページ分割する
 // （モックは1日1件ずつ追加されているため、直近30日は 31 件＝2 ページ）。「すべて」だけサーバー側のページ分割。
 
@@ -19,6 +19,7 @@ async function showAll(page: Page) {
 
 scenario('KEV-01', '一覧・件数サマリー・グラフが表示される', async ({ page }) => {
   await page.goto('/')
+  await openPublic(page, 'KEV')
 
   const table = page.getByRole('table', { name: TABLE })
   await expect(cveLinks(page)).toHaveCount(30)
@@ -44,6 +45,7 @@ scenario('KEV-01', '一覧・件数サマリー・グラフが表示される', 
 
 scenario('KEV-02', '行クリックで詳細（説明・推奨対処・EPSS）が展開/折りたたみされる', async ({ page }) => {
   await page.goto('/')
+  await openPublic(page, 'KEV')
   const row = page.getByRole('row', { name: /CVE-2026-0001/ })
 
   await expect(row).toHaveAttribute('aria-expanded', 'false')
@@ -64,6 +66,7 @@ scenario('KEV-02', '行クリックで詳細（説明・推奨対処・EPSS）�
 
 scenario('KEV-03', 'キーワード検索で絞り込まれ、クリアで元に戻る', async ({ page, api }) => {
   await page.goto('/')
+  await openPublic(page, 'KEV')
   const table = page.getByRole('table', { name: TABLE })
   const search = page.getByRole('textbox', { name: 'ベンダー名・製品名' })
   await expect(cveLinks(page)).toHaveCount(30)
@@ -84,6 +87,7 @@ scenario('KEV-03', 'キーワード検索で絞り込まれ、クリアで元に
 
 scenario('KEV-04', 'ページ送り（次へ/前へ）と境界でのボタン無効化', async ({ page, api }) => {
   await page.goto('/')
+  await openPublic(page, 'KEV')
   const bottom = page.getByRole('navigation', { name: 'ページ送り（下部）' })
   const top = page.getByRole('navigation', { name: 'ページ送り（上部）' })
 
@@ -110,6 +114,7 @@ scenario('KEV-04', 'ページ送り（次へ/前へ）と境界でのボタン�
 scenario('KEV-05', '該当なしのとき空状態メッセージが表示される', async ({ page, api }) => {
   api.override('GET', '/api/vulnerabilities/recent', () => ({ body: [] }))
   await page.goto('/')
+  await openPublic(page, 'KEV')
 
   await expect(page.getByText('該当する CVE はありません')).toBeVisible()
   await expect(page.getByText('クローラーがデータを取得すると表示されます')).toBeVisible()
@@ -118,6 +123,7 @@ scenario('KEV-05', '該当なしのとき空状態メッセージが表示され
 
 scenario('KEV-06', '再読み込みボタンで一覧と統計が再取得される', async ({ page, api }) => {
   await page.goto('/')
+  await openPublic(page, 'KEV')
   await expect(page.getByRole('table', { name: TABLE })).toBeVisible()
   const before = {
     stats: api.requestsTo('/api/vulnerabilities/stats').length,
@@ -133,6 +139,7 @@ scenario('KEV-06', '再読み込みボタンで一覧と統計が再取得され
 
 scenario('KEV-07', 'EPSS未取得は「—」、CVE IDはNVDへの外部リンクになる', async ({ page }) => {
   await page.goto('/')
+  await openPublic(page, 'KEV')
 
   // 2件目はEPSS未取得（null）のため「—」を表示する
   const noEpss = page.getByRole('row', { name: /CVE-2026-0002/ })
@@ -156,6 +163,7 @@ scenario('KEV-08', 'APIエラー時もクラッシュせずデータなし状態
     api.override('GET', path, () => ({ status: 500, body: { detail: 'boom' } }))
   }
   await page.goto('/')
+  await openPublic(page, 'KEV')
 
   // 一覧は表示されないが、画面は操作可能なまま
   await expect(page.getByRole('table', { name: TABLE })).toHaveCount(0)
@@ -167,6 +175,7 @@ scenario('KEV-08', 'APIエラー時もクラッシュせずデータなし状態
 
 scenario('KEV-09', 'リクエストに公開用 X-API-KEY ヘッダーが付与される', async ({ page, api }) => {
   await page.goto('/')
+  await openPublic(page, 'KEV')
   await expect(page.getByRole('table', { name: TABLE })).toBeVisible()
   // 「すべて」にすると、一覧APIも呼ばれる
   await showAll(page)
@@ -182,6 +191,7 @@ scenario('KEV-09', 'リクエストに公開用 X-API-KEY ヘッダーが付与�
 
 scenario('KEV-10', 'ページ送りの最初/最後ボタンとページ番号の直接入力', async ({ page, api }) => {
   await page.goto('/')
+  await openPublic(page, 'KEV')
   await showAll(page)
   const bottom = page.getByRole('navigation', { name: 'ページ送り（下部）' })
   const first = bottom.getByRole('button', { name: '最初のページへ' })
@@ -229,6 +239,7 @@ scenario('KEV-10', 'ページ送りの最初/最後ボタンとページ番号�
 scenario('KEV-11', 'スマホ幅でもページ送りが画面内に収まり横スクロールしない', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 })
   await page.goto('/')
+  await openPublic(page, 'KEV')
   await showAll(page)
   const bottom = page.getByRole('navigation', { name: 'ページ送り（下部）' })
   await expect(bottom).toContainText('1 / 3')
@@ -256,6 +267,7 @@ scenario('KEV-11', 'スマホ幅でもページ送りが画面内に収まり横
 
 scenario('KEV-12', '期間（7日/30日/90日/すべて）を切り替えると、件数の帯と一覧が変わる', async ({ page, api }) => {
   await page.goto('/')
+  await openPublic(page, 'KEV')
   const period = page.getByRole('group', { name: '期間フィルター' })
   const band = page.getByRole('group', { name: '件数の集計' })
   await expect(period.getByRole('button', { name: '30日' })).toHaveAttribute('aria-pressed', 'true')
@@ -283,6 +295,7 @@ scenario('KEV-12', '期間（7日/30日/90日/すべて）を切り替えると�
 
 scenario('KEV-13', '一覧は追加日ごとに区切られる', async ({ page }) => {
   await page.goto('/')
+  await openPublic(page, 'KEV')
   const table = page.getByRole('table', { name: TABLE })
 
   // モックは1日1件ずつ追加されているため、1ページ30件＝30日分の区切り。先頭は最新の日付
@@ -294,6 +307,7 @@ scenario('KEV-13', '一覧は追加日ごとに区切られる', async ({ page }
 
 scenario('KEV-14', '自分のスタックのキーワードを登録すると、該当件数が出て、押すと絞り込まれる', async ({ page, api }) => {
   await page.goto('/')
+  await openPublic(page, 'KEV')
   const group = page.getByRole('group', { name: '自分のスタックのキーワード' })
   await expect(page.getByText(/使っている製品名（例: Python・nginx）を追加すると/)).toBeVisible()
 
@@ -312,6 +326,7 @@ scenario('KEV-14', '自分のスタックのキーワードを登録すると、
 
   // ブラウザに保存され、再読み込みしても残る。0 件のキーワードは緑
   await page.reload()
+  await openPublic(page, 'KEV')
   await expect(group.getByRole('button', { name: /^cisco\s*\d+$/ })).toBeVisible()
   await page.getByRole('textbox', { name: 'キーワードを追加' }).fill('nginx')
   await page.getByRole('textbox', { name: 'キーワードを追加' }).press('Enter')

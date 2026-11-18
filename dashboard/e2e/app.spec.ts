@@ -1,21 +1,20 @@
 import { expect, openPublic, openTab, scenario, seedSession } from './support/test'
 
-scenario('APP-01', '初期表示でヘッダー・KEVタブ・フッターが表示される', async ({ page }) => {
+scenario('APP-01', '初期表示でヘッダー・概要タブ・フッターが表示される', async ({ page }) => {
   await page.goto('/')
 
   await expect(page.getByText('サイバー攻撃情報ダッシュボード')).toBeVisible()
-  // 最初のタブは「公開情報」で、その中の先頭の小タブは KEV
-  await expect(page.getByRole('tab', { name: '公開情報', exact: true })).toHaveAttribute('aria-selected', 'true')
-  await expect(page.getByRole('tab', { name: 'KEV', exact: true })).toHaveAttribute('aria-selected', 'true')
-  await expect(page.getByRole('tabpanel', { name: 'KEV' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: /CISA KEV/ })).toBeVisible()
+  // 最初のタブは「概要」
+  await expect(page.getByRole('tab', { name: '概要', exact: true })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('heading', { name: /概要 — いま対応が必要なもの/ })).toBeVisible()
   await expect(page.getByText('毎日 JST 00:00〜00:55 に自動更新')).toBeVisible()
 })
 
-scenario('APP-02', '4つのタブが切り替わり対応するタブパネルが表示される', async ({ page }) => {
+scenario('APP-02', '5つのタブが切り替わり対応するタブパネルが表示される', async ({ page }) => {
   await page.goto('/')
 
   const expectations = [
+    { tab: '概要', heading: /概要 — いま対応が必要なもの/ },
     { tab: '依存ライブラリ', heading: /DEPSCAN — 自作アプリの依存ライブラリ脆弱性/ },
     { tab: 'コードと設定', heading: /CODESCAN — 自アプリのコード脆弱性診断/ },
     { tab: '公開情報', heading: /CISA KEV — Known Exploited Vulnerabilities/ },
@@ -102,7 +101,8 @@ scenario('APP-06', 'アクセシビリティツリー（ARIAスナップショ�
   const mainTabs = page.locator('nav').getByRole('tablist')
   await expect(mainTabs).toMatchAriaSnapshot(`
     - tablist:
-      - tab "公開情報" [selected]
+      - tab "概要" [selected]
+      - tab "公開情報"
       - tab "依存ライブラリ"
       - tab "コードと設定"
       - tab "運用"
@@ -110,6 +110,7 @@ scenario('APP-06', 'アクセシビリティツリー（ARIAスナップショ�
   await openTab(page, '依存ライブラリ')
   await expect(mainTabs).toMatchAriaSnapshot(`
     - tablist:
+      - tab "概要"
       - tab "公開情報"
       - tab "依存ライブラリ" [selected]
       - tab "コードと設定"

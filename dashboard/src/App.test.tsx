@@ -27,6 +27,13 @@ vi.mock('./components/posture/SourceTabs', () => ({
   AuditTab: () => <div data-testid="audit-tab" />,
   SitesTab: () => <div data-testid="sites-tab" />,
 }))
+vi.mock('./components/overview/OverviewPanel', () => ({
+  OverviewPanel: ({ onNavigate }: { onNavigate: (t: { tab: string; subTab?: string }) => void }) => (
+    <div data-testid="overview-panel">
+      <button onClick={() => onNavigate({ tab: 'dependencies', subTab: 'sla' })}>go-sla</button>
+    </div>
+  ),
+}))
 vi.mock('./components/posture/AlertsTab', () => ({
   AlertsTab: () => <div data-testid="alerts-tab" />,
 }))
@@ -47,11 +54,18 @@ describe('App', () => {
     setUrl('')
   })
 
-  it('defaults to the KEV tab', () => {
+  it('defaults to the overview tab', () => {
     render(<App />)
-    expect(screen.getByTestId('kev-panel')).toBeInTheDocument()
-    expect(screen.queryByTestId('osv-panel')).not.toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: /KEV/ })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByTestId('overview-panel')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /概要/ })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('opens the tab and sub-tab chosen on an overview card', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getByText('go-sla'))
+    expect(screen.getByRole('tab', { name: /依存ライブラリ/ })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: '対応状況' })).toHaveAttribute('aria-selected', 'true')
   })
 
   it('auto-selects the DEPSCAN tab when returning from an OAuth callback', () => {
@@ -65,7 +79,9 @@ describe('App', () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await user.click(screen.getByRole('tab', { name: /OSV/ }))
+    await user.click(screen.getByRole('tab', { name: /公開情報/ }))
+    expect(screen.getByTestId('kev-panel')).toBeInTheDocument()
+    await user.click(screen.getByRole('tab', { name: /^OSV$/ }))
     expect(screen.getByTestId('osv-panel')).toBeInTheDocument()
     expect(screen.queryByTestId('kev-panel')).not.toBeInTheDocument()
 
@@ -84,7 +100,7 @@ describe('App', () => {
     render(<App />)
     expect(screen.getByTestId('health-status')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('tab', { name: /OSV/ }))
+    await user.click(screen.getByRole('tab', { name: /公開情報/ }))
     expect(screen.getByTestId('health-status')).toBeInTheDocument()
   })
 

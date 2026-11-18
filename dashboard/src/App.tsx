@@ -6,15 +6,21 @@ import { HeaderMenu } from './components/layout/HeaderMenu'
 import { TabBar } from './components/layout/TabBar'
 import { TabPanel } from './components/layout/TabPanel'
 import { TAB_DEFINITIONS, type TabKey } from './components/layout/tabs'
+import type { NavTarget } from './components/overview/overviewConfig'
 
 export default function App() {
   // GitHub OAuth コールバックからの復帰（?depscan_code=...）時は DEPSCAN タブを自動選択する
   const [activeTab, setActiveTab] = useState<TabKey>(() => (
-    new URLSearchParams(window.location.search).has('depscan_code') ? 'dependencies' : 'public'
+    new URLSearchParams(window.location.search).has('depscan_code') ? 'dependencies' : 'overview'
   ))
   // タブごとの選択中の小タブ。タブを離れて戻ったときに、直前の小タブへ戻すため、App で持つ（未選択は先頭）
   const [subTabKeys, setSubTabKeys] = useState<Partial<Record<TabKey, string>>>({})
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // 概要のカードから、該当のタブ・小タブへ移る
+  const navigate = ({ tab, subTab }: NavTarget) => {
+    setActiveTab(tab)
+    if (subTab) setSubTabKeys((prev) => ({ ...prev, [tab]: subTab }))
+  }
   const activeDefinition = TAB_DEFINITIONS.find((tab) => tab.key === activeTab)
 
   return (
@@ -54,6 +60,7 @@ export default function App() {
           <TabPanel
             tab={activeDefinition}
             subTabKey={subTabKeys[activeDefinition.key]}
+            onNavigate={navigate}
             onSubTabChange={(key) => setSubTabKeys((prev) => ({ ...prev, [activeDefinition.key]: key }))}
           />
         )}

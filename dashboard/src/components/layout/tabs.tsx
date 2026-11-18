@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
-import { Shield, Bug, ScanSearch, ShieldCheck } from 'lucide-react'
+import { Shield, Bug, ScanSearch, ShieldCheck, LayoutDashboard } from 'lucide-react'
 import type { GithubSession } from '../../hooks/useGithubSession'
+import { OverviewPanel } from '../overview/OverviewPanel'
+import { OVERVIEW_TEXT, type NavTarget } from '../overview/overviewConfig'
 import { KevPanel } from '../KevPanel'
 import { OsvPanel } from '../OsvPanel'
 import { CodescanPanel } from '../CodescanPanel'
@@ -15,12 +17,14 @@ import { ALERT_KIND_GROUPS } from '../posture/postureConfig'
 import type { FetchedCrawlerType } from '../freshness/freshnessConfig'
 
 // タブ種別
-export type TabKey = 'public' | 'dependencies' | 'code' | 'ops'
+export type TabKey = 'overview' | 'public' | 'dependencies' | 'code' | 'ops'
 
 // ログイン後に本体へ渡す文脈（セッションと、セッション失効時に呼ぶログアウト）
 export interface PanelContext {
   session: GithubSession
   logout: () => void
+  // 別のタブ・小タブへ移る（概要のカードから使う）
+  navigate: (target: NavTarget) => void
 }
 
 // 本体の定義: そのまま描ける中身、または、ログイン後の文脈を受け取る関数（login のあるタブだけが使える）
@@ -57,6 +61,17 @@ export interface TabDefinition {
 }
 
 export const TAB_DEFINITIONS: TabDefinition[] = [
+  {
+    key: 'overview',
+    label: '概要',
+    crawlerType: 'DEPSCAN',
+    icon: (size) => <LayoutDashboard size={size} className="text-emerald-400" />,
+    title: OVERVIEW_TEXT.heading,
+    subtitle: OVERVIEW_TEXT.subtitle,
+    borderColor: 'border-emerald-800/40',
+    login: { description: OVERVIEW_TEXT.loginDescription },
+    panel: ({ session, navigate }) => <OverviewPanel authToken={session.token} onNavigate={navigate} />,
+  },
   {
     key: 'public',
     label: '公開情報',

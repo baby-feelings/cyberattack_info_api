@@ -50,7 +50,7 @@ export async function seedSession(
 }
 
 // 下部固定タブバーのタブを選択する（タブは role=tab・名前＝タブ名）
-export async function openTab(page: Page, name: '公開情報' | '依存ライブラリ' | 'コードと設定' | '運用') {
+export async function openTab(page: Page, name: '概要' | '公開情報' | '依存ライブラリ' | 'コードと設定' | '運用') {
   await page.getByRole('tab', { name, exact: true }).click()
   await expect(page.getByRole('tab', { name, exact: true })).toHaveAttribute('aria-selected', 'true')
 }
@@ -87,5 +87,5 @@ export async function openCode(page: Page, sub?: CodeSubTab) {
 export async function openSettings(page: Page) {
   await page.getByRole('button', { name: 'メニュー' }).click()
   await page.getByRole('button', { name: '設定', exact: true }).click()
-  await expect(page.getByRole('heading', { name: '設定' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '設定', exact: true })).toBeVisible()
 }

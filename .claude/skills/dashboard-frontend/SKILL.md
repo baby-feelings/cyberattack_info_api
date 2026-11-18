@@ -13,9 +13,15 @@ description: Reactダッシュボード（dashboard/）のアーキテクチャ�
 テスト用の`jsonResponse`は`src/test/http.ts`（カバレッジの対象外）。
 
 ## タブ切り替え UI（App.tsx）
-KEV / OSV / DEPSCAN / CODESCAN / POSTURE の 5 つは、画面下部固定のタブバーで切り替え
-表示する構成（縦並び表示ではない）。DEPSOPS（Dependabot 運用状況）に専用タブは作らず、DEPSCAN
-タブ内のボタンから開く全画面モーダルとして統合している。「依存パッケージ」
+**概要 / 公開情報 / 依存ライブラリ / コードと設定 / 運用** の 5 タブ（`TabKey`）を、画面下部固定のタブバーで切り替える
+（最初は概要）。各タブの中は小タブ（`SubTabBar`。`TabDefinition.subTabs`。選択は`App.tsx`が持ち、タブを離れて戻っても残る）:
+公開情報＝KEV・OSV／依存ライブラリ＝検知（DEPSCAN）・対応状況・Dependabot運用・依存パッケージ・言語・実行環境・アラート／
+コードと設定＝検知（CODESCAN）・アラート（コード・シークレット）・設定の監査／運用＝外形監視。ログインが要るタブは、
+`login`を指定すると`TabPanel`が`GithubLoginGate`で包む（小タブ全体で1回）。旧モーダル4つは、枠なしの`…Panel`
+（`shared/PanelFrame`）として小タブの中身になった（以下の「モーダル」の記述は、パネルと読み替える）。
+**概要タブ**（`components/overview/`）: `OverviewMetric`（値・単位・状態。nullは「不明」で0と区別）・`overviewConfig`
+（指標の一覧・文言・色・移動先。ハードコードはここだけ）・`useOverviewData`（指標ごとに独立取得。運用中のみ）・`OverviewPanel`
+（カードを押すと`navigate`で該当のタブ・小タブへ）。以下は旧構成の経緯。「依存パッケージ」
 （`DependenciesModal.tsx`。`GET /api/depscan/dependencies`）も同じ作りで、左のアプリ一覧（`RepoRail`）で
 アプリごとに閲覧し、パッケージ名・版は「検索」ボタン／Enterで確定する（入力のたびには取得しない）。
 取得は`useEffect`の中で非同期に行い、`setState`は完了時（`.then`）だけにする（効果内で同期的に
@@ -185,7 +191,7 @@ http(s)のみリンクにする（`javascript:`等を弾くXSS対策）。
 （本番では常に「本番環境」で情報にならず、常に緑のチェックが付いて稼働の判定と紛らわしかったため削除）。
 `HealthResponse.environment` は、API の応答の型として残している（画面では使わない）。
 
-## 態勢タブ（POSTURE。`components/posture/`。設計書: `docs/superpowers/specs/2026-11-18-posture-tab-design.md`）
+## 態勢の部品（`components/posture/`。旧POSTUREタブは解体し、依存ライブラリ・コードと設定・運用の小タブになった。設計書: `docs/superpowers/specs/2026-11-18-posture-tab-design.md`）
 GitHub のセキュリティアラート（`/api/github-alerts`）・リポジトリ設定の監査（`/api/repo-audit`）・公開サイトの外形監視
 （`/api/site-monitor`）を、1タブで見る。DEPSCAN と同じ GitHub ログイン（共通部品`shared/GithubLoginGate`）。
 - **責務の分離**: 取得＝`api/posture.ts`と`usePostureData`（3つの取得元を**独立**に取り、`Source<T>`＝loading/ready/error。

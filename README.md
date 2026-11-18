@@ -32,7 +32,7 @@ Claude Code や CI/CD ツールから「今まさに悪用されているサイ�
 | **品質・セキュリティ検査** | ruff（bandit 相当含む）・mypy・ESLint・pytest/Vitest/Playwright、gitleaks・OSV-Scanner・pip-audit、OWASP ZAP による動的診断を CI で実行 |
 | **運用監視** | Prometheus + Grafana による稼働状態（API・エラー率・応答時間・ジョブの成否・防御・鍵の期限・ホストリソース）の可視化（OCI上、任意） |
 | **一覧・統計・実行ログ API** | ページネーション・検索・フィルタリング対応（詳細: [docs/api-reference.md](docs/api-reference.md)） |
-| **React ダッシュボード** | KEV・OSV・DEPSCAN・CODESCAN・POSTURE（GitHubアラート・設定の監査・外形監視）を画面下部固定タブで切り替え表示（Vercel デプロイ）。KEV・OSV は期間（初期は直近30日）と、使っている製品名のキーワード別の該当件数で、新しい脆弱性を先に確認できる。一覧は日付（追加日・更新日・検知日）ごとに区切って表示 |
+| **React ダッシュボード** | 概要（対応が必要な件数を横断して集計）・公開情報（KEV・OSV）・依存ライブラリ（DEPSCAN・対応状況・依存一覧・言語のサポート期限・Dependabot）・コードと設定（CODESCAN・GitHubアラート・設定の監査）・運用（外形監視）を、画面下部固定タブと小タブで切り替え表示（Vercel デプロイ）。KEV・OSV は期間（初期は直近30日）と、使っている製品名のキーワード別の該当件数で、新しい脆弱性を先に確認できる。一覧は日付（追加日・更新日・検知日）ごとに区切って表示 |
 
 ---
 
