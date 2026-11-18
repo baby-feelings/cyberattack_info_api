@@ -36,6 +36,12 @@ describe('PostureSummary', () => {
     expect(summary.siteIssues()).toBeNull()
   })
 
+  it('names the sources that could not be fetched, in a fixed order', () => {
+    expect(new PostureSummary({ alerts: null, audit, sites: null }).unknownSources()).toEqual(['alerts', 'sites'])
+    expect(new PostureSummary({ alerts, audit: null, sites }).unknownSources()).toEqual(['audit'])
+    expect(new PostureSummary({ alerts, audit, sites }).unknownSources()).toEqual([])
+  })
+
   it('reports 0 when a source was fetched and is empty', () => {
     const summary = new PostureSummary({
       alerts: AlertList.fromResponse({ total: 0, data: [], unavailable: [] }), audit: new AuditMatrix([]), sites: [],

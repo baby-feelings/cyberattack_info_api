@@ -41,6 +41,8 @@ describe('SCREEN_FETCH_SOURCE', () => {
   it('maps each modal screen to the crawler whose data it shows', () => {
     expect(SCREEN_FETCH_SOURCE).toEqual({
       dependencies: 'DEPSCAN', sla: 'DEPSCAN', depsops: 'DEPSOPS', runtimes: 'RUNTIME',
+      // 態勢タブの3つのセクションは、それぞれ別のクローラー
+      postureAlerts: 'GHALERT', postureAudit: 'REPOAUDIT', postureSites: 'EXTMON',
     })
   })
 })

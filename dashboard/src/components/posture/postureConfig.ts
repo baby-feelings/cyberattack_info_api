@@ -8,6 +8,55 @@ import type { AuditStatusKind } from './model/AuditStatus'
 export const POSTURE_TEXT = {
   // 取得に失敗したが、理由を読み取れないときの文言
   fetchFailed: '取得できませんでした',
+  loginDescription: 'ログインすると、自分のリポジトリのアラート・設定の監査・外形監視の結果を閲覧できます',
+  retry: '再試行',
+  loadFailed: '読み込めませんでした',
+  loading: '読み込み中',
+  all: 'すべて',
+  summary: {
+    openAlerts: 'アラート（未対応）',
+    auditRate: '設定の達成率（%）',
+    siteIssues: '外形監視の問題',
+    unknownPrefix: '取得できなかった項目:',
+  },
+  // 3つの取得元の名前（見出しの「取得できなかった項目」に出す）
+  sources: { alerts: 'アラート', audit: '設定の監査', sites: '外形監視' },
+  audit: {
+    title: 'リポジトリ × 点検項目',
+    repoColumn: 'リポジトリ',
+    onlyIssues: '改善が必要なものだけ',
+    search: 'リポジトリ名で検索',
+    empty: '点検の結果がありません。リポジトリ設定の監査は、毎日の取得のあとに表示されます。',
+    noIssues: '改善が必要なリポジトリはありません。',
+    noMatch: '該当するリポジトリがありません。',
+    legend: '項目を押すと、詳細と直し方が出ます',
+    detail: '詳細',
+    fix: '直し方',
+  },
+  alerts: {
+    title: 'GitHub のセキュリティアラート',
+    kind: '種類',
+    severity: '重要度',
+    empty: '未対応のアラートはありません。',
+    unavailableTitle: '取得できなかった項目（機能が無効・権限不足）',
+    unknownReason: '理由不明',
+    columns: { severity: '重要度', kind: '種類', repo: 'リポジトリ', title: 'タイトル', tool: '検知元' },
+    opensInNewTab: '（新しいタブで開く）',
+  },
+  sites: {
+    title: '公開サイトの外形監視',
+    empty: '外形監視の結果がありません。',
+    columns: { url: 'URL', tls: 'TLS 残日数', findings: '指摘' },
+    tlsUnit: '日',
+    noFindings: '問題なし',
+  },
+}
+
+// 外形監視の指摘の、重要度ごとの表示（API の値）。色だけに頼らず、記号でも示す
+export const SITE_SEVERITY_VIEW: Record<string, { glyph: string; cls: string }> = {
+  ERROR: { glyph: '✕', cls: 'text-red-300' },
+  WARNING: { glyph: '▲', cls: 'text-amber-300' },
+  INFO: { glyph: '・', cls: 'text-slate-400' },
 }
 
 // ── アラートの種類 ──────────────────────────────────────────────
