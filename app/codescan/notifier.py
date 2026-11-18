@@ -63,7 +63,7 @@ class CodeFindingsNotifier(Notifier):
             lines.append(f"• 重要度: {_counts_text(severities, _SEVERITY_ORDER)}")
             lines.append(f"• ツール: {_counts_text(tools)}")
             lines.append("")
-        lines.append("詳細はダッシュボードの「CODESCAN」を確認してください。")
+        lines.append("詳細はダッシュボードの「コードと設定」タブの「検知」を確認してください。")
         return truncate_for_slack("\n".join(lines).rstrip())
 
 

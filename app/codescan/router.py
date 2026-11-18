@@ -3,8 +3,9 @@
 GET /api/codescan        – 検知結果一覧（リポジトリ・重要度・解決状態・CVSS下限でフィルタ）
 GET /api/codescan/stats  – リポジトリ別・重要度別の統計情報（未解決分のみ集計）
 
-ダッシュボードの DEPSCAN/CODESCAN タブ間でセッションを共有し、両方とも GitHub ログインを
-必須にする（Issue #219）ため、`app.auth.api_key.require_api_key_or_session`（`X-API-KEY` または
+ダッシュボードの「依存ライブラリ」「コードと設定」タブ間でセッションを共有し、
+両方とも GitHub ログインを必須にする（Issue #219）ため、
+`app.auth.api_key.require_api_key_or_session`（`X-API-KEY` または
 GitHub ログインセッション JWT のいずれかを要求する共通認証）で保護する。
 
 検知結果にはリポジトリ名・脆弱な箇所が含まれるため、DEPSCAN と同様に、セッション認証時は

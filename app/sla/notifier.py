@@ -74,5 +74,5 @@ class SlaDigestNotifier(Notifier):
             lines += ["", "*リポジトリ別の期限超過*"]
             lines += [f"• `{r['repo_full_name']}`: {r['overdue']}件" for r in repos]
 
-        lines += ["", f">詳細（「対応状況」）: {DASHBOARD_URL}"]
+        lines += ["", f">詳細（「依存ライブラリ」タブの「対応状況」）: {DASHBOARD_URL}"]
         return truncate_for_slack("\n".join(lines))

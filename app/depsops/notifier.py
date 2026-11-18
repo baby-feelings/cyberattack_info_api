@@ -47,7 +47,7 @@ class DependabotOpsNotifier(Notifier):
             by_reason = Counter(item["reason"] for item in self._flagged)
             lines.append(f"⚠️ *要確認（{len(self._flagged)}件・{len(by_repo)}リポジトリ）*")
             lines.extend(f"• {reason} {count}件" for reason, count in by_reason.most_common())
-            lines.append("詳細はダッシュボードの「Dependabot運用状況」を確認してください。")
+            lines.append("詳細はダッシュボードの「依存ライブラリ」タブの「Dependabot運用」を確認してください。")
         return truncate_for_slack("\n".join(lines).rstrip())
 
 

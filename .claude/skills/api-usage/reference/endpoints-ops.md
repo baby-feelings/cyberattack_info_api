@@ -48,7 +48,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 }
 ```
 
-> React ダッシュボードでは、DEPSOPS 専用タブは無く DEPSCAN タブ内のボタンから開く
+> React ダッシュボードでは、DEPSOPS 専用タブは無く「依存ライブラリ」タブの小タブ「Dependabot運用」のボタンから開く
 > 「Dependabot 運用状況」全画面モーダルからこの一覧を閲覧できる。
 > `is_security_update` が常に `null` の場合、`GITHUB_TOKEN` に Dependabot alerts の
 > 読み取り権限（classic PAT: `security_events` スコープ / fine-grained PAT: 「Dependabot
@@ -135,7 +135,7 @@ curl -s -H "X-API-KEY: $CYBERATTACK_API_KEY" \
 
 ## 参考: GitHub ログイン API（DEPSCAN ダッシュボード用・ブラウザ専用）
 
-React ダッシュボードの DEPSCAN タブ向けの GitHub OAuth ログイン機能。ブラウザでの
+React ダッシュボードの 「依存ライブラリ」タブ（旧 DEPSCAN タブ）向けの GitHub OAuth ログイン機能。ブラウザでの
 インタラクティブな認可が前提のため、Claude Code や CI から `curl` で直接呼び出す
 スキルではない（参考情報として記載）。
 
