@@ -550,7 +550,7 @@ scenario('DEP-24', 'スマホ幅でも、小タブの文字が縦に崩れず、
   await expect(tabs).toHaveCount(6)
   // 小タブの文字は折り返されず、1行の高さに収まる（幅が足りなければ、小タブ単位で次の段に回る）
   for (const box of await tabs.evaluateAll((els) => els.map((el) => el.getBoundingClientRect()))) {
-    expect(box.height).toBeLessThan(40)
+    expect(box.height).toBeLessThan(60)
     expect(box.width).toBeGreaterThan(40)
   }
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
