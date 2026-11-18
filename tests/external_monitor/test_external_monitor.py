@@ -20,6 +20,8 @@ from app.external_monitor.notifier import SiteAlertNotifier  # noqa: E402
 from app.external_monitor.targets import Target  # noqa: E402
 
 HEADERS = {"X-API-KEY": "test-api-key-for-pytest"}
+# 運用状態（operating）の判定が読む設定（運用停止中のリポジトリの一覧）
+INACTIVE_REPOS_SETTING = "app.core.findings.operating_status.settings.INACTIVE_REPOS"
 NOW = datetime(2026, 10, 31, tzinfo=UTC)
 GOOD_HEADERS = {
     "Content-Security-Policy": "default-src 'self'; frame-ancestors 'none'",
@@ -487,6 +489,30 @@ class TestApi:
         self._seed(db_session)
         body = client.get("/api/site-monitor?only_issues=true", headers=HEADERS).json()
         assert [s["url"] for s in body["data"]] == ["https://bad.example", "https://warn.example"]
+
+    def test_operating_splits_active_and_inactive_sites(self, client, db_session):
+        self._seed(db_session)
+
+        def urls(query):
+            body = client.get(f"/api/site-monitor{query}", headers=HEADERS).json()
+            return sorted(s["url"] for s in body["data"])
+
+        everything = ["https://bad.example", "https://bob.example", "https://ok.example", "https://warn.example"]
+        with patch(INACTIVE_REPOS_SETTING, "Alice/Bad"):
+            assert urls("?operating=inactive") == ["https://bad.example"]
+            assert urls("?operating=all") == everything
+            assert urls("") == everything   # 未指定は、従来どおり全件
+
+    def test_operating_treats_a_site_without_a_repository_as_active(self, client, db_session):
+        self._seed(db_session)   # https://warn.example は、リポジトリに紐づかない（repo_full_name=None）
+
+        def urls(query):
+            body = client.get(f"/api/site-monitor{query}", headers=HEADERS).json()
+            return sorted(s["url"] for s in body["data"])
+
+        with patch(INACTIVE_REPOS_SETTING, "alice/bad"):
+            assert urls("?operating=active") == ["https://bob.example", "https://ok.example", "https://warn.example"]
+            assert "https://warn.example" not in urls("?operating=inactive")
 
     def test_session_user_sees_only_sites_of_own_repositories(self, client, db_session):
         self._seed(db_session)

@@ -45,6 +45,10 @@ CODE_ITEM = {
 }
 
 
+# 運用状態（operating）の判定が読む設定（運用停止中のリポジトリの一覧）
+INACTIVE_REPOS_SETTING = "app.core.findings.operating_status.settings.INACTIVE_REPOS"
+
+
 def _alert(kind="dependabot", repo="u/app", number=1, **detail):
     return {
         "kind": kind, "repo_full_name": repo, "number": number, "severity": "HIGH",
@@ -242,6 +246,20 @@ class TestApi:
 
         assert {a["repo_full_name"] for a in body["data"]} == {"alice/api"}
         assert [u["repo_full_name"] for u in body["unavailable"]] == ["alice/web"]
+
+    def test_operating_splits_alerts_and_unavailable_sources(self, client, db_session):
+        self._seed(db_session)   # 未解決: alice/api（secret）・bob/app（dependabot）／取得不可: alice/web
+
+        def view(query):
+            body = client.get(f"/api/github-alerts{query}", headers=HEADERS).json()
+            return (sorted(a["repo_full_name"] for a in body["data"]),
+                    [u["repo_full_name"] for u in body["unavailable"]])
+
+        with patch(INACTIVE_REPOS_SETTING, "Alice/Web, bob/app"):
+            assert view("?operating=active") == (["alice/api"], [])
+            assert view("?operating=inactive") == (["bob/app"], ["alice/web"])
+            assert view("?operating=all") == (["alice/api", "bob/app"], ["alice/web"])
+            assert view("") == (["alice/api", "bob/app"], ["alice/web"])   # 未指定は、従来どおり全件
 
     def test_compare_endpoint(self, client, db_session):
         self._seed(db_session)

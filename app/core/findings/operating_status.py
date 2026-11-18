@@ -12,7 +12,7 @@
 from typing import Annotated, Any, Literal
 
 from fastapi import Query
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Query as SaQuery
 
 from app.core.config import settings
@@ -36,9 +36,15 @@ def inactive_repo_names() -> set[str]:
 def apply_operating_status(
     query: SaQuery[Any], repo_column: Any, operating: OperatingStatus,
 ) -> SaQuery[Any]:
-    """`repo_column`（`repo_full_name` 列）を、運用状態で絞り込む。`all` ならそのまま返す。"""
+    """`repo_column`（`repo_full_name` 列）を、運用状態で絞り込む。`all` ならそのまま返す。
+
+    リポジトリに紐づかない行（列が NULL。例: 設定で指定した監視対象のサイト）は、運用中として扱う。
+    SQL では `NOT (NULL IN (...))` が NULL になり、運用中からも落ちてしまうため、明示的に含める。
+    """
     if operating == "all":
         return query
     inactive = inactive_repo_names()
     in_inactive = func.lower(repo_column).in_(inactive)
-    return query.filter(in_inactive if operating == "inactive" else ~in_inactive)
+    if operating == "inactive":
+        return query.filter(in_inactive)
+    return query.filter(or_(repo_column.is_(None), ~in_inactive))
