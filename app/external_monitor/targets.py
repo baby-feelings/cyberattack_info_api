@@ -3,7 +3,7 @@
 自分の所有するドメインだけが対象。次の3つから集める（重複は除く）。
 
 1. リポジトリの Homepage 欄
-2. Firebase Hosting（`.firebaserc` のプロジェクト ID → `https://<id>.web.app`）と、
+2. Firebase Hosting（`.firebaserc` の全環境のプロジェクト ID → `https://<id>.web.app`）と、
    Firestore の確認先
 3. GitHub Pages（`has_pages` のリポジトリ → `https://<owner>.github.io[/<repo>]`）
 
@@ -56,14 +56,27 @@ def configured_urls() -> list[str]:
     return [u.strip() for u in settings.EXTERNAL_MONITOR_URLS.split(",") if u.strip()]
 
 
-def firebase_project_id(firebaserc_text: str) -> str | None:
-    """`.firebaserc` の既定プロジェクト ID。"""
+def firebase_project_ids(firebaserc_text: str) -> list[str]:
+    """`.firebaserc` の、すべての環境（開発・本番など）のプロジェクト ID（既定が先頭。重複は除く）。
+
+    既定の1つだけを見ると、本番用のサイトが外形監視から漏れる（開発用が既定のことが多い）。
+    """
     try:
         projects = (json.loads(firebaserc_text).get("projects") or {})
     except (ValueError, AttributeError):
-        return None
-    project = projects.get("default") or next(iter(projects.values()), None)
-    return str(project) if project else None
+        return []
+    ordered = [projects.get("default"), *projects.values()]
+    ids: list[str] = []
+    for project in ordered:
+        if project and str(project) not in ids:
+            ids.append(str(project))
+    return ids
+
+
+def firebase_project_id(firebaserc_text: str) -> str | None:
+    """`.firebaserc` の既定プロジェクト ID（無ければ、最初のもの）。"""
+    ids = firebase_project_ids(firebaserc_text)
+    return ids[0] if ids else None
 
 
 def discover_targets(repos: list[dict[str, Any]], token: str) -> list[Target]:
@@ -86,17 +99,16 @@ def discover_targets(repos: list[dict[str, Any]], token: str) -> list[Target]:
             # ユーザーのサイト（`<owner>.github.io`）は、ルート。それ以外は、`/<repo>` の下
             # （ホストは同じ）
             add(Target(f"https://{owner}.github.io", SOURCE_PAGES, full_name))
-        project = _firebase_project(GitHubRepo.from_full_name(full_name, token))
-        if project:
+        for project in _firebase_projects(GitHubRepo.from_full_name(full_name, token)):
             add(Target(f"https://{project}.web.app", SOURCE_FIREBASE, full_name, project))
     for url in configured_urls():
         add(Target(url, SOURCE_CONFIG))
     return list(targets.values())
 
 
-def _firebase_project(repo: GitHubRepo) -> str | None:
-    """リポジトリの `.firebaserc` から、Firebase のプロジェクト ID を読む（無ければ None）。"""
+def _firebase_projects(repo: GitHubRepo) -> list[str]:
+    """リポジトリの `.firebaserc` から、Firebase のプロジェクト ID をすべて読む（無ければ空）。"""
     try:
-        return firebase_project_id(repo.file_content(".firebaserc"))
+        return firebase_project_ids(repo.file_content(".firebaserc"))
     except httpx.HTTPError:
-        return None
+        return []

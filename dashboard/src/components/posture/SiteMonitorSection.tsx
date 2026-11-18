@@ -41,11 +41,12 @@ export function SiteMonitorSection({ source, onRetry }: { source: Source<SiteChe
                         <a href={href} target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline">{site.url}</a>
                       ) : site.url}
                     </td>
-                    <td className="px-3 py-2 text-slate-300">{sourceLabel(site.source)}</td>
-                    <td className="px-3 py-2 text-slate-300 tabular-nums">
+                    <td className="px-3 py-2 text-slate-300 whitespace-nowrap">{sourceLabel(site.source)}</td>
+                    <td className="px-3 py-2 text-slate-300 tabular-nums whitespace-nowrap">
                       {site.tlsDaysLeft === null ? '—' : `${site.tlsDaysLeft}${POSTURE_TEXT.sites.tlsUnit}`}
                     </td>
-                    <td className="px-3 py-2">
+                    {/* 検知の列に幅の下限を付ける（無いと、スマホ幅で、1文字ずつ折り返して縦に伸びる） */}
+                    <td className="px-3 py-2 min-w-[16rem]">
                       {site.findings.length === 0 ? (
                         <span className="text-slate-400">{POSTURE_TEXT.sites.noFindings}</span>
                       ) : (
