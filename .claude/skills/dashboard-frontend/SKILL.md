@@ -84,6 +84,12 @@ jsdom 上でホバーをシミュレートしてもテストから呼び出さ�
 `components/depscan/useDepscanData.ts`・`components/osv/useOsvData.ts`（カスタムフック）に
 抽出済み。Panel本体はUIレンダリングに専念する。
 
+**画面（パネル）は3分割が基本**（挙動を変えず、長大化を防ぐ）: ①取得・状態＝`use〇〇.ts`（`useSlaReport`・`useRuntimes`・
+`useDependencies`・`useDependabotOps`・`useMcpTokens` など）、②文言・色・既定値・列見出し＝`〇〇Config.ts`（`slaConfig`・
+`runtimesConfig`・`dependenciesConfig`・`dependabotOpsConfig`・`depscanPanelConfig`・`codescanPanelConfig`・`osvPanelConfig`・
+`kevPanelConfig`・`mcpTokenConfig`）、③描画の部品＝`〇〇Sections.tsx`（表・バッジ・絞り込みなど）。Panel本体は、これらを
+並べるだけ（約40〜140行）。新しい画面・文言は、まず Config に足す。取得の古い結果を捨てる処理（`cancelled`）は、フックの中に置く。
+
 ## DepscanPanel のオーナーフィルターは repo_full_name から導出
 `GET /api/depscan` にリポジトリオーナー絞り込み用の `owner` クエリパラメータがある
 （`repo_full_name LIKE '{owner}/%'`。既存の `repo`（完全一致）とは別軸）。オーナーの選択肢
