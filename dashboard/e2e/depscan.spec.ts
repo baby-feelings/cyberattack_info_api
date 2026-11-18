@@ -542,7 +542,7 @@ scenario('DEP-23', '依存パッケージのモーダルで、アプリごとに
   expect(api.lastQuery('/api/depscan/dependencies')?.get('ecosystem')).toBe('Pub')
 })
 
-scenario('DEP-24', 'スマホ幅でも、小タブの文字が縦に崩れず、ページが横にはみ出さない', async ({ page }) => {
+scenario('DEP-24', 'スマホ幅でも、小タブの文字が縦に崩れず、帯が縦に動かず、ページが横にはみ出さない', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await openDepscan(page)
 
@@ -555,6 +555,10 @@ scenario('DEP-24', 'スマホ幅でも、小タブの文字が縦に崩れず、
     expect(box.width).toBeGreaterThan(40)
   }
   expect(new Set(boxes.map((box) => Math.round(box.top))).size).toBe(1)
+  // 帯は縦にスクロールしない（はみ出すと、スマホで触ったときに、帯の中の文字が上下に動く）
+  const bar = page.getByRole('tablist', { name: '小タブ' })
+  expect(await bar.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(0)
+  await expect(bar).toHaveCSS('overflow-y', 'hidden')
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
   expect(overflow).toBeLessThanOrEqual(1)
 })

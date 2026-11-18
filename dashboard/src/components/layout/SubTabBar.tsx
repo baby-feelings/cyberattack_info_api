@@ -43,7 +43,7 @@ export function SubTabBar({
             aria-selected={isActive}
             aria-controls={`subtabpanel-${idPrefix}`}
             onClick={() => onSelect(tab.key)}
-            className={`shrink-0 px-4 py-3 text-base font-semibold whitespace-nowrap border-b-2 -mb-px transition-colors ${
+            className={`shrink-0 px-4 py-3 text-base font-semibold whitespace-nowrap border-b-2 transition-colors ${
               isActive
                 ? 'border-violet-500 text-white'
                 : 'border-transparent text-slate-500 hover:text-slate-300'

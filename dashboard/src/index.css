@@ -23,3 +23,10 @@ body {
 ::-webkit-scrollbar-track { background: #1e293b; }
 ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+/* 横スクロールの枠は、縦にはスクロールさせない。overflow-x だけを指定すると、縦も auto になり、
+   内容が1pxでもはみ出すと、スマホで枠の中の文字が縦に動いてしまう（小タブの帯・表など） */
+.overflow-x-auto {
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+}
