@@ -61,8 +61,13 @@ def send_slack(message: str, webhook_url: str) -> bool:
     呼び出しでは戻り値を無視する）。テスト送信（`send_test_notification`）は
     戻り値で成否を判定する。
     """
+    # 送信の直前にも検証する（SSRF対策）。登録時に検証済みでも、DB の値が書き換わった場合などに、
+    # Slack 以外（社内ネットワーク・メタデータ API など）へ、リクエストを送らない
+    if not is_valid_slack_webhook_url(webhook_url):
+        logger.warning("Slack notification skipped: the webhook URL is not a Slack URL")
+        return False
     try:
-        with httpx.Client(timeout=_WEBHOOK_TIMEOUT) as client:
+        with httpx.Client(timeout=_WEBHOOK_TIMEOUT, follow_redirects=False) as client:
             resp = client.post(webhook_url, json={"text": message})
             resp.raise_for_status()
         logger.info("Slack notification sent successfully")
