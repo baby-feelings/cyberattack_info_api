@@ -1,7 +1,5 @@
-import { Fragment, useState } from 'react'
-import {
-  Bug, RefreshCw, CheckCircle2, Sparkles, GitPullRequest, Package, Cpu, Timer,
-} from 'lucide-react'
+import { Fragment } from 'react'
+import { Bug, RefreshCw, CheckCircle2, Sparkles } from 'lucide-react'
 import {
   SeverityPieChart,
   TableLoadingSkeleton, EmptyState, Pagination,
@@ -9,10 +7,6 @@ import {
 } from './shared/VulnPanelParts'
 import { DepscanGroupRow } from './depscan/DepscanGroupRow'
 import { RepoBarChart } from './depscan/RepoBarChart'
-import { DependabotOpsModal } from './depscan/DependabotOpsModal'
-import { DependenciesModal } from './depscan/DependenciesModal'
-import { RuntimesModal } from './depscan/RuntimesModal'
-import { SlaModal } from './depscan/SlaModal'
 import { SEVERITY_CLS, SEVERITY_COLORS, groupLatestDetectedAt } from './depscan/grouping'
 import { useDepscanData } from './depscan/useDepscanData'
 import { OperatingFilter } from './shared/OperatingFilter'
@@ -48,11 +42,6 @@ function RepoBadge({ crit, high, total }: { crit: number; high: number; total: n
 // authToken 指定時（GitHubログイン経由）は、サーバー側でログインユーザー本人が
 // 所有するリポジトリのみに強制的に絞り込まれる（オーナーフィルターは実質不要になる）
 export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
-  const [depsOpsOpen, setDepsOpsOpen] = useState(false)
-  const [searchOpen, setSearchOpen] = useState(false)
-  const [runtimesOpen, setRuntimesOpen] = useState(false)
-  const [slaOpen, setSlaOpen] = useState(false)
-
   const {
     owner, severity, showResolved, showExcepted, operating, sortBy, handleSort, page, setPage,
     stats, loading, newDataAvailable,
@@ -83,8 +72,7 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
       )}
 
       {/* ヘッダー */}
-      {/* 1段目: タイトルと再読み込み／2段目: 操作ボタン。幅が足りなければボタン単位で折り返す
-          （1行に詰めると、スマホ幅でボタンの文字が縦に折り返されて崩れる） */}
+      {/* タイトルと再読み込み（依存パッケージ・言語・対応状況・Dependabot運用状況は、「依存ライブラリ」タブの小タブに移した） */}
       <div className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
@@ -100,36 +88,6 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
             title="再読み込み"
           >
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-          </button>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => setSearchOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
-          >
-            <Package size={13} />
-            依存パッケージ
-          </button>
-          <button
-            onClick={() => setRuntimesOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
-          >
-            <Cpu size={13} />
-            言語・実行環境
-          </button>
-          <button
-            onClick={() => setSlaOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
-          >
-            <Timer size={13} />
-            対応状況
-          </button>
-          <button
-            onClick={() => setDepsOpsOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
-          >
-            <GitPullRequest size={13} />
-            Dependabot運用状況
           </button>
         </div>
       </div>
@@ -269,15 +227,6 @@ export function DepscanPanel({ authToken }: { authToken?: string } = {}) {
           )}
         </div>
       </div>
-
-
-      {/* Dependabot PR 自動運用（DEPSOPS）の判定履歴。専用タブは作らず全画面モーダルで表示する */}
-      <DependabotOpsModal open={depsOpsOpen} onClose={() => setDepsOpsOpen(false)} />
-
-      {/* 使っている依存パッケージの閲覧・検索（アプリごとの一覧／新しい脆弱性の影響範囲の確認）。同じく全画面モーダル */}
-      <DependenciesModal open={searchOpen} onClose={() => setSearchOpen(false)} authToken={authToken} />
-      <RuntimesModal open={runtimesOpen} onClose={() => setRuntimesOpen(false)} authToken={authToken} />
-      <SlaModal open={slaOpen} onClose={() => setSlaOpen(false)} authToken={authToken} />
     </div>
   )
 }

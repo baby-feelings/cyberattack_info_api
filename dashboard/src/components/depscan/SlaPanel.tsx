@@ -1,4 +1,4 @@
-import { FullScreenModal } from '../shared/FullScreenModal'
+import { PanelFrame } from '../shared/PanelFrame'
 import { LastFetched } from '../freshness/LastFetched'
 import { SCREEN_FETCH_SOURCE } from '../freshness/freshnessConfig'
 import { useEffect, useState } from 'react'
@@ -41,7 +41,8 @@ function OverdueBadge({ count }: { count: number }) {
   return <span className="text-red-400 font-semibold tabular-nums">{count}</span>
 }
 
-function SlaDialog({ onClose, authToken }: { onClose: () => void; authToken?: string }) {
+// 使っている画面（タブの中の小タブ）。取得は、表示されたときに始まる
+export function SlaPanel({ authToken }: { authToken?: string }) {
   const [operating, setOperating] = useState<OperatingStatus>('active')
   const [result, setResult] = useState<Result | null>(null)
 
@@ -59,9 +60,9 @@ function SlaDialog({ onClose, authToken }: { onClose: () => void; authToken?: st
   const report = !loading && result ? result.report : null
 
   return (
-    <FullScreenModal
+    <PanelFrame
       label="対応状況"
-      icon={Timer} onClose={onClose}
+      icon={Timer}
     >
       <p className="text-xs text-slate-500">
         検知から解決までの日数と、重要度ごとの対応期限（SLA）を超えている検知です。
@@ -199,16 +200,6 @@ function SlaDialog({ onClose, authToken }: { onClose: () => void; authToken?: st
           </div>
         </>
       )}
-    </FullScreenModal>
+    </PanelFrame>
   )
-}
-
-// 脆弱性への対応状況（期限超過・平均対応日数）を見る全画面モーダル。
-// DEPSCAN タブ内のボタンから開く（依存パッケージ・言語・実行環境と同じ設計）。
-// 開いたときにだけ内側を組み立てるため、閉じている間は取得しない。
-export function SlaModal({
-  open, onClose, authToken,
-}: { open: boolean; onClose: () => void; authToken?: string }) {
-  if (!open) return null
-  return <SlaDialog onClose={onClose} authToken={authToken} />
 }

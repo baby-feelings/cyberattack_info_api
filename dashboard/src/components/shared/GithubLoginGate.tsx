@@ -8,13 +8,18 @@ import { useGithubSession, type GithubSession } from '../../hooks/useGithubSessi
 // セッション管理は、DEPSCAN・CODESCAN と共通の `useGithubSession` を使い、localStorage のキーも共有する
 // （どのタブでログインしても、すべて閲覧できる）。DEPSCAN・CODESCAN のゲートは、同じ作りの重複が
 // 既にあり、そちらは、この部品への置き換えを後続とする（今回は、新しいタブだけが使う）。
+// 本体へ渡す操作。logout は、確認なしでログアウト扱いにする（セッション失効のとき用）。参照は安定している
+export interface GateControls {
+  logout: () => void
+}
+
 export function GithubLoginGate({ description, children }: {
   // 未ログイン時に、ログインで何が見られるようになるかの説明
   description: string
-  // ログイン済みのときに描く本体。セッション（トークン）を受け取る
-  children: (session: GithubSession) => ReactNode
+  // ログイン済みのときに描く本体。セッション（トークン）と、ログアウトの操作（セッション失効時に呼ぶ）を受け取る
+  children: (session: GithubSession, controls: GateControls) => ReactNode
 }) {
-  const { session, checked, handleLogoutClick } = useGithubSession()
+  const { session, checked, handleLogout, handleLogoutClick } = useGithubSession()
 
   if (!checked) return null
 
@@ -52,7 +57,7 @@ export function GithubLoginGate({ description, children }: {
         </button>
       </div>
 
-      {children(session)}
+      {children(session, { logout: handleLogout })}
     </div>
   )
 }

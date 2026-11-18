@@ -1,5 +1,5 @@
 import { API_PREFIX } from './support/mockApi'
-import { expect, openTab, scenario, seedSession, type Page } from './support/test'
+import { expect, openDependencies, openTab, scenario, seedSession, type Page } from './support/test'
 import { DEPSOPS_TOTAL, depscanFindings, depsopsItems } from './support/mockData'
 
 const TABLE = '依存ライブラリ脆弱性一覧'
@@ -8,7 +8,7 @@ const TABLE = '依存ライブラリ脆弱性一覧'
 async function openDepscan(page: Page) {
   await seedSession(page)
   await page.goto('/')
-  await openTab(page, 'DEPSCAN')
+  await openTab(page, '依存ライブラリ')
   const table = page.getByRole('table', { name: TABLE })
   await expect(table).toBeVisible()
   return table
@@ -16,7 +16,7 @@ async function openDepscan(page: Page) {
 
 scenario('DEP-01', '未ログイン時はGitHubログイン案内とログインリンクが表示される', async ({ page, api }) => {
   await page.goto('/')
-  await openTab(page, 'DEPSCAN')
+  await openTab(page, '依存ライブラリ')
 
   await expect(page.getByText('GitHubアカウントでログインしてください')).toBeVisible()
   await expect(page.getByText(/あなた自身が所有する GitHub リポジトリ/)).toBeVisible()
@@ -29,18 +29,23 @@ scenario('DEP-01', '未ログイン時はGitHubログイン案内とログイン
 })
 
 scenario('DEP-02', 'ログイン済みでスキャン中表示から完了後にパネルへ遷移する', async ({ page, api }) => {
-  api.state.scanStatuses = [
-    { username: 'octocat', status: 'running' },
-    { username: 'octocat', status: 'done', repos_scanned: 3 },
-  ]
+  // 取得の回数に依存しないよう、「完了させる」操作をするまで、実行中を返し続ける
+  // （開発サーバーの StrictMode では、画面の表示直後に、取得が2回走るため）
+  let finished = false
+  api.override('GET', '/auth/scan-status', () => ({
+    body: finished
+      ? { username: 'octocat', status: 'done', repos_scanned: 3 }
+      : { username: 'octocat', status: 'running' },
+  }))
   await seedSession(page)
   await page.goto('/')
-  await openTab(page, 'DEPSCAN')
+  await openTab(page, '依存ライブラリ')
 
   await expect(page.getByText('octocat のリポジトリをスキャン中です')).toBeVisible()
   await expect(page.getByRole('table', { name: TABLE })).toHaveCount(0)
 
   // 4秒間隔のポーリングで完了を検知し、パネルが表示される
+  finished = true
   await expect(page.getByRole('table', { name: TABLE })).toBeVisible({ timeout: 15_000 })
   await expect(page.getByText('octocat のリポジトリをスキャン中です')).toHaveCount(0)
   await expect(page.getByText('ログイン中:')).toBeVisible()
@@ -161,9 +166,9 @@ scenario('DEP-07', '複数オーナーのときオーナーフィルターが表
 
 scenario('DEP-08', 'Dependabot運用状況モーダルを開き一覧・フィルターを操作できる', async ({ page, api }) => {
   await openDepscan(page)
-  await page.getByRole('button', { name: 'Dependabot運用状況' }).click()
+  await openDependencies(page, 'Dependabot運用')
 
-  const dialog = page.getByRole('dialog', { name: 'Dependabot 運用状況' })
+  const dialog = page.getByRole('region', { name: 'Dependabot 運用状況' })
   const table = dialog.getByRole('table', { name: 'Dependabot PR 判定履歴' })
   await expect(dialog).toBeVisible()
   await expect(dialog.getByText('Dependabot 運用状況（DEPSOPS）')).toBeVisible()
@@ -202,26 +207,23 @@ scenario('DEP-08', 'Dependabot運用状況モーダルを開き一覧・フィ�
   expect(api.lastQuery('/api/depsops')?.has('action')).toBe(false)
 })
 
-scenario('DEP-09', 'モーダルを閉じるボタン/Escapeで閉じられる', async ({ page, api }) => {
+scenario('DEP-09', '検知とDependabot運用の小タブを切り替えられ、Dependabot運用は表示したときだけ取得する', async ({ page, api }) => {
   await openDepscan(page)
-  const open = page.getByRole('button', { name: 'Dependabot運用状況' })
-  const dialog = page.getByRole('dialog', { name: 'Dependabot 運用状況' })
+  // 検知の画面では、DEPSOPS のデータを取得しない
+  expect(api.requestsTo('/api/depsops')).toHaveLength(0)
 
-  await open.click()
-  await expect(dialog).toBeVisible()
-  await dialog.getByRole('button', { name: '閉じる' }).click()
-  await expect(dialog).toBeHidden()
+  await openDependencies(page, 'Dependabot運用')
+  const panel = page.getByRole('region', { name: 'Dependabot 運用状況' })
+  await expect(panel).toBeVisible()
+  await expect(panel.getByRole('table', { name: 'Dependabot PR 判定履歴' })).toBeVisible()
+  const callsWhileShown = api.requestsTo('/api/depsops').length
+  expect(callsWhileShown).toBeGreaterThan(0)
 
-  await open.click()
-  await expect(dialog).toBeVisible()
-  await page.keyboard.press('Escape')
-  await expect(dialog).toBeHidden()
-
-  // 閉じている間は DEPSOPS のデータを取得しない（開いた2回分のみ）
-  const callsWhileClosed = api.requestsTo('/api/depsops').length
-  await page.getByRole('button', { name: '再読み込み' }).click()
+  // 検知へ戻ると、検知の一覧が表示され、Dependabot運用の画面は消える
+  await openDependencies(page, '検知')
   await expect(page.getByRole('table', { name: TABLE })).toBeVisible()
-  expect(api.requestsTo('/api/depsops')).toHaveLength(callsWhileClosed)
+  await expect(panel).toHaveCount(0)
+  expect(api.requestsTo('/api/depsops')).toHaveLength(callsWhileShown)
 })
 
 scenario('DEP-10', 'ログアウトは確認ダイアログを経て未ログインに戻る（キャンセルで維持）', async ({ page }) => {
@@ -249,7 +251,7 @@ scenario('DEP-11', 'スキャンエラー状態のときエラーバナーが表
   api.state.scanStatuses = [{ username: 'octocat', status: 'error', error_message: 'rate limit exceeded' }]
   await seedSession(page)
   await page.goto('/')
-  await openTab(page, 'DEPSCAN')
+  await openTab(page, '依存ライブラリ')
 
   await expect(page.getByText('スキャン中にエラーが発生しました: rate limit exceeded')).toBeVisible()
   // エラーでもスキャン中表示にはならず、既存データのパネルは閲覧できる
@@ -260,7 +262,7 @@ scenario('DEP-12', 'セッション失効（401）で自動的にログアウト
   api.override('GET', '/auth/scan-status', () => ({ status: 401, body: { detail: 'expired' } }))
   await seedSession(page)
   await page.goto('/')
-  await openTab(page, 'DEPSCAN')
+  await openTab(page, '依存ライブラリ')
 
   await expect(page.getByText('GitHubアカウントでログインしてください')).toBeVisible()
   expect(await page.evaluate(() => localStorage.getItem('depscan_session_token'))).toBeNull()
@@ -272,7 +274,7 @@ scenario('DEP-18', '表示時にセッションが延長され、新しいトー
   }))
   await seedSession(page)
   await page.goto('/')
-  await openTab(page, 'DEPSCAN')
+  await openTab(page, '依存ライブラリ')
 
   await expect.poll(() => page.evaluate(() => localStorage.getItem('depscan_session_token')))
     .toBe('refreshed-token')
@@ -283,7 +285,7 @@ scenario('DEP-19', '延長できない（ログインから上限日数を超え
   api.override('POST', '/auth/refresh', () => ({ status: 401, body: { detail: 'expired' } }))
   await seedSession(page)
   await page.goto('/')
-  await openTab(page, 'DEPSCAN')
+  await openTab(page, '依存ライブラリ')
 
   await expect(page.getByText('GitHubアカウントでログインしてください')).toBeVisible()
   expect(await page.evaluate(() => localStorage.getItem('depscan_session_token'))).toBeNull()
@@ -294,7 +296,7 @@ scenario('DEP-13', '新しいクロールを検知すると更新バナーが表
   await page.clock.install()
   await seedSession(page)
   await page.goto('/')
-  await openTab(page, 'DEPSCAN')
+  await openTab(page, '依存ライブラリ')
   await expect(page.getByRole('table', { name: TABLE })).toBeVisible()
   // 表示データの基準となるクロールログIDが記録されるまで待つ
   await expect.poll(() => api.requestsTo('/api/crawler-logs').length).toBeGreaterThan(0)
@@ -320,7 +322,7 @@ scenario('DEP-14', '該当なしのとき空状態メッセージが表示され
   api.override('GET', '/api/depscan', () => ({ body: { total: 0, page: 1, per_page: 200, data: [] } }))
   await seedSession(page)
   await page.goto('/')
-  await openTab(page, 'DEPSCAN')
+  await openTab(page, '依存ライブラリ')
 
   await expect(page.getByText('該当する依存ライブラリ脆弱性はありません')).toBeVisible()
   await expect(page.getByRole('table', { name: TABLE })).toHaveCount(0)
@@ -342,8 +344,8 @@ scenario('DEP-15', 'リクエストにBearerトークンが付与される（X-A
 
 scenario('DEP-16', 'モーダルのページ送りと該当なし状態', async ({ page, api }) => {
   await openDepscan(page)
-  await page.getByRole('button', { name: 'Dependabot運用状況' }).click()
-  const dialog = page.getByRole('dialog', { name: 'Dependabot 運用状況' })
+  await openDependencies(page, 'Dependabot運用')
+  const dialog = page.getByRole('region', { name: 'Dependabot 運用状況' })
   const bottom = dialog.getByRole('navigation', { name: 'ページ送り（下部）' })
 
   // 45件 / 20件 = 3ページ。最終ページは5件
@@ -366,8 +368,8 @@ scenario('DEP-16', 'モーダルのページ送りと該当なし状態', async 
 
 scenario('DEP-17', 'モーダルのページ送りの最初/最後ボタンとページ番号の直接入力', async ({ page, api }) => {
   await openDepscan(page)
-  await page.getByRole('button', { name: 'Dependabot運用状況' }).click()
-  const dialog = page.getByRole('dialog', { name: 'Dependabot 運用状況' })
+  await openDependencies(page, 'Dependabot運用')
+  const dialog = page.getByRole('region', { name: 'Dependabot 運用状況' })
   const bottom = dialog.getByRole('navigation', { name: 'ページ送り（下部）' })
   const first = bottom.getByRole('button', { name: '最初のページへ' })
   const last = bottom.getByRole('button', { name: '最後のページへ' })
@@ -438,8 +440,8 @@ scenario('DEP-20', '運用中／運用停止中を切り替えると、リクエ
 scenario('DEP-21', 'Dependabot運用状況モーダルも運用中／運用停止中で分かれる', async ({ page, api }) => {
   api.state.inactiveRepos = ['baby-feelings/app-two']
   await openDepscan(page)
-  await page.getByRole('button', { name: 'Dependabot運用状況' }).click()
-  const dialog = page.getByRole('dialog', { name: 'Dependabot 運用状況' })
+  await openDependencies(page, 'Dependabot運用')
+  const dialog = page.getByRole('region', { name: 'Dependabot 運用状況' })
   const bottom = dialog.getByRole('navigation', { name: 'ページ送り（下部）' })
   const group = dialog.getByRole('group', { name: '運用状態フィルター' })
 
@@ -486,9 +488,9 @@ scenario('DEP-22', '左のアプリ一覧で、対応が必要なアプリが上
 
 scenario('DEP-23', '依存パッケージのモーダルで、アプリごとに閲覧し、パッケージ・版・エコシステムで検索できる', async ({ page, api }) => {
   await openDepscan(page)
-  await page.getByRole('button', { name: '依存パッケージ' }).click()
+  await openDependencies(page, '依存パッケージ')
 
-  const dialog = page.getByRole('dialog', { name: '依存パッケージ' })
+  const dialog = page.getByRole('region', { name: '依存パッケージ' })
   await expect(dialog).toBeVisible()
   // 開いただけで、運用中のアプリすべての依存が一覧に出る（何も入力しなくてよい）。Bearer トークンで取得する
   const table = dialog.getByRole('table', { name: '依存パッケージ一覧' })
@@ -540,35 +542,26 @@ scenario('DEP-23', '依存パッケージのモーダルで、アプリごとに
   expect(api.lastQuery('/api/depscan/dependencies')?.get('ecosystem')).toBe('Pub')
 })
 
-scenario('DEP-24', 'スマホ幅でも、操作ボタンが縦に崩れず、タイトルの下に折り返して並ぶ', async ({ page }) => {
+scenario('DEP-24', 'スマホ幅でも、小タブの文字が縦に崩れず、ページが横にはみ出さない', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await openDepscan(page)
 
-  const heading = page.getByText('自作アプリの依存ライブラリ脆弱性（未解決）')
-  const packages = page.getByRole('button', { name: '依存パッケージ' })
-  const runtimes = page.getByRole('button', { name: '言語・実行環境' })
-  const depsops = page.getByRole('button', { name: 'Dependabot運用状況' })
-  await expect(packages).toBeVisible()
-  await expect(runtimes).toBeVisible()
-  await expect(depsops).toBeVisible()
-
-  // ボタンの文字は折り返されず、1行の高さに収まる（以前は幅が足りず、1文字ずつ縦に折り返していた）
-  for (const button of [packages, runtimes, depsops]) {
-    const box = await button.boundingBox()
-    expect(box!.height).toBeLessThan(40)
-    expect(box!.width).toBeGreaterThan(90)
+  const tabs = page.getByRole('tablist', { name: '小タブ' }).getByRole('tab')
+  await expect(tabs).toHaveCount(6)
+  // 小タブの文字は折り返されず、1行の高さに収まる（幅が足りなければ、小タブ単位で次の段に回る）
+  for (const box of await tabs.evaluateAll((els) => els.map((el) => el.getBoundingClientRect()))) {
+    expect(box.height).toBeLessThan(40)
+    expect(box.width).toBeGreaterThan(40)
   }
-  // 操作ボタンは、タイトルの下の段に並ぶ
-  const headingBox = await heading.boundingBox()
-  const packagesBox = await packages.boundingBox()
-  expect(packagesBox!.y).toBeGreaterThan(headingBox!.y + headingBox!.height - 1)
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+  expect(overflow).toBeLessThanOrEqual(1)
 })
 
 scenario('DEP-25', '言語・実行環境のモーダルで、アプリごとに版と状態を閲覧し、更新が必要なものだけに絞れる', async ({ page, api }) => {
   await openDepscan(page)
-  await page.getByRole('button', { name: '言語・実行環境' }).click()
+  await openDependencies(page, '言語・実行環境')
 
-  const dialog = page.getByRole('dialog', { name: '言語・実行環境' })
+  const dialog = page.getByRole('region', { name: '言語・実行環境' })
   await expect(dialog).toBeVisible()
   // 開いただけで、運用中のアプリすべての言語・実行環境が一覧に出る（何も入力しなくてよい）。Bearer トークンで取得する
   const table = dialog.getByRole('table', { name: '言語・実行環境一覧' })
@@ -649,9 +642,9 @@ scenario('DEP-26', '悪意あるパッケージ（MAL-*）は「悪意あり」�
 scenario('DEP-27', '対応状況のモーダルで、期限超過の検知と平均対応日数を見られ、運用中／運用停止中で分かれる', async ({ page, api }) => {
   api.state.inactiveRepos = ['other-owner/tool']
   await openDepscan(page)
-  await page.getByRole('button', { name: '対応状況' }).click()
+  await openDependencies(page, '対応状況')
 
-  const dialog = page.getByRole('dialog', { name: '対応状況' })
+  const dialog = page.getByRole('region', { name: '対応状況' })
   await expect(dialog).toBeVisible()
   // Bearer トークンで、運用中のアプリだけを取得する
   const tiles = dialog.getByLabel('対応状況の概要')
@@ -681,9 +674,6 @@ scenario('DEP-27', '対応状況のモーダルで、期限超過の検知と平
   await expect(table).not.toContainText('lodash')
   expect(api.lastQuery('/api/sla')?.get('operating')).toBe('inactive')
 
-  // Escape で閉じる
-  await page.keyboard.press('Escape')
-  await expect(dialog).toBeHidden()
 })
 
 scenario('DEP-28', '検知を受容（理由・期限つき）にすると一覧から外れ、「例外を含む」でタグつきで見られ、解除すると元に戻る', async ({ page, api }) => {
@@ -774,4 +764,25 @@ scenario('DEP-30', '並び順を検知日順にすると、検知日ごとの区
   // 重要度順に戻すと、区切りは消える
   await sort.getByRole('button', { name: '重要度' }).click()
   await expect(dividers).toHaveCount(0)
+})
+
+scenario('DEP-31', '依存ライブラリのアラートの小タブには、Dependabot のアラートだけが出て、運用停止中は折りたたまれている', async ({ page, api }) => {
+  api.state.inactiveRepos = ['baby-feelings/app-stopped']
+  await openDepscan(page)
+  await openDependencies(page, 'アラート')
+
+  // 運用中の区画: Dependabot の種別だけ。コード・シークレットのアラートは、出ない
+  const alerts = page.getByRole('table', { name: 'GitHub のセキュリティアラート' })
+  await expect(alerts).toContainText('lodash の脆弱性')
+  await expect(alerts).not.toContainText('XSS の可能性')
+  await expect(alerts).not.toContainText('AWS のアクセスキー')
+  expect(api.lastQuery('/api/github-alerts')?.get('operating')).toBe('active')
+
+  // 運用停止中の区画は、開くまで取得しない。開くと、運用停止中のアプリの Dependabot（ここでは0件）を取得する
+  const toggle = page.getByRole('button', { name: /運用停止中/ })
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  await expect.poll(() => api.lastQuery('/api/github-alerts')?.get('operating')).toBe('inactive')
+  await expect(page.getByRole('region', { name: '運用停止中' })).toContainText('未対応のアラートはありません。')
 })

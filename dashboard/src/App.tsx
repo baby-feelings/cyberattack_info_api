@@ -10,7 +10,7 @@ import { TAB_DEFINITIONS, type TabKey } from './components/layout/tabs'
 export default function App() {
   // GitHub OAuth コールバックからの復帰（?depscan_code=...）時は DEPSCAN タブを自動選択する
   const [activeTab, setActiveTab] = useState<TabKey>(() => (
-    new URLSearchParams(window.location.search).has('depscan_code') ? 'depscan' : 'public'
+    new URLSearchParams(window.location.search).has('depscan_code') ? 'dependencies' : 'public'
   ))
   // タブごとの選択中の小タブ。タブを離れて戻ったときに、直前の小タブへ戻すため、App で持つ（未選択は先頭）
   const [subTabKeys, setSubTabKeys] = useState<Partial<Record<TabKey, string>>>({})

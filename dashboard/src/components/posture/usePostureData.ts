@@ -52,11 +52,19 @@ function useSource<T>(load: Loader<T>, authToken: string, operating: OperatingSt
   return { source, reload }
 }
 
-// 「態勢」タブの、データ取得。3つの取得元（設定の監査・アラート・外形監視）を、並行に、独立に取る。
+// 取得元ごとのフック。1つの取得元だけを使う画面（小タブ）が、単独で呼ぶ
+export const useAuditSource = (authToken: string, operating: OperatingStatus) =>
+  useSource(loadAudit, authToken, operating)
+export const useAlertsSource = (authToken: string, operating: OperatingStatus) =>
+  useSource(loadAlerts, authToken, operating)
+export const useSitesSource = (authToken: string, operating: OperatingStatus) =>
+  useSource(loadSites, authToken, operating)
+
+// 3つの取得元（設定の監査・アラート・外形監視）を、並行に、独立に取る。
 export function usePostureData(authToken: string, operating: OperatingStatus) {
-  const { source: audit, reload: reloadAudit } = useSource(loadAudit, authToken, operating)
-  const { source: alerts, reload: reloadAlerts } = useSource(loadAlerts, authToken, operating)
-  const { source: sites, reload: reloadSites } = useSource(loadSites, authToken, operating)
+  const { source: audit, reload: reloadAudit } = useAuditSource(authToken, operating)
+  const { source: alerts, reload: reloadAlerts } = useAlertsSource(authToken, operating)
+  const { source: sites, reload: reloadSites } = useSitesSource(authToken, operating)
 
   // 取得元を指定すれば、その1つだけ。省略すれば、3つとも
   const reload = useCallback((which?: PostureSourceKey) => {

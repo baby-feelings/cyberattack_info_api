@@ -1,5 +1,5 @@
 import { RECENT_CRAWL_HOURS_AGO } from './support/mockApi'
-import { expect, openPublic, openTab, scenario, seedSession } from './support/test'
+import { expect, openDependencies, openPublic, openTab, scenario, seedSession } from './support/test'
 
 // 現在時刻の hoursAgo 時間前に終わった実行（モックの実行履歴 1 件分）
 function crawlerLog(status: string, hoursAgo: number, inserted = 0) {
@@ -17,7 +17,7 @@ scenario('FRS-01', '各タブの見出しに、そのタブのクローラーの
   await page.goto('/')
   await expect(lastFetched(page)).toBeVisible()
   const tabs = [
-    ['KEV', 'KEV'], ['OSV', 'OSV'], ['DEPSCAN', 'DEPSCAN'], ['CODESCAN', 'CODESCAN'],
+    ['KEV', 'KEV'], ['OSV', 'OSV'], ['依存ライブラリ', 'DEPSCAN'], ['CODESCAN', 'CODESCAN'],
   ] as const
   for (const [tab, crawlerType] of tabs) {
     if (tab === 'KEV' || tab === 'OSV') await openPublic(page, tab)
@@ -75,10 +75,9 @@ scenario('FRS-05', '実行履歴を取得できなくても、画面は動き「
 scenario('FRS-06', '言語・実行環境の画面にも、最終取得が表示される', async ({ page, api }) => {
   await seedSession(page)
   await page.goto('/')
-  await openTab(page, 'DEPSCAN')
-  await page.getByRole('button', { name: '言語・実行環境' }).click()
+  await openDependencies(page, '言語・実行環境')
 
-  const dialog = page.getByRole('dialog', { name: '言語・実行環境' })
+  const dialog = page.getByRole('region', { name: '言語・実行環境' })
   await expect(dialog.getByTestId('last-fetched')).toBeVisible()
   await expect.poll(() => api.requestsTo('/api/crawler-logs')
     .some((r) => r.query.get('crawler_type') === 'RUNTIME')).toBe(true)
@@ -87,19 +86,18 @@ scenario('FRS-06', '言語・実行環境の画面にも、最終取得が表示
 scenario('FRS-07', '依存パッケージ・対応状況・Dependabot運用状況の画面にも、最終取得が表示される', async ({ page, api }) => {
   await seedSession(page)
   await page.goto('/')
-  await openTab(page, 'DEPSCAN')
+  await openTab(page, '依存ライブラリ')
 
-  // 画面（ボタン名＝ダイアログ名）と、その画面が表示するデータを取得するクローラーの種別
+  // 画面（小タブ名）と、その画面が表示するデータを取得するクローラーの種別
   const screens = [
-    ['依存パッケージ', 'DEPSCAN'], ['対応状況', 'DEPSCAN'], ['Dependabot運用状況', 'DEPSOPS'],
+    ['依存パッケージ', 'DEPSCAN'], ['対応状況', 'DEPSCAN'], ['Dependabot運用', 'DEPSOPS'],
   ] as const
   for (const [name, crawlerType] of screens) {
-    await page.getByRole('button', { name }).click()
-    const dialog = page.getByRole('dialog')
-    await expect(dialog.getByTestId('last-fetched')).toBeVisible()
+    await openDependencies(page, name)
+    // 画面の見出しの領域に、最終取得が出る（小タブの名前は短く、領域の名前は少し長いため、先頭の一致で探す）
+    const region = page.getByRole('region', { name: new RegExp(`^${name === 'Dependabot運用' ? 'Dependabot 運用状況' : name}`) })
+    await expect(region.getByTestId('last-fetched')).toBeVisible()
     await expect.poll(() => api.requestsTo('/api/crawler-logs')
       .some((r) => r.query.get('crawler_type') === crawlerType)).toBe(true)
-    await page.keyboard.press('Escape')
-    await expect(dialog).toBeHidden()
   }
 })

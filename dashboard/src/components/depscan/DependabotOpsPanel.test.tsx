@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { DependabotOpsModal } from './DependabotOpsModal'
+import { DependabotOpsPanel } from './DependabotOpsPanel'
 import { fetchCrawlerLogs } from '../../api/crawlerLogs'
 import {
   fetchDepsOpsList, fetchDepsOpsStats,
@@ -42,19 +42,11 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('DependabotOpsModal', () => {
-  it('renders nothing when closed', () => {
-    mockedList.mockResolvedValue(listResponse([]))
-    mockedStats.mockResolvedValue({ repos: [] })
-    render(<DependabotOpsModal open={false} onClose={vi.fn()} />)
-    expect(screen.queryByText('Dependabot 運用状況（DEPSOPS）')).not.toBeInTheDocument()
-    expect(mockedList).not.toHaveBeenCalled()
-  })
-
+describe('DependabotOpsPanel', () => {
   it('fetches and shows PR entries once opened', async () => {
     mockedList.mockResolvedValue(listResponse([item()]))
     mockedStats.mockResolvedValue({ repos: [] })
-    render(<DependabotOpsModal open onClose={vi.fn()} />)
+    render(<DependabotOpsPanel />)
 
     await waitFor(() => {
       expect(screen.getByText(/Bump lucide-react/)).toBeInTheDocument()
@@ -65,7 +57,7 @@ describe('DependabotOpsModal', () => {
   it('shows when the data was last fetched, from the DEPSOPS crawler', async () => {
     mockedList.mockResolvedValue(listResponse([item()]))
     mockedStats.mockResolvedValue({ repos: [] })
-    render(<DependabotOpsModal open onClose={vi.fn()} />)
+    render(<DependabotOpsPanel />)
 
     expect(await screen.findByTestId('last-fetched')).toBeInTheDocument()
     expect(mockedLogs).toHaveBeenCalledWith(expect.objectContaining({ crawlerType: 'DEPSOPS' }))
@@ -74,7 +66,7 @@ describe('DependabotOpsModal', () => {
   it('shows the empty state when there are no matching PRs', async () => {
     mockedList.mockResolvedValue(listResponse([]))
     mockedStats.mockResolvedValue({ repos: [] })
-    render(<DependabotOpsModal open onClose={vi.fn()} />)
+    render(<DependabotOpsPanel />)
 
     await waitFor(() => {
       expect(screen.getByText('該当する PR はありません')).toBeInTheDocument()
@@ -86,7 +78,7 @@ describe('DependabotOpsModal', () => {
       item({ pr_number: 7, action: 'flagged', reason: 'メジャーバージョンアップ' }),
     ]))
     mockedStats.mockResolvedValue({ repos: [] })
-    render(<DependabotOpsModal open onClose={vi.fn()} />)
+    render(<DependabotOpsPanel />)
     await waitFor(() => expect(screen.getByText('メジャーバージョンアップ')).toBeInTheDocument())
 
     mockedList.mockClear()
@@ -106,7 +98,7 @@ describe('DependabotOpsModal', () => {
       item({ pr_number: 3, is_security_update: null }),
     ]))
     mockedStats.mockResolvedValue({ repos: [] })
-    render(<DependabotOpsModal open onClose={vi.fn()} />)
+    render(<DependabotOpsPanel />)
 
     await waitFor(() => expect(screen.getByText('セキュリティ更新')).toBeInTheDocument())
     expect(screen.getByText('バージョン更新')).toBeInTheDocument()
@@ -121,7 +113,7 @@ describe('DependabotOpsModal', () => {
       }),
     ]))
     mockedStats.mockResolvedValue({ repos: [] })
-    render(<DependabotOpsModal open onClose={vi.fn()} />)
+    render(<DependabotOpsPanel />)
 
     await waitFor(() => {
       expect(screen.getByAltText('Dependabot compatibility score')).toHaveAttribute(
@@ -133,38 +125,16 @@ describe('DependabotOpsModal', () => {
   it('shows a placeholder when no compatibility score badge is available', async () => {
     mockedList.mockResolvedValue(listResponse([item({ pr_number: 1 })]))
     mockedStats.mockResolvedValue({ repos: [] })
-    render(<DependabotOpsModal open onClose={vi.fn()} />)
+    render(<DependabotOpsPanel />)
 
     await waitFor(() => expect(screen.getByText(/Bump lucide-react/)).toBeInTheDocument())
     expect(screen.queryByAltText('Dependabot compatibility score')).not.toBeInTheDocument()
   })
 
-  it('calls onClose when the close button is clicked', async () => {
-    mockedList.mockResolvedValue(listResponse([]))
-    mockedStats.mockResolvedValue({ repos: [] })
-    const onClose = vi.fn()
-    render(<DependabotOpsModal open onClose={onClose} />)
-    await waitFor(() => expect(mockedList).toHaveBeenCalled())
-
-    await userEvent.click(screen.getByLabelText('閉じる'))
-    expect(onClose).toHaveBeenCalledOnce()
-  })
-
-  it('calls onClose when Escape is pressed', async () => {
-    mockedList.mockResolvedValue(listResponse([]))
-    mockedStats.mockResolvedValue({ repos: [] })
-    const onClose = vi.fn()
-    render(<DependabotOpsModal open onClose={onClose} />)
-    await waitFor(() => expect(mockedList).toHaveBeenCalled())
-
-    await userEvent.keyboard('{Escape}')
-    expect(onClose).toHaveBeenCalledOnce()
-  })
-
   it('renders the unresolved repo chart from all fetched entries', async () => {
     mockedList.mockResolvedValue(listResponse([item()]))
     mockedStats.mockResolvedValue({ repos: [{ repo_full_name: 'u/r1', count: 1 }] })
-    render(<DependabotOpsModal open onClose={vi.fn()} />)
+    render(<DependabotOpsPanel />)
 
     await waitFor(() => {
       expect(screen.getByText('リポジトリ別 要確認PR件数（未解決）')).toBeInTheDocument()
@@ -175,7 +145,7 @@ describe('DependabotOpsModal', () => {
   it('offers only auto-merged and flagged filters (resolved PRs are deleted)', async () => {
     mockedList.mockResolvedValue(listResponse([item({ pr_number: 1, action: 'flagged' })]))
     mockedStats.mockResolvedValue({ repos: [] })
-    render(<DependabotOpsModal open onClose={vi.fn()} />)
+    render(<DependabotOpsPanel />)
 
     await waitFor(() => expect(screen.getByRole('button', { name: '要確認' })).toBeInTheDocument())
     expect(screen.getByRole('button', { name: '自動マージ' })).toBeInTheDocument()
@@ -185,7 +155,7 @@ describe('DependabotOpsModal', () => {
   it('shows only running apps by default, and switches to stopped / all (page reset)', async () => {
     mockedList.mockResolvedValue(listResponse([item()]))
     mockedStats.mockResolvedValue({ repos: [] })
-    render(<DependabotOpsModal open onClose={vi.fn()} />)
+    render(<DependabotOpsPanel />)
 
     await waitFor(() =>
       expect(mockedList).toHaveBeenCalledWith(expect.objectContaining({ operating: 'active' })),

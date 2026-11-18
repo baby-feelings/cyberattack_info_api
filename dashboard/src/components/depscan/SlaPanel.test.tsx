@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { SlaModal } from './SlaModal'
+import { SlaPanel } from './SlaPanel'
 import { fetchCrawlerLogs } from '../../api/crawlerLogs'
 import { fetchSlaReport, type SlaReport } from '../../api/client'
 
@@ -50,21 +50,14 @@ function report(overrides: Partial<SlaReport> = {}): SlaReport {
 }
 
 async function openDialog() {
-  render(<SlaModal open onClose={vi.fn()} authToken="tok" />)
+  render(<SlaPanel authToken="tok" />)
   await waitFor(() => expect(screen.getByLabelText('対応状況の概要')).toBeInTheDocument())
 }
 
-describe('SlaModal', () => {
+describe('SlaPanel', () => {
   // 波括弧で包む（モック関数を返すと、Vitest が後始末の関数として呼び出してしまう）
   beforeEach(() => { mockedFetch.mockResolvedValue(report()) })
   afterEach(() => { vi.clearAllMocks() })
-
-  it('renders nothing and fetches nothing while closed', () => {
-    render(<SlaModal open={false} onClose={vi.fn()} />)
-
-    expect(screen.queryByRole('dialog', { name: '対応状況' })).not.toBeInTheDocument()
-    expect(mockedFetch).not.toHaveBeenCalled()
-  })
 
   it('shows when the data was last fetched, from the DEPSCAN crawler', async () => {
     await openDialog()
@@ -154,20 +147,9 @@ describe('SlaModal', () => {
 
   it('shows an error message when the fetch fails', async () => {
     mockedFetch.mockRejectedValue(new Error('boom'))
-    render(<SlaModal open onClose={vi.fn()} />)
+    render(<SlaPanel />)
 
     expect(await screen.findByText('取得に失敗しました。時間をおいて再度お試しください')).toBeInTheDocument()
   })
 
-  it('closes with the close button and the Escape key', async () => {
-    const user = userEvent.setup()
-    const onClose = vi.fn()
-    render(<SlaModal open onClose={onClose} />)
-    await screen.findByLabelText('対応状況の概要')
-
-    await user.click(screen.getByRole('button', { name: '閉じる' }))
-    await user.keyboard('{Escape}')
-
-    expect(onClose).toHaveBeenCalledTimes(2)
-  })
 })

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { RuntimesModal } from './RuntimesModal'
+import { RuntimesPanel } from './RuntimesPanel'
 import { fetchCrawlerLogs } from '../../api/crawlerLogs'
 import {
   fetchRuntimes, fetchRuntimeRepos, fetchRuntimeReleases,
@@ -73,19 +73,11 @@ afterEach(() => {
 
 // 取得が終わって一覧が表示されるまで待つ
 async function renderOpen(authToken?: string) {
-  render(<RuntimesModal open onClose={vi.fn()} authToken={authToken} />)
+  render(<RuntimesPanel authToken={authToken} />)
   await waitFor(() => expect(screen.getByRole('table', { name: '言語・実行環境一覧' })).toBeInTheDocument())
 }
 
-describe('RuntimesModal', () => {
-  it('renders nothing and does not fetch while closed', () => {
-    render(<RuntimesModal open={false} onClose={vi.fn()} />)
-    expect(screen.queryByRole('dialog', { name: '言語・実行環境' })).not.toBeInTheDocument()
-    expect(mockedList).not.toHaveBeenCalled()
-    expect(mockedRepos).not.toHaveBeenCalled()
-    expect(mockedReleases).not.toHaveBeenCalled()
-  })
-
+describe('RuntimesPanel', () => {
   it('lists the runtimes as soon as it opens, without any input', async () => {
     await renderOpen('session-token')
 
@@ -263,7 +255,7 @@ describe('RuntimesModal', () => {
 
   it('shows the empty state, with a message specific to the needs-action filter', async () => {
     mockedList.mockResolvedValue({ total: 0, data: [] })
-    render(<RuntimesModal open onClose={vi.fn()} />)
+    render(<RuntimesPanel />)
     expect(await screen.findByText('該当する言語・実行環境はありません')).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: '更新が必要なものだけ' }))
@@ -272,16 +264,8 @@ describe('RuntimesModal', () => {
 
   it('shows an error message when fetching fails', async () => {
     mockedList.mockRejectedValue(new Error('boom'))
-    render(<RuntimesModal open onClose={vi.fn()} />)
+    render(<RuntimesPanel />)
     expect(await screen.findByText(/取得に失敗しました/)).toBeInTheDocument()
   })
 
-  it('closes with the close button and the Escape key', async () => {
-    const onClose = vi.fn()
-    render(<RuntimesModal open onClose={onClose} />)
-    await userEvent.click(screen.getByRole('button', { name: '閉じる' }))
-    expect(onClose).toHaveBeenCalledTimes(1)
-    await userEvent.keyboard('{Escape}')
-    expect(onClose).toHaveBeenCalledTimes(2)
-  })
 })

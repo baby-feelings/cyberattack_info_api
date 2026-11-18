@@ -13,8 +13,13 @@ vi.mock('./components/KevPanel', () => ({
 vi.mock('./components/OsvPanel', () => ({
   OsvPanel: () => <div data-testid="osv-panel" />,
 }))
-vi.mock('./components/DepscanAuthGate', () => ({
-  DepscanAuthGate: () => <div data-testid="depscan-auth-gate" />,
+vi.mock('./components/shared/GithubLoginGate', () => ({
+  GithubLoginGate: ({ children }: { children: (s: unknown, c: unknown) => unknown }) => (
+    <div data-testid="login-gate">{children({ token: 'tok', username: 'octocat' }, { logout: vi.fn() }) as never}</div>
+  ),
+}))
+vi.mock('./components/DepscanScanView', () => ({
+  DepscanScanView: () => <div data-testid="depscan-auth-gate" />,
 }))
 vi.mock('./components/CodescanAuthGate', () => ({
   CodescanAuthGate: () => <div data-testid="codescan-auth-gate" />,
@@ -50,7 +55,7 @@ describe('App', () => {
     setUrl('?depscan_code=abc123')
     render(<App />)
     expect(screen.getByTestId('depscan-auth-gate')).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: /DEPSCAN/ })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: /依存ライブラリ/ })).toHaveAttribute('aria-selected', 'true')
   })
 
   it('switches panels when a different tab is clicked', async () => {
@@ -61,7 +66,7 @@ describe('App', () => {
     expect(screen.getByTestId('osv-panel')).toBeInTheDocument()
     expect(screen.queryByTestId('kev-panel')).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('tab', { name: /DEPSCAN/ }))
+    await user.click(screen.getByRole('tab', { name: /依存ライブラリ/ }))
     expect(screen.getByTestId('depscan-auth-gate')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: new RegExp(POSTURE_TAB.label) }))

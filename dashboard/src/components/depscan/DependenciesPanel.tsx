@@ -1,4 +1,4 @@
-import { FullScreenModal } from '../shared/FullScreenModal'
+import { PanelFrame } from '../shared/PanelFrame'
 import { LastFetched } from '../freshness/LastFetched'
 import { SCREEN_FETCH_SOURCE } from '../freshness/freshnessConfig'
 import { useEffect, useState, type FormEvent } from 'react'
@@ -74,7 +74,8 @@ function RepoBadge({ stat }: { stat: RepoDependencyRepoStat }) {
   )
 }
 
-function DependenciesDialog({ onClose, authToken }: { onClose: () => void; authToken?: string }) {
+// 使っている画面（タブの中の小タブ）。取得は、表示されたときに始まる
+export function DependenciesPanel({ authToken }: { authToken?: string }) {
   const [filters, setFilters] = useState<Filters>(INITIAL_FILTERS)
   // 入力欄の文字（「検索」またはEnterで filters に確定する）
   const [packageText, setPackageText] = useState('')
@@ -132,9 +133,9 @@ function DependenciesDialog({ onClose, authToken }: { onClose: () => void; authT
   const totalPages = list ? Math.ceil(list.total / PER_PAGE) : 0
 
   return (
-    <FullScreenModal
+    <PanelFrame
       label="依存パッケージ"
-      icon={Package} onClose={onClose}
+      icon={Package}
     >
       <p className="text-xs text-slate-500">
         各アプリが使っている依存パッケージの一覧です。左でアプリを選ぶと、そのアプリが使っている依存を見られます。
@@ -278,16 +279,6 @@ function DependenciesDialog({ onClose, authToken }: { onClose: () => void; authT
           )}
         </div>
       </div>
-    </FullScreenModal>
+    </PanelFrame>
   )
-}
-
-// 使っている依存パッケージを、アプリごとに閲覧し、パッケージ名・版で検索する全画面モーダル。
-// DEPSCAN タブ内のボタンから開く（Dependabot 運用状況と同じ設計。追加の固定タブにはしない）。
-// 開いたときにだけ内側を組み立てるため、閉じている間は取得しない。
-export function DependenciesModal({
-  open, onClose, authToken,
-}: { open: boolean; onClose: () => void; authToken?: string }) {
-  if (!open) return null
-  return <DependenciesDialog onClose={onClose} authToken={authToken} />
 }

@@ -90,6 +90,12 @@ export const ALERT_KIND_VIEW: Record<'secret' | 'dependabot' | 'code', AlertKind
   dependabot: { label: 'Dependabot', icon: 'Package' },
   code: { label: 'コード', icon: 'ScanSearch' },
 }
+// 画面ごとに扱うアラートの種別（依存ライブラリ＝Dependabot、コードと設定＝コードスキャン・シークレット）
+export const ALERT_KIND_GROUPS = {
+  dependencies: ['dependabot'],
+  code: ['code', 'secret'],
+} as const satisfies Record<string, readonly (keyof typeof ALERT_KIND_VIEW)[]>
+
 // 未知の種類のアイコン
 export const ALERT_FALLBACK_ICON: AlertIconName = 'ShieldAlert'
 

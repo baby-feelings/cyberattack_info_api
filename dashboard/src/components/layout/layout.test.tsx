@@ -12,13 +12,26 @@ vi.mock('../../api/crawlerLogs', () => ({ fetchCrawlerLogs: vi.fn().mockResolved
 // 重いパネル本体は軽量なダミーへ差し替える（レイアウトだけを検証する）
 vi.mock('../KevPanel', () => ({ KevPanel: () => <div>kev-panel</div> }))
 vi.mock('../OsvPanel', () => ({ OsvPanel: () => <div>osv-panel</div> }))
-vi.mock('../DepscanAuthGate', () => ({ DepscanAuthGate: () => <div>depscan-gate</div> }))
+// ログインのゲートは、ログイン済みの状態を装う（小タブの切り替えだけを検証する）
+vi.mock('../shared/GithubLoginGate', () => ({
+  GithubLoginGate: ({ children }: { children: (s: unknown, c: unknown) => unknown }) => (
+    <div data-testid="login-gate">{children({ token: 'tok', username: 'octocat' }, { logout: vi.fn() }) as never}</div>
+  ),
+}))
+vi.mock('../DepscanScanView', () => ({ DepscanScanView: () => <div>depscan-scan-view</div> }))
+vi.mock('../depscan/SlaPanel', () => ({ SlaPanel: ({ authToken }: { authToken: string }) => <div>sla-panel {authToken}</div> }))
+vi.mock('../depscan/DependabotOpsPanel', () => ({ DependabotOpsPanel: () => <div>depsops-panel</div> }))
+vi.mock('../depscan/DependenciesPanel', () => ({ DependenciesPanel: () => <div>deps-panel</div> }))
+vi.mock('../depscan/RuntimesPanel', () => ({ RuntimesPanel: () => <div>runtimes-panel</div> }))
+vi.mock('../posture/AlertsTab', () => ({
+  AlertsTab: ({ kinds }: { kinds: string[] }) => <div>alerts-tab {kinds.join(',')}</div>,
+}))
 vi.mock('../CodescanAuthGate', () => ({ CodescanAuthGate: () => <div>codescan-gate</div> }))
 vi.mock('../posture/PostureAuthGate', () => ({ PostureAuthGate: () => <div>posture-gate</div> }))
 
 describe('TAB_DEFINITIONS', () => {
   it('defines the four tabs in display order with unique keys', () => {
-    expect(TAB_DEFINITIONS.map((t) => t.key)).toEqual(['public', 'depscan', 'codescan', 'posture'])
+    expect(TAB_DEFINITIONS.map((t) => t.key)).toEqual(['public', 'dependencies', 'codescan', 'posture'])
     expect(new Set(TAB_DEFINITIONS.map((t) => t.key)).size).toBe(4)
   })
 
@@ -36,10 +49,10 @@ describe('TAB_DEFINITIONS', () => {
 
 describe('TabBar', () => {
   it('renders one tab per definition and marks only the active one as selected', () => {
-    render(<TabBar activeTab="depscan" onSelect={vi.fn()} />)
+    render(<TabBar activeTab="dependencies" onSelect={vi.fn()} />)
     const tabs = screen.getAllByRole('tab')
     expect(tabs).toHaveLength(4)
-    expect(screen.getByRole('tab', { name: /DEPSCAN/ })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: /依存ライブラリ/ })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('tab', { name: /公開情報/ })).toHaveAttribute('aria-selected', 'false')
   })
 
@@ -54,17 +67,17 @@ describe('TabBar', () => {
   it('links each tab to its panel via aria-controls and calls onSelect with the key', () => {
     const onSelect = vi.fn()
     render(<TabBar activeTab="public" onSelect={onSelect} />)
-    const depscan = screen.getByRole('tab', { name: /DEPSCAN/ })
-    expect(depscan).toHaveAttribute('id', 'tab-depscan')
-    expect(depscan).toHaveAttribute('aria-controls', 'tabpanel-depscan')
+    const depscan = screen.getByRole('tab', { name: /依存ライブラリ/ })
+    expect(depscan).toHaveAttribute('id', 'tab-dependencies')
+    expect(depscan).toHaveAttribute('aria-controls', 'tabpanel-dependencies')
     fireEvent.click(depscan)
-    expect(onSelect).toHaveBeenCalledWith('depscan')
+    expect(onSelect).toHaveBeenCalledWith('dependencies')
   })
 })
 
 describe('TabPanel', () => {
   it('shows the last fetch of the crawler the tab declares, next to the heading', async () => {
-    const tab = TAB_DEFINITIONS.find((t) => t.key === 'depscan')!
+    const tab = TAB_DEFINITIONS.find((t) => t.key === 'dependencies')!
     render(<TabPanel tab={tab} />)
     expect(await screen.findByTestId('last-fetched')).toBeInTheDocument()
     expect(fetchCrawlerLogs).toHaveBeenCalledWith(expect.objectContaining({ crawlerType: 'DEPSCAN' }))
@@ -102,14 +115,35 @@ describe('TabPanel', () => {
   })
 
   it('renders heading, subtitle and body with aria wiring back to the tab', () => {
-    const tab = TAB_DEFINITIONS.find((t) => t.key === 'depscan')!
+    const tab = TAB_DEFINITIONS.find((t) => t.key === 'dependencies')!
     render(<TabPanel tab={tab} />)
-    const panel = screen.getByRole('tabpanel')
-    expect(panel).toHaveAttribute('id', 'tabpanel-depscan')
-    expect(panel).toHaveAttribute('aria-labelledby', 'tab-depscan')
+    // 外側（タブ）のパネルが先頭。小タブの中身のパネルが、その中に入る
+    const panel = screen.getAllByRole('tabpanel')[0]
+    expect(panel).toHaveAttribute('id', 'tabpanel-dependencies')
+    expect(panel).toHaveAttribute('aria-labelledby', 'tab-dependencies')
     expect(screen.getByRole('heading', { name: /DEPSCAN/ })).toBeInTheDocument()
     expect(screen.getByText(/OSV と照合し、悪意あるパッケージ/)).toBeInTheDocument()
-    expect(screen.getByText('depscan-gate')).toBeInTheDocument()
+    expect(screen.getByText('depscan-scan-view')).toBeInTheDocument()
+  })
+
+  describe('the dependencies tab (behind the GitHub login gate)', () => {
+    const tab = () => TAB_DEFINITIONS.find((t) => t.key === 'dependencies')!
+
+    it('has the six sub tabs in order, inside one login gate', () => {
+      render(<TabPanel tab={tab()} />)
+      expect(screen.getAllByTestId('login-gate')).toHaveLength(1)
+      expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
+        '検知', '対応状況', 'Dependabot運用', '依存パッケージ', '言語・実行環境', 'アラート',
+      ])
+    })
+
+    it('passes the session token to a sub tab, and only the dependabot alerts to the alerts tab', () => {
+      const { rerender } = render(<TabPanel tab={tab()} subTabKey="sla" />)
+      expect(screen.getByText('sla-panel tok')).toBeInTheDocument()
+
+      rerender(<TabPanel tab={tab()} subTabKey="alerts" />)
+      expect(screen.getByText('alerts-tab dependabot')).toBeInTheDocument()
+    })
   })
 })
 

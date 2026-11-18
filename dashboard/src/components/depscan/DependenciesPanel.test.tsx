@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { DependenciesModal } from './DependenciesModal'
+import { DependenciesPanel } from './DependenciesPanel'
 import { fetchCrawlerLogs } from '../../api/crawlerLogs'
 import {
   fetchRepoDependencies, fetchRepoDependencyRepos,
@@ -54,18 +54,11 @@ afterEach(() => {
 
 // 取得が終わって一覧が表示されるまで待つ
 async function renderOpen(authToken?: string) {
-  render(<DependenciesModal open onClose={vi.fn()} authToken={authToken} />)
+  render(<DependenciesPanel authToken={authToken} />)
   await waitFor(() => expect(screen.getByRole('table', { name: '依存パッケージ一覧' })).toBeInTheDocument())
 }
 
-describe('DependenciesModal', () => {
-  it('renders nothing and does not fetch while closed', () => {
-    render(<DependenciesModal open={false} onClose={vi.fn()} />)
-    expect(screen.queryByRole('dialog', { name: '依存パッケージ' })).not.toBeInTheDocument()
-    expect(mockedList).not.toHaveBeenCalled()
-    expect(mockedRepos).not.toHaveBeenCalled()
-  })
-
+describe('DependenciesPanel', () => {
   it('shows when the data was last fetched, from the DEPSCAN crawler', async () => {
     await renderOpen()
     expect(await screen.findByTestId('last-fetched')).toBeInTheDocument()
@@ -188,7 +181,7 @@ describe('DependenciesModal', () => {
 
   it('shows the empty state, with a message specific to "vulnerable only"', async () => {
     mockedList.mockResolvedValue(listResponse([]))
-    render(<DependenciesModal open onClose={vi.fn()} />)
+    render(<DependenciesPanel />)
     await waitFor(() => expect(screen.getByText('該当する依存パッケージはありません')).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: '脆弱性ありのみ' }))
@@ -197,7 +190,7 @@ describe('DependenciesModal', () => {
 
   it('shows an error state when fetching fails', async () => {
     mockedList.mockRejectedValue(new Error('boom'))
-    render(<DependenciesModal open onClose={vi.fn()} />)
+    render(<DependenciesPanel />)
     await waitFor(() => expect(screen.getByText(/取得に失敗しました/)).toBeInTheDocument())
   })
 
@@ -207,14 +200,4 @@ describe('DependenciesModal', () => {
     expect(screen.getByText('undici')).toBeInTheDocument()
   })
 
-  it('closes with the close button and with Escape', async () => {
-    const onClose = vi.fn()
-    render(<DependenciesModal open onClose={onClose} />)
-
-    await userEvent.click(screen.getByLabelText('閉じる'))
-    expect(onClose).toHaveBeenCalledTimes(1)
-
-    await userEvent.keyboard('{Escape}')
-    expect(onClose).toHaveBeenCalledTimes(2)
-  })
 })
