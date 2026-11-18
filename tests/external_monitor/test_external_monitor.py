@@ -365,6 +365,29 @@ class TestTargets:
         assert targets.firebase_project_id("not json") is None
         assert targets.firebase_project_id("[]") is None
 
+    def test_firebase_project_ids_lists_every_environment_default_first(self):
+        text = '{"projects": {"dev": "p-dev", "default": "p-dev", "prod": "p-prod"}}'
+        assert targets.firebase_project_ids(text) == ["p-dev", "p-prod"]
+        assert targets.firebase_project_ids('{"projects": {"a": "x", "b": "y"}}') == ["x", "y"]
+        assert targets.firebase_project_ids('{"projects": {"default": "x", "prod": "x"}}') == ["x"]
+        assert targets.firebase_project_ids('{"projects": {}}') == []
+        assert targets.firebase_project_ids("not json") == []
+        assert targets.firebase_project_ids("[]") == []
+
+    def test_discovers_every_firebase_project_of_a_repository(self):
+        repos = [{"full_name": "u/app", "homepage": "", "has_pages": False}]
+
+        def firebaserc(self, path):
+            return '{"projects": {"default": "app-dev", "dev": "app-dev", "prod": "app-prod"}}'
+
+        with patch("app.external_monitor.targets.GitHubRepo.file_content", firebaserc),              patch("app.external_monitor.targets.settings.EXTERNAL_MONITOR_URLS", ""):
+            found = targets.discover_targets(repos, "tok")
+
+        by_url = {t.url: t for t in found}
+        assert set(by_url) == {"https://app-dev.web.app", "https://app-prod.web.app"}
+        assert by_url["https://app-prod.web.app"].firebase_project == "app-prod"
+        assert by_url["https://app-prod.web.app"].repo_full_name == "u/app"
+
     def test_discovers_homepage_pages_firebase_and_configured_urls_without_duplicates(self):
         repos = [
             {"full_name": "u/web", "homepage": "https://web.example/app", "has_pages": False},
