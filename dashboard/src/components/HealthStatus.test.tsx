@@ -14,15 +14,17 @@ describe('HealthStatus', () => {
     vi.resetAllMocks()
   })
 
-  it('shows OK status and translated environment label on success', async () => {
+  it('shows OK status and the DB connection on success, without an environment row', async () => {
     mockedFetchHealth.mockResolvedValueOnce({
       status: 'ok', environment: 'production', db_connected: true,
     })
     render(<HealthStatus />)
 
     await waitFor(() => expect(screen.getByText('OK')).toBeInTheDocument())
-    expect(screen.getByText('本番環境')).toBeInTheDocument()
     expect(screen.getByText('正常')).toBeInTheDocument()
+    // 実行環境の行は表示しない（本番では常に同じ値で、情報にならないため）
+    expect(screen.queryByText('実行環境')).not.toBeInTheDocument()
+    expect(screen.queryByText('本番環境')).not.toBeInTheDocument()
   })
 
   it('shows UNREACHABLE when the health check fails', async () => {
@@ -31,15 +33,6 @@ describe('HealthStatus', () => {
 
     await waitFor(() => expect(screen.getByText('UNREACHABLE')).toBeInTheDocument())
     expect(screen.getByText('エラー')).toBeInTheDocument()
-  })
-
-  it('falls back to the raw environment string when unrecognized', async () => {
-    mockedFetchHealth.mockResolvedValueOnce({
-      status: 'ok', environment: 'staging', db_connected: true,
-    })
-    render(<HealthStatus />)
-
-    await waitFor(() => expect(screen.getByText('staging')).toBeInTheDocument())
   })
 
   it('re-fetches when the refresh button is clicked', async () => {

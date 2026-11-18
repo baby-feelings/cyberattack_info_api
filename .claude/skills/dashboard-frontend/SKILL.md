@@ -180,9 +180,10 @@ http(s)のみリンクにする（`javascript:`等を弾くXSS対策）。
   （そのまま読むと、ブラウザが現地時間とみなして数時間ずれる）。相対時間は「昨日」ではなく「1 日前」（24時間ごと）
 - **基準時刻**: 履歴を取得した時点で更新する（画面を開いた時刻のままだと、経過時間を短く表示する）。履歴は10分ごとに取り直す
 
-## 実行環境表示の日本語化（HealthStatus.tsx）
-`/health` の `environment` フィールド（`production`/`development`）はそのまま表示せず、
-`ENVIRONMENT_LABELS` で「本番環境」/「開発環境」に変換してから表示する。
+## サーバー稼働状況（HealthStatus.tsx）
+`/health` の状態（OK／DEGRADED／UNREACHABLE）と「DB 接続」だけを表示する。**「実行環境」の行は表示しない**
+（本番では常に「本番環境」で情報にならず、常に緑のチェックが付いて稼働の判定と紛らわしかったため削除）。
+`HealthResponse.environment` は、API の応答の型として残している（画面では使わない）。
 
 ## APIクライアントの分割構成（dashboard/src/api/）
 `client.ts`（元は451行の単一ファイル）は、ドメインごとに `shared.ts`/`kev.ts`/`osv.ts`/
