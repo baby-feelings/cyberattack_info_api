@@ -21,6 +21,7 @@ from app.core.findings.operating_status import (  # noqa: E402
 )
 from app.depscan.models import DependencyFinding  # noqa: E402
 from app.depsops.models import DependabotPrLog  # noqa: E402
+from app.external_monitor.models import SiteCheck  # noqa: E402
 
 _NOW = datetime.now(UTC)
 _HEADERS = {"X-API-KEY": "test-api-key-for-pytest"}
@@ -91,6 +92,26 @@ class TestApplyOperatingStatus:
         assert [f.repo_full_name for f in active] == [_ACTIVE]
         assert [f.repo_full_name for f in stopped] == [_STOPPED]
         assert len(everything) == 2
+
+    def test_rows_without_a_repository_count_as_active(self, db_session):
+        """リポジトリに紐づかない行（repo が NULL）は、運用中として扱う。"""
+        db_session.add_all([
+            SiteCheck(url="https://none.example", source="config", repo_full_name=None,
+                      tls_days_left=1, findings=[], checked_at=_NOW),
+            SiteCheck(url="https://stopped.example", source="homepage", repo_full_name=_STOPPED,
+                      tls_days_left=1, findings=[], checked_at=_NOW),
+        ])
+        db_session.commit()
+        query = db_session.query(SiteCheck)
+
+        with patch(_CFG, _STOPPED):
+            active = apply_operating_status(query, SiteCheck.repo_full_name, "active").all()
+            stopped = apply_operating_status(query, SiteCheck.repo_full_name, "inactive").all()
+
+        assert [s.url for s in active] == ["https://none.example"]
+        assert [s.url for s in stopped] == ["https://stopped.example"]
+        db_session.query(SiteCheck).delete()
+        db_session.commit()
 
     def test_everything_is_active_when_nothing_is_listed(self, db_session, seeded):
         with patch(_CFG, ""):

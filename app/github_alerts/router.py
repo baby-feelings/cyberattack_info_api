@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.api_key import require_api_key, require_api_key_or_session
 from app.core.database import get_db
+from app.core.findings.operating_status import OperatingQuery, apply_operating_status
 from app.core.runner.background import run_in_background
 from app.github_alerts.crawler import fetch_and_store_github_alerts
 from app.github_alerts.models import SOURCE_UNAVAILABLE, GithubAlert, GithubAlertSource
@@ -83,12 +84,16 @@ def list_github_alerts(
     kind: Annotated[Literal["secret", "dependabot", "code"] | None, Query()] = None,
     repo: Annotated[str | None, Query(description="リポジトリ（owner/name）")] = None,
     resolved: Annotated[bool, Query(description="解決済みも含める")] = False,
+    operating: OperatingQuery = "all",
 ) -> GithubAlertListResponse:
     query = db.query(GithubAlert).filter(_owned(forced_owner, GithubAlert.repo_full_name))
     sources = db.query(GithubAlertSource).filter(
         _owned(forced_owner, GithubAlertSource.repo_full_name),
         GithubAlertSource.status == SOURCE_UNAVAILABLE,
     )
+    # 運用状態（取得不可の項目にも同じ絞り込みを適用する）
+    query = apply_operating_status(query, GithubAlert.repo_full_name, operating)
+    sources = apply_operating_status(sources, GithubAlertSource.repo_full_name, operating)
     if kind:
         query, sources = query.filter(GithubAlert.kind == kind), sources.filter(
             GithubAlertSource.kind == kind)

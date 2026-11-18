@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.api_key import require_api_key, require_api_key_or_session
 from app.core.database import get_db
+from app.core.findings.operating_status import OperatingQuery, apply_operating_status
 from app.core.runner.background import run_in_background
 from app.repo_audit.checks import NG
 from app.repo_audit.crawler import fetch_and_audit_repos
@@ -63,10 +64,12 @@ def get_repo_audit(
     db: Annotated[Session, Depends(get_db)],
     forced_owner: Annotated[str | None, Depends(require_api_key_or_session)],
     only_issues: Annotated[bool, Query(description="改善すべき項目があるリポジトリだけ")] = False,
+    operating: OperatingQuery = "all",
 ) -> RepoAuditResponse:
     query = db.query(RepoAudit)
     if forced_owner:
         query = query.filter(RepoAudit.repo_full_name.like(f"{forced_owner}/%"))
+    query = apply_operating_status(query, RepoAudit.repo_full_name, operating)
     rows = [
         RepoAuditOut(
             repo_full_name=r.repo_full_name, score=r.score,

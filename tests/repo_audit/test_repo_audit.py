@@ -20,6 +20,8 @@ from app.repo_audit.notifier import RepoAuditChangeNotifier  # noqa: E402
 
 HEADERS = {"X-API-KEY": "test-api-key-for-pytest"}
 NOW = datetime(2026, 10, 31, tzinfo=UTC)
+# 運用状態（operating）の判定が読む設定（運用停止中のリポジトリの一覧）
+INACTIVE_REPOS_SETTING = "app.core.findings.operating_status.settings.INACTIVE_REPOS"
 
 SECURE = {
     "repo": {
@@ -383,6 +385,19 @@ class TestApi:
         token = create_session_token("bob")
         body = client.get("/api/repo-audit", headers={"Authorization": f"Bearer {token}"}).json()
         assert [r["repo_full_name"] for r in body["data"]] == ["bob/none"]
+
+    def test_operating_splits_active_and_inactive_repositories(self, client, db_session):
+        self._seed(db_session)
+
+        def repos(query):
+            body = client.get(f"/api/repo-audit{query}", headers=HEADERS).json()
+            return [r["repo_full_name"] for r in body["data"]]
+
+        with patch(INACTIVE_REPOS_SETTING, "Alice/Bad"):
+            assert repos("?operating=active") == ["alice/good", "bob/none"]
+            assert repos("?operating=inactive") == ["alice/bad"]
+            assert repos("?operating=all") == ["alice/bad", "alice/good", "bob/none"]
+            assert repos("") == ["alice/bad", "alice/good", "bob/none"]   # 未指定は、従来どおり全件
 
     def test_manual_run_needs_the_admin_key(self, client):
         assert client.post("/admin/repo-audit-crawl").status_code in (401, 403)

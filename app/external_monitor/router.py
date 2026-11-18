@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.api_key import require_api_key, require_api_key_or_session
 from app.core.database import get_db
+from app.core.findings.operating_status import OperatingQuery, apply_operating_status
 from app.core.runner.background import run_in_background
 from app.external_monitor.crawler import fetch_and_monitor_sites
 from app.external_monitor.models import SiteCheck
@@ -64,10 +65,12 @@ def get_site_monitor(
     only_issues: Annotated[
         bool, Query(description="問題（ERROR・WARNING）があるサイトだけ"),
     ] = False,
+    operating: OperatingQuery = "all",
 ) -> SiteMonitorResponse:
     query = db.query(SiteCheck)
     if forced_owner:
         query = query.filter(SiteCheck.repo_full_name.like(f"{forced_owner}/%"))
+    query = apply_operating_status(query, SiteCheck.repo_full_name, operating)
 
     def worst(row: SiteCheck) -> int:
         return min((_SEVERITY_ORDER.get(f["severity"], 3) for f in row.findings), default=3)
