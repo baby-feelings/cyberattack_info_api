@@ -32,17 +32,17 @@ vi.mock('../posture/SourceTabs', () => ({
 }))
 
 describe('TAB_DEFINITIONS', () => {
-  it('defines the four tabs in display order with unique keys', () => {
-    expect(TAB_DEFINITIONS.map((t) => t.key)).toEqual(['public', 'dependencies', 'code', 'ops'])
-    expect(new Set(TAB_DEFINITIONS.map((t) => t.key)).size).toBe(4)
+  it('defines the five tabs in display order with unique keys', () => {
+    expect(TAB_DEFINITIONS.map((t) => t.key)).toEqual(['overview', 'public', 'dependencies', 'code', 'ops'])
+    expect(new Set(TAB_DEFINITIONS.map((t) => t.key)).size).toBe(5)
   })
 
   it('declares the crawler whose last fetch each tab shows', () => {
-    expect(TAB_DEFINITIONS.map((t) => t.crawlerType)).toEqual(['KEV', 'DEPSCAN', 'CODESCAN', 'EXTMON'])
+    expect(TAB_DEFINITIONS.map((t) => t.crawlerType)).toEqual(['DEPSCAN', 'KEV', 'DEPSCAN', 'CODESCAN', 'EXTMON'])
   })
 
   it('puts the logged-in tabs behind a GitHub login, and the public tab in front of none', () => {
-    expect(TAB_DEFINITIONS.filter((t) => t.login).map((t) => t.key)).toEqual(['dependencies', 'code', 'ops'])
+    expect(TAB_DEFINITIONS.filter((t) => t.login).map((t) => t.key)).toEqual(['overview', 'dependencies', 'code', 'ops'])
   })
 })
 
@@ -50,7 +50,7 @@ describe('TabBar', () => {
   it('renders one tab per definition and marks only the active one as selected', () => {
     render(<TabBar activeTab="dependencies" onSelect={vi.fn()} />)
     const tabs = screen.getAllByRole('tab')
-    expect(tabs).toHaveLength(4)
+    expect(tabs).toHaveLength(5)
     expect(screen.getByRole('tab', { name: /依存ライブラリ/ })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('tab', { name: /公開情報/ })).toHaveAttribute('aria-selected', 'false')
   })

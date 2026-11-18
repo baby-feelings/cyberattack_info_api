@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type { PanelContent, PanelContext, TabDefinition } from './tabs'
+import type { NavTarget } from '../overview/overviewConfig'
 import { LastFetched } from '../freshness/LastFetched'
 import { GithubLoginGate } from '../shared/GithubLoginGate'
 import { SubTabBar } from './SubTabBar'
@@ -15,12 +16,14 @@ function resolve(content: PanelContent, ctx: PanelContext | null): ReactNode {
 // 小タブがあるタブは、小タブの切り替えを出し、見出し・最終取得・本体は選択中の小タブのものを使う。
 // login があるタブは、GitHub ログインのゲートで本体を包む（小タブすべてで1回のログインを共有する）
 export function TabPanel({
-  tab, subTabKey, onSubTabChange,
+  tab, subTabKey, onSubTabChange, onNavigate,
 }: {
   tab: TabDefinition
   // 選択中の小タブ（未指定・不明な値は、先頭の小タブ）
   subTabKey?: string
   onSubTabChange?: (key: string) => void
+  // 別のタブ・小タブへ移る（概要のカード用）
+  onNavigate?: (target: NavTarget) => void
 }) {
   const subTabs = tab.subTabs
   const activeSub = subTabs?.find((sub) => sub.key === subTabKey) ?? subTabs?.[0]
@@ -63,7 +66,7 @@ export function TabPanel({
       </div>
       {tab.login ? (
         <GithubLoginGate description={tab.login.description}>
-          {(session, { logout }) => renderBody({ session, logout })}
+          {(session, { logout }) => renderBody({ session, logout, navigate: (target) => onNavigate?.(target) })}
         </GithubLoginGate>
       ) : renderBody(null)}
     </section>
