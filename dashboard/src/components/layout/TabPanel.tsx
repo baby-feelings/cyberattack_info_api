@@ -47,7 +47,9 @@ export function TabPanel({
       id={`tabpanel-${tab.key}`}
       role="tabpanel"
       aria-labelledby={`tab-${tab.key}`}
-      className="flex flex-col gap-4 sm:gap-6 lg:gap-8"
+      // 切り替え直後（読み込み中）に中身が短くなっても、ページの高さが縮まないよう、画面の高さを下限にする。
+      // 縮むと、スマホのブラウザがスクロール位置を補正して、画面が上下に動く（dvh は、アドレスバーの伸縮に追従する）
+      className="flex flex-col gap-4 sm:gap-6 lg:gap-8 min-h-[100dvh]"
     >
       {/* 小タブは見出しの上に置く。見出し（題名の長さ・最終取得の行数）が小タブごとに違っても、押したボタンの位置が動かない */}
       {subTabs && activeSub && (
