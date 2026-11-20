@@ -19,6 +19,8 @@ export function DependenciesPanel({ authToken }: { authToken?: string }) {
     <PanelFrame
       label={T.label}
       icon={Package}
+      onReload={d.reload}
+      reloading={d.loading}
     >
       <p className="text-xs text-slate-500">{T.intro}</p>
 

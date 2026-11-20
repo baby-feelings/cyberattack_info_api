@@ -1,6 +1,7 @@
 import { useId, type ReactNode } from 'react'
 import { githubLoginUrl } from '../../api/client'
 import { LastFetched } from '../freshness/LastFetched'
+import { ReloadButton } from '../shared/ReloadButton'
 import type { FetchedCrawlerType } from '../freshness/freshnessConfig'
 import { POSTURE_TEXT } from './postureConfig'
 import type { Source } from './usePostureData'
@@ -20,7 +21,10 @@ export function PostureSection<T>({ title, crawlerType, source, onRetry, childre
     <section aria-labelledby={headingId} className="rounded-2xl border border-slate-800 bg-slate-900 p-4 flex flex-col gap-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <h3 id={headingId} className="text-sm font-semibold text-slate-200">{title}</h3>
-        <LastFetched crawlerType={crawlerType} />
+        <div className="flex items-center gap-2">
+          <LastFetched crawlerType={crawlerType} />
+          <ReloadButton onReload={onRetry} busy={source.status === 'loading'} label={`${title}を再読み込み`} />
+        </div>
       </div>
 
       {source.status === 'loading' && (

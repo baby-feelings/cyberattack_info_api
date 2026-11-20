@@ -8,6 +8,8 @@ import { INITIAL_FILTERS, type Filters } from './runtimesConfig'
 interface ListResult {
   // この結果を取得したときの条件。現在の条件と違えば「取得中」とみなす
   filters: Filters
+  // 取得したときの「再読み込みの回数」。現在の回数と違えば「取得中」とみなす
+  attempt: number
   items: RepoRuntimeOut[]
   failed: boolean
 }
@@ -18,6 +20,8 @@ export function useRuntimes(authToken?: string) {
   const [list, setList] = useState<ListResult | null>(null)
   const [repoList, setRepoList] = useState<{ operating: OperatingStatus; repos: RepoRuntimeRepoStat[] } | null>(null)
   const [releases, setReleases] = useState<RuntimeReleaseOut[]>([])
+  // 再読み込みのボタンを押すたびに増やし、3つの取得（一覧・アプリ一覧・推奨の版）を取り直す
+  const [attempt, setAttempt] = useState(0)
 
   // 一覧。条件が変わるたびに取り直す。状態の更新は取得の完了時だけ行う
   // （効果の中で同期的に更新しない。条件の変更で古い取得が遅れて届いても、結果を捨てる）
@@ -28,13 +32,13 @@ export function useRuntimes(authToken?: string) {
       operating: filters.operating, authToken,
     })
       .then(res => {
-        if (!cancelled) setList({ filters, items: res.data, failed: false })
+        if (!cancelled) setList({ filters, attempt, items: res.data, failed: false })
       })
       .catch(() => {
-        if (!cancelled) setList({ filters, items: [], failed: true })
+        if (!cancelled) setList({ filters, attempt, items: [], failed: true })
       })
     return () => { cancelled = true }
-  }, [filters, authToken])
+  }, [filters, authToken, attempt])
 
   // 左のアプリ一覧。運用状態を切り替えたときだけ取り直す
   useEffect(() => {
@@ -47,7 +51,7 @@ export function useRuntimes(authToken?: string) {
         if (!cancelled) setRepoList({ operating: filters.operating, repos: [] })
       })
     return () => { cancelled = true }
-  }, [authToken, filters.operating])
+  }, [authToken, filters.operating, attempt])
 
   // 推奨の版の表示。開いたときに1回だけ取得する（失敗しても、一覧の表示は妨げない）
   useEffect(() => {
@@ -56,7 +60,7 @@ export function useRuntimes(authToken?: string) {
       .then(res => { if (!cancelled) setReleases(res.data) })
       .catch(() => { if (!cancelled) setReleases([]) })
     return () => { cancelled = true }
-  }, [authToken])
+  }, [authToken, attempt])
 
   function update(patch: Partial<Filters>) {
     setFilters(f => ({ ...f, ...patch }))
@@ -67,11 +71,11 @@ export function useRuntimes(authToken?: string) {
     update({ operating, repo: null })
   }
 
-  const loading = list === null || list.filters !== filters
+  const loading = list === null || list.filters !== filters || list.attempt !== attempt
   const repos: RepoRuntimeRepoStat[] = repoList?.operating === filters.operating ? repoList.repos : []
 
   return {
-    filters, update, handleOperating, loading,
+    filters, update, handleOperating, loading, reload: () => setAttempt(n => n + 1),
     failed: list?.failed ?? false,
     items: list?.items ?? [],
     repos, releases: releases as RuntimeReleaseOut[],

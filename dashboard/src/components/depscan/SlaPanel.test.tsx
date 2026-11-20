@@ -152,4 +152,15 @@ describe('SlaPanel', () => {
     expect(await screen.findByText('取得に失敗しました。時間をおいて再度お試しください')).toBeInTheDocument()
   })
 
+
+  it('refetches the report when the reload button is pressed', async () => {
+    await openDialog()
+    expect(mockedFetch).toHaveBeenCalledTimes(1)
+
+    await userEvent.click(screen.getByRole('button', { name: '対応状況を再読み込み' }))
+
+    await waitFor(() => expect(mockedFetch).toHaveBeenCalledTimes(2))
+    expect(mockedFetch).toHaveBeenLastCalledWith('tok', 'active')
+    await waitFor(() => expect(screen.getByLabelText('対応状況の概要')).toBeInTheDocument())
+  })
 })

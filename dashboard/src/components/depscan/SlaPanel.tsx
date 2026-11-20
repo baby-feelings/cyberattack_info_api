@@ -11,10 +11,10 @@ import { SlaByRepoTable, SlaBySeverityTable, SlaOverdueTable, SlaPolicyNote, Sla
 // 対応状況（SLA）。使っている画面（タブの中の小タブ）。取得は、表示されたときに始まる。
 // 取得は useSlaReport、文言は slaConfig、表は SlaSections。ここは、並べるだけ
 export function SlaPanel({ authToken }: { authToken?: string }) {
-  const { operating, setOperating, loading, report } = useSlaReport(authToken)
+  const { operating, setOperating, loading, report, reload } = useSlaReport(authToken)
 
   return (
-    <PanelFrame label={SLA_TEXT.label} icon={Timer}>
+    <PanelFrame label={SLA_TEXT.label} icon={Timer} onReload={reload} reloading={loading}>
       <p className="text-xs text-slate-500">{SLA_TEXT.description}</p>
 
       <LastFetched crawlerType={SCREEN_FETCH_SOURCE.sla} />

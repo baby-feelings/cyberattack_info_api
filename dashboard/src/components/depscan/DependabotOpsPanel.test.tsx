@@ -178,4 +178,19 @@ describe('DependabotOpsPanel', () => {
     )
     expect(mockedStats).toHaveBeenLastCalledWith('all')
   })
+
+  it('refetches the table and the stats when the reload button is pressed', async () => {
+    mockedList.mockResolvedValue(listResponse([item()]))
+    mockedStats.mockResolvedValue({ repos: [] })
+    render(<DependabotOpsPanel />)
+    await waitFor(() => expect(screen.getByText(/Bump lucide-react/)).toBeInTheDocument())
+    const before = [mockedList.mock.calls.length, mockedStats.mock.calls.length]
+
+    await userEvent.click(screen.getByRole('button', { name: 'Dependabot 運用状況を再読み込み' }))
+
+    await waitFor(() => {
+      expect(mockedList.mock.calls.length).toBe(before[0] + 1)
+      expect(mockedStats.mock.calls.length).toBe(before[1] + 1)
+    })
+  })
 })

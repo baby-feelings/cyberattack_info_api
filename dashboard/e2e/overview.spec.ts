@@ -34,3 +34,15 @@ scenario('OVW-03', 'カードを押すと、該当のタブ・小タブが開く
   await page.getByRole('button', { name: /問題のある公開サイト/ }).click()
   await expect(page.getByRole('tab', { name: '運用', exact: true })).toHaveAttribute('aria-selected', 'true')
 })
+
+scenario('OVW-04', '再読み込みボタンで、すべての指標が取り直される', async ({ page, api }) => {
+  await seedSession(page)
+  await page.goto('/')
+  await expect(page.getByRole('button', { name: /未解決の脆弱性/ })).toContainText(/\d+ 件/)
+  const before = api.requestsTo('/api/depscan/stats').length
+
+  await page.getByRole('button', { name: '概要を再読み込み' }).click()
+
+  await expect.poll(() => api.requestsTo('/api/depscan/stats').length).toBe(before + 1)
+  await expect(page.getByRole('button', { name: /未解決の脆弱性/ })).toContainText(/\d+ 件/)
+})

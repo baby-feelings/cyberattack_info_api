@@ -1,6 +1,7 @@
 import { Fragment, type ReactNode } from 'react'
-import { Bug, RefreshCw, CheckCircle2, Sparkles } from 'lucide-react'
+import { Bug, CheckCircle2, Sparkles } from 'lucide-react'
 import { DateDividerRow } from '../shared/DateDividerRow'
+import { ReloadButton } from '../shared/ReloadButton'
 import { isNewDay } from '../shared/dateDay'
 import { DepscanGroupRow } from './DepscanGroupRow'
 import { groupLatestDetectedAt, type FindingGroup } from './grouping'
@@ -49,14 +50,7 @@ export function DepscanHeader({ loading, onReload }: { loading: boolean; onReloa
           <Bug size={16} className="text-slate-400 shrink-0" />
           <span className="text-sm font-semibold text-slate-400 uppercase tracking-wider">{T.title}</span>
         </div>
-        <button
-          onClick={onReload}
-          disabled={loading}
-          className="shrink-0 text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40 p-1 rounded"
-          title={T.reload}
-        >
-          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-        </button>
+        <ReloadButton onReload={onReload} busy={loading} label={T.reload} />
       </div>
     </div>
   )

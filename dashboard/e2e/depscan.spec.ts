@@ -794,3 +794,15 @@ scenario('DEP-31', '依存ライブラリのアラートの小タブには、Dep
   await expect.poll(() => api.lastQuery('/api/github-alerts')?.get('operating')).toBe('inactive')
   await expect(page.getByRole('region', { name: '運用停止中' })).toContainText('未対応のアラートはありません。')
 })
+
+scenario('DEP-32', '対応状況の再読み込みボタンで、結果が取り直される', async ({ page, api }) => {
+  await openDepscan(page)
+  await openDependencies(page, '対応状況')
+  await expect(page.getByRole('region', { name: '対応状況' }).getByLabel('対応状況の概要')).toBeVisible()
+  const before = api.requestsTo('/api/sla').length
+
+  await page.getByRole('button', { name: '対応状況を再読み込み' }).click()
+
+  await expect.poll(() => api.requestsTo('/api/sla').length).toBe(before + 1)
+  await expect(page.getByRole('region', { name: '対応状況' }).getByLabel('対応状況の概要')).toBeVisible()
+})

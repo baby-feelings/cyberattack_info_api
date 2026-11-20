@@ -268,4 +268,18 @@ describe('RuntimesPanel', () => {
     expect(await screen.findByText(/取得に失敗しました/)).toBeInTheDocument()
   })
 
+
+  it('refetches the list, the app list and the releases when the reload button is pressed', async () => {
+    await renderOpen('tok')
+    const before = [mockedList.mock.calls.length, mockedRepos.mock.calls.length, mockedReleases.mock.calls.length]
+
+    await userEvent.click(screen.getByRole('button', { name: '言語・実行環境を再読み込み' }))
+
+    await waitFor(() => {
+      expect(mockedList.mock.calls.length).toBe(before[0] + 1)
+      expect(mockedRepos.mock.calls.length).toBe(before[1] + 1)
+      expect(mockedReleases.mock.calls.length).toBe(before[2] + 1)
+    })
+    await waitFor(() => expect(screen.getByRole('table', { name: '言語・実行環境一覧' })).toBeInTheDocument())
+  })
 })

@@ -226,3 +226,14 @@ scenario('POS-11', 'データが0件のとき、次の行動つきの空の状�
   // 0件は 0 として出す（取得できなかった、とは区別する）。エラーは出ない
   await expect(page.getByRole('alert')).toHaveCount(0)
 })
+
+scenario('POS-12', '外形監視の再読み込みボタンで、結果が取り直される', async ({ page, api }) => {
+  await openOps(page)
+  await expect(sites(page)).toBeVisible()
+  const before = api.requestsTo('/api/site-monitor').length
+
+  await page.getByRole('button', { name: `${SITES}を再読み込み` }).click()
+
+  await expect.poll(() => api.requestsTo('/api/site-monitor').length).toBe(before + 1)
+  await expect(sites(page)).toBeVisible()
+})
