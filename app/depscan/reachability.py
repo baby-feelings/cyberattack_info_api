@@ -21,7 +21,6 @@
 """
 import re
 from collections.abc import Callable
-from dataclasses import dataclass
 
 # PyPI: パッケージ名とimport名が大きく異なる著名なケースのみ個別対応する
 # （汎用的な解決は不可能なため、既知の主要パッケージに限定した補助的な措置）
@@ -53,13 +52,6 @@ SOURCE_EXTENSIONS: dict[str, tuple[str, ...]] = {
     "Packagist": (".php",),
     "Hex": (".ex", ".exs"),
 }
-
-
-@dataclass(frozen=True)
-class ReachabilityResult:
-    """到達可能性の判定結果。"""
-
-    status: str  # "reachable" / "unreachable" / "unknown"
 
 
 def _pypi_candidates(package_name: str) -> list[str]:

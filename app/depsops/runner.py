@@ -36,6 +36,22 @@ from app.depsops.pr_log_retention import PrLogRetention
 logger = logging.getLogger(__name__)
 
 
+def _open_alert_package_names(repo: GitHubRepo, full_name: str) -> set[str] | None:
+    """Open な Dependabot alert のパッケージ名の集合（セキュリティ更新かの判定用）。
+
+    リポジトリ単位で1回だけ取得し使い回す。権限不足（GITHUB_TOKEN に Dependabot alerts:
+    Read-only が無い）等で失敗しても、DEPSOPS 本来のマージ判定は継続する（判定不能 = None）。
+    """
+    try:
+        alerts = list_open_dependabot_alerts(repo)
+    except httpx.HTTPError as exc:
+        logger.warning(
+            "DEPSOPS: failed to list Dependabot alerts for %s: %s", full_name, exc,
+        )
+        return None
+    return {a["dependency"]["package"]["name"] for a in alerts}
+
+
 def _process_repo(
     db: Session, full_name: str, token: str | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], int]:
@@ -82,20 +98,9 @@ def _process_repo(
         full_name, len(prs), has_ci,
     )
 
-    # セキュリティ更新かどうかの判定用に、リポジトリ単位で1回だけ取得し使い回す。
-    # 権限不足（GITHUB_TOKEN に Dependabot alerts: Read-only が無い）等で
-    # 失敗しても DEPSOPS 本来のマージ判定は継続する（判定不能 = None のまま）
-    alert_package_names: set[str] | None
-    try:
-        alerts = list_open_dependabot_alerts(repo)
-        alert_package_names = {a["dependency"]["package"]["name"] for a in alerts}
-    except httpx.HTTPError as exc:
-        logger.warning(
-            "DEPSOPS: failed to list Dependabot alerts for %s: %s", full_name, exc,
-        )
-        alert_package_names = None
-
-    judge = PrJudge(repo, has_ci=has_ci, alert_package_names=alert_package_names)
+    judge = PrJudge(
+        repo, has_ci=has_ci, alert_package_names=_open_alert_package_names(repo, full_name),
+    )
     for pr in prs:
         try:
             action, item = judge.judge(pr)

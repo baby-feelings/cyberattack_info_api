@@ -12,7 +12,7 @@ from app.core.db_utils import now_utc
 from app.core.osv_client import osv_vulnerability_url
 from app.depscan.models import DependencyFinding
 from app.depscan.sbom import build_purl
-from app.finding_exceptions.matching import KEY_SEPARATOR
+from app.finding_exceptions.matching import split_dependency_key
 from app.finding_exceptions.models import (
     STATUS_ACCEPTED,
     STATUS_FALSE_POSITIVE,
@@ -52,9 +52,9 @@ def analysis_by_finding(
     """依存ライブラリの例外を、(ecosystem, package, osv_id) で引ける辞書にする（SBOM 用）。"""
     result: dict[tuple[str, str, str], dict[str, Any]] = {}
     for exc in exceptions:
-        parts = exc.finding_key.split(KEY_SEPARATOR)
-        if len(parts) == 3:
-            result[(parts[0], parts[1], parts[2])] = cyclonedx_analysis(exc)
+        dep = split_dependency_key(exc.finding_key)
+        if dep is not None:
+            result[dep] = cyclonedx_analysis(exc)
     return result
 
 

@@ -250,3 +250,14 @@ class TestRepository:
         _exc(db_session, key="npm|b|2", status="false_positive", expires_at=None)
 
         assert [r.id for r in repo.active_accepted("dependency")] == [accepted.id]
+
+
+def test_split_dependency_key_は_3要素のキーだけを分解する():
+    """依存の同一性キーは、(ecosystem, package, osv_id) に分解する。形が違えば None。"""
+    from app.finding_exceptions.matching import dependency_key, split_dependency_key
+
+    key = dependency_key("PyPI", "django", "GHSA-1")
+    assert split_dependency_key(key) == ("PyPI", "django", "GHSA-1")
+    assert split_dependency_key("PyPI|django") is None
+    assert split_dependency_key("a|b|c|d") is None
+    assert split_dependency_key("") is None

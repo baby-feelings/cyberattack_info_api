@@ -23,11 +23,21 @@ from app.finding_exceptions.models import (
 )
 
 KEY_SEPARATOR = "|"
+# 依存の同一性キーの要素数（ecosystem・package・osv_id）
+DEPENDENCY_KEY_PARTS = 3
 
 
 def dependency_key(ecosystem: str, package_name: str, osv_id: str) -> str:
     """依存ライブラリの検知の同一性キー。"""
     return KEY_SEPARATOR.join((ecosystem, package_name, osv_id))
+
+
+def split_dependency_key(finding_key: str) -> tuple[str, str, str] | None:
+    """依存の同一性キーを (ecosystem, package, osv_id) に分解する。形が違えば None。"""
+    parts = finding_key.split(KEY_SEPARATOR)
+    if len(parts) != DEPENDENCY_KEY_PARTS:
+        return None
+    return parts[0], parts[1], parts[2]
 
 
 def code_key(file_path: str, rule_id: str) -> str:
@@ -110,15 +120,15 @@ def drop_excepted(
 def finding_exists(db: Session, kind: str, repo_full_name: str, finding_key: str) -> bool:
     """その同一性キーの検知が、実在する（解決済みを含む）か。"""
     if kind == KIND_DEPENDENCY:
-        parts = finding_key.split(KEY_SEPARATOR)
-        if len(parts) != 3:
+        dep = split_dependency_key(finding_key)
+        if dep is None:
             return False
         return db.query(
             exists().where(
                 DependencyFinding.repo_full_name == repo_full_name,
-                DependencyFinding.ecosystem == parts[0],
-                DependencyFinding.package_name == parts[1],
-                DependencyFinding.osv_id == parts[2],
+                DependencyFinding.ecosystem == dep[0],
+                DependencyFinding.package_name == dep[1],
+                DependencyFinding.osv_id == dep[2],
             ),
         ).scalar() or False
     if kind == KIND_CODE:
@@ -138,14 +148,14 @@ def finding_exists(db: Session, kind: str, repo_full_name: str, finding_key: str
 def findings_for(db: Session, exc: FindingException) -> list[Any]:
     """例外に対応する、未解決の検知（コードは、同じファイル・ルールの全行）。"""
     if exc.kind == KIND_DEPENDENCY:
-        parts = exc.finding_key.split(KEY_SEPARATOR)
-        if len(parts) != 3:
+        dep = split_dependency_key(exc.finding_key)
+        if dep is None:
             return []
         return db.query(DependencyFinding).filter(
             DependencyFinding.repo_full_name == exc.repo_full_name,
-            DependencyFinding.ecosystem == parts[0],
-            DependencyFinding.package_name == parts[1],
-            DependencyFinding.osv_id == parts[2],
+            DependencyFinding.ecosystem == dep[0],
+            DependencyFinding.package_name == dep[1],
+            DependencyFinding.osv_id == dep[2],
             DependencyFinding.resolved_at.is_(None),
         ).all()
     file_path, sep, rule_id = exc.finding_key.rpartition(KEY_SEPARATOR)

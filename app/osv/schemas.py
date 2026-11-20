@@ -65,10 +65,3 @@ class OsvStatsResponse(BaseModel):
     monthly_trend: list[MonthlyStat] = Field(description="月別件数（直近 12 ヶ月）")
 
 
-class OsvCrawlResponse(BaseModel):
-    """OSV クローラー手動実行レスポンス。"""
-
-    message: str
-    inserted: int
-    updated: int
-    deleted: int = 0
