@@ -23,6 +23,7 @@ from app.commit_watch.router import admin_router as commit_watch_admin_router
 from app.core.config import settings
 from app.core.database import Base, engine, get_db
 from app.core.metrics import router as metrics_router
+from app.core.net.api_docs import docs_urls, root_info
 from app.core.net.http_metrics import HttpMetricsMiddleware
 from app.core.net.rate_limit import RateLimitMiddleware
 from app.core.net.security_headers import SecurityHeadersMiddleware
@@ -126,8 +127,9 @@ app = FastAPI(
     ),
     version="1.0.0",
     lifespan=lifespan,
-    docs_url="/docs" if settings.ENVIRONMENT != "production" else None,
-    redoc_url="/redoc" if settings.ENVIRONMENT != "production" else None,
+    # 本番は、Swagger・ReDoc・OpenAPI 仕様（/openapi.json）を、すべて公開しない
+    # （core/net/api_docs.py）
+    **docs_urls(settings.ENVIRONMENT),
 )
 
 # 開発時だけ許可する、ローカルのダッシュボード（Vite・Next.js の既定ポート）のオリジン
@@ -232,10 +234,4 @@ def health_check() -> HealthResponse:
 @app.get("/", tags=["system"])
 def root():
     """ルートエンドポイント（API 情報を返す）。"""
-    return {
-        "name": "Cyberattack Info API",
-        "version": "1.0.0",
-        "docs": "/docs",
-        "redoc": "/redoc",
-        "health": "/health",
-    }
+    return root_info(settings.ENVIRONMENT)

@@ -43,7 +43,7 @@ API キーの比較には `hmac.compare_digest` を使用し、タイミング�
 > 抽出できるため管理者用キーとは分離してある）。Claude Code からの利用では引き続き
 > `API_KEY` を使えばよく、影響はない。
 
-> **Note:** 本番環境では Swagger UI（`/docs`）と ReDoc（`/redoc`）はセキュリティ上の理由で無効化されています。
+> **Note:** 本番環境では Swagger UI（`/docs`）・ReDoc（`/redoc`）・OpenAPI 仕様（`/openapi.json`）は、セキュリティ上の理由で、すべて無効化されています（実装は `app/core/net/api_docs.py`）。
 > API 仕様の詳細は本ドキュメントまたは `README.md` を参照してください。
 > ローカル開発時は `http://localhost:8000/docs` で OpenAPI ドキュメントを参照できます。
 
