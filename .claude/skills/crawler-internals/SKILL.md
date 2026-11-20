@@ -306,6 +306,6 @@ Upsert前にリスト内の重複を除去。`OSV_RETENTION_DAYS`（既定180日
 
 ## セキュリティヘッダー（app/core/net/security_headers.py）
 `SecurityHeadersMiddleware`（`app/main.py`で`add_middleware`）が全レスポンスに`X-Content-Type-Options: nosniff`・
-`X-Frame-Options: DENY`・`Referrer-Policy: no-referrer`を付与する（OWASP ZAPの`X-Content-Type-Options
-Header Missing`指摘への対応）。ハンドラ側で設定済みの値は`setdefault`で上書きしない。本APIはJSONのみを返し、
+`X-Frame-Options: DENY`・`Referrer-Policy: no-referrer`・`Content-Security-Policy`（`API_CSP`=`default-src 'none'`。開発の`/docs`・`/redoc`だけ`DOCS_CSP`。ハンドラ側で決めた同意画面は上書きしない）を付与する（OWASP ZAPの`X-Content-Type-Options
+Header Missing`・外形監視の`missing-csp`指摘への対応）。ハンドラ側で設定済みの値は`setdefault`で上書きしない。本APIはJSONのみを返し、
 ブラウザでHTMLとして埋め込まれる用途が無いため保守的な値で一律に付けている。

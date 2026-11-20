@@ -86,6 +86,10 @@ services:
       # インターネットへ公開するため、匿名アクセス・サインアップを明示的に無効化する
       - GF_AUTH_ANONYMOUS_ENABLED=false
       - GF_USERS_ALLOW_SIGN_UP=false
+      # Content-Security-Policy（Grafana 組み込みのテンプレート。外形監視の missing-csp 対応）。
+      # root_url を公開ドメインに合わせると、CSP の connect-src（WebSocket）がそのドメインになる
+      - GF_SECURITY_CONTENT_SECURITY_POLICY=true
+      - "GF_SERVER_ROOT_URL=https://${GRAFANA_DOMAIN:?GRAFANA_DOMAIN を deploy/.env に設定してください}/"
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro

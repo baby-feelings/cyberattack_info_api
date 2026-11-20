@@ -228,6 +228,7 @@ Issue #227でダッシュボードからのユーザー別登録方式（`UserAc
   - コレクタは`describe()`で何も返す（何も集計しない）。Prometheusは**登録時に`collect()`を
     呼んで指標名を調べる**ため、定義しないと起動直後（DBの準備前）の結果が1時間キャッシュされる
   - 新しい指標を足すときは、ここに`GaugeMetricFamily`を足し、ダッシュボードJSONにパネルを足す
+- **Grafanaのヘッダー**: CSPはGrafana組み込み（`GF_SECURITY_CONTENT_SECURITY_POLICY=true`。`connect-src`のWebSocketを公開ドメインに合わせるため`GF_SERVER_ROOT_URL=https://$GRAFANA_DOMAIN/`も必須）、Referrer-Policyは`deploy/Caddyfile`で付与（外形監視の指摘対応）。変更後は手元のDockerでGrafanaを起動し、ログイン画面と、ログイン後の画面にCSP違反が無いことを確認する。
 - **Grafanaダッシュボードの作成ルール**:
   1. **Grafanaは「本アプリが正常に稼働しているか、異常か」の把握に絞る**（API・エラー率・応答時間・ジョブの
      成否と鮮度・防御の発動・鍵の期限・サーバーのリソース）。脆弱性・依存・言語・例外・設定の監査などの
