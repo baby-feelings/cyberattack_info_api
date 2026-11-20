@@ -46,13 +46,37 @@ def _list_or_none(api: GitHubApi, path: str) -> list[dict[str, Any]] | None:
     return None if status in (403, 404) else list(body or [])
 
 
+def _ruleset_protection(api: GitHubApi, repo: GitHubRepo, branch: str) -> Any:
+    """ルールセット（有効なもの）による、ブランチの保護。従来のブランチ保護と同じ形（辞書・False）で返す。
+
+    GitHub の新しい保護の仕組み（Rulesets）は、従来のブランチ保護の API には出ない。
+    ブランチに効いている規則（`GET /rules/branches/{branch}`）のうち、
+    必須の PR（`pull_request`）と必須のチェック（`required_status_checks`）を、
+    従来の項目名（`required_pull_request_reviews`・`required_status_checks`）に換算する。
+    規則が1つも無ければ、未保護。
+    """
+    status, body = _optional_get(api, repo.path(f"/rules/branches/{branch}"))
+    if status in (403, 404) or not isinstance(body, list) or not body:
+        return False
+    types = {str(rule.get("type")) for rule in body if isinstance(rule, dict)}
+    protection: dict[str, Any] = {}
+    if "pull_request" in types:
+        protection["required_pull_request_reviews"] = {"via": "ruleset"}
+    if "required_status_checks" in types:
+        protection["required_status_checks"] = {"via": "ruleset"}
+    return protection
+
+
 def _branch_protection(api: GitHubApi, repo: GitHubRepo, branch: str) -> Any:
-    """既定ブランチの保護。設定の辞書・False（未保護）・"not_enforceable"（設定できない）・None（取得不可）。"""
+    """既定ブランチの保護。設定の辞書・False（未保護）・"not_enforceable"（設定できない）・None（取得不可）。
+
+    従来のブランチ保護が無い（未保護）ときは、ルールセットによる保護も調べる。
+    """
     status, body = _optional_get(api, repo.path(f"/branches/{branch}/protection"))
     if status == 404:
         # 「保護されていない」と「リポジトリが見えない」は、メッセージで区別する
         message = str((body or {}).get("message", "")).lower()
-        return False if "not protected" in message else None
+        return _ruleset_protection(api, repo, branch) if "not protected" in message else None
     if status == 403:
         message = str((body or {}).get("message", "")).lower()
         return "not_enforceable" if _UPGRADE_HINT in message else None

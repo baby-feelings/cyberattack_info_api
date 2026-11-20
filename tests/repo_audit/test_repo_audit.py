@@ -280,6 +280,25 @@ class TestCollector:
         assert forbidden["branch_protection"] is None and invisible["branch_protection"] is None
         assert protected["branch_protection"] == {"required_status_checks": {"strict": True}}
 
+    def test_branch_protection_by_rulesets_counts_as_protected(self):
+        """従来のブランチ保護が無くても、ルールセット（有効）で、必須の PR・チェックがあれば、保護されている。"""
+        base = {
+            "/repos/u/app": _resp(body={}),
+            "/branches/main/protection": _resp(404, {"message": "Branch not protected"}),
+        }
+        full = collector.collect(_repo({**base, "/rules/branches/main": _resp(body=[
+            {"type": "deletion"}, {"type": "non_fast_forward"},
+            {"type": "pull_request", "parameters": {"required_approving_review_count": 0}},
+            {"type": "required_status_checks", "parameters": {"required_status_checks": []}},
+        ])}), "main")
+        only_delete = collector.collect(_repo({**base, "/rules/branches/main": _resp(body=[{"type": "deletion"}])}), "main")
+        none = collector.collect(_repo({**base, "/rules/branches/main": _resp(body=[])}), "main")
+
+        assert _by_key({**SECURE, "branch_protection": full["branch_protection"]})["branch_protection"].status == c.OK
+        weak = _by_key({**SECURE, "branch_protection": only_delete["branch_protection"]})["branch_protection"]
+        assert weak.status == c.NG and "必須レビュー" in weak.detail and "必須チェック" in weak.detail
+        assert none["branch_protection"] is False
+
     def test_non_json_error_bodies_and_server_errors(self):
         broken = _resp(403)
         broken.json.side_effect = ValueError("no json")
