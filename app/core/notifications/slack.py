@@ -63,8 +63,9 @@ def send_slack(message: str, webhook_url: str) -> bool:
     """
     # 送信の直前にも検証する（SSRF対策）。登録時に検証済みでも、DB の値が書き換わった場合などに、
     # Slack 以外（社内ネットワーク・メタデータ API など）へ、リクエストを送らない
-    # （関数に切り出さず、ここで直接 startswith を書く。CodeQL が防御として認識するため）
-    if not webhook_url.startswith(SLACK_WEBHOOK_URL_PREFIX):
+    # （関数や定数に切り出さず、リテラルを直接 startswith に書く。CodeQL が防御と認識するため。
+    #   値は SLACK_WEBHOOK_URL_PREFIX と同じ。同期はテストで検査する）
+    if not webhook_url.startswith("https://hooks.slack.com/"):
         logger.warning("Slack notification skipped: the webhook URL is not a Slack URL")
         return False
     try:
