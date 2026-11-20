@@ -17,6 +17,11 @@
 | 7 | グラフが古くなる | 更新は、ファイルの編集・コミットで動く。`git pull`・マージ・ブランチ切替では動かない（`head_matches_build: false`） |
 | 8 | 呼び出しの約 73% が、名前だけの推定 | `CALLS` 28,324 件のうち、直接の対応づけは 7,628 件。`reload`・`update` など一般的な名前は、無関係な関数と混ざる |
 
+**2.4.0 での再検証（2026-11-20）**: 原因 1（値として渡す関数）・3（無名の矢印関数）は、最小の再現例でも、2.4.0 で
+再現した。本家に報告済み（https://github.com/tirth8205/code-review-graph/issues/1235 ・
+https://github.com/tirth8205/code-review-graph/issues/1236）。2.4.0 のデッドコードは 144 件で、うち 85 件が 3 文字以下の名前。
+原因 2・4 は、最小の例では再現せず、実プロジェクトでだけ残る（未報告）。原因 6 は MCP の `changed_files` の挙動で、再検証していない。
+
 ## 結果の読み方
 
 | ツール・出力 | 扱い |
@@ -32,6 +37,9 @@
 ## 運用
 
 - 作業の最初に、`code-review-graph build` と `code-review-graph watch`（バックグラウンド）を実行する。
+- 版を上げたあと（例: 2.3.9 から 2.4.0）は、グラフの形式が変わるため、各リポジトリで `code-review-graph build` をやり直す。
+  Windows では、`serve`・`watch` が動いていると、`pip install -U` が `code-review-graph.exe` を上書きできず、
+  インストールが壊れる。先に、実行中のプロセスを止めてから更新する。
 - **`git pull`・マージ・ブランチの切り替えのあとは、`code-review-graph update` を実行する**（原因 7）。
   `watch` が動いていないと、グラフは、編集の反映も止まる。`get_minimal_context_tool` や
   `list_graph_stats_tool` の `_graph.head_matches_build` が `false` なら、更新が必要。
