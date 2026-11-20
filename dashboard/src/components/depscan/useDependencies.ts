@@ -8,6 +8,8 @@ import { INITIAL_FILTERS, PER_PAGE, type Filters } from './dependenciesConfig'
 interface ListResult {
   // この結果を取得したときの条件。現在の条件と違えば「取得中」とみなす
   filters: Filters
+  // 取得したときの「再読み込みの回数」。現在の回数と違えば「取得中」とみなす
+  attempt: number
   items: RepoDependencyOut[]
   total: number
   failed: boolean
@@ -21,6 +23,8 @@ export function useDependencies(authToken?: string) {
   const [versionText, setVersionText] = useState('')
   const [list, setList] = useState<ListResult | null>(null)
   const [repoList, setRepoList] = useState<{ operating: OperatingStatus; repos: RepoDependencyRepoStat[] } | null>(null)
+  // 再読み込みのボタンを押すたびに増やし、一覧とアプリ一覧を取り直す
+  const [attempt, setAttempt] = useState(0)
 
   // 依存の一覧。条件が変わるたびに取り直す。状態の更新は取得の完了時だけ行う
   // （効果の中で同期的に更新しない。条件の変更で古い取得が遅れて届いても、結果を捨てる）
@@ -32,13 +36,13 @@ export function useDependencies(authToken?: string) {
       vulnerableOnly: filters.vulnerableOnly, operating: filters.operating, authToken,
     })
       .then(res => {
-        if (!cancelled) setList({ filters, items: res.data, total: res.total, failed: false })
+        if (!cancelled) setList({ filters, attempt, items: res.data, total: res.total, failed: false })
       })
       .catch(() => {
-        if (!cancelled) setList({ filters, items: [], total: 0, failed: true })
+        if (!cancelled) setList({ filters, attempt, items: [], total: 0, failed: true })
       })
     return () => { cancelled = true }
-  }, [filters, authToken])
+  }, [filters, authToken, attempt])
 
   // 左のアプリ一覧。運用状態を切り替えたときだけ取り直す
   useEffect(() => {
@@ -51,7 +55,7 @@ export function useDependencies(authToken?: string) {
         if (!cancelled) setRepoList({ operating: filters.operating, repos: [] })
       })
     return () => { cancelled = true }
-  }, [authToken, filters.operating])
+  }, [authToken, filters.operating, attempt])
 
   function update(patch: Partial<Filters>) {
     setFilters(f => ({ ...f, ...patch, page: 1 }))
@@ -74,7 +78,8 @@ export function useDependencies(authToken?: string) {
   return {
     filters, update, handleOperating, handleSubmit, changePage,
     packageText, setPackageText, versionText, setVersionText,
-    loading: list === null || list.filters !== filters,
+    loading: list === null || list.filters !== filters || list.attempt !== attempt,
+    reload: () => setAttempt(n => n + 1),
     failed: list?.failed ?? false,
     items: list?.items ?? ([] as RepoDependencyOut[]),
     total: list?.total ?? 0,

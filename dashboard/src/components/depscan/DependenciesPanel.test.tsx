@@ -200,4 +200,17 @@ describe('DependenciesPanel', () => {
     expect(screen.getByText('undici')).toBeInTheDocument()
   })
 
+
+  it('refetches the list and the app list when the reload button is pressed', async () => {
+    await renderOpen('tok')
+    const before = [mockedList.mock.calls.length, mockedRepos.mock.calls.length]
+
+    await userEvent.click(screen.getByRole('button', { name: '依存パッケージを再読み込み' }))
+
+    await waitFor(() => {
+      expect(mockedList.mock.calls.length).toBe(before[0] + 1)
+      expect(mockedRepos.mock.calls.length).toBe(before[1] + 1)
+    })
+    await waitFor(() => expect(screen.getByRole('table', { name: '依存パッケージ一覧' })).toBeInTheDocument())
+  })
 })

@@ -40,6 +40,11 @@ description: Reactダッシュボード（dashboard/）のアーキテクチャ�
 DEPSCANの一覧には、悪意あるパッケージ（`MAL-*`）に「🛑 悪意あり」バッジ（`MaliciousBadge`。E2E DEP-26）。
 DEPSCANパネルのヘッダーは、1段目をタイトルと再読み込み、2段目を操作ボタン（`flex-wrap`・`whitespace-nowrap`）
 にする（1行に詰めると、スマホ幅でボタンの文字が縦に折り返される。E2E DEP-24で検査）。
+**再読み込みのボタン**: 各画面の見出しの右に、共通の`shared/ReloadButton`（アイコン・読み込み中は回して無効）を置く
+（KEV・OSV・DEPSCAN・CODESCAN・依存パッケージ・言語・対応状況・Dependabot運用・態勢の3セクション・概要）。
+`PanelFrame`は`onReload`/`reloading`を渡すと、`PostureSection`は`onRetry`で、ボタンを出す（名前は「〇〇を再読み込み」）。
+取得のフックは、`attempt`（再読み込みの回数）を取得の条件に含めて取り直す（結果にも`attempt`を持たせ、違えば「取得中」）。
+新しい画面を足したら、ボタンも付ける（E2E OVW-04・DEP-32・POS-12・KEV-06）。
 `App.tsx`（約70行）は組み立てのみ。タブごとの定義（キー・ラベル・アイコン・見出し・サブタイトル・
 枠線色・本体パネル）は `components/layout/tabs.tsx` の `TAB_DEFINITIONS` に集約しており
 （新しいタブはここに1件足す。以前は`App.tsx`にタブ数×約20行の同じ構造が並んでいた）、

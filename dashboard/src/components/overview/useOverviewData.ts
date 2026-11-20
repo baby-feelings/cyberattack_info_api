@@ -32,9 +32,13 @@ const LOADERS: Record<string, Loader> = {
 }
 
 // 概要の指標を、取得して返す。各取得は独立で、失敗した指標は value: null（不明）
-export function useOverviewData(authToken: string): { metrics: OverviewMetric[]; loading: boolean } {
+export function useOverviewData(authToken: string): { metrics: OverviewMetric[]; loading: boolean; reload: () => void } {
   const [values, setValues] = useState<Record<string, number | null>>({})
-  const [doneToken, setDoneToken] = useState<string | null>(null)
+  // 取得が完了した条件（トークン＋再読み込みの回数）。今の条件と違えば「取得中」
+  const [doneKey, setDoneKey] = useState<string | null>(null)
+  // 再読み込みのボタンを押すたびに増やし、すべての指標を取り直す
+  const [attempt, setAttempt] = useState(0)
+  const key = `${authToken}|${attempt}`
 
   useEffect(() => {
     let cancelled = false
@@ -42,12 +46,12 @@ export function useOverviewData(authToken: string): { metrics: OverviewMetric[];
       const value = await (LOADERS[def.id]?.(authToken) ?? Promise.resolve(null)).catch(() => null)
       if (!cancelled) setValues((prev) => ({ ...prev, [def.id]: value }))
     })
-    void Promise.all(settled).then(() => { if (!cancelled) setDoneToken(authToken) })
+    void Promise.all(settled).then(() => { if (!cancelled) setDoneKey(key) })
     return () => { cancelled = true }
-  }, [authToken])
+  }, [authToken, key])
 
   const metrics = OVERVIEW_METRICS.map((def) => new OverviewMetric({
     ...def, value: def.id in values ? values[def.id] : null,
   }))
-  return { metrics, loading: doneToken !== authToken }
+  return { metrics, loading: doneKey !== key, reload: () => setAttempt((n) => n + 1) }
 }

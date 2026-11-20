@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { useOverviewData } from './useOverviewData'
 import * as client from '../../api/client'
 
@@ -45,5 +45,19 @@ describe('useOverviewData', () => {
     await waitFor(() => expect(result.current.loading).toBe(false))
     expect(valueOf(result.current.metrics, 'dep-overdue')).toBeNull()
     expect(valueOf(result.current.metrics, 'dep-open')).toBe(3)
+  })
+
+  it('refetches every metric on reload, showing the loading state meanwhile', async () => {
+    const { result } = renderHook(() => useOverviewData('tok'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    mocked.fetchDepscanStats.mockResolvedValue({ total: 9, repos: [], severities: [] })
+    expect(mocked.fetchDepscanStats).toHaveBeenCalledTimes(1)
+
+    act(() => result.current.reload())
+
+    expect(result.current.loading).toBe(true)
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(mocked.fetchDepscanStats).toHaveBeenCalledTimes(2)
+    expect(valueOf(result.current.metrics, 'dep-open')).toBe(9)
   })
 })

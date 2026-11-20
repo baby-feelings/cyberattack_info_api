@@ -53,6 +53,12 @@ export function useDependabotOps() {
     loadStats(operating)
   }, [loadStats, operating])
 
+  // 現在の条件のまま、表と、アプリ別の件数を取り直す（再読み込みのボタン）
+  function reload() {
+    void loadTable(action, page, operating)
+    void loadStats(operating)
+  }
+
   function handleOperating(op: OperatingStatus) {
     setOperating(op)
     setPage(1)
@@ -66,6 +72,6 @@ export function useDependabotOps() {
   return {
     action, operating, page, setPage, total, items, loading, repoStats, statsLoading,
     totalPages: Math.ceil(total / PER_PAGE),
-    handleOperating, handleAction,
+    handleOperating, handleAction, reload,
   }
 }

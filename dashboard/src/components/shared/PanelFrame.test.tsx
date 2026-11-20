@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { Timer } from 'lucide-react'
 import { PanelFrame } from './PanelFrame'
 
@@ -23,5 +23,26 @@ describe('PanelFrame', () => {
       </PanelFrame>,
     )
     expect(screen.getByRole('heading', { name: 'Dependabot 運用状況（DEPSOPS）' })).toBeInTheDocument()
+  })
+
+  it('shows no reload button unless onReload is given', () => {
+    render(<PanelFrame label="対応状況" icon={Timer}><p>x</p></PanelFrame>)
+
+    expect(screen.queryByRole('button', { name: /再読み込み/ })).not.toBeInTheDocument()
+  })
+
+  it('shows a reload button named after the panel, and calls onReload', () => {
+    const onReload = vi.fn()
+    render(<PanelFrame label="対応状況" icon={Timer} onReload={onReload}><p>x</p></PanelFrame>)
+
+    fireEvent.click(screen.getByRole('button', { name: '対応状況を再読み込み' }))
+
+    expect(onReload).toHaveBeenCalledTimes(1)
+  })
+
+  it('disables the reload button while reloading', () => {
+    render(<PanelFrame label="対応状況" icon={Timer} onReload={() => {}} reloading><p>x</p></PanelFrame>)
+
+    expect(screen.getByRole('button', { name: '対応状況を再読み込み' })).toBeDisabled()
   })
 })

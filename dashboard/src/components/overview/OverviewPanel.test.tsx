@@ -7,9 +7,10 @@ import * as data from './useOverviewData'
 
 vi.mock('./useOverviewData')
 
-function setMetrics(values: Record<string, number | null>, loading = false) {
+function setMetrics(values: Record<string, number | null>, loading = false, reload = vi.fn()) {
   vi.mocked(data.useOverviewData).mockReturnValue({
     loading,
+    reload,
     metrics: OVERVIEW_METRICS.map((d) => new OverviewMetric({ ...d, value: d.id in values ? values[d.id] : 0 })),
   })
 }
@@ -35,5 +36,19 @@ describe('OverviewPanel', () => {
     setMetrics({}, true)
     render(<OverviewPanel authToken="t" onNavigate={vi.fn()} />)
     expect(screen.getByRole('status', { name: '集計中' })).toBeInTheDocument()
+  })
+
+  it('reloads the metrics when the reload button is pressed', () => {
+    const reload = vi.fn()
+    setMetrics({}, false, reload)
+    render(<OverviewPanel authToken="t" onNavigate={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: '概要を再読み込み' }))
+    expect(reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the reload button, disabled, while loading', () => {
+    setMetrics({}, true)
+    render(<OverviewPanel authToken="t" onNavigate={vi.fn()} />)
+    expect(screen.getByRole('button', { name: '概要を再読み込み' })).toBeDisabled()
   })
 })

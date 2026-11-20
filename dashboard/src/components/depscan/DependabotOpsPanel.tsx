@@ -17,6 +17,7 @@ export function DependabotOpsPanel() {
     <PanelFrame
       label={T.label} title={T.title}
       icon={GitPullRequest} maxWidth="max-w-5xl"
+      onReload={d.reload} reloading={d.loading || d.statsLoading}
     >
       <LastFetched crawlerType={SCREEN_FETCH_SOURCE.depsops} />
 

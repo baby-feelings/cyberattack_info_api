@@ -1,7 +1,8 @@
 import { Fragment } from 'react'
-import { Shield, RefreshCw } from 'lucide-react'
+import { Shield } from 'lucide-react'
 import type { OsvListResponse, OsvStatsResponse } from '../../api/client'
 import { DateDividerRow } from '../shared/DateDividerRow'
+import { ReloadButton } from '../shared/ReloadButton'
 import { isNewDay } from '../shared/dateDay'
 import { OsvRow } from './OsvRow'
 import { ECOSYSTEMS, OSV_TEXT as T, SEVERITY_CLS, TH } from './osvPanelConfig'
@@ -16,14 +17,7 @@ export function OsvHeader({
         <Shield size={16} className="text-slate-400" />
         <span className="text-sm font-semibold text-slate-400 uppercase tracking-wider">{T.title(period)}</span>
       </div>
-      <button
-        onClick={onReload}
-        disabled={busy}
-        className="text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40 p-1 rounded"
-        title={T.reload}
-      >
-        <RefreshCw size={13} className={busy ? 'animate-spin' : ''} />
-      </button>
+      <ReloadButton onReload={onReload} busy={busy} label={T.reload} />
     </div>
   )
 }

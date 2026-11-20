@@ -57,6 +57,7 @@ export const METRIC_STATE_CLASS: Record<MetricState, { value: string; border: st
 
 export const OVERVIEW_TEXT = {
   heading: '概要 — いま対応が必要なもの',
+  reload: '概要を再読み込み',
   subtitle: '運用中のアプリだけを数えています。押すと、詳細の画面へ移ります',
   loginDescription: 'ログインすると、あなたのリポジトリの、対応が必要な件数をまとめて確認できます',
   unknown: '不明',

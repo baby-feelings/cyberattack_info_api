@@ -12,12 +12,14 @@ import { useRuntimes } from './useRuntimes'
 
 // 使っている画面（タブの中の小タブ）。取得は、表示されたときに始まる
 export function RuntimesPanel({ authToken }: { authToken?: string }) {
-  const { filters, update, handleOperating, loading, failed, items, repos, releases } = useRuntimes(authToken)
+  const { filters, update, handleOperating, loading, reload, failed, items, repos, releases } = useRuntimes(authToken)
 
   return (
     <PanelFrame
       label={RUNTIMES_TEXT.label}
       icon={Cpu}
+      onReload={reload}
+      reloading={loading}
     >
       <p className="text-xs text-slate-500">{RUNTIMES_TEXT.intro}</p>
 
