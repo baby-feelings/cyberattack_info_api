@@ -5,3 +5,10 @@ dashboard/dist/**
 dashboard/playwright-report/**
 dashboard/coverage/**
 htmlcov/**
+# 各ツールのキャッシュ（`.gitignore` 済みだが、watch・再走査は `.gitignore` を見ないため、ここにも書く。
+# mypy のキャッシュ約 2,000 個の JSON が、72 万ノードとして取り込まれ、DB が 3GB 近くになった）
+.mypy_cache/**
+.ruff_cache/**
+.pytest_cache/**
+# 他の API から取得した仕様のコピー（約 1,000 ノードを使う。コードではない）
+cyberattack-info-api.json
