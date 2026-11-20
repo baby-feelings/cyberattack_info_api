@@ -4,7 +4,7 @@
 `X-API-KEY` ヘッダーが必要です。curlの実行例・パラメータ詳細・レスポンス例は
 **[.claude/skills/api-usage/SKILL.md](../.claude/skills/api-usage/SKILL.md)** に集約しているので
 そちらを参照（本ページでは重複を避け、エンドポイント一覧のみ示す）。ローカル開発時は
-`http://localhost:8000/docs` でOpenAPI仕様（Swagger UI）も参照できる（本番は無効化）。
+`http://localhost:8000/docs` でOpenAPI仕様（Swagger UI）も参照できる（本番は、`/docs`・`/redoc`・`/openapi.json` をすべて無効化。管理用パスを含む全仕様が、認証なしで読めないようにするため）。
 
 | メソッド | パス | 説明 |
 |---------|------|------|
