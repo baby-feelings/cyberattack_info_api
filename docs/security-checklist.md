@@ -17,7 +17,7 @@ IPA のチェックリスト（11 の脆弱性）を、本アプリの実装と�
 | 10 | バッファオーバーフロー | Python（メモリ直接操作なし）。依存は pip-audit・OSV-Scanner・Dependabot で最新化 | `.github/workflows/` |
 | 11 | アクセス制御・認可の欠落 | DEPSCAN/CODESCAN は本人所有のリポジトリのみ（セッション・MCP とも）。管理 API は API キー | `app/auth/dependencies.py` |
 
-追加の対策: API の HSTS（`deploy/Caddyfile`）、nosniff・Referrer-Policy（API・ダッシュボード）。
+追加の対策: API の HSTS（`deploy/Caddyfile`）、nosniff・Referrer-Policy・CSP（API・ダッシュボード。APIは`default-src 'none'`、開発の`/docs`だけ専用）、Grafana の CSP（Grafana 組み込み。`deploy/docker-compose.yml`の`GF_SECURITY_CONTENT_SECURITY_POLICY`・`GF_SERVER_ROOT_URL`）と Referrer-Policy（`deploy/Caddyfile`）。
 
 ## 運用上の注意
 - **ダッシュボードの CSP（`dashboard/vercel.json`）の `connect-src` に、API のオリジン**
