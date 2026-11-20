@@ -116,6 +116,7 @@ Compose により稼働し、`deploy/deploy_to_oci.ps1` を都度手動実行し
 - IPA「安全なウェブサイトの作り方」11項目の対応表: [docs/security-checklist.md](docs/security-checklist.md)
 - AIエージェント向けリモートMCPサーバー（接続方法・見える範囲）: [docs/mcp-server.md](docs/mcp-server.md)
 - 開発の進め方・CI の品質チェック一覧: [docs/development-workflow.md](docs/development-workflow.md)
+- code-review-graph の使い方と、誤検知の見方: [docs/code-review-graph.md](docs/code-review-graph.md)
 - Claude Code / AIエージェントからの活用例: [.claude/skills/api-usage/SKILL.md](.claude/skills/api-usage/SKILL.md)
 
 ---

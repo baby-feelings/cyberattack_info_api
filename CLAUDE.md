@@ -8,9 +8,9 @@
 ```bash
 # code-review-graph (https://github.com/tirth8205/code-review-graph)を使える状態にする。
 code-review-graph build
-
-# グラフの更新(ビルド後、実行し、グラフの更新を監視するため)
-code-review-graph watch
+code-review-graph watch   # グラフの更新を監視（ビルド後に実行）
+# pull・マージ・ブランチ切替のあとは `code-review-graph update`。デッドコード・「テストなし」は誤検知が多く、
+# `query_graph_tool` は resolution=direct で使う。見方は docs/code-review-graph.md
 ```
 
 ---
