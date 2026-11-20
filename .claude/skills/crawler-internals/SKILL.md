@@ -166,12 +166,14 @@ datetime 型の属性だけ自動変換する。`OsvVulnerabilityOut`/
 各`list_*`が8〜9個のクエリパラメータを引数で受け取りフィルターを組み立てていたため、
 ルーターは`page`/`per_page`と`flt: XxxListFilter = Depends()`だけを受け取り、`flt.apply(query)`を
 呼ぶ形にした。FastAPIは`Depends()`のクラスの`__init__`引数をクエリパラメータに展開するため、
-**OpenAPI上のパラメータ名・制約・説明は従来と同一**（`tests/core/test_list_filters.py`が回帰ガード）。
+**OpenAPI上のパラメータ名・制約・説明は従来と同一**（`tests/core/findings/test_list_filters.py`が回帰ガード）。
 共通部は`FeedListFilter`（OSV。直近日数・重要度・キーワード・ソート・差分取得。サブクラスが
 `model`/`date_column`/`search_columns`/`normalize_severity`を宣言し、OSVは`ecosystem`を追加）と
 `RepoFindingFilter`（DEPSCAN/CODESCAN。repo/owner/severity/resolved。`restrict_to_owner`が
 セッション認証時のowner強制と他人リポジトリ指定の403ガードを担う。DEPSCANは`ecosystem`、CODESCANは
-`min_cvss`を追加）。KEVは`KevListFilter`単独。サブクラスのコンストラクタに`Query(...)`既定値を
+`min_cvss`を追加）。DEPSCAN/CODESCAN共通の`include_excepted`（例外の検知を含めるか）は、`core/`が例外の
+ドメインを知らないよう、中間クラス`ExceptableFindingFilter`（`app/finding_exceptions/filters.py`。
+サブクラスが例外の種別`kind`を宣言。`include_excepted_query()`で説明・既定値をそろえる）に置く。KEVは`KevListFilter`単独。サブクラスのコンストラクタに`Query(...)`既定値を
 書く必要があるため、**テストでは全引数を明示して生成する**。
 
 ## SQLite / PostgreSQL 切り替え

@@ -212,7 +212,7 @@ OWASP Top 10:2025「ソフトウェアサプライチェーンの失敗」対策
   `OrmDatetimeModel`はORMに無い属性を`None`で渡すため、`int`のままだと500になる（実際に踏んだ）
 - **ダッシュボード**: 「依存ライブラリ」タブの小タブ「依存パッケージ」（旧・全画面モーダル）。左にアプリ一覧
   （検知がある依存の数を赤バッジ）、右に一覧と、パッケージ名・版・エコシステムの検索、「脆弱性ありのみ」
-  （`components/depscan/DependenciesModal.tsx`。Dependabot運用状況と同じ作り）
+  （`components/depscan/DependenciesPanel.tsx`・`DependenciesSections.tsx`。Dependabot運用状況と同じ作り）
 
 ## DEPSCAN の解決済みレコードは保持期間超過で自動削除する（未解決は対象外）
 `app.depscan.repository.DependencyFindingRepository.delete_old_resolved` が、`resolved_at` が

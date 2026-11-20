@@ -120,7 +120,7 @@ CVSS 7.0以上はダッシュボード（`CodescanRow.tsx`のCvssBadge）で赤�
   「検知されなくなった」のではなく「検査できなかった」ため、`resolve_stale`の対象外にし、そのリポジトリは
   クローズの判定にも入れない（入れると、誤って解決→クローズ→次回に再起票を繰り返す）
 - Open なIssueが無いリポジトリは何もしない。GitHub書き込みの失敗はリポジトリ単位で握りつぶす
-- テストは`tests/codescan/conftest.py`が`find_open_issue`を既定で差し替え、実GitHubに出ない
+- テストは各テストで`find_open_issue`を`patch`し、実GitHubに出ない（`tests/codescan/test_issue_close.py`）
 
 ## API認証: ログイン必須かつ本人所有リポジトリのみ（Issue #219でログイン必須化、#289で絞り込み追加）
 ダッシュボードの「依存ライブラリ」「コードと設定」タブ間でセッションを共有し、CODESCANも読み取りにGitHubログインを
