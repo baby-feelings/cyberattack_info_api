@@ -17,7 +17,7 @@ cyberattack_info_api/
 │   │                           # （auth は mcp_server を知らない。依存は mcp_server → auth の一方向）
 │   ├── core/                   # 横断的インフラ（個別のドメインを知らない）。config・database・crypto〈トークン暗号化〉・db_utils・pagination・osv_client・stix・共通 schemas
 │   │                           # net/〈retry・http_metrics・rate_limit・security_headers〉
-│   │                           # findings/〈finding_format・list_filters〈一覧APIの絞り込み条件の基底クラス〉・owner_scope・operating_status・issue_filing=`IssueReporter`〈DEPSCAN/CODESCANのIssue起票・クローズ〉〉
+│   │                           # findings/〈finding_format・list_filters〈一覧APIの絞り込み条件の基底クラス。例外を含めるかの共通部は finding_exceptions/filters〉・owner_scope・operating_status・issue_filing=`IssueReporter`〈DEPSCAN/CODESCANのIssue起票・クローズ〉〉
 │   │                           # runner/〈crawler_runner=`CrawlJob`・user_scan=`UserScanJob`〈ユーザー別スキャンの骨格〉・background〉
 │   │                           # notifications/〈slack・recipients・base・共通の crawler/webhook_test。ドメイン固有の通知は各ドメインの notifier.py〉・github/〈api=`GitHubApi`・repo=`GitHubRepo`・accounts=所有リポジトリ一覧〉
 │   │                           # CrawlJob・UserScanJob・IssueReporter・Notifier は Template Method
@@ -45,7 +45,7 @@ cyberattack_info_api/
 │   │                           # crawler〈毎日のジョブ〉・router〈/api/repo-audit〉
 │   ├── github_alerts/           # GitHubのセキュリティアラート（Issue #402）: client〈取得・正規化。シークレットの値は参照しない〉・
 │   │                           # repository〈保存・DEPSCANとの突き合わせ〉・crawler〈毎日のジョブ〉・router〈/api/github-alerts〉
-│   ├── finding_exceptions/      # 検知の例外（Issue #403）: models〈finding_exceptions。検知とは別テーブル〉・matching〈同一性キー・除外・照合〉・
+│   ├── finding_exceptions/      # 検知の例外（Issue #403）: models〈finding_exceptions。検知とは別テーブル〉・matching〈同一性キー・除外・照合〉・filters〈一覧の「例外を含めるか」の共通部〉・
 │   │                           # repository・router〈/api/exceptions・VEX〉・lifecycle〈期限切れ・修正版の公開の毎日の確認〉・issue_sync〈Issueの整合〉・vex
 │   ├── codescan/                # 自アプリコード脆弱性診断（CODESCAN）ドメイン（scanners/〈1ツール1ファイル: semgrep・gitleaks・zizmor・infra〉・
 │   │                           # iac_rules/〈common・firebase・dockerfile・compose〉・notifier〈リポジトリ別の概要のSlack通知〉・issue_management〈Issueの起票・自動クローズ〉・cvss_mapping含む）

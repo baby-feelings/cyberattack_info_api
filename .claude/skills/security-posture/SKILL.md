@@ -30,7 +30,7 @@ DEPSCAN（`dependency`）とCODESCAN（`code`）の両方が対象。
 
   キー: dependency=`ecosystem|package|osv_id`（版を含めない）/ code=`file_path|rule_id`（**行番号を含めない**＝行がずれても外れない。
 
-  同じファイル・ルールの全行がまとめて例外になる）。キーは`matching.py`（`key_of_finding`）に1か所
+  同じファイル・ルールの全行がまとめて例外になる）。キーは`matching.py`（`key_of_finding`。依存キーの分解は`split_dependency_key`）に1か所
 
 - **有効の条件**: `ended_at IS NULL`かつ（期限なし or 期限が未来）。期限切れは、定期ジョブが終了にする前でも、クエリ上で有効に数えない
 
@@ -228,7 +228,7 @@ tarball方式のCODESCANは現在のツリーしか見えないため、GitHub�
 
   状態はメモリ（1コンテナ前提）。**クライアントの識別は`X-Forwarded-For`の最後の値**（先頭はクライアントが偽れる）。
 
-  テストでは`RATE_LIMIT_ENABLED=false`（conftest）。制限の検証は、専用の小さなアプリで行う（`tests/core/test_rate_limit.py`）
+  テストでは`RATE_LIMIT_ENABLED=false`（conftest）。制限の検証は、専用の小さなアプリで行う（`tests/core/net/test_rate_limit.py`）
 
 - **監査ログ**（`audit/`）: `AuditMiddleware`が、`/admin/`・`/auth/`の変更系（POST・PUT・PATCH・DELETE）と、認証の失敗・429を記録。
 

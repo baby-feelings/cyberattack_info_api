@@ -46,9 +46,16 @@ git push -u origin feature/your-feature-name
 なければ `test` を、`dashboard/` の変更がなければ `dashboard-test`・`dashboard-e2e` を省略する
 （`ci.yml` 自体の変更時は両方実行）。Semgrep はドキュメント（`*.md`・`docs/`・`.claude/skills/`）のみの
 変更で実行しない。**gitleaks・OSV-Scanner は絞らない**（ドキュメントや設定にもシークレット・依存が入りうる）。
-省略はワークフロー単位でなくジョブ単位（将来「必須チェック」を設定しても、省略されたジョブは成功扱い）。
+省略はワークフロー単位でなくジョブ単位（必須チェックにしても、省略されたジョブは成功扱いのため、PR は止まらない）。
 ダッシュボードの Vercel デプロイ（`deploy.yml`）は従来から `dashboard/**` の変更時のみ、Vercel のプレビュー
 ビルドは `dashboard/vercel.json` の `ignoreCommand` で、ダッシュボードに差分がなければ（または Dependabot のブランチなら）スキップする。
+
+**`main` の保護（GitHub のルールセット `protect-main`）**: 削除・強制プッシュの禁止、PR 経由のマージ（必須レビューは 0 人。
+自分の PR を自分でマージするため）、必須チェック `Test & Lint (Python 3.13)`・`Dashboard Test & Build`・
+`Secret scan (gitleaks)`。Semgrep は変更によって動かないことがあるため、必須にしない（動かない必須チェックは PR を止める）。
+「最新に更新してからマージ」は求めない（続けてマージするときに、毎回の再実行が要るため）。設定の監査（`repo_audit`）は、
+従来のブランチ保護に加えて、ルールセットの `pull_request`・`required_status_checks` も保護として数える。CodeQL は
+GitHub のデフォルト設定（ワークフローファイルなし）で、結果は GitHub のアラートとして取り込む。
 
 定期実行: pip-audit・OSV-Scanner（毎週）、OWASP ZAP（毎週月曜 03:00 JST。`docs/zap-scan.md`）、
 DEPSCAN/CODESCAN（毎日）。
