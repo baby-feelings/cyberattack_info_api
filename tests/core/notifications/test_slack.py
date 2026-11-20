@@ -62,3 +62,12 @@ def test_send_test_notification_returns_false_on_failure():
             httpx.ConnectError("connection refused")
         )
         assert send_test_notification(_TEST_URL, "alice") is False
+
+
+def test_send_slack_inline_prefix_matches_the_registration_prefix():
+    """send_slack の接頭辞のリテラル（CodeQL 対応）が、登録時の定数とずれないことを検査する。"""
+    import inspect
+
+    from app.core.notifications import slack
+
+    assert f'startswith("{slack.SLACK_WEBHOOK_URL_PREFIX}")' in inspect.getsource(slack.send_slack)
