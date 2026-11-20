@@ -94,6 +94,20 @@ class TestEvaluate:
         assert private_open["forking"].status == c.NG
         assert "forking" not in public
 
+    def test_forking_of_a_user_owned_private_repository_is_not_enforceable(self):
+        """個人所有の非公開リポジトリは、GitHub がフォークの許可を変更させない。不備ではなく適用不可。"""
+        personal = _by_key({
+            **SECURE,
+            "repo": {**SECURE["repo"], "allow_forking": True, "owner": {"type": "User"}},
+        })
+        org = _by_key({
+            **SECURE,
+            "repo": {**SECURE["repo"], "allow_forking": True, "owner": {"type": "Organization"}},
+        })
+
+        assert personal["forking"].status == c.NOT_ENFORCEABLE
+        assert org["forking"].status == c.NG
+
     def test_writable_deploy_keys_and_insecure_webhooks_are_ng(self):
         checks = _by_key({
             **SECURE,

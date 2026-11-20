@@ -4,7 +4,8 @@
 - `ok`: 設定されている
 - `ng`: 設定されていない・不備がある（改善すべき。`fix` に、直し方を示す）
 - `unavailable`: 取得できない（権限不足・機能が使えない）。スコアの分母に含めない
-- `not_enforceable`: 設定できない（非公開の無料リポジトリのブランチ保護）。
+- `not_enforceable`: 設定できない（非公開の無料リポジトリのブランチ保護・個人所有の非公開
+  リポジトリのフォーク許可）。
   不備とは区別し、分母に含めない
 """
 import hashlib
@@ -90,6 +91,13 @@ def _forking(repo: dict[str, Any]) -> Check | None:
     if not repo.get("private"):
         return None
     if repo.get("allow_forking"):
+        if (repo.get("owner") or {}).get("type") == "User":
+            # 個人所有の非公開リポジトリは、GitHub がフォークの許可を変更させない（組織所有のみ）。
+            # 不備と区別し、スコアの分母に含めない
+            return Check(
+                "forking", "フォークの許可", NOT_ENFORCEABLE, 1,
+                "個人所有の非公開リポジトリのため、フォークの許可を変更できません（強制できません）",
+            )
         return Check(
             "forking", "フォークの許可", NG, 1, "非公開ですが、フォークが許可されています",
             "Settings → General → Allow forking を無効にする",
