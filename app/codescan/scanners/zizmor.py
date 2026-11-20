@@ -114,6 +114,34 @@ class ZizmorScanner(Scanner):
             path = path[2:]
         return path
 
+    @staticmethod
+    def _is_reported(item: dict[str, Any], ident: str) -> bool:
+        """取り込む指摘か。無視指定（`ignored`）は除き、regular と、残す auditor だけにする。"""
+        if item.get("ignored"):
+            return False
+        persona = str((item.get("determinations") or {}).get("persona") or "").upper()
+        return persona == "REGULAR" or ident in _ZIZMOR_AUDITOR_IDENTS_TO_KEEP
+
+    @staticmethod
+    def _line_range(concrete: dict[str, Any]) -> tuple[int, int]:
+        """指摘の開始行・終了行（zizmor は 0 始まりのため、1 を足す）。"""
+        span = concrete.get("location") or {}
+        line_start = int((span.get("start_point") or {}).get("row", 0)) + 1
+        line_end = int((span.get("end_point") or {}).get("row", line_start - 1)) + 1
+        return line_start, line_end
+
+    @staticmethod
+    def _message(item: dict[str, Any], ident: str, symbolic: dict[str, Any]) -> str:
+        """説明文に、注釈・対策・詳細の URL を足したメッセージ。"""
+        message = str(item.get("desc") or ident)
+        if symbolic.get("annotation"):
+            message += f"（{symbolic['annotation']}）"
+        if ident in _ZIZMOR_FIX_HINTS:
+            message += f" 対策: {_ZIZMOR_FIX_HINTS[ident]}。"
+        if item.get("url"):
+            message += f" 詳細: {item['url']}"
+        return message
+
     def parse(
         self, full_name: str, raw: list[dict[str, Any]], repo_root: str,
     ) -> list[dict[str, Any]]:
@@ -128,11 +156,8 @@ class ZizmorScanner(Scanner):
         records: list[dict[str, Any]] = []
 
         for item in raw:
-            if item.get("ignored"):
-                continue
             ident = str(item.get("ident") or "unknown")
-            persona = str((item.get("determinations") or {}).get("persona") or "").upper()
-            if persona != "REGULAR" and ident not in _ZIZMOR_AUDITOR_IDENTS_TO_KEEP:
+            if not self._is_reported(item, ident):
                 continue
             location = self._primary_location(item)
             rel_path = self._relative_path(location, repo_root) if location else None
@@ -141,18 +166,8 @@ class ZizmorScanner(Scanner):
 
             symbolic = location.get("symbolic") or {}
             concrete = location.get("concrete") or {}
-            span = concrete.get("location") or {}
-            line_start = int((span.get("start_point") or {}).get("row", 0)) + 1
-            line_end = int((span.get("end_point") or {}).get("row", line_start - 1)) + 1
-
+            line_start, line_end = self._line_range(concrete)
             severity_text = str((item.get("determinations") or {}).get("severity") or "")
-            message = str(item.get("desc") or ident)
-            if symbolic.get("annotation"):
-                message += f"（{symbolic['annotation']}）"
-            if ident in _ZIZMOR_FIX_HINTS:
-                message += f" 対策: {_ZIZMOR_FIX_HINTS[ident]}。"
-            if item.get("url"):
-                message += f" 詳細: {item['url']}"
 
             snippet = ""
             if ident not in _ZIZMOR_NO_SNIPPET_IDENTS:
@@ -165,7 +180,7 @@ class ZizmorScanner(Scanner):
                 "line_end": line_end,
                 # Semgrep・gitleaks の rule_id との衝突を避けるため、ツール名の接頭辞を付ける
                 "rule_id": f"zizmor:{ident}",
-                "message": message,
+                "message": self._message(item, ident, symbolic),
                 "severity": _ZIZMOR_SEVERITY.get(severity_text.upper(), "INFO"),
                 "cwe_ids": [],
                 "owasp_categories": [],

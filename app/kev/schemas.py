@@ -43,14 +43,6 @@ class VulnerabilityListResponse(BaseModel):
     data: list[VulnerabilityOut] = Field(description="脆弱性データ一覧")
 
 
-class CrawlResponse(BaseModel):
-    """クローラー手動実行エンドポイントのレスポンススキーマ。"""
-
-    message: str
-    inserted: int
-    updated: int
-
-
 # ── 統計 ────────────────────────────────────────────────────────
 
 

@@ -57,8 +57,94 @@ def _env_pairs(body: str) -> list[tuple[str, str]]:
     return [(parts[0], parts[1] if len(parts) > 1 else "")]
 
 
-def check_dockerfile(text: str) -> list[IacIssue]:  # noqa: C901 - ルールを1か所で一覧できるようにする
-    """Dockerfile の代表的な不備（root 実行・latest タグ・シークレットの混入）を検知する。"""
+def _latest_tag_issue(
+    number: int, line: str, image: str, stage_aliases: set[str],
+) -> IacIssue | None:
+    """FROM のベースイメージが、タグなし・`latest` なら指摘する（固定・scratch・別名は除く）。"""
+    tag_part = image.split("@")[0]
+    tagless = ":" not in tag_part.rsplit("/", 1)[-1]
+    if (
+        image.lower() != "scratch" and image not in stage_aliases
+        and "@sha256:" not in image
+        and "$" not in image and (tagless or tag_part.endswith(":latest"))
+    ):
+        return IacIssue(
+            number, "dockerfile-latest-tag", WARNING,
+            f"ベースイメージ `{image}` が、タグなし・`latest` です。"
+            "ビルドのたびに中身が変わり、"
+            "再現できず、悪意ある更新も取り込みます。"
+            " 対策: 版（例: `python:3.13-slim`）、できればダイジェスト"
+            "（`@sha256:...`）で固定する。",
+            _snippet(line), "CWE-1104",
+        )
+    return None
+
+
+def _secret_copy_issue(number: int, line: str) -> IacIssue | None:
+    """COPY / ADD でシークレットのファイルをイメージに入れていれば指摘する。"""
+    copy_match = _COPY_ADD.match(line)
+    if copy_match and _SECRET_FILE.search(" " + copy_match.group("args")):
+        return IacIssue(
+            number, "dockerfile-secret-copy", ERROR,
+            "シークレット・鍵・認証情報のファイルを、イメージに入れています。イメージを取得できる人に、"
+            "すべて読まれます（レイヤーに残るため、あとで消しても取り出せます）。"
+            " 対策: イメージに入れず、実行時の環境変数・シークレット管理で渡す。"
+            "`.dockerignore` にも追加する。",
+            _snippet(line), "CWE-540",
+        )
+    return None
+
+
+def _secret_env_issues(number: int, line: str) -> list[IacIssue]:
+    """ENV / ARG に、認証情報らしい値を直書きしていれば指摘する（値は伏せる）。"""
+    env_match = _ENV_ARG.match(line)
+    if not env_match:
+        return []
+    return [
+        IacIssue(
+            number, "dockerfile-secret-env", ERROR,
+            f"`{key}` に、認証情報らしい値を直書きしています（値は伏せています）。"
+            "イメージの履歴から読み取れます。"
+            " 対策: 直書きをやめ、実行時の環境変数・シークレット管理で渡す"
+            "（`ARG` も、ビルド履歴に残る）。",
+            f"{line.split()[0].upper()} {key}=***", "CWE-798",
+        )
+        for key, value in _env_pairs(env_match.group("body"))
+        if _SECRET_NAME.search(key) and _is_literal_value(value)
+    ]
+
+
+def _pipe_to_shell_issue(number: int, line: str) -> IacIssue | None:
+    """ダウンロードしたスクリプトを、検証せずシェルに渡していれば指摘する。"""
+    if _PIPE_TO_SHELL.search(line):
+        return IacIssue(
+            number, "dockerfile-pipe-to-shell", WARNING,
+            "ダウンロードしたスクリプトを、検証せずにシェルで実行しています（供給網の攻撃の入口）。"
+            " 対策: ダウンロードして、チェックサム（`sha256sum -c`）で検証してから実行する。",
+            _snippet(line), "CWE-494",
+        )
+    return None
+
+
+def _root_user_issue(last_from_line: int, has_user: bool, user_is_root: bool) -> IacIssue | None:
+    """最後のステージが root のまま動く（USER が無い・root を指定）なら指摘する。"""
+    if last_from_line and (not has_user or user_is_root):
+        return IacIssue(
+            last_from_line, "dockerfile-root-user", WARNING,
+            "コンテナが root で動きます。侵入された場合の被害が大きくなります。"
+            " 対策: 一般ユーザーを作り、`USER` で切り替える"
+            "（例: `RUN useradd -m app` → `USER app`）。",
+            "(最後のステージに、root 以外の USER の指定がありません)", "CWE-250",
+        )
+    return None
+
+
+def check_dockerfile(text: str) -> list[IacIssue]:
+    """Dockerfile の代表的な不備（root 実行・latest タグ・シークレットの混入）を検知する。
+
+    ルールごとの判定は、上の小さな関数に分けてある。ここでは、ステージ（FROM・USER）の
+    状態だけを持ち、行ごとに各ルールを呼ぶ。
+    """
     issues: list[IacIssue] = []
     stage_aliases: set[str] = set()
     last_from_line = 0
@@ -68,25 +154,11 @@ def check_dockerfile(text: str) -> list[IacIssue]:  # noqa: C901 - ルールを1
     for number, line in _logical_lines(text):
         from_match = _FROM.match(line)
         if from_match:
-            image = from_match.group("image")
             last_from_line = number
             has_user_in_last_stage, last_user_is_root = False, False
-            tag_part = image.split("@")[0]
-            tagless = ":" not in tag_part.rsplit("/", 1)[-1]
-            if (
-                image.lower() != "scratch" and image not in stage_aliases
-                and "@sha256:" not in image
-                and "$" not in image and (tagless or tag_part.endswith(":latest"))
-            ):
-                issues.append(IacIssue(
-                    number, "dockerfile-latest-tag", WARNING,
-                    f"ベースイメージ `{image}` が、タグなし・`latest` です。"
-                    "ビルドのたびに中身が変わり、"
-                    "再現できず、悪意ある更新も取り込みます。"
-                    " 対策: 版（例: `python:3.13-slim`）、できればダイジェスト"
-                    "（`@sha256:...`）で固定する。",
-                    _snippet(line), "CWE-1104",
-                ))
+            latest = _latest_tag_issue(number, line, from_match.group("image"), stage_aliases)
+            if latest:
+                issues.append(latest)
             if from_match.group("alias"):
                 stage_aliases.add(from_match.group("alias"))
             continue
@@ -97,45 +169,12 @@ def check_dockerfile(text: str) -> list[IacIssue]:  # noqa: C901 - ルールを1
             last_user_is_root = user_match.group("user").split(":")[0].lower() in {"root", "0"}
             continue
 
-        copy_match = _COPY_ADD.match(line)
-        if copy_match and _SECRET_FILE.search(" " + copy_match.group("args")):
-            issues.append(IacIssue(
-                number, "dockerfile-secret-copy", ERROR,
-                "シークレット・鍵・認証情報のファイルを、イメージに入れています。イメージを取得できる人に、"
-                "すべて読まれます（レイヤーに残るため、あとで消しても取り出せます）。"
-                " 対策: イメージに入れず、実行時の環境変数・シークレット管理で渡す。"
-                "`.dockerignore` にも追加する。",
-                _snippet(line), "CWE-540",
-            ))
+        for found in (_secret_copy_issue(number, line), *_secret_env_issues(number, line),
+                      _pipe_to_shell_issue(number, line)):
+            if found:
+                issues.append(found)
 
-        env_match = _ENV_ARG.match(line)
-        if env_match:
-            for key, value in _env_pairs(env_match.group("body")):
-                if _SECRET_NAME.search(key) and _is_literal_value(value):
-                    issues.append(IacIssue(
-                        number, "dockerfile-secret-env", ERROR,
-                        f"`{key}` に、認証情報らしい値を直書きしています（値は伏せています）。"
-                        "イメージの履歴から読み取れます。"
-                        " 対策: 直書きをやめ、実行時の環境変数・シークレット管理で渡す"
-                        "（`ARG` も、ビルド履歴に残る）。",
-                        f"{line.split()[0].upper()} {key}=***", "CWE-798",
-                    ))
-
-        if _PIPE_TO_SHELL.search(line):
-            issues.append(IacIssue(
-                number, "dockerfile-pipe-to-shell", WARNING,
-                "ダウンロードしたスクリプトを、検証せずにシェルで実行しています（供給網の攻撃の入口）。"
-                " 対策: ダウンロードして、チェックサム（`sha256sum -c`）で検証してから実行する。",
-                _snippet(line), "CWE-494",
-            ))
-
-    # 最後のステージが root のまま動く（USER が無い・root を指定）
-    if last_from_line and (not has_user_in_last_stage or last_user_is_root):
-        issues.append(IacIssue(
-            last_from_line, "dockerfile-root-user", WARNING,
-            "コンテナが root で動きます。侵入された場合の被害が大きくなります。"
-            " 対策: 一般ユーザーを作り、`USER` で切り替える"
-            "（例: `RUN useradd -m app` → `USER app`）。",
-            "(最後のステージに、root 以外の USER の指定がありません)", "CWE-250",
-        ))
+    root = _root_user_issue(last_from_line, has_user_in_last_stage, last_user_is_root)
+    if root:
+        issues.append(root)
     return issues

@@ -190,10 +190,3 @@ class DependencyFindingStatsResponse(BaseModel):
     severities: list[SeverityStat] = Field(description="重要度別件数")
 
 
-class DepscanCrawlResponse(BaseModel):
-    """DEPSCAN 手動実行レスポンス。"""
-
-    message: str
-    new_findings: int
-    resolved: int
-    repos_scanned: int

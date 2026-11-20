@@ -130,10 +130,13 @@ app = FastAPI(
     redoc_url="/redoc" if settings.ENVIRONMENT != "production" else None,
 )
 
+# 開発時だけ許可する、ローカルのダッシュボード（Vite・Next.js の既定ポート）のオリジン
+_DEV_CORS_ORIGINS = ["http://localhost:5173", "http://localhost:3000"]
+
 # CORS 設定（本番はダッシュボードドメインのみ許可、開発時は localhost も許可）
 _dashboard_origin = settings.DASHBOARD_URL.rstrip("/")
 _cors_origins = (
-    [_dashboard_origin, "http://localhost:5173", "http://localhost:3000"]
+    [_dashboard_origin, *_DEV_CORS_ORIGINS]
     if settings.ENVIRONMENT != "production"
     else [_dashboard_origin]
 )

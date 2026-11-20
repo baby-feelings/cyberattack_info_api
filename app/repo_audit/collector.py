@@ -5,6 +5,7 @@
 """
 import logging
 from collections.abc import Callable
+from http import HTTPStatus
 from typing import Any
 
 import httpx
@@ -28,10 +29,10 @@ def _optional_get(api: GitHubApi, path: str, **params: Any) -> tuple[int, Any]:
     try:
         response = api.get(path, params=params or None)
     except httpx.HTTPStatusError as exc:
-        if exc.response.status_code not in (403, 404):
+        if exc.response.status_code not in (HTTPStatus.FORBIDDEN, HTTPStatus.NOT_FOUND):
             raise
         response = exc.response
-    if response.status_code in (403, 404):
+    if response.status_code in (HTTPStatus.FORBIDDEN, HTTPStatus.NOT_FOUND):
         try:
             return response.status_code, response.json()
         except ValueError:
@@ -43,7 +44,7 @@ def _optional_get(api: GitHubApi, path: str, **params: Any) -> tuple[int, Any]:
 
 def _list_or_none(api: GitHubApi, path: str) -> list[dict[str, Any]] | None:
     status, body = _optional_get(api, path, per_page=MAX_PER_PAGE)
-    return None if status in (403, 404) else list(body or [])
+    return None if status in (HTTPStatus.FORBIDDEN, HTTPStatus.NOT_FOUND) else list(body or [])
 
 
 def _ruleset_protection(api: GitHubApi, repo: GitHubRepo, branch: str) -> Any:
@@ -56,7 +57,8 @@ def _ruleset_protection(api: GitHubApi, repo: GitHubRepo, branch: str) -> Any:
     規則が1つも無ければ、未保護。
     """
     status, body = _optional_get(api, repo.path(f"/rules/branches/{branch}"))
-    if status in (403, 404) or not isinstance(body, list) or not body:
+    unavailable = status in (HTTPStatus.FORBIDDEN, HTTPStatus.NOT_FOUND)
+    if unavailable or not isinstance(body, list) or not body:
         return False
     types = {str(rule.get("type")) for rule in body if isinstance(rule, dict)}
     protection: dict[str, Any] = {}
@@ -73,11 +75,11 @@ def _branch_protection(api: GitHubApi, repo: GitHubRepo, branch: str) -> Any:
     従来のブランチ保護が無い（未保護）ときは、ルールセットによる保護も調べる。
     """
     status, body = _optional_get(api, repo.path(f"/branches/{branch}/protection"))
-    if status == 404:
+    if status == HTTPStatus.NOT_FOUND:
         # 「保護されていない」と「リポジトリが見えない」は、メッセージで区別する
         message = str((body or {}).get("message", "")).lower()
         return _ruleset_protection(api, repo, branch) if "not protected" in message else None
-    if status == 403:
+    if status == HTTPStatus.FORBIDDEN:
         message = str((body or {}).get("message", "")).lower()
         return "not_enforceable" if _UPGRADE_HINT in message else None
     return dict(body or {})
@@ -87,14 +89,14 @@ def collect(repo: GitHubRepo, default_branch: str) -> dict[str, Any]:
     """1リポジトリの設定を集める。"""
     with repo.api() as api:
         status, info = _optional_get(api, repo.path(""))
-        repo_info = None if status in (403, 404) else dict(info)
+        repo_info = None if status in (HTTPStatus.FORBIDDEN, HTTPStatus.NOT_FOUND) else dict(info)
         # Dependabot alerts: 204=有効・404=無効（リポジトリが見えない場合と、区別できない）
         alerts_status, _ = _optional_get(api, repo.path("/vulnerability-alerts"))
         vulnerability_alerts: bool | None
-        if alerts_status == 403:
+        if alerts_status == HTTPStatus.FORBIDDEN:
             vulnerability_alerts = None
         else:
-            vulnerability_alerts = alerts_status != 404
+            vulnerability_alerts = alerts_status != HTTPStatus.NOT_FOUND
         collaborators = _list_or_none(api, repo.path("/collaborators?affiliation=direct"))
         return {
             "repo": repo_info,

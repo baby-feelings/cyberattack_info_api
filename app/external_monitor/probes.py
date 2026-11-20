@@ -14,6 +14,7 @@ import socket
 import ssl
 import time
 from collections.abc import Mapping
+from http import HTTPStatus
 from urllib.parse import urlsplit
 
 import httpx
@@ -237,7 +238,8 @@ def probe_exposure(
             )
         except httpx.HTTPError:
             continue
-        if status == 200 and looks_like_exposure(rule, headers.get("content-type", ""), text):
+        content_type = headers.get("content-type", "")
+        if status == HTTPStatus.OK and looks_like_exposure(rule, content_type, text):
             reported.add(rule)
             findings.append(_finding(
                 rule, ERROR,
@@ -262,7 +264,8 @@ def evaluate_takeover(
             "（サブドメインの乗っ取りの危険）",
         )]
     lowered = body.lower()
-    if status in (404, 410, 200) and any(fp in lowered for fp in _TAKEOVER_FINGERPRINTS):
+    takeover_statuses = (HTTPStatus.NOT_FOUND, HTTPStatus.GONE, HTTPStatus.OK)
+    if status in takeover_statuses and any(fp in lowered for fp in _TAKEOVER_FINGERPRINTS):
         return [_finding(
             "subdomain-takeover", ERROR,
             f"`{host}` は、サービス側のリソースが無い表示です。"
@@ -283,7 +286,7 @@ def probe_firestore(
         status, _, _ = fetch_limited(client, url, read_body=False, deadline=deadline, pageSize=1)
     except httpx.HTTPError:
         return []
-    if status == 200:
+    if status == HTTPStatus.OK:
         return [_finding(
             "firestore-public-read", WARNING,
             f"Firestore（{project_id}）を、認証なしで読めます。意図した公開範囲か確認してください"
